@@ -6,10 +6,11 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import CategoryButton from '../components/CategoryButton';
@@ -26,9 +27,17 @@ const CATEGORIES = [
   { key: 'Rental',   icon: '🏗️' },
 ];
 
-// ─── Labour Grid ──────────────────────────────────────────────────────────────
+// ─── Labour Grid ──────────────────────────────────────────────────────
 const LabourView = () => {
+  const navigation = useNavigation();
   const [selectedId, setSelectedId] = useState(null);
+
+  const selectedItem = labourCategories.find((l) => l.id === selectedId);
+
+  const handleContinue = () => {
+    if (!selectedId) return;
+    navigation.navigate('WorkersNearby', { category: selectedItem.label });
+  };
 
   const renderItem = useCallback(({ item }) => (
     <LabourCategoryCard
@@ -53,16 +62,20 @@ const LabourView = () => {
       ListFooterComponent={
         <View style={styles.continueWrapper}>
           <LinearGradient
-            colors={[colors.gradientStart, colors.gradientEnd]}
+            colors={selectedId
+              ? [colors.gradientStart, colors.gradientEnd]
+              : [colors.surfaceElevated, colors.surfaceElevated]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.continueBtn}
           >
-            <TouchableOpacity style={styles.continueTouchable} activeOpacity={0.85}>
-              <Text style={styles.continueBtnText}>
-                {selectedId
-                  ? `Continue with ${labourCategories.find(l => l.id === selectedId)?.label} →`
-                  : 'Select a Category'}
+            <TouchableOpacity
+              style={styles.continueTouchable}
+              activeOpacity={selectedId ? 0.85 : 1}
+              onPress={handleContinue}
+            >
+              <Text style={[styles.continueBtnText, !selectedId && styles.continueBtnTextDim]}>
+                {selectedId ? `Continue with ${selectedItem.label} →` : 'Select a Category'}
               </Text>
             </TouchableOpacity>
           </LinearGradient>
@@ -83,49 +96,40 @@ const MaterialView = () => {
       )
     : materials;
 
+  const renderItem = useCallback(({ item }) => (
+    <View style={styles.materialCardWrapper}>
+      <MaterialCard item={item} onPress={() => {}} />
+    </View>
+  ), []);
+
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.materialScroll}>
-      <SectionHeader title="Browse Materials" actionLabel="Filter ↓" onAction={() => {}} />
-
-      {/* Material search */}
-      <View style={styles.materialSearchWrapper}>
-        <Text style={styles.searchIcon}>🔍</Text>
-        <TextInput
-          style={styles.materialSearchInput}
-          placeholder="Search materials, sellers..."
-          placeholderTextColor={colors.textMuted}
-          value={query}
-          onChangeText={setQuery}
-        />
-      </View>
-
-      {/* Horizontal card scroll */}
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <MaterialCard item={item} onPress={() => {}} />}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.materialHorizontalList}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No materials found.</Text>
-        }
-      />
-
-      {/* Section divider — categories */}
-      <SectionHeader
-        title="Shop by Type"
-        actionLabel="All"
-        onAction={() => {}}
-      />
-      <View style={styles.typeChipsRow}>
-        {['Cement', 'Steel', 'Bricks', 'Sand', 'Tiles', 'Paint'].map((t) => (
-          <TouchableOpacity key={t} style={styles.typeChip} activeOpacity={0.75}>
-            <Text style={styles.typeChipText}>{t}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </ScrollView>
+    <FlatList
+      data={filtered}
+      keyExtractor={(item) => item.id}
+      renderItem={renderItem}
+      numColumns={2}
+      columnWrapperStyle={styles.materialGridRow}
+      contentContainerStyle={styles.materialGridList}
+      showsVerticalScrollIndicator={false}
+      ListHeaderComponent={
+        <View>
+          <SectionHeader title="Browse Materials" actionLabel="Filter ↓" onAction={() => {}} />
+          <View style={styles.materialSearchWrapper}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.materialSearchInput}
+              placeholder="Search materials, sellers..."
+              placeholderTextColor={colors.textMuted}
+              value={query}
+              onChangeText={setQuery}
+            />
+          </View>
+        </View>
+      }
+      ListEmptyComponent={
+        <Text style={styles.emptyText}>No materials found.</Text>
+      }
+    />
   );
 };
 
@@ -151,14 +155,14 @@ const RentalView = () => (
 );
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-const BookingScreen = () => {
+const BookingScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const [activeCategory, setActiveCategory] = useState('Labour');
   const [search, setSearch] = useState('');
 
   return (
-    <SafeAreaView style={styles.safe}>
+     <View style={[styles.safe, { paddingTop: insets.top + 10}]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -204,7 +208,7 @@ const BookingScreen = () => {
         {activeCategory === 'Material' && <MaterialView />}
         {activeCategory === 'Rental'   && <RentalView />}
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -310,9 +314,19 @@ const styles = StyleSheet.create({
   },
 
   // Material
-  materialScroll: {
+// Material
+  materialGridList: {
     paddingTop: 16,
     paddingBottom: 30,
+    paddingHorizontal: 12,
+  },
+  materialGridRow: {
+    justifyContent: 'space-between',
+    marginBottom: 0,
+  },
+  materialCardWrapper: {
+    flex: 1,
+    margin: 6,
   },
   materialSearchWrapper: {
     flexDirection: 'row',
@@ -322,7 +336,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginHorizontal: 20,
-    marginBottom: 18,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -331,36 +345,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textPrimary,
   },
-  materialHorizontalList: {
-    paddingLeft: 20,
-    paddingRight: 6,
-    paddingBottom: 4,
-    marginBottom: 26,
-  },
   emptyText: {
     color: colors.textMuted,
     fontSize: 14,
     fontWeight: '500',
     paddingVertical: 20,
-  },
-  typeChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 20,
-    gap: 10,
-  },
-  typeChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  typeChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
+    paddingLeft: 8,
   },
 
   // Rental

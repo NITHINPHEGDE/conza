@@ -4,10 +4,10 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { userProfile } from '../data/dummyData';
 import { colors } from '../theme/colors';
@@ -34,11 +34,12 @@ const MenuItem = ({ icon, label, sub, danger }) => (
 
 const ProfileScreen = () => {
   const u = userProfile;
+  const insets = useSafeAreaInsets();
   const initials = u.name.split(' ').map((n) => n[0]).join('');
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+     <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
 
         {/* Avatar Section */}
@@ -92,7 +93,7 @@ const ProfileScreen = () => {
 
         <Text style={styles.version}>ConstructApp v1.0.0</Text>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

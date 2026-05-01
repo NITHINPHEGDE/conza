@@ -1,8 +1,9 @@
 import React from 'react';
 import {
   View, Text, FlatList, StyleSheet,
-  SafeAreaView, StatusBar, TouchableOpacity,
+   StatusBar, TouchableOpacity,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import SectionHeader from '../components/SectionHeader';
 import { projects } from '../data/dummyData';
@@ -54,33 +55,36 @@ const ProjectCard = ({ item }) => (
   </TouchableOpacity>
 );
 
-const ProjectScreen = () => (
-  <SafeAreaView style={styles.safe}>
-    <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-    <View style={styles.header}>
-      <Text style={styles.headerTitle}>My Projects</Text>
-      <TouchableOpacity style={styles.addBtn} activeOpacity={0.8}>
-        <LinearGradient
-          colors={[colors.gradientStart, colors.gradientEnd]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.addBtnGrad}
-        >
-          <Text style={styles.addBtnText}>+ New</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-    </View>
+const ProjectScreen = () => {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>My Projects</Text>
+        <TouchableOpacity style={styles.addBtn} activeOpacity={0.8}>
+          <LinearGradient
+            colors={[colors.gradientStart, colors.gradientEnd]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.addBtnGrad}
+          >
+            <Text style={styles.addBtnText}>+ New</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
 
-    <FlatList
-      data={projects}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => <ProjectCard item={item} />}
-      contentContainerStyle={styles.list}
-      showsVerticalScrollIndicator={false}
-      ListHeaderComponent={<SectionHeader title={`${projects.length} Sites`} />}
-    />
-  </SafeAreaView>
-);
+      <FlatList
+        data={projects}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => <ProjectCard item={item} />}
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={<SectionHeader title={`${projects.length} Sites`} />}
+      />
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
