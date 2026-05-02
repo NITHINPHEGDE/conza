@@ -8,6 +8,8 @@ import BookingScreen       from '../screens/BookingScreen';
 import WorkersNearbyScreen from '../screens/WorkersNearbyScreen';
 import ProjectScreen       from '../screens/ProjectScreen';
 import ProfileScreen       from '../screens/ProfileScreen';
+import LabourCheckoutScreen from '../screens/LabourCheckoutScreen';
+import MaterialCheckoutScreen from '../screens/MaterialCheckoutScreen';
 import { colors }          from '../theme/colors';
 
 const Tab   = createBottomTabNavigator();
@@ -30,6 +32,8 @@ const BookingStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="BookingHome"    component={BookingScreen}       />
     <Stack.Screen name="WorkersNearby"  component={WorkersNearbyScreen} />
+    <Stack.Screen name="LabourCheckout" component={LabourCheckoutScreen} />
+    <Stack.Screen name="MaterialCheckout"    component={MaterialCheckoutScreen} />
   </Stack.Navigator>
 );
 

@@ -1,55 +1,138 @@
-import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  TextInput,
+} from 'react-native';
 import { colors } from '../theme/colors';
 
-const MaterialCard = ({ item, quantity, onAdd, onRemove }) => (
-  <TouchableOpacity style={styles.card} activeOpacity={0.8}>
-    <View style={styles.imageWrapper}>
-      <Image source={{ uri: item.image }} style={styles.image} resizeMode="cover" />
-      <View style={styles.stockBadge}>
-        <View style={[styles.stockDot, { backgroundColor: item.inStock ? colors.success : colors.danger }]} />
-        <Text style={[styles.stockText, { color: item.inStock ? colors.success : colors.danger }]}>
-          {item.inStock ? 'In Stock' : 'Out'}
-        </Text>
-      </View>
-      <View style={styles.ratingBadge}>
-        <Text style={styles.ratingText}>⭐ {item.rating}</Text>
-      </View>
-    </View>
+const MaterialCard = ({ item, quantity, onAdd, onRemove, }) => {
+  const [inputValue, setInputValue] = useState(String(quantity));
 
-    <View style={styles.details}>
-      <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-      <Text style={styles.seller} numberOfLines={1}>by {item.seller}</Text>
-      <View style={styles.priceRow}>
-        <View>
-          <Text style={styles.price}>₹{item.price}</Text>
-          <Text style={styles.unit}>{item.unit}</Text>
+  // Sync input when quantity changes externally
+  useEffect(() => {
+    setInputValue(String(quantity));
+  }, [quantity]);
+
+  return (
+    <TouchableOpacity style={styles.card} activeOpacity={0.8}>
+      <View style={styles.imageWrapper}>
+        <Image source={{ uri: item.image }} style={styles.image} />
+
+        <View style={styles.stockBadge}>
+          <View
+            style={[
+              styles.stockDot,
+              { backgroundColor: item.inStock ? colors.success : colors.danger },
+            ]}
+          />
+          <Text
+            style={[
+              styles.stockText,
+              { color: item.inStock ? colors.success : colors.danger },
+            ]}
+          >
+            {item.inStock ? 'In Stock' : 'Out'}
+          </Text>
         </View>
 
-        {/* Quantity control */}
-        {quantity > 0 ? (
-          <View style={styles.qtyControl}>
-            <TouchableOpacity style={styles.qtyBtn} onPress={() => onRemove(item)} activeOpacity={0.75}>
-              <Text style={styles.qtyBtnText}>−</Text>
-            </TouchableOpacity>
-            <Text style={styles.qtyValue}>{quantity}</Text>
-            <TouchableOpacity style={styles.qtyBtn} onPress={() => onAdd(item)} activeOpacity={0.75}>
-              <Text style={styles.qtyBtnText}>+</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={[styles.addBtn, !item.inStock && styles.addBtnDisabled]}
-            onPress={() => item.inStock && onAdd(item)}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.addBtnText}>+</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.ratingBadge}>
+          <Text style={styles.ratingText}>⭐ {item.rating}</Text>
+        </View>
       </View>
-    </View>
-  </TouchableOpacity>
-);
+
+      <View style={styles.details}>
+        <Text style={styles.name} numberOfLines={1}>
+          {item.name}
+        </Text>
+        <Text style={styles.seller} numberOfLines={1}>
+          by {item.seller}
+        </Text>
+
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>₹{item.price}</Text>
+          <Text style={styles.unit}>{item.unit}</Text>
+
+          {quantity > 0 ? (
+            <View style={styles.qtyWrapper}>
+              <View style={styles.qtyControl}>
+                {/* Minus */}
+                <TouchableOpacity
+                  style={styles.qtyBtnMinus}
+                  onPress={() => onRemove(item)}
+                >
+                  <Text style={styles.qtyBtnText}>−</Text>
+                </TouchableOpacity>
+
+                {/* Editable Input */}
+                <TextInput
+                  style={styles.qtyInput}
+                  value={inputValue}
+                  onChangeText={(t) => {
+                    if (t === '') {
+                      setInputValue('');
+                      onAdd(item, 0); // remove from cart when cleared
+                      return;
+                    }
+                    if (/^\d+$/.test(t)) {
+                      setInputValue(t);
+                      const num = parseInt(t);
+                      if (!isNaN(num) && num > 0) {
+                        onAdd(item, num);
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    const num = parseInt(inputValue);
+                    if (isNaN(num) || num <= 0 || inputValue === '') {
+                      // remove from cart and hide control
+                      onAdd(item, 0);
+                      setInputValue('0');
+                    } else {
+                      onAdd(item, num);
+                      setInputValue(String(num));
+                    }
+                  }}
+                  onSubmitEditing={() => {
+                    const num = parseInt(inputValue);
+                    if (isNaN(num) || num <= 0 || inputValue === '') {
+                      onAdd(item, 0);
+                      setInputValue('0');
+                    } else {
+                      onAdd(item, num);
+                      setInputValue(String(num));
+                    }
+                  }}
+                  keyboardType="numeric"
+                  maxLength={5}
+                  selectTextOnFocus
+                />
+
+                {/* Plus */}
+                <TouchableOpacity
+                  style={styles.qtyBtnPlus}
+                  onPress={() => onAdd(item)}
+                >
+                  <Text style={styles.qtyBtnText}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.addBtn, !item.inStock && styles.addBtnDisabled]}
+              onPress={() => item.inStock && onAdd(item)}
+            >
+              <Text style={styles.addBtnText}>+</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
   card: {
@@ -59,19 +142,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.14,
-    shadowRadius: 8,
     elevation: 4,
   },
+
   imageWrapper: {
     width: '100%',
     height: 120,
     position: 'relative',
     backgroundColor: colors.surfaceElevated,
   },
-  image: { width: '100%', height: '100%' },
+
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+
   stockBadge: {
     position: 'absolute',
     top: 8,
@@ -82,11 +167,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 20,
-    gap: 4,
-    elevation: 2,
   },
-  stockDot: { width: 5, height: 5, borderRadius: 3 },
-  stockText: { fontSize: 10, fontWeight: '700' },
+
+  stockDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+
+  stockText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
   ratingBadge: {
     position: 'absolute',
     top: 8,
@@ -95,17 +188,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 20,
-    elevation: 2,
   },
-  ratingText: { fontSize: 10, fontWeight: '700', color: colors.textPrimary },
-  details: { padding: 11 },
-  name: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
-  seller: { fontSize: 11, color: colors.textMuted, marginBottom: 9, fontWeight: '500' },
-  priceRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-  price: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
-  unit: { fontSize: 10, color: colors.textMuted, fontWeight: '500', marginTop: 1 },
 
-  // Add button (when qty is 0)
+  ratingText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+
+  details: {
+    padding: 11,
+  },
+
+  name: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+
+  seller: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginBottom: 9,
+  },
+
+  priceRow: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    marginTop: 6,
+    gap: 6,
+  },
+
+  price: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  unit: {
+    fontSize: 10,
+    color: colors.textMuted,
+  },
+
   addBtn: {
     width: 28,
     height: 28,
@@ -114,46 +237,65 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   addBtnDisabled: {
     backgroundColor: colors.surfaceElevated,
   },
+
   addBtnText: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.textPrimary,
-    lineHeight: 22,
   },
 
-  // Quantity control (when qty > 0)
+  qtyWrapper: {
+    alignItems: 'flex-end',
+  },
+
   qtyControl: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
     borderRadius: 9,
     borderWidth: 1,
     borderColor: colors.border,
-    overflow: 'hidden',
   },
-  qtyBtn: {
-    width: 28,
+
+  qtyBtnMinus: {
+    width: 24,
     height: 28,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.accentYellow,
+    borderTopLeftRadius: 7,
+    borderBottomLeftRadius: 7,
   },
+
+  qtyBtnPlus: {
+    width: 24,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentYellow,
+    borderTopRightRadius: 7,
+    borderBottomRightRadius: 7,
+  },
+
   qtyBtnText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
-    color: colors.textPrimary,
-    lineHeight: 20,
   },
-  qtyValue: {
+
+  qtyInput: {
     fontSize: 13,
     fontWeight: '800',
-    color: colors.textPrimary,
-    paddingHorizontal: 10,
-    minWidth: 32,
+    color: '#111111',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 4,
+    paddingVertical: 0,
+    minWidth: 58,
     textAlign: 'center',
+    height: 28,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 });
 

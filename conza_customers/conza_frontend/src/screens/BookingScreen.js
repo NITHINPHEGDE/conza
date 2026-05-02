@@ -6,19 +6,20 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Modal,
   StatusBar,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import CategoryButton from '../components/CategoryButton';
+import CategoryButton    from '../components/CategoryButton';
 import LabourCategoryCard from '../components/LabourCategoryCard';
-import MaterialCard from '../components/MaterialCard';
-import SectionHeader from '../components/SectionHeader';
+import MaterialCard      from '../components/MaterialCard';
+import SectionHeader     from '../components/SectionHeader';
+import SkillWorkerCard   from '../components/SkillWorkerCard';
 
-import { labourCategories, materials, rentalItems } from '../data/dummyData';
+import { labourCategories, materials, rentalItems, allWorkers } from '../data/dummyData';
 import { colors } from '../theme/colors';
 
 const CATEGORIES = [
@@ -27,15 +28,105 @@ const CATEGORIES = [
   { key: 'Rental',   icon: '🏗️' },
 ];
 
+// ─── Skill Search Results View ─────────────────────────────────────────────────
+const SkillSearchView = ({ query, onClear }) => {
+  const navigation = useNavigation();
+  const [selected, setSelected] = useState([]);
+
+  const results = (allWorkers || []).filter((w) =>
+  w.skills.some((s) => s.toLowerCase().includes(query.toLowerCase())) ||
+  w.category.toLowerCase().includes(query.toLowerCase()) ||
+  w.name.toLowerCase().includes(query.toLowerCase())
+);
+
+  const toggleWorker = (worker) => {
+    setSelected((prev) =>
+      prev.find((w) => w.id === worker.id)
+        ? prev.filter((w) => w.id !== worker.id)
+        : [...prev, worker]
+    );
+  };
+
+  const totalPerDay = selected.reduce((sum, w) => sum + w.pricePerDay, 0);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <FlatList
+        data={results}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.skillList}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View style={styles.skillSearchHeader}>
+            <Text style={styles.skillResultCount}>
+              {results.length} worker{results.length !== 1 ? 's' : ''} found for "{query}"
+            </Text>
+            <TouchableOpacity onPress={onClear} activeOpacity={0.7}>
+              <Text style={styles.skillClearText}>Clear ✕</Text>
+            </TouchableOpacity>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <SkillWorkerCard
+            worker={item}
+            isSelected={!!selected.find((w) => w.id === item.id)}
+            onToggle={toggleWorker}
+          />
+        )}
+        ListEmptyComponent={
+          <View style={styles.skillEmpty}>
+            <Text style={styles.skillEmptyEmoji}>🔍</Text>
+            <Text style={styles.skillEmptyText}>No workers found</Text>
+            <Text style={styles.skillEmptySub}>
+              Try searching "plumbing", "painting", "wiring" etc.
+            </Text>
+          </View>
+        }
+      />
+
+      {/* Bottom bar when workers selected */}
+      {selected.length > 0 && (
+        <View style={styles.bottomBar}>
+          <View style={styles.bottomBarInfo}>
+            <Text style={styles.selectedCount}>
+              {selected.length} worker{selected.length > 1 ? 's' : ''} selected
+            </Text>
+            <Text style={styles.totalPrice}>₹{totalPerDay}/day</Text>
+          </View>
+          <LinearGradient
+            colors={[colors.gradientStart, colors.gradientEnd]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.checkoutBtn}
+          >
+            <TouchableOpacity
+              style={styles.checkoutTouchable}
+              activeOpacity={0.85}
+              onPress={() =>
+                navigation.navigate('LabourCheckout', {
+                  selectedWorkers: selected,
+                  category: 'Service',
+                })
+              }
+            >
+              <Text style={styles.checkoutText}>Proceed to Checkout →</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      )}
+    </View>
+  );
+};
+
 // ─── Labour Grid ──────────────────────────────────────────────────────────────
 const LabourView = () => {
-  const navigation = useNavigation();
+  const navigation  = useNavigation();
   const [selectedId, setSelectedId] = useState(null);
+  const [showModal, setShowModal]   = useState(false);
+  const [quantity, setQuantity]     = useState(1);
 
   const selectedItem = labourCategories.find((l) => l.id === selectedId);
-  const [showModal, setShowModal] = useState(false);
-  const [quantity, setQuantity]   = useState(1);
-  
+
   const handleContinue = () => {
     if (!selectedId) return;
     navigation.navigate('WorkersNearby', { category: selectedItem.label });
@@ -50,150 +141,134 @@ const LabourView = () => {
   ), [selectedId]);
 
   return (
-  <View style={{ flex: 1 }}>
-    <FlatList
-      data={labourCategories}
-      keyExtractor={(item) => item.id}
-      renderItem={renderItem}
-      numColumns={2}
-      columnWrapperStyle={styles.gridRow}
-      contentContainerStyle={styles.labourList}
-      showsVerticalScrollIndicator={false}
-      ListHeaderComponent={
-        <SectionHeader title="Choose Category" actionLabel="View All" onAction={() => {}} />
-      }
-      ListFooterComponent={
-        <View style={styles.continueWrapper}>
-          {selectedId && (
-            <>
-              <LinearGradient
-                colors={[colors.gradientStart, colors.gradientEnd]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[styles.continueBtn, { marginBottom: 10 }]}
-              >
-                <TouchableOpacity
-                  style={styles.continueTouchable}
-                  activeOpacity={0.85}
-                  onPress={() => setShowModal(true)}
+    <View style={{ flex: 1 }}>
+      <FlatList
+        data={labourCategories}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        numColumns={2}
+        columnWrapperStyle={styles.gridRow}
+        contentContainerStyle={styles.labourList}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <SectionHeader title="Choose Category" actionLabel="View All" onAction={() => {}} />
+        }
+        ListFooterComponent={
+          <View style={styles.continueWrapper}>
+            {selectedId && (
+              <>
+                <LinearGradient
+                  colors={[colors.gradientStart, colors.gradientEnd]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.continueBtn, { marginBottom: 10 }]}
                 >
-                  <Text style={styles.continueBtnText}>
-                    ⚡ Auto Book Nearest {selectedItem.label}
+                  <TouchableOpacity
+                    style={styles.continueTouchable}
+                    activeOpacity={0.85}
+                    onPress={() => setShowModal(true)}
+                  >
+                    <Text style={styles.continueBtnText}>
+                      ⚡ Auto Book Nearest {selectedItem.label}
+                    </Text>
+                  </TouchableOpacity>
+                </LinearGradient>
+
+                <TouchableOpacity
+                  style={styles.continueOutlineBtn}
+                  activeOpacity={0.85}
+                  onPress={handleContinue}
+                >
+                  <Text style={styles.continueOutlineBtnText}>
+                    Continue with {selectedItem.label} →
                   </Text>
                 </TouchableOpacity>
-              </LinearGradient>
+              </>
+            )}
+          </View>
+        }
+      />
 
-              <TouchableOpacity
-                style={styles.continueOutlineBtn}
-                activeOpacity={0.85}
-                onPress={handleContinue}
-              >
-                <Text style={styles.continueOutlineBtnText}>
-                  Continue with {selectedItem.label} →
-                </Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      }
-    />
-
-    {/* Auto Book Modal */}
-    <Modal
-      visible={showModal}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setShowModal(false)}
-    >
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={() => setShowModal(false)}
+      {/* Auto Book Modal */}
+      <Modal
+        visible={showModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowModal(false)}
       >
-        <TouchableOpacity style={styles.modalSheet} activeOpacity={1}>
-
-          {/* Handle bar */}
-          <View style={styles.modalHandle} />
-
-          <Text style={styles.modalTitle}>
-            How many {selectedItem?.label}s do you need?
-          </Text>
-          <Text style={styles.modalSub}>
-            We'll find the nearest available workers for you
-          </Text>
-
-          {/* Counter */}
-          <View style={styles.counterRow}>
-            <TouchableOpacity
-              style={styles.counterBtn}
-              onPress={() => setQuantity((q) => Math.max(1, q - 1))}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.counterBtnText}>−</Text>
-            </TouchableOpacity>
-
-            <View style={styles.counterDisplay}>
-              <Text style={styles.counterValue}>{quantity}</Text>
-              <Text style={styles.counterLabel}>
-                {selectedItem?.label}{quantity > 1 ? 's' : ''}
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowModal(false)}
+        >
+          <TouchableOpacity style={styles.modalSheet} activeOpacity={1}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>
+              How many {selectedItem?.label}s do you need?
+            </Text>
+            <Text style={styles.modalSub}>
+              We'll find the nearest available workers for you
+            </Text>
+            <View style={styles.counterRow}>
+              <TouchableOpacity
+                style={styles.counterBtn}
+                onPress={() => setQuantity((q) => Math.max(1, q - 1))}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.counterBtnText}>−</Text>
+              </TouchableOpacity>
+              <View style={styles.counterDisplay}>
+                <Text style={styles.counterValue}>{quantity}</Text>
+                <Text style={styles.counterLabel}>
+                  {selectedItem?.label}{quantity > 1 ? 's' : ''}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.counterBtn}
+                onPress={() => setQuantity((q) => Math.min(10, q + 1))}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.counterBtnText}>+</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalNote}>
+              <Text style={styles.modalNoteText}>
+                📍 Workers will be matched based on your location and availability
               </Text>
             </View>
-
-            <TouchableOpacity
-              style={styles.counterBtn}
-              onPress={() => setQuantity((q) => Math.min(10, q + 1))}
-              activeOpacity={0.75}
+            <LinearGradient
+              colors={[colors.gradientStart, colors.gradientEnd]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.modalConfirmBtn}
             >
-              <Text style={styles.counterBtnText}>+</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Info note */}
-          <View style={styles.modalNote}>
-            <Text style={styles.modalNoteText}>
-              📍 Workers will be matched based on your location and availability
-            </Text>
-          </View>
-
-          {/* Confirm Button */}
-          <LinearGradient
-            colors={[colors.gradientStart, colors.gradientEnd]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.modalConfirmBtn}
-          >
+              <TouchableOpacity
+                style={styles.continueTouchable}
+                activeOpacity={0.85}
+                onPress={() => setShowModal(false)}
+              >
+                <Text style={styles.continueBtnText}>
+                  Book {quantity} {selectedItem?.label}{quantity > 1 ? 's' : ''} →
+                </Text>
+              </TouchableOpacity>
+            </LinearGradient>
             <TouchableOpacity
-              style={styles.continueTouchable}
-              activeOpacity={0.85}
-              onPress={() => {
-                setShowModal(false);
-                // TODO: trigger auto book with quantity
-              }}
+              onPress={() => setShowModal(false)}
+              style={styles.modalCancel}
+              activeOpacity={0.7}
             >
-              <Text style={styles.continueBtnText}>
-                Book {quantity} {selectedItem?.label}{quantity > 1 ? 's' : ''} →
-              </Text>
+              <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
-          </LinearGradient>
-
-          {/* Cancel */}
-          <TouchableOpacity
-            onPress={() => setShowModal(false)}
-            style={styles.modalCancel}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.modalCancelText}>Cancel</Text>
           </TouchableOpacity>
-
         </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
-  </View>
-);
+      </Modal>
+    </View>
+  );
 };
 
 // ─── Material View ────────────────────────────────────────────────────────────
 const MaterialView = () => {
+  const navigation = useNavigation();
   const [query, setQuery] = useState('');
   const [cart, setCart]   = useState({});
 
@@ -204,11 +279,21 @@ const MaterialView = () => {
       )
     : materials;
 
-  const addToCart = (item) => {
-    setCart((prev) => ({ ...prev, [item.id]: (prev[item.id] || 0) + 1 }));
-  };
+  const addToCart = useCallback((item, qty) => {
+    setCart((prev) => {
+      if (qty !== undefined) {
+        if (qty <= 0) {
+          const updated = { ...prev };
+          delete updated[item.id];
+          return updated;
+        }
+        return { ...prev, [item.id]: qty };
+      }
+      return { ...prev, [item.id]: (prev[item.id] || 0) + 1 };
+    });
+  }, []);
 
-  const removeFromCart = (item) => {
+  const removeFromCart = useCallback((item) => {
     setCart((prev) => {
       const current = prev[item.id] || 0;
       if (current <= 1) {
@@ -218,7 +303,7 @@ const MaterialView = () => {
       }
       return { ...prev, [item.id]: current - 1 };
     });
-  };
+  }, []);
 
   const cartItems  = materials.filter((m) => cart[m.id] > 0);
   const totalItems = Object.values(cart).reduce((a, b) => a + b, 0);
@@ -233,7 +318,7 @@ const MaterialView = () => {
         onRemove={removeFromCart}
       />
     </View>
-  ), [cart]);
+  ), [cart, addToCart, removeFromCart]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -267,8 +352,6 @@ const MaterialView = () => {
           <Text style={styles.emptyText}>No materials found.</Text>
         }
       />
-
-      {/* Checkout Bar */}
       {totalItems > 0 && (
         <View style={styles.materialCheckoutBar}>
           <View style={styles.materialCheckoutLeft}>
@@ -288,7 +371,12 @@ const MaterialView = () => {
             end={{ x: 1, y: 0 }}
             style={styles.materialCheckoutBtn}
           >
-            <TouchableOpacity style={styles.materialCheckoutBtnTouch} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.materialCheckoutBtnTouch} 
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('MaterialCheckout', {
+            cartItems: materials.filter((m) => cart[m.id] > 0),
+            cart,
+          })}>
               <Text style={styles.materialCheckoutBtnText}>Checkout →</Text>
             </TouchableOpacity>
           </LinearGradient>
@@ -322,7 +410,19 @@ const RentalView = () => (
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const BookingScreen = () => {
   const [activeCategory, setActiveCategory] = useState('Labour');
-  const [search, setSearch] = useState('');
+  const [search, setSearch]                 = useState('');
+  const [activeSearch, setActiveSearch]     = useState('');
+
+  const handleSearchSubmit = () => {
+    if (search.trim()) setActiveSearch(search.trim());
+  };
+
+  const handleClearSearch = () => {
+    setSearch('');
+    setActiveSearch('');
+  };
+
+  const isSearching = activeSearch.trim().length > 0;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -341,46 +441,62 @@ const BookingScreen = () => {
 
       {/* Fixed Section */}
       <View style={styles.fixedSection}>
-        {activeCategory !== 'Material' && (
-          <View style={styles.searchBar}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search services..."
-              placeholderTextColor={colors.textMuted}
-              value={search}
-              onChangeText={setSearch}
-            />
+        {activeCategory === 'Labour' && (
+        /* Search bar — always visible */
+        <View style={styles.searchBar}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search services, skills..."
+            placeholderTextColor={colors.textMuted}
+            value={search}
+            onChangeText={(t) => {
+              setSearch(t);
+              setActiveSearch(t);
+            }}
+            
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={handleClearSearch} activeOpacity={0.7}>
+              <Text style={styles.searchClear}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        )}
+        {/* Category buttons — hidden when searching */}
+        {!isSearching && (
+          <View style={styles.categoryRow}>
+            {CATEGORIES.map((cat) => (
+              <CategoryButton
+                key={cat.key}
+                label={cat.key}
+                icon={cat.icon}
+                isSelected={activeCategory === cat.key}
+                onPress={() => setActiveCategory(cat.key)}
+              />
+            ))}
           </View>
         )}
-        <View style={styles.categoryRow}>
-          {CATEGORIES.map((cat) => (
-            <CategoryButton
-              key={cat.key}
-              label={cat.key}
-              icon={cat.icon}
-              isSelected={activeCategory === cat.key}
-              onPress={() => setActiveCategory(cat.key)}
-            />
-          ))}
-        </View>
       </View>
 
       {/* Dynamic Section */}
       <View style={styles.dynamicSection}>
-        {activeCategory === 'Labour'   && <LabourView />}
-        {activeCategory === 'Material' && <MaterialView />}
-        {activeCategory === 'Rental'   && <RentalView />}
+        {isSearching ? (
+          <SkillSearchView query={activeSearch} onClear={handleClearSearch} />
+        ) : (
+          <>
+            {activeCategory === 'Labour'   && <LabourView />}
+            {activeCategory === 'Material' && <MaterialView />}
+            {activeCategory === 'Rental'   && <RentalView />}
+          </>
+        )}
       </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  safe: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -431,23 +547,87 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  searchIcon: {
-    fontSize: 15,
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
+  searchIcon: { fontSize: 15, marginRight: 10 },
+  searchInput: { flex: 1, fontSize: 14, color: colors.textPrimary },
+  searchClear: {
     fontSize: 14,
-    color: colors.textPrimary,
+    color: colors.textMuted,
+    fontWeight: '700',
+    paddingLeft: 8,
   },
-  categoryRow: {
+  categoryRow: { flexDirection: 'row', alignItems: 'center' },
+  dynamicSection: { flex: 1, backgroundColor: colors.background },
+
+  // Skill search
+  skillList: {
+    paddingTop: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 120,
+  },
+  skillSearchHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  dynamicSection: {
-    flex: 1,
-    backgroundColor: colors.background,
+  skillResultCount: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
+  skillClearText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.accentAmber,
+  },
+  skillEmpty: {
+    alignItems: 'center',
+    paddingTop: 60,
+  },
+  skillEmptyEmoji: { fontSize: 44, marginBottom: 14 },
+  skillEmptyText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 6,
+  },
+  skillEmptySub: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: 30,
+    fontWeight: '500',
+  },
+
+  // Bottom bar (skill search checkout)
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 28,
+    shadowColor: colors.cardShadow,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  bottomBarInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  selectedCount: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  totalPrice: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
+  checkoutBtn: { borderRadius: 16, overflow: 'hidden' },
+  checkoutTouchable: { paddingVertical: 16, alignItems: 'center' },
+  checkoutText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
 
   // Labour
   labourList: {
@@ -455,31 +635,21 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
     paddingHorizontal: 14,
   },
-  gridRow: {
-    justifyContent: 'space-between',
-  },
+  gridRow: { justifyContent: 'space-between' },
   continueWrapper: {
     marginTop: 12,
     marginHorizontal: 6,
     marginBottom: 10,
   },
-  continueBtn: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  continueTouchable: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
+  continueBtn: { borderRadius: 16, overflow: 'hidden' },
+  continueTouchable: { paddingVertical: 16, alignItems: 'center' },
   continueBtnText: {
     color: colors.textPrimary,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.3,
   },
-  continueBtnTextDim: {
-    color: colors.textMuted,
-  },
+  continueBtnTextDim: { color: colors.textMuted },
   continueOutlineBtn: {
     borderRadius: 16,
     paddingVertical: 16,
@@ -488,16 +658,145 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.border,
   },
-  continueOutlineBtnDim: {
-    borderColor: colors.borderLight,
-    backgroundColor: colors.surfaceElevated,
-  },
   continueOutlineBtnText: {
     color: colors.textPrimary,
     fontSize: 15,
     fontWeight: '700',
     letterSpacing: 0.3,
   },
+
+  // Material
+  materialGridList: {
+    paddingTop: 16,
+    paddingBottom: 30,
+    paddingHorizontal: 12,
+  },
+  materialGridRow: { justifyContent: 'space-between' },
+  materialCardWrapper: { flex: 1, margin: 6 },
+  materialSearchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.inputBg,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  materialSearchInput: { flex: 1, fontSize: 14, color: colors.textPrimary },
+  emptyText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '500',
+    paddingVertical: 20,
+    paddingLeft: 8,
+  },
+  materialCheckoutBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    shadowColor: colors.cardShadow,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  materialCheckoutLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  materialCheckoutBadge: {
+    minWidth: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: colors.accentYellowSoft,
+    borderWidth: 1,
+    borderColor: colors.accentYellow,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  materialCheckoutBadgeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.accentAmber,
+  },
+  materialCheckoutLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  materialCheckoutTotal: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+  materialCheckoutBtn: { borderRadius: 14, overflow: 'hidden' },
+  materialCheckoutBtnTouch: {
+    paddingHorizontal: 22,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  materialCheckoutBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: 0.3,
+  },
+
+  // Rental
+  rentalContainer: { paddingTop: 16, paddingHorizontal: 20 },
+  rentalCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 15,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 13,
+    shadowColor: colors.cardShadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  rentalEmoji: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: colors.accentYellowSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(245,200,66,0.25)',
+  },
+  rentalName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 3 },
+  rentalPrice: { fontSize: 13, color: colors.accentAmber, fontWeight: '600' },
+  rentBtn: {
+    backgroundColor: colors.accentYellowSoft,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(245,200,66,0.3)',
+  },
+  rentBtnText: { fontSize: 13, fontWeight: '700', color: colors.accentAmber },
+
   // Modal
   modalOverlay: {
     flex: 1,
@@ -531,7 +830,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: 6,
-    letterSpacing: 0.1,
   },
   modalSub: {
     fontSize: 13,
@@ -563,10 +861,7 @@ const styles = StyleSheet.create({
     color: colors.accentAmber,
     lineHeight: 30,
   },
-  counterDisplay: {
-    alignItems: 'center',
-    minWidth: 80,
-  },
+  counterDisplay: { alignItems: 'center', minWidth: 80 },
   counterValue: {
     fontSize: 48,
     fontWeight: '800',
@@ -594,181 +889,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
-  modalConfirmBtn: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  modalCancel: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
-
-  // Material
-  materialGridList: {
-    paddingTop: 16,
-    paddingBottom: 30,
-    paddingHorizontal: 12,
-  },
-  materialGridRow: {
-    justifyContent: 'space-between',
-  },
-  materialCardWrapper: {
-    flex: 1,
-    margin: 6,
-  },
-  materialSearchWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.inputBg,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginHorizontal: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  materialSearchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.textPrimary,
-  },
-  emptyText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '500',
-    paddingVertical: 20,
-    paddingLeft: 8,
-  },
-
-  // Material checkout bar
-  materialCheckoutBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  materialCheckoutLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  materialCheckoutBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: colors.accentYellowSoft,
-    borderWidth: 1,
-    borderColor: colors.accentYellow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  materialCheckoutBadgeText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.accentAmber,
-  },
-  materialCheckoutLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  materialCheckoutTotal: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  materialCheckoutBtn: {
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  materialCheckoutBtnTouch: {
-    paddingHorizontal: 22,
-    paddingVertical: 13,
-    alignItems: 'center',
-  },
-  materialCheckoutBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    letterSpacing: 0.3,
-  },
-
-  // Rental
-  rentalContainer: {
-    paddingTop: 16,
-    paddingHorizontal: 20,
-  },
-  rentalCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 13,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  rentalEmoji: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: colors.accentYellowSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(245,200,66,0.25)',
-  },
-  rentalName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 3,
-  },
-  rentalPrice: {
-    fontSize: 13,
-    color: colors.accentAmber,
-    fontWeight: '600',
-  },
-  rentBtn: {
-    backgroundColor: colors.accentYellowSoft,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(245,200,66,0.3)',
-  },
-  rentBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.accentAmber,
-  },
+  modalConfirmBtn: { borderRadius: 16, overflow: 'hidden', marginBottom: 12 },
+  modalCancel: { paddingVertical: 12, alignItems: 'center' },
+  modalCancelText: { fontSize: 14, color: colors.textMuted, fontWeight: '600' },
 });
 
 export default BookingScreen;

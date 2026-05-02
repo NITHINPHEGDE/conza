@@ -7,6 +7,7 @@ export const labourCategories = [
   { id: '6', label: 'Welder',      emoji: '🔥', rating: 4.8, available: 4  },
 ];
 
+
 export const materials = [
   {
     id: '1',
@@ -277,3 +278,8 @@ export const workersByCategory = {
     },
   ],
 };
+// Flat list of all workers with their category — for skill search
+export const allWorkers = Object.entries(workersByCategory).flatMap(
+  ([category, workers]) =>
+    workers.map((w) => ({ ...w, category }))
+);

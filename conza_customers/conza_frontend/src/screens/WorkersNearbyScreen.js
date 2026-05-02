@@ -7,7 +7,7 @@ import {
   StyleSheet,
   StatusBar,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { workersByCategory } from '../data/dummyData';
 import { colors } from '../theme/colors';
@@ -19,34 +19,38 @@ const WorkerCard = ({ worker, isSelected, onToggle }) => (
     onPress={() => onToggle(worker)}
     activeOpacity={0.82}
   >
-    {/* Checkbox */}
-    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-      {isSelected && <Text style={styles.checkmark}>✓</Text>}
-    </View>
+    {/* Top Row — Avatar + Name + Checkbox */}
+    <View style={styles.cardTop}>
+      <LinearGradient
+        colors={isSelected
+          ? [colors.gradientStart, colors.gradientEnd]
+          : ['#D0CDFF', '#A89CFF']}
+        style={styles.avatar}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <Text style={styles.avatarText}>{worker.initials}</Text>
+      </LinearGradient>
 
-    {/* Avatar */}
-    <LinearGradient
-      colors={isSelected
-        ? [colors.gradientStart, colors.gradientEnd]
-        : ['#D0CDFF', '#A89CFF']}
-      style={styles.avatar}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
-      <Text style={styles.avatarText}>{worker.initials}</Text>
-    </LinearGradient>
-
-    {/* Info */}
-    <View style={styles.info}>
-      <View style={styles.nameRow}>
+      <View style={styles.nameBlock}>
         <Text style={styles.name}>{worker.name}</Text>
-        <View style={styles.ratingChip}>
-          <Text style={styles.ratingStar}>⭐</Text>
-          <Text style={styles.ratingValue}>{worker.rating}</Text>
+        <View style={styles.metaRow}>
+          <Text style={styles.metaText}>⭐ {worker.rating}</Text>
+          <View style={styles.metaDot} />
+          <Text style={styles.metaText}>📍 {worker.distance}</Text>
         </View>
       </View>
 
-      {/* Skill tags */}
+      <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+        {isSelected && <Text style={styles.checkmark}>✓</Text>}
+      </View>
+    </View>
+
+    {/* Divider */}
+    <View style={styles.cardDivider} />
+
+    {/* Bottom Row — Skills + Price */}
+    <View style={styles.cardBottom}>
       <View style={styles.skillsRow}>
         {worker.skills.map((s) => (
           <View key={s} style={styles.skillTag}>
@@ -54,19 +58,14 @@ const WorkerCard = ({ worker, isSelected, onToggle }) => (
           </View>
         ))}
       </View>
-
-      {/* Distance + Price */}
-      <View style={styles.metaRow}>
-        <Text style={styles.distance}>📍 {worker.distance}</Text>
-        <Text style={[styles.price, isSelected && styles.priceSelected]}>
-          ₹{worker.pricePerDay}/day
-        </Text>
-      </View>
+      <Text style={[styles.price, isSelected && styles.priceSelected]}>
+        ₹{worker.pricePerDay}/day
+      </Text>
     </View>
   </TouchableOpacity>
 );
 
-// ─── Availability Filter Chip ─────────────────────────────────────────────────
+// ─── Filter Chip ──────────────────────────────────────────────────────────────
 const FilterChip = ({ label, active, onPress }) => (
   <TouchableOpacity
     style={[styles.filterChip, active && styles.filterChipActive]}
@@ -81,12 +80,11 @@ const FilterChip = ({ label, active, onPress }) => (
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const WorkersNearbyScreen = ({ route, navigation }) => {
-  const insets = useSafeAreaInsets();
   const { category } = route.params;
   const allWorkers = workersByCategory[category] || [];
 
-  const [selected, setSelected]     = useState([]);
-  const [filterAvail, setFilterAvail] = useState('All'); // 'All' | 'Available'
+  const [selected, setSelected]       = useState([]);
+  const [filterAvail, setFilterAvail] = useState('All');
 
   const displayed = filterAvail === 'Available'
     ? allWorkers.filter((w) => w.available)
@@ -103,7 +101,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
   const totalPerDay = selected.reduce((sum, w) => sum + w.pricePerDay, 0);
 
   return (
-    <View style={[styles.safe, { paddingTop: insets.top + 15 }]}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
       {/* Header */}
@@ -123,7 +121,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
 
       <View style={styles.divider} />
 
-      {/* Filter chips */}
+      {/* Filters */}
       <View style={styles.filterRow}>
         {['All', 'Available'].map((f) => (
           <FilterChip
@@ -135,7 +133,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
         ))}
       </View>
 
-      {/* Worker list */}
+      {/* List */}
       <FlatList
         data={displayed}
         keyExtractor={(item) => item.id}
@@ -157,7 +155,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
         }
       />
 
-      {/* Bottom bar — shows only when workers selected */}
+      {/* Bottom bar */}
       {selected.length > 0 && (
         <View style={styles.bottomBar}>
           <View style={styles.bottomBarInfo}>
@@ -172,28 +170,32 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
             end={{ x: 1, y: 0 }}
             style={styles.checkoutBtn}
           >
-            <TouchableOpacity style={styles.checkoutTouchable} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={styles.checkoutTouchable}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('LabourCheckout', {
+                selectedWorkers: selected,
+                category,
+              })}
+            >
               <Text style={styles.checkoutText}>Proceed to Checkout →</Text>
             </TouchableOpacity>
           </LinearGradient>
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  safe: { flex: 1, backgroundColor: colors.background },
 
   // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 0,
+    paddingTop: 14,
     paddingBottom: 14,
     gap: 14,
   },
@@ -207,28 +209,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  backArrow: {
-    fontSize: 18,
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    letterSpacing: 0.1,
-  },
-  headerSub: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.borderLight,
-    marginHorizontal: 0,
-  },
+  backArrow: { fontSize: 18, color: colors.textPrimary, fontWeight: '600' },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary },
+  headerSub: { fontSize: 12, color: colors.textMuted, fontWeight: '500', marginTop: 2 },
+  divider: { height: 1, backgroundColor: colors.borderLight },
 
   // Filters
   filterRow: {
@@ -250,33 +234,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentYellowSoft,
     borderColor: colors.accentYellow,
   },
-  filterChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  filterChipTextActive: {
-    color: colors.accentAmber,
-  },
+  filterChipText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+  filterChipTextActive: { color: colors.accentAmber },
 
   // List
-  list: {
-    paddingTop: 10,
-    paddingHorizontal: 20,
-    paddingBottom: 120,
-  },
+  list: { paddingTop: 10, paddingHorizontal: 20, paddingBottom: 120 },
 
   // Worker Card
   card: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1.5,
     borderColor: colors.border,
-    gap: 14,
     shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -291,80 +262,69 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
   },
+
+  // Top row
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  avatarText: { fontSize: 16, fontWeight: '800', color: colors.white, letterSpacing: 0.5 },
+  nameBlock: { flex: 1 },
+  name: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginBottom: 5,
+    letterSpacing: 0.1,
+  },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaText: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
+  metaDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.textMuted },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 7,
     borderWidth: 2,
     borderColor: colors.border,
     backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
     flexShrink: 0,
   },
   checkboxSelected: {
     backgroundColor: colors.textPrimary,
     borderColor: colors.textPrimary,
   },
-  checkmark: {
-    fontSize: 13,
-    color: colors.white,
-    fontWeight: '800',
-    lineHeight: 16,
+  checkmark: { fontSize: 13, color: colors.white, fontWeight: '800', lineHeight: 16 },
+
+  // Divider
+  cardDivider: {
+    height: 1,
+    backgroundColor: colors.borderLight,
+    marginVertical: 12,
   },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.white,
-    letterSpacing: 0.5,
-  },
-  info: {
-    flex: 1,
-  },
-  nameRow: {
+
+  // Bottom row
+  cardBottom: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  name: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    letterSpacing: 0.1,
-    flex: 1,
-  },
-  ratingChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  ratingStar: { fontSize: 11 },
-  ratingValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textPrimary,
+    gap: 10,
   },
   skillsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 10,
+    flex: 1,
   },
   skillTag: {
     backgroundColor: colors.surfaceElevated,
@@ -374,49 +334,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
-  skillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  distance: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '500',
-  },
+  skillText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
   price: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: colors.textSecondary,
+    flexShrink: 0,
   },
-  priceSelected: {
-    color: colors.accentAmber,
-  },
+  priceSelected: { color: colors.accentAmber },
 
-  // Empty state
-  emptyState: {
-    alignItems: 'center',
-    paddingTop: 60,
-  },
+  // Empty
+  emptyState: { alignItems: 'center', paddingTop: 60 },
   emptyEmoji: { fontSize: 44, marginBottom: 14 },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 6,
-  },
-  emptySub: {
-    fontSize: 13,
-    color: colors.textMuted,
-    fontWeight: '500',
-    textAlign: 'center',
-    paddingHorizontal: 30,
-  },
+  emptyText: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 6 },
+  emptySub: { fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingHorizontal: 30 },
 
   // Bottom bar
   bottomBar: {
@@ -442,30 +373,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
-  selectedCount: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  totalPrice: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  checkoutBtn: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  checkoutTouchable: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  checkoutText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    letterSpacing: 0.3,
-  },
+  selectedCount: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  totalPrice: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
+  checkoutBtn: { borderRadius: 16, overflow: 'hidden' },
+  checkoutTouchable: { paddingVertical: 16, alignItems: 'center' },
+  checkoutText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
 });
 
 export default WorkersNearbyScreen;
