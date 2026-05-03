@@ -87,6 +87,10 @@ const SkillSearchView = ({ query, onClear }) => {
             </Text>
           </View>
         }
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
 
       {/* Bottom bar when workers selected */}
@@ -196,6 +200,10 @@ const LabourView = () => {
             )}
           </View>
         }
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
 
       {/* Auto Book Modal */}
@@ -353,6 +361,10 @@ const MaterialView = () => {
         ListEmptyComponent={
           <Text style={styles.emptyText}>No materials found.</Text>
         }
+        initialNumToRender={6}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
       {totalItems > 0 && (
         <View style={styles.materialCheckoutBar}>
@@ -478,6 +490,10 @@ const RentalView = () => {
           </View>
         }
         renderItem={renderItem}
+        initialNumToRender={6}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
 
       {/* Filter Modal */}
@@ -556,6 +572,15 @@ const BookingScreen = () => {
 
   const isSearching = activeSearch.trim().length > 0;
 
+  const renderCategoryItem = useCallback(({ item }) => (
+    <CategoryButton
+      label={item.key}
+      icon={item.icon}
+      isSelected={activeCategory === item.key}
+      onPress={() => setActiveCategory(item.key)}
+    />
+  ), [activeCategory]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
@@ -598,15 +623,15 @@ const BookingScreen = () => {
         {/* Category buttons — hidden when searching */}
         {!isSearching && (
           <View style={styles.categoryRow}>
-            {CATEGORIES.map((cat) => (
-              <CategoryButton
-                key={cat.key}
-                label={cat.key}
-                icon={cat.icon}
-                isSelected={activeCategory === cat.key}
-                onPress={() => setActiveCategory(cat.key)}
-              />
-            ))}
+            <FlatList
+              horizontal
+              data={CATEGORIES}
+              keyExtractor={(item) => item.key}
+              showsHorizontalScrollIndicator={false}
+              initialNumToRender={3}
+              renderItem={renderCategoryItem}
+              contentContainerStyle={{ paddingRight: 20 }}
+            />
           </View>
         )}
       </View>

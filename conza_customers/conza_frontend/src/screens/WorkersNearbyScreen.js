@@ -174,6 +174,10 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
             <Text style={styles.emptySub}>Check back soon or try a different filter</Text>
           </View>
         }
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
 
       {/* Bottom bar */}

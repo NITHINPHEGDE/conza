@@ -84,6 +84,10 @@ const ProjectScreen = () => {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={<SectionHeader title={`${projects.length} Sites`} />}
+        initialNumToRender={5}
+        maxToRenderPerBatch={5}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
     </View>
   );
