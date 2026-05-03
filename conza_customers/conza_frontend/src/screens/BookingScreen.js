@@ -18,8 +18,8 @@ import LabourCategoryCard from '../components/LabourCategoryCard';
 import MaterialCard      from '../components/MaterialCard';
 import SectionHeader     from '../components/SectionHeader';
 import SkillWorkerCard   from '../components/SkillWorkerCard';
-
-import { labourCategories, materials, rentalItems, allWorkers } from '../data/dummyData';
+import RentalCard from '../components/RentalCard';
+import { labourCategories, materials, rentalItems, rentalCategories, allWorkers } from '../data/dummyData';
 import { colors } from '../theme/colors';
 
 const CATEGORIES = [
@@ -316,6 +316,7 @@ const MaterialView = () => {
         quantity={cart[item.id] || 0}
         onAdd={addToCart}
         onRemove={removeFromCart}
+        onImagePress={() => navigation.navigate('MaterialDetail', { item })}
       />
     </View>
   ), [cart, addToCart, removeFromCart]);
@@ -387,25 +388,149 @@ const MaterialView = () => {
 };
 
 // ─── Rental View ──────────────────────────────────────────────────────────────
-const RentalView = () => (
-  <View style={styles.rentalContainer}>
-    <SectionHeader title="Equipment Rental" />
-    {rentalItems.map((item) => (
-      <TouchableOpacity key={item.id} style={styles.rentalCard} activeOpacity={0.8}>
-        <View style={styles.rentalEmoji}>
-          <Text style={{ fontSize: 26 }}>{item.emoji}</Text>
+const RentalView = () => {
+  const navigation = useNavigation();
+  const [query, setQuery]               = useState('');
+  const [selectedCat, setSelectedCat]   = useState('all');
+  const [showFilter, setShowFilter]     = useState(false);
+
+  const filtered = rentalItems.filter((item) => {
+    const matchCat   = selectedCat === 'all' || item.category === selectedCat;
+    const matchQuery = item.name.toLowerCase().includes(query.toLowerCase()) ||
+                       item.seller.toLowerCase().includes(query.toLowerCase());
+    return matchCat && (query.trim() === '' || matchQuery);
+  });
+
+  const activeCat = rentalCategories.find((c) => c.id === selectedCat);
+
+  return (
+    <View style={{ flex: 1 }}>
+
+      {/* Search + Filter bar */}
+      <View style={styles.rentalTopBar}>
+        <View style={styles.rentalSearchBar}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.rentalSearchInput}
+            placeholder="Search equipment..."
+            placeholderTextColor={colors.textMuted}
+            value={query}
+            onChangeText={setQuery}
+          />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={() => setQuery('')} activeOpacity={0.7}>
+              <Text style={styles.searchClear}>✕</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.rentalName}>{item.name}</Text>
-          <Text style={styles.rentalPrice}>₹{item.pricePerDay} / day</Text>
-        </View>
-        <TouchableOpacity style={styles.rentBtn} activeOpacity={0.8}>
-          <Text style={styles.rentBtnText}>Rent</Text>
+
+        {/* Filter button */}
+        <TouchableOpacity
+          style={[styles.filterBtn, selectedCat !== 'all' && styles.filterBtnActive]}
+          onPress={() => setShowFilter(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.filterBtnIcon}>⚙️</Text>
+          <Text style={[styles.filterBtnText, selectedCat !== 'all' && styles.filterBtnTextActive]}>
+            {selectedCat !== 'all' ? activeCat?.label : 'Filter'}
+          </Text>
         </TouchableOpacity>
-      </TouchableOpacity>
-    ))}
-  </View>
-);
+      </View>
+
+      {/* Active filter chip */}
+      {selectedCat !== 'all' && (
+        <View style={styles.activeCatRow}>
+          <Text style={styles.activeCatEmoji}>{activeCat?.emoji}</Text>
+          <Text style={styles.activeCatLabel}>{activeCat?.label}</Text>
+          <TouchableOpacity onPress={() => setSelectedCat('all')} activeOpacity={0.7}>
+            <Text style={styles.activeCatClear}>✕ Clear</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Grid */}
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        columnWrapperStyle={styles.rentalGridRow}
+        contentContainerStyle={styles.rentalGridList}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.skillEmpty}>
+            <Text style={styles.skillEmptyEmoji}>🏗️</Text>
+            <Text style={styles.skillEmptyText}>No equipment found</Text>
+            <Text style={styles.skillEmptySub}>Try a different filter or search term</Text>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <View style={styles.rentalCardWrapper}>
+            <RentalCard
+              item={item}
+              onPress={(i) => navigation.navigate('RentalDetail', { item: i })}
+            />
+          </View>
+        )}
+      />
+
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilter}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFilter(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowFilter(false)}
+        >
+          <TouchableOpacity style={styles.modalSheet} activeOpacity={1}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Filter by Category</Text>
+            <Text style={styles.modalSub}>Select a category to filter equipment</Text>
+
+            <View style={styles.catGrid}>
+              {rentalCategories.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[
+                    styles.catCard,
+                    selectedCat === cat.id && styles.catCardSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedCat(cat.id);
+                    setShowFilter(false);
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.catEmoji}>{cat.emoji}</Text>
+                  <Text style={[
+                    styles.catLabel,
+                    selectedCat === cat.id && styles.catLabelSelected,
+                  ]}>
+                    {cat.label}
+                  </Text>
+                  {selectedCat === cat.id && (
+                    <View style={styles.catSelectedDot} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              onPress={() => setShowFilter(false)}
+              style={styles.modalCancel}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalCancelText}>Close</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+};
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const BookingScreen = () => {
@@ -757,45 +882,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // Rental
-  rentalContainer: { paddingTop: 16, paddingHorizontal: 20 },
-  rentalCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 13,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  rentalEmoji: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: colors.accentYellowSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(245,200,66,0.25)',
-  },
-  rentalName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 3 },
-  rentalPrice: { fontSize: 13, color: colors.accentAmber, fontWeight: '600' },
-  rentBtn: {
-    backgroundColor: colors.accentYellowSoft,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(245,200,66,0.3)',
-  },
-  rentBtnText: { fontSize: 13, fontWeight: '700', color: colors.accentAmber },
 
   // Modal
   modalOverlay: {
@@ -892,6 +978,120 @@ const styles = StyleSheet.create({
   modalConfirmBtn: { borderRadius: 16, overflow: 'hidden', marginBottom: 12 },
   modalCancel: { paddingVertical: 12, alignItems: 'center' },
   modalCancelText: { fontSize: 14, color: colors.textMuted, fontWeight: '600' },
+
+// Rental
+  rentalTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  rentalSearchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.inputBg,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  rentalSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  filterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterBtnActive: {
+    backgroundColor: colors.accentYellowSoft,
+    borderColor: colors.accentYellow,
+  },
+  filterBtnIcon: { fontSize: 14 },
+  filterBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  filterBtnTextActive: { color: colors.accentAmber },
+  activeCatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    gap: 8,
+  },
+  activeCatEmoji: { fontSize: 16 },
+  activeCatLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  activeCatClear: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.accentAmber,
+  },
+  rentalGridList: {
+    paddingHorizontal: 12,
+    paddingBottom: 30,
+  },
+  rentalCardWrapper: { width: '47%', margin: '1.5%' },
+rentalGridRow: { justifyContent: 'space-between' },
+
+  // Category filter grid in modal
+  catGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  catCard: {
+    width: '30%',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    position: 'relative',
+  },
+  catCardSelected: {
+    backgroundColor: '#FFFDF0',
+    borderColor: colors.accentYellow,
+  },
+  catEmoji: { fontSize: 28, marginBottom: 8 },
+  catLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  catLabelSelected: { color: colors.accentAmber },
+  catSelectedDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accentAmber,
+  },
 });
 
 export default BookingScreen;

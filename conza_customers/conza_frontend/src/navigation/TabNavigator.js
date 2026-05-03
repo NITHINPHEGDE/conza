@@ -10,6 +10,9 @@ import ProjectScreen       from '../screens/ProjectScreen';
 import ProfileScreen       from '../screens/ProfileScreen';
 import LabourCheckoutScreen from '../screens/LabourCheckoutScreen';
 import MaterialCheckoutScreen from '../screens/MaterialCheckoutScreen';
+import MaterialDetailScreen from '../screens/MaterialDetailScreen';
+import RentalDetailScreen   from '../screens/RentalDetailScreen';
+import RentalCheckoutScreen from '../screens/RentalCheckoutScreen';
 import { colors }          from '../theme/colors';
 
 const Tab   = createBottomTabNavigator();
@@ -34,6 +37,9 @@ const BookingStack = () => (
     <Stack.Screen name="WorkersNearby"  component={WorkersNearbyScreen} />
     <Stack.Screen name="LabourCheckout" component={LabourCheckoutScreen} />
     <Stack.Screen name="MaterialCheckout"    component={MaterialCheckoutScreen} />
+    <Stack.Screen name="MaterialDetail" component={MaterialDetailScreen} />
+     <Stack.Screen name="RentalDetail"     component={RentalDetailScreen}     />
+    <Stack.Screen name="RentalCheckout"   component={RentalCheckoutScreen}   />
   </Stack.Navigator>
 );
 
