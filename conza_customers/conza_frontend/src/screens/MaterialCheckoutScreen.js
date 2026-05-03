@@ -84,6 +84,27 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
 
   const handleSelectPayment = useCallback((id) => setPayment(id), []);
 
+  const renderedCartItems = useMemo(() => (
+    cartItems.map((item) => (
+      <MaterialItemRow
+        key={item.id}
+        item={item}
+        quantity={cart[item.id] ?? item.quantity ?? 0}
+      />
+    ))
+  ), [cartItems, cart]);
+
+  const renderedPaymentOptions = useMemo(() => (
+    PAYMENT_METHODS.map((method) => (
+      <PaymentOption
+        key={method.id}
+        method={method}
+        selected={paymentMethod === method.id}
+        onSelect={handleSelectPayment}
+      />
+    ))
+  ), [paymentMethod, handleSelectPayment]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
@@ -113,13 +134,7 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
             Order Summary
             <Text style={styles.sectionCount}> ({totalItems} items)</Text>
           </Text>
-          {cartItems.map((item) => (
-            <MaterialItemRow
-              key={item.id}
-              item={item}
-              quantity={cart[item.id] ?? item.quantity ?? 0}
-            />
-          ))}
+          {renderedCartItems}
         </View>
 
         {/* Delivery Address */}
@@ -174,14 +189,7 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
         {/* Payment Method */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
-          {PAYMENT_METHODS.map((method) => (
-            <PaymentOption
-              key={method.id}
-              method={method}
-              selected={paymentMethod === method.id}
-              onSelect={handleSelectPayment}
-            />
-          ))}
+          {renderedPaymentOptions}
         </View>
 
         {/* Bill Summary */}

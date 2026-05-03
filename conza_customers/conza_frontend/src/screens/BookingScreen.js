@@ -572,14 +572,6 @@ const BookingScreen = () => {
 
   const isSearching = activeSearch.trim().length > 0;
 
-  const renderCategoryItem = useCallback(({ item }) => (
-    <CategoryButton
-      label={item.key}
-      icon={item.icon}
-      isSelected={activeCategory === item.key}
-      onPress={() => setActiveCategory(item.key)}
-    />
-  ), [activeCategory]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -623,15 +615,15 @@ const BookingScreen = () => {
         {/* Category buttons — hidden when searching */}
         {!isSearching && (
           <View style={styles.categoryRow}>
-            <FlatList
-              horizontal
-              data={CATEGORIES}
-              keyExtractor={(item) => item.key}
-              showsHorizontalScrollIndicator={false}
-              initialNumToRender={3}
-              renderItem={renderCategoryItem}
-              contentContainerStyle={{ paddingRight: 20 }}
-            />
+            {CATEGORIES.map((item) => (
+              <CategoryButton
+                key={item.key}
+                label={item.key}
+                icon={item.icon}
+                isSelected={activeCategory === item.key}
+                onPress={() => setActiveCategory(item.key)}
+              />
+            ))}
           </View>
         )}
       </View>
@@ -688,7 +680,7 @@ const styles = StyleSheet.create({
   },
   fixedSection: {
     paddingHorizontal: 20,
-    paddingBottom: 14,
+    paddingBottom: 18,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
     backgroundColor: colors.background,
@@ -710,9 +702,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textMuted,
     fontWeight: '700',
-    paddingLeft: 8,
   },
-  categoryRow: { flexDirection: 'row', alignItems: 'center' },
+  categoryRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    width: '100%',
+    justifyContent: 'space-between',
+    paddingTop: 4
+  },
   dynamicSection: { flex: 1, backgroundColor: colors.background },
 
   // Skill search

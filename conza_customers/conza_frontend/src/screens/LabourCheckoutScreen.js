@@ -97,6 +97,23 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
 
   const handleSelectPayment = useCallback((id) => setPayment(id), []);
 
+  const renderedWorkers = useMemo(() => (
+    selectedWorkers.map((worker) => (
+      <WorkerRow key={worker.id} worker={worker} />
+    ))
+  ), [selectedWorkers]);
+
+  const renderedPaymentOptions = useMemo(() => (
+    PAYMENT_METHODS.map((method) => (
+      <PaymentOption
+        key={method.id}
+        method={method}
+        selected={paymentMethod === method.id}
+        onSelect={handleSelectPayment}
+      />
+    ))
+  ), [paymentMethod, handleSelectPayment]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
@@ -124,9 +141,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         {/* Selected Workers */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Selected Workers</Text>
-          {selectedWorkers.map((worker) => (
-            <WorkerRow key={worker.id} worker={worker} />
-          ))}
+          {renderedWorkers}
         </View>
 
         {/* Work Location */}
@@ -178,14 +193,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         {/* Payment Method */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
-          {PAYMENT_METHODS.map((method) => (
-            <PaymentOption
-              key={method.id}
-              method={method}
-              selected={paymentMethod === method.id}
-              onSelect={handleSelectPayment}
-            />
-          ))}
+          {renderedPaymentOptions}
         </View>
 
         {/* Bill Summary */}

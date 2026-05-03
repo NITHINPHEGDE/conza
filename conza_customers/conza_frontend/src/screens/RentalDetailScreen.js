@@ -309,6 +309,39 @@ const RentalDetailScreen = ({ route, navigation }) => {
     if (item.available) openBookNow();
   }, [item.available, openBookNow]);
 
+  const renderedFeatures = useMemo(() => (
+    (item.features || []).map((f) => (
+      <View key={f.label} style={styles.featureItem}>
+        <View style={styles.featureIcon}>
+          <Text style={{ fontSize: 20 }}>{f.icon}</Text>
+        </View>
+        <Text style={styles.featureLabel}>{f.label}</Text>
+      </View>
+    ))
+  ), [item.features]);
+
+  const renderedSpecs = useMemo(() => (
+    (item.specs || []).map((s) => (
+      <View key={s.label} style={styles.pricingRow}>
+        <Text style={styles.pricingLabel}>{s.label}</Text>
+        <Text style={styles.pricingValue}>{s.value}</Text>
+      </View>
+    ))
+  ), [item.specs]);
+
+  const renderedPricing = useMemo(() => (
+    [
+      { label: 'Daily Rate',   value: `₹${item.pricePerDay}` },
+      { label: 'Weekly Rate',  value: `₹${item.pricePerDay * 6}` },
+      { label: 'Monthly Rate', value: `₹${item.pricePerDay * 24}` },
+    ].map((p) => (
+      <View key={p.label} style={styles.pricingRow}>
+        <Text style={styles.pricingLabel}>{p.label}</Text>
+        <Text style={styles.pricingValue}>{p.value}</Text>
+      </View>
+    ))
+  ), [item.pricePerDay]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
@@ -367,14 +400,7 @@ const RentalDetailScreen = ({ route, navigation }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>What's Included</Text>
           <View style={styles.featuresGrid}>
-            {(item.features || []).map((f) => (
-              <View key={f.label} style={styles.featureItem}>
-                <View style={styles.featureIcon}>
-                  <Text style={{ fontSize: 20 }}>{f.icon}</Text>
-                </View>
-                <Text style={styles.featureLabel}>{f.label}</Text>
-              </View>
-            ))}
+            {renderedFeatures}
           </View>
         </View>
 
@@ -391,12 +417,7 @@ const RentalDetailScreen = ({ route, navigation }) => {
         {/* Specs */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Specifications</Text>
-          {(item.specs || []).map((s) => (
-            <View key={s.label} style={styles.pricingRow}>
-              <Text style={styles.pricingLabel}>{s.label}</Text>
-              <Text style={styles.pricingValue}>{s.value}</Text>
-            </View>
-          ))}
+          {renderedSpecs}
         </View>
 
         <View style={styles.divider} />
@@ -404,16 +425,7 @@ const RentalDetailScreen = ({ route, navigation }) => {
         {/* Pricing breakdown */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Pricing</Text>
-          {[
-            { label: 'Daily Rate',   value: `₹${item.pricePerDay}` },
-            { label: 'Weekly Rate',  value: `₹${item.pricePerDay * 6}` },
-            { label: 'Monthly Rate', value: `₹${item.pricePerDay * 24}` },
-          ].map((p) => (
-            <View key={p.label} style={styles.pricingRow}>
-              <Text style={styles.pricingLabel}>{p.label}</Text>
-              <Text style={styles.pricingValue}>{p.value}</Text>
-            </View>
-          ))}
+          {renderedPricing}
         </View>
 
         <View style={{ height: 120 }} />

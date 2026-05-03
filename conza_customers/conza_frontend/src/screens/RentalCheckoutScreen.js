@@ -66,6 +66,17 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
 
   const handleSelectPayment = useCallback((id) => setPayment(id), []);
 
+  const renderedPaymentOptions = useMemo(() => (
+    PAYMENT_METHODS.map((method) => (
+      <PaymentOption
+        key={method.id}
+        method={method}
+        selected={paymentMethod === method.id}
+        onSelect={handleSelectPayment}
+      />
+    ))
+  ), [paymentMethod, handleSelectPayment]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
@@ -158,14 +169,7 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
         {/* Payment */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
-          {PAYMENT_METHODS.map((method) => (
-            <PaymentOption
-              key={method.id}
-              method={method}
-              selected={paymentMethod === method.id}
-              onSelect={handleSelectPayment}
-            />
-          ))}
+          {renderedPaymentOptions}
         </View>
 
         {/* Bill */}
