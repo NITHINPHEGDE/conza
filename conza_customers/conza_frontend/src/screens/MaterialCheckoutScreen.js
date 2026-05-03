@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ const PAYMENT_METHODS = [
 ];
 
 // ─── Material Item Row ────────────────────────────────────────────────────────
-const MaterialItemRow = ({ item, quantity }) => (
+const MaterialItemRow = React.memo(({ item, quantity }) => (
   <View style={styles.itemRow}>
     <Image source={{ uri: item.image }} style={styles.itemImage} resizeMode="cover" />
     <View style={styles.itemInfo}>
@@ -37,10 +37,10 @@ const MaterialItemRow = ({ item, quantity }) => (
       <Text style={styles.itemPrice}>₹{item.price * quantity}</Text>
     </View>
   </View>
-);
+));
 
 // ─── Payment Option ───────────────────────────────────────────────────────────
-const PaymentOption = ({ method, selected, onSelect }) => (
+const PaymentOption = React.memo(({ method, selected, onSelect }) => (
   <TouchableOpacity
     style={[styles.paymentOption, selected && styles.paymentOptionSelected]}
     onPress={() => onSelect(method.id)}
@@ -57,7 +57,7 @@ const PaymentOption = ({ method, selected, onSelect }) => (
       <Text style={styles.paymentSub}>{method.sub}</Text>
     </View>
   </TouchableOpacity>
-);
+));
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const MaterialCheckoutScreen = ({ route, navigation }) => {
@@ -68,10 +68,21 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
   const [pincode, setPincode]       = useState('');
   const [paymentMethod, setPayment] = useState('cod');
 
-  const subtotal    = cartItems.reduce((sum, item) => sum + item.price * cart[item.id], 0);
-  const platformFee = Math.round(subtotal * PLATFORM_FEE_RATE);
-  const total       = subtotal + platformFee + DELIVERY_FEE;
-  const totalItems  = cartItems.reduce((sum, item) => sum + cart[item.id], 0);
+  const { subtotal, platformFee, total, totalItems } = useMemo(() => {
+    const sub = cartItems.reduce((sum, item) => {
+      const qty = cart[item.id] ?? item.quantity ?? 0;
+      return sum + item.price * qty;
+    }, 0);
+    const fee = Math.round(sub * PLATFORM_FEE_RATE);
+    const tot = sub + fee + DELIVERY_FEE;
+    const itemsCount = cartItems.reduce((sum, item) => {
+      const qty = cart[item.id] ?? item.quantity ?? 0;
+      return sum + qty;
+    }, 0);
+    return { subtotal: sub, platformFee: fee, total: tot, totalItems: itemsCount };
+  }, [cartItems, cart]);
+
+  const handleSelectPayment = useCallback((id) => setPayment(id), []);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -106,7 +117,7 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
             <MaterialItemRow
               key={item.id}
               item={item}
-              quantity={cart[item.id]}
+              quantity={cart[item.id] ?? item.quantity ?? 0}
             />
           ))}
         </View>
@@ -168,7 +179,7 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
               key={method.id}
               method={method}
               selected={paymentMethod === method.id}
-              onSelect={setPayment}
+              onSelect={handleSelectPayment}
             />
           ))}
         </View>

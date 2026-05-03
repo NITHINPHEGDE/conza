@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,7 @@ const PAYMENT_METHODS = [
   { id: 'card', label: 'Credit / Debit Card',  sub: 'All major cards accepted',    icon: '💳' },
 ];
 
-const PaymentOption = ({ method, selected, onSelect }) => (
+const PaymentOption = React.memo(({ method, selected, onSelect }) => (
   <TouchableOpacity
     style={[styles.paymentOption, selected && styles.paymentOptionSelected]}
     onPress={() => onSelect(method.id)}
@@ -40,7 +40,7 @@ const PaymentOption = ({ method, selected, onSelect }) => (
       <Text style={styles.paymentSub}>{method.sub}</Text>
     </View>
   </TouchableOpacity>
-);
+));
 
 const RentalCheckoutScreen = ({ route, navigation }) => {
   const {
@@ -55,10 +55,16 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
   const [pincode, setPincode]       = useState('');
   const [paymentMethod, setPayment] = useState('cod');
 
-  const subtotal    = (item?.pricePerDay || 0) * quantity;
-  const platformFee = Math.round(subtotal * PLATFORM_FEE_RATE);
-  const total       = subtotal + platformFee + DELIVERY_FEE;
+  const { subtotal, platformFee, total } = useMemo(() => {
+    const sub = (item?.pricePerDay || 0) * quantity;
+    const fee = Math.round(sub * PLATFORM_FEE_RATE);
+    const tot = sub + fee + DELIVERY_FEE;
+    return { subtotal: sub, platformFee: fee, total: tot };
+  }, [item, quantity]);
+
   const isScheduled = !!scheduledDate;
+
+  const handleSelectPayment = useCallback((id) => setPayment(id), []);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -157,7 +163,7 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
               key={method.id}
               method={method}
               selected={paymentMethod === method.id}
-              onSelect={setPayment}
+              onSelect={handleSelectPayment}
             />
           ))}
         </View>

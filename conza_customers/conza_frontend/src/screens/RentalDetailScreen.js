@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,42 +18,54 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 
 // ─── Quantity Selector ────────────────────────────────────────────────────────
-const QuantitySelector = ({ quantity, onChange }) => (
-  <View style={styles.qtyRow}>
-    <Text style={styles.qtyLabel}>Quantity</Text>
-    <View style={styles.qtyControl}>
-      <TouchableOpacity
-        style={styles.qtyBtn}
-        onPress={() => onChange(Math.max(1, quantity - 1))}
-        activeOpacity={0.75}
-      >
-        <Text style={styles.qtyBtnText}>−</Text>
-      </TouchableOpacity>
-      <TextInput
-        style={styles.qtyInput}
-        value={String(quantity)}
-        onChangeText={(t) => {
-          const n = parseInt(t);
-          if (!isNaN(n) && n > 0) onChange(n);
-        }}
-        keyboardType="numeric"
-        maxLength={3}
-        selectTextOnFocus
-      />
-      <TouchableOpacity
-        style={styles.qtyBtn}
-        onPress={() => onChange(quantity + 1)}
-        activeOpacity={0.75}
-      >
-        <Text style={styles.qtyBtnText}>+</Text>
-      </TouchableOpacity>
+const QuantitySelector = React.memo(({ quantity, onChange }) => {
+  const handleMinus = useCallback(() => onChange(Math.max(1, quantity - 1)), [onChange, quantity]);
+  const handlePlus = useCallback(() => onChange(quantity + 1), [onChange, quantity]);
+  const handleChangeText = useCallback((t) => {
+    const n = parseInt(t);
+    if (!isNaN(n) && n > 0) onChange(n);
+  }, [onChange]);
+
+  return (
+    <View style={styles.qtyRow}>
+      <Text style={styles.qtyLabel}>Quantity</Text>
+      <View style={styles.qtyControl}>
+        <TouchableOpacity
+          style={styles.qtyBtn}
+          onPress={handleMinus}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.qtyBtnText}>−</Text>
+        </TouchableOpacity>
+        <TextInput
+          style={styles.qtyInput}
+          value={String(quantity)}
+          onChangeText={handleChangeText}
+          keyboardType="numeric"
+          maxLength={3}
+          selectTextOnFocus
+        />
+        <TouchableOpacity
+          style={styles.qtyBtn}
+          onPress={handlePlus}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.qtyBtnText}>+</Text>
+        </TouchableOpacity>
+      </View>
     </View>
-  </View>
-);
+  );
+});
 
 // ─── Book Now Modal ───────────────────────────────────────────────────────────
-const BookNowModal = ({ visible, item, onClose, onProceed }) => {
+const BookNowModal = React.memo(({ visible, item, onClose, onProceed }) => {
   const [quantity, setQuantity] = useState(1);
+
+  const handleProceedLocal = useCallback(() => {
+    onProceed({ quantity, scheduledDate: null, scheduledTime: null });
+  }, [onProceed, quantity]);
+
+  const totalPrice = useMemo(() => (item?.pricePerDay || 0) * quantity, [item?.pricePerDay, quantity]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -67,7 +79,7 @@ const BookNowModal = ({ visible, item, onClose, onProceed }) => {
 
           <View style={styles.modalPriceSummary}>
             <Text style={styles.modalPriceLabel}>Total per day</Text>
-            <Text style={styles.modalPriceValue}>₹{(item?.pricePerDay || 0) * quantity}</Text>
+            <Text style={styles.modalPriceValue}>₹{totalPrice}</Text>
           </View>
 
           <LinearGradient
@@ -79,7 +91,7 @@ const BookNowModal = ({ visible, item, onClose, onProceed }) => {
             <TouchableOpacity
               style={styles.modalProceedTouch}
               activeOpacity={0.85}
-              onPress={() => onProceed({ quantity, scheduledDate: null, scheduledTime: null })}
+              onPress={handleProceedLocal}
             >
               <Text style={styles.modalProceedText}>Proceed to Checkout →</Text>
             </TouchableOpacity>
@@ -92,10 +104,10 @@ const BookNowModal = ({ visible, item, onClose, onProceed }) => {
       </TouchableOpacity>
     </Modal>
   );
-};
+});
 
 // ─── Schedule Modal ───────────────────────────────────────────────────────────
-const ScheduleModal = ({ visible, item, onClose, onProceed }) => {
+const ScheduleModal = React.memo(({ visible, item, onClose, onProceed }) => {
   const [quantity,        setQuantity]        = useState(1);
   const [selectedDate,    setSelectedDate]    = useState(new Date());
   const [selectedTime,    setSelectedTime]    = useState(new Date());
@@ -104,22 +116,59 @@ const ScheduleModal = ({ visible, item, onClose, onProceed }) => {
   const [dateConfirmed,   setDateConfirmed]   = useState(false);
   const [timeConfirmed,   setTimeConfirmed]   = useState(false);
 
-  const formatDate = (date) => {
+  const formatDate = useCallback((date) => {
     const d = String(date.getDate()).padStart(2, '0');
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const y = date.getFullYear();
     return `${d}/${m}/${y}`;
-  };
+  }, []);
 
-  const formatTime = (date) => {
+  const formatTime = useCallback((date) => {
     let hours   = date.getHours();
     const mins  = String(date.getMinutes()).padStart(2, '0');
     const ampm  = hours >= 12 ? 'PM' : 'AM';
     hours       = hours % 12 || 12;
     return `${String(hours).padStart(2, '0')}:${mins} ${ampm}`;
-  };
+  }, []);
 
   const isValid = dateConfirmed && timeConfirmed;
+
+  const handleProceedLocal = useCallback(() => {
+    if (isValid) {
+      onProceed({
+        quantity,
+        scheduledDate: formatDate(selectedDate),
+        scheduledTime: formatTime(selectedTime),
+      });
+    }
+  }, [isValid, onProceed, quantity, selectedDate, selectedTime, formatDate, formatTime]);
+
+  const totalPrice = useMemo(() => (item?.pricePerDay || 0) * quantity, [item?.pricePerDay, quantity]);
+
+  const openDatePicker = useCallback(() => setShowDatePicker(true), []);
+  const openTimePicker = useCallback(() => setShowTimePicker(true), []);
+
+  const handleDateChange = useCallback((event, date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (event.type === 'set' && date) {
+      setSelectedDate(date);
+      setDateConfirmed(true);
+      setShowDatePicker(false);
+    } else if (event.type === 'dismissed') {
+      setShowDatePicker(false);
+    }
+  }, []);
+
+  const handleTimeChange = useCallback((event, time) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    if (event.type === 'set' && time) {
+      setSelectedTime(time);
+      setTimeConfirmed(true);
+      setShowTimePicker(false);
+    } else if (event.type === 'dismissed') {
+      setShowTimePicker(false);
+    }
+  }, []);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -133,7 +182,7 @@ const ScheduleModal = ({ visible, item, onClose, onProceed }) => {
           <Text style={styles.fieldLabel}>Preferred Date</Text>
           <TouchableOpacity
             style={styles.dateTimeInput}
-            onPress={() => setShowDatePicker(true)}
+            onPress={openDatePicker}
             activeOpacity={0.8}
           >
             <Text style={styles.dateTimeIcon}>📅</Text>
@@ -152,16 +201,7 @@ const ScheduleModal = ({ visible, item, onClose, onProceed }) => {
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
               minimumDate={new Date()}
-              onChange={(event, date) => {
-                setShowDatePicker(Platform.OS === 'ios');
-                if (event.type === 'set' && date) {
-                  setSelectedDate(date);
-                  setDateConfirmed(true);
-                  setShowDatePicker(false);
-                } else if (event.type === 'dismissed') {
-                  setShowDatePicker(false);
-                }
-              }}
+              onChange={handleDateChange}
             />
           )}
 
@@ -169,7 +209,7 @@ const ScheduleModal = ({ visible, item, onClose, onProceed }) => {
           <Text style={styles.fieldLabel}>Preferred Time</Text>
           <TouchableOpacity
             style={styles.dateTimeInput}
-            onPress={() => setShowTimePicker(true)}
+            onPress={openTimePicker}
             activeOpacity={0.8}
           >
             <Text style={styles.dateTimeIcon}>🕐</Text>
@@ -188,16 +228,7 @@ const ScheduleModal = ({ visible, item, onClose, onProceed }) => {
               mode="time"
               display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
               is24Hour={false}
-              onChange={(event, time) => {
-                setShowTimePicker(Platform.OS === 'ios');
-                if (event.type === 'set' && time) {
-                  setSelectedTime(time);
-                  setTimeConfirmed(true);
-                  setShowTimePicker(false);
-                } else if (event.type === 'dismissed') {
-                  setShowTimePicker(false);
-                }
-              }}
+              onChange={handleTimeChange}
             />
           )}
 
@@ -221,7 +252,7 @@ const ScheduleModal = ({ visible, item, onClose, onProceed }) => {
 
           <View style={styles.modalPriceSummary}>
             <Text style={styles.modalPriceLabel}>Total per day</Text>
-            <Text style={styles.modalPriceValue}>₹{(item?.pricePerDay || 0) * quantity}</Text>
+            <Text style={styles.modalPriceValue}>₹{totalPrice}</Text>
           </View>
 
           <LinearGradient
@@ -235,11 +266,7 @@ const ScheduleModal = ({ visible, item, onClose, onProceed }) => {
             <TouchableOpacity
               style={styles.modalProceedTouch}
               activeOpacity={isValid ? 0.85 : 1}
-              onPress={() => isValid && onProceed({
-                quantity,
-                scheduledDate: formatDate(selectedDate),
-                scheduledTime: formatTime(selectedTime),
-              })}
+              onPress={handleProceedLocal}
             >
               <Text style={[styles.modalProceedText, !isValid && { color: colors.textMuted }]}>
                 {isValid ? 'Proceed to Checkout →' : 'Select Date & Time'}
@@ -254,7 +281,7 @@ const ScheduleModal = ({ visible, item, onClose, onProceed }) => {
       </TouchableOpacity>
     </Modal>
   );
-};
+});
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const RentalDetailScreen = ({ route, navigation }) => {
@@ -262,16 +289,25 @@ const RentalDetailScreen = ({ route, navigation }) => {
   const [showBookNow,  setShowBookNow]  = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
 
- const description = item.description || 'High quality rental equipment for your construction needs.';
+  const description = useMemo(() => item.description || 'High quality rental equipment for your construction needs.', [item.description]);
 
-  const handleProceed = (bookingDetails) => {
+  const handleProceed = useCallback((bookingDetails) => {
     setShowBookNow(false);
     setShowSchedule(false);
     navigation.navigate('RentalCheckout', {
       item,
       ...bookingDetails,
     });
-  };
+  }, [item, navigation]);
+
+  const openBookNow = useCallback(() => setShowBookNow(true), []);
+  const closeBookNow = useCallback(() => setShowBookNow(false), []);
+  const openSchedule = useCallback(() => setShowSchedule(true), []);
+  const closeSchedule = useCallback(() => setShowSchedule(false), []);
+
+  const handleBookNowPress = useCallback(() => {
+    if (item.available) openBookNow();
+  }, [item.available, openBookNow]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -387,7 +423,7 @@ const RentalDetailScreen = ({ route, navigation }) => {
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.scheduleBtn}
-          onPress={() => setShowSchedule(true)}
+          onPress={openSchedule}
           activeOpacity={0.85}
         >
           <Text style={styles.scheduleBtnText}>📅 Schedule</Text>
@@ -404,7 +440,7 @@ const RentalDetailScreen = ({ route, navigation }) => {
           <TouchableOpacity
             style={styles.bookNowTouch}
             activeOpacity={item.available ? 0.85 : 1}
-            onPress={() => item.available && setShowBookNow(true)}
+            onPress={handleBookNowPress}
           >
             <Text style={[styles.bookNowText, !item.available && { color: colors.textMuted }]}>
               {item.available ? '⚡ Book Now' : 'Not Available'}
@@ -416,13 +452,13 @@ const RentalDetailScreen = ({ route, navigation }) => {
       <BookNowModal
         visible={showBookNow}
         item={item}
-        onClose={() => setShowBookNow(false)}
+        onClose={closeBookNow}
         onProceed={handleProceed}
       />
       <ScheduleModal
         visible={showSchedule}
         item={item}
-        onClose={() => setShowSchedule(false)}
+        onClose={closeSchedule}
         onProceed={handleProceed}
       />
     </SafeAreaView>

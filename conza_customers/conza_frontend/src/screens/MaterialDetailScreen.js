@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,18 +19,21 @@ const { width } = Dimensions.get('window');
 
 
 // ─── Quantity Dialog ──────────────────────────────────────────────────────────
-const QuantityDialog = ({ visible, item, onClose, onConfirm }) => {
+const QuantityDialog = React.memo(({ visible, item, onClose, onConfirm }) => {
   const [qty, setQty] = useState(1);
 
-  const handleConfirm = () => {
+  const handleConfirm = useCallback(() => {
     onConfirm(qty);
     setQty(1);
-  };
+  }, [onConfirm, qty]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setQty(1);
     onClose();
-  };
+  }, [onClose]);
+
+  const handleMinus = useCallback(() => setQty((q) => Math.max(1, q - 1)), []);
+  const handlePlus = useCallback(() => setQty((q) => q + 1), []);
 
   return (
     <Modal
@@ -54,7 +57,7 @@ const QuantityDialog = ({ visible, item, onClose, onConfirm }) => {
           <View style={styles.counterRow}>
             <TouchableOpacity
               style={styles.counterBtn}
-              onPress={() => setQty((q) => Math.max(1, q - 1))}
+              onPress={handleMinus}
               activeOpacity={0.75}
             >
               <Text style={styles.counterBtnText}>−</Text>
@@ -67,7 +70,7 @@ const QuantityDialog = ({ visible, item, onClose, onConfirm }) => {
 
             <TouchableOpacity
               style={styles.counterBtn}
-              onPress={() => setQty((q) => q + 1)}
+              onPress={handlePlus}
               activeOpacity={0.75}
             >
               <Text style={styles.counterBtnText}>+</Text>
@@ -111,7 +114,7 @@ const QuantityDialog = ({ visible, item, onClose, onConfirm }) => {
       </TouchableOpacity>
     </Modal>
   );
-};
+});
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const MaterialDetailScreen = ({ route, navigation }) => {
@@ -123,22 +126,29 @@ const MaterialDetailScreen = ({ route, navigation }) => {
 
   if (!item) return null;
 
- const offer       = materialOffers[item.id];
+  const offer       = materialOffers[item.id];
   const description = materialDescriptions[item.id] || 'High quality construction material sourced from certified suppliers.';
-  const discountedPrice = Math.round(item.price * 0.95); // 5% shown as original offer price
+  const discountedPrice = useMemo(() => Math.round(item.price * 0.95), [item.price]);
 
-  const handleBuyNowConfirm = (qty) => {
+  const handleBuyNowConfirm = useCallback((qty) => {
     setShowDialog(false);
     navigation.navigate('MaterialCheckout', {
       cartItems: [item],
       cart: { [item.id]: qty },
     });
-  };
+  }, [item, navigation]);
 
-  const handleAddToCart = () => {
+  const handleAddToCart = useCallback(() => {
     setCartAdded(true);
     setTimeout(() => setCartAdded(false), 2000);
-  };
+  }, []);
+
+  const openDialog = useCallback(() => setShowDialog(true), []);
+  const closeDialog = useCallback(() => setShowDialog(false), []);
+  const openReturnTerms = useCallback(() => setShowReturnTerms(true), []);
+  const closeReturnTerms = useCallback(() => setShowReturnTerms(false), []);
+  const openReplacementTerms = useCallback(() => setShowReplacementTerms(true), []);
+  const closeReplacementTerms = useCallback(() => setShowReplacementTerms(false), []);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -252,7 +262,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
                 <TouchableOpacity
                   style={styles.termsBtn}
                   activeOpacity={0.8}
-                  onPress={() => setShowReturnTerms(true)}
+                  onPress={openReturnTerms}
                 >
                   <Text style={styles.termsBtnIcon}>↩️</Text>
                   <View style={{ flex: 1 }}>
@@ -266,7 +276,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
                 <TouchableOpacity
                   style={styles.termsBtn}
                   activeOpacity={0.8}
-                  onPress={() => setShowReplacementTerms(true)}
+                  onPress={openReplacementTerms}
                 >
                   <Text style={styles.termsBtnIcon}>🔄</Text>
                   <View style={{ flex: 1 }}>
@@ -283,7 +293,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
         <View style={{ height: 110 }} />
       </ScrollView>
 
-      {/* ── Bottom Buttons ── */}
+      {/* Bottom Buttons ── */}
       <View style={styles.bottomBar}>
         {/* Add to Cart — white/outline */}
         <TouchableOpacity
@@ -307,7 +317,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
             style={styles.buyBtnTouch}
             activeOpacity={0.85}
             disabled={!item.inStock}
-            onPress={() => setShowDialog(true)}
+            onPress={openDialog}
           >
             <Text style={styles.buyBtnText}>
               {item.inStock ? 'Buy Now ⚡' : 'Out of Stock'}
@@ -320,19 +330,19 @@ const MaterialDetailScreen = ({ route, navigation }) => {
       <QuantityDialog
         visible={showDialog}
         item={item}
-        onClose={() => setShowDialog(false)}
+        onClose={closeDialog}
         onConfirm={handleBuyNowConfirm}
       />
 
       {/* Return Terms Modal */}
-      <Modal visible={showReturnTerms} transparent animationType="slide" onRequestClose={() => setShowReturnTerms(false)}>
-        <TouchableOpacity style={styles.dialogOverlay} activeOpacity={1} onPress={() => setShowReturnTerms(false)}>
+      <Modal visible={showReturnTerms} transparent animationType="slide" onRequestClose={closeReturnTerms}>
+        <TouchableOpacity style={styles.dialogOverlay} activeOpacity={1} onPress={closeReturnTerms}>
           <TouchableOpacity style={styles.dialogSheet} activeOpacity={1}>
             <View style={styles.dialogHandle} />
             <Text style={styles.termsModalIcon}>↩️</Text>
             <Text style={styles.termsModalTitle}>Return Terms & Conditions</Text>
             <Text style={styles.termsModalText}>{item.returnPolicy}</Text>
-            <TouchableOpacity style={styles.termsModalCloseBtn} onPress={() => setShowReturnTerms(false)} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.termsModalCloseBtn} onPress={closeReturnTerms} activeOpacity={0.8}>
               <Text style={styles.termsModalCloseBtnText}>Got it</Text>
             </TouchableOpacity>
           </TouchableOpacity>
@@ -340,14 +350,14 @@ const MaterialDetailScreen = ({ route, navigation }) => {
       </Modal>
 
       {/* Replacement Terms Modal */}
-      <Modal visible={showReplacementTerms} transparent animationType="slide" onRequestClose={() => setShowReplacementTerms(false)}>
-        <TouchableOpacity style={styles.dialogOverlay} activeOpacity={1} onPress={() => setShowReplacementTerms(false)}>
+      <Modal visible={showReplacementTerms} transparent animationType="slide" onRequestClose={closeReplacementTerms}>
+        <TouchableOpacity style={styles.dialogOverlay} activeOpacity={1} onPress={closeReplacementTerms}>
           <TouchableOpacity style={styles.dialogSheet} activeOpacity={1}>
             <View style={styles.dialogHandle} />
             <Text style={styles.termsModalIcon}>🔄</Text>
             <Text style={styles.termsModalTitle}>Replacement Terms & Conditions</Text>
             <Text style={styles.termsModalText}>{item.replacementPolicy}</Text>
-            <TouchableOpacity style={styles.termsModalCloseBtn} onPress={() => setShowReplacementTerms(false)} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.termsModalCloseBtn} onPress={closeReplacementTerms} activeOpacity={0.8}>
               <Text style={styles.termsModalCloseBtnText}>Got it</Text>
             </TouchableOpacity>
           </TouchableOpacity>

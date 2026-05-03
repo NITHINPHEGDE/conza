@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
 
-const RentalCard = ({ item, onPress }) => (
+const RentalCard = React.memo(({ item, onPress }) => (
   <TouchableOpacity
     style={styles.card}
     onPress={() => onPress && onPress(item)}
@@ -34,7 +34,7 @@ const RentalCard = ({ item, onPress }) => (
       </View>
     </View>
   </TouchableOpacity>
-);
+));
 
 const styles = StyleSheet.create({
   card: {

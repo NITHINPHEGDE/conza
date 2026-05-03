@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 
-const SkillWorkerCard = ({ worker, isSelected, onToggle }) => (
+const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => (
   <TouchableOpacity
     style={[styles.card, isSelected && styles.cardSelected]}
     onPress={() => onToggle(worker)}
@@ -59,7 +59,7 @@ const SkillWorkerCard = ({ worker, isSelected, onToggle }) => (
       </View>
     </View>
   </TouchableOpacity>
-);
+));
 
 const styles = StyleSheet.create({
   card: {

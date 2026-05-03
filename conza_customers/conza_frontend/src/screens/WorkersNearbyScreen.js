@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,60 +13,64 @@ import { workersByCategory } from '../data/dummyData';
 import { colors } from '../theme/colors';
 
 // ─── Worker Card ──────────────────────────────────────────────────────────────
-const WorkerCard = ({ worker, isSelected, onToggle }) => (
-  <TouchableOpacity
-    style={[styles.card, isSelected && styles.cardSelected]}
-    onPress={() => onToggle(worker)}
-    activeOpacity={0.82}
-  >
-    {/* Top Row — Avatar + Name + Checkbox */}
-    <View style={styles.cardTop}>
-      <LinearGradient
-        colors={isSelected
-          ? [colors.gradientStart, colors.gradientEnd]
-          : ['#D0CDFF', '#A89CFF']}
-        style={styles.avatar}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <Text style={styles.avatarText}>{worker.initials}</Text>
-      </LinearGradient>
+const WorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
+  const handleToggle = useCallback(() => onToggle(worker), [onToggle, worker]);
 
-      <View style={styles.nameBlock}>
-        <Text style={styles.name}>{worker.name}</Text>
-        <View style={styles.metaRow}>
-          <Text style={styles.metaText}>⭐ {worker.rating}</Text>
-          <View style={styles.metaDot} />
-          <Text style={styles.metaText}>📍 {worker.distance}</Text>
+  return (
+    <TouchableOpacity
+      style={[styles.card, isSelected && styles.cardSelected]}
+      onPress={handleToggle}
+      activeOpacity={0.82}
+    >
+      {/* Top Row — Avatar + Name + Checkbox */}
+      <View style={styles.cardTop}>
+        <LinearGradient
+          colors={isSelected
+            ? [colors.gradientStart, colors.gradientEnd]
+            : ['#D0CDFF', '#A89CFF']}
+          style={styles.avatar}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Text style={styles.avatarText}>{worker.initials}</Text>
+        </LinearGradient>
+
+        <View style={styles.nameBlock}>
+          <Text style={styles.name}>{worker.name}</Text>
+          <View style={styles.metaRow}>
+            <Text style={styles.metaText}>⭐ {worker.rating}</Text>
+            <View style={styles.metaDot} />
+            <Text style={styles.metaText}>📍 {worker.distance}</Text>
+          </View>
+        </View>
+
+        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+          {isSelected && <Text style={styles.checkmark}>✓</Text>}
         </View>
       </View>
 
-      <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-        {isSelected && <Text style={styles.checkmark}>✓</Text>}
-      </View>
-    </View>
+      {/* Divider */}
+      <View style={styles.cardDivider} />
 
-    {/* Divider */}
-    <View style={styles.cardDivider} />
-
-    {/* Bottom Row — Skills + Price */}
-    <View style={styles.cardBottom}>
-      <View style={styles.skillsRow}>
-        {worker.skills.map((s) => (
-          <View key={s} style={styles.skillTag}>
-            <Text style={styles.skillText}>{s}</Text>
-          </View>
-        ))}
+      {/* Bottom Row — Skills + Price */}
+      <View style={styles.cardBottom}>
+        <View style={styles.skillsRow}>
+          {worker.skills.map((s) => (
+            <View key={s} style={styles.skillTag}>
+              <Text style={styles.skillText}>{s}</Text>
+            </View>
+          ))}
+        </View>
+        <Text style={[styles.price, isSelected && styles.priceSelected]}>
+          ₹{worker.pricePerDay}/day
+        </Text>
       </View>
-      <Text style={[styles.price, isSelected && styles.priceSelected]}>
-        ₹{worker.pricePerDay}/day
-      </Text>
-    </View>
-  </TouchableOpacity>
-);
+    </TouchableOpacity>
+  );
+});
 
 // ─── Filter Chip ──────────────────────────────────────────────────────────────
-const FilterChip = ({ label, active, onPress }) => (
+const FilterChip = React.memo(({ label, active, onPress }) => (
   <TouchableOpacity
     style={[styles.filterChip, active && styles.filterChipActive]}
     onPress={onPress}
@@ -76,29 +80,64 @@ const FilterChip = ({ label, active, onPress }) => (
       {label}
     </Text>
   </TouchableOpacity>
-);
+));
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const WorkersNearbyScreen = ({ route, navigation }) => {
   const { category } = route.params;
-  const allWorkers = workersByCategory[category] || [];
+  const allWorkers = useMemo(() => workersByCategory[category] || [], [category]);
 
   const [selected, setSelected]       = useState([]);
   const [filterAvail, setFilterAvail] = useState('All');
 
-  const displayed = filterAvail === 'Available'
-    ? allWorkers.filter((w) => w.available)
-    : allWorkers;
+  const displayed = useMemo(() =>
+    filterAvail === 'Available'
+      ? allWorkers.filter((w) => w.available)
+      : allWorkers
+  , [allWorkers, filterAvail]);
 
-  const toggleWorker = (worker) => {
+  const toggleWorker = useCallback((worker) => {
     setSelected((prev) =>
       prev.find((w) => w.id === worker.id)
         ? prev.filter((w) => w.id !== worker.id)
         : [...prev, worker]
     );
-  };
+  }, []);
 
-  const totalPerDay = selected.reduce((sum, w) => sum + w.pricePerDay, 0);
+  const totalPerDay = useMemo(() => selected.reduce((sum, w) => sum + w.pricePerDay, 0), [selected]);
+
+  const renderItem = useCallback(({ item }) => (
+    <WorkerCard
+      worker={item}
+      isSelected={!!selected.find((w) => w.id === item.id)}
+      onToggle={toggleWorker}
+    />
+  ), [selected, toggleWorker]);
+
+  const handleFilterAll = useCallback(() => setFilterAvail('All'), []);
+  const handleFilterAvailable = useCallback(() => setFilterAvail('Available'), []);
+
+  const handleCheckout = useCallback(() => {
+    navigation.navigate('LabourCheckout', {
+      selectedWorkers: selected,
+      category,
+    });
+  }, [navigation, selected, category]);
+
+  const ListHeader = useMemo(() => (
+    <View style={styles.filterRow}>
+      <FilterChip
+        label={`All (${allWorkers.length})`}
+        active={filterAvail === 'All'}
+        onPress={handleFilterAll}
+      />
+      <FilterChip
+        label="🟢  Available Now"
+        active={filterAvail === 'Available'}
+        onPress={handleFilterAvailable}
+      />
+    </View>
+  ), [allWorkers.length, filterAvail, handleFilterAll, handleFilterAvailable]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -121,31 +160,13 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
 
       <View style={styles.divider} />
 
-      {/* Filters */}
-      <View style={styles.filterRow}>
-        {['All', 'Available'].map((f) => (
-          <FilterChip
-            key={f}
-            label={f === 'Available' ? '🟢  Available Now' : `All (${allWorkers.length})`}
-            active={filterAvail === f}
-            onPress={() => setFilterAvail(f)}
-          />
-        ))}
-      </View>
-
-      {/* List */}
       <FlatList
         data={displayed}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <WorkerCard
-            worker={item}
-            isSelected={!!selected.find((w) => w.id === item.id)}
-            onToggle={toggleWorker}
-          />
-        )}
+        renderItem={renderItem}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={ListHeader}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🔍</Text>
@@ -173,10 +194,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
             <TouchableOpacity
               style={styles.checkoutTouchable}
               activeOpacity={0.85}
-              onPress={() => navigation.navigate('LabourCheckout', {
-                selectedWorkers: selected,
-                category,
-              })}
+              onPress={handleCheckout}
             >
               <Text style={styles.checkoutText}>Proceed to Checkout →</Text>
             </TouchableOpacity>

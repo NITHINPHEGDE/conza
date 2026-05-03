@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import MaterialCard      from '../components/MaterialCard';
 import SectionHeader     from '../components/SectionHeader';
 import SkillWorkerCard   from '../components/SkillWorkerCard';
 import RentalCard from '../components/RentalCard';
-import { labourCategories, materials, rentalItems, rentalCategories, allWorkers } from '../data/dummyData';
+import { labourCategories, materials as dummyMaterials, rentalItems, rentalCategories, allWorkers } from '../data/dummyData';
 import { colors } from '../theme/colors';
 
 const CATEGORIES = [
@@ -39,13 +39,24 @@ const SkillSearchView = ({ query, onClear }) => {
   w.name.toLowerCase().includes(query.toLowerCase())
 );
 
-  const toggleWorker = (worker) => {
+  const toggleWorker = useCallback((worker) => {
     setSelected((prev) =>
       prev.find((w) => w.id === worker.id)
         ? prev.filter((w) => w.id !== worker.id)
         : [...prev, worker]
     );
-  };
+  }, []);
+
+  const renderItem = useCallback(({ item }) => {
+    const isSelected = !!selected.find((w) => w.id === item.id);
+    return (
+      <SkillWorkerCard
+        worker={item}
+        isSelected={isSelected}
+        onToggle={toggleWorker}
+      />
+    );
+  }, [selected, toggleWorker]);
 
   const totalPerDay = selected.reduce((sum, w) => sum + w.pricePerDay, 0);
 
@@ -66,13 +77,7 @@ const SkillSearchView = ({ query, onClear }) => {
             </TouchableOpacity>
           </View>
         }
-        renderItem={({ item }) => (
-          <SkillWorkerCard
-            worker={item}
-            isSelected={!!selected.find((w) => w.id === item.id)}
-            onToggle={toggleWorker}
-          />
-        )}
+        renderItem={renderItem}
         ListEmptyComponent={
           <View style={styles.skillEmpty}>
             <Text style={styles.skillEmptyEmoji}>🔍</Text>
@@ -132,13 +137,17 @@ const LabourView = () => {
     navigation.navigate('WorkersNearby', { category: selectedItem.label });
   };
 
+  const handleSelect = useCallback((item) => {
+    setSelectedId((prevId) => (prevId === item.id ? null : item.id));
+  }, []);
+
   const renderItem = useCallback(({ item }) => (
     <LabourCategoryCard
       item={item}
       isSelected={selectedId === item.id}
-      onPress={(i) => setSelectedId(selectedId === i.id ? null : i.id)}
+      onPress={handleSelect}
     />
-  ), [selectedId]);
+  ), [selectedId, handleSelect]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -270,7 +279,27 @@ const LabourView = () => {
 const MaterialView = () => {
   const navigation = useNavigation();
   const [query, setQuery] = useState('');
-  const [cart, setCart]   = useState({});
+  const [materials, setMaterials] = useState([]);
+
+  useEffect(() => {
+    const initialized = dummyMaterials.map(item => ({
+      ...item,
+      quantity: item.quantity ?? 0,
+    }));
+    setMaterials(initialized);
+  }, []);
+
+  const handleUpdateQuantity = useCallback((id, newQty) => {
+    setMaterials((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, quantity: newQty } : item
+      )
+    );
+  }, []);
+
+  const handleImagePress = useCallback((item) => {
+    navigation.navigate('MaterialDetail', { item });
+  }, [navigation]);
 
   const filtered = query.trim()
     ? materials.filter((m) =>
@@ -279,47 +308,19 @@ const MaterialView = () => {
       )
     : materials;
 
-  const addToCart = useCallback((item, qty) => {
-    setCart((prev) => {
-      if (qty !== undefined) {
-        if (qty <= 0) {
-          const updated = { ...prev };
-          delete updated[item.id];
-          return updated;
-        }
-        return { ...prev, [item.id]: qty };
-      }
-      return { ...prev, [item.id]: (prev[item.id] || 0) + 1 };
-    });
-  }, []);
-
-  const removeFromCart = useCallback((item) => {
-    setCart((prev) => {
-      const current = prev[item.id] || 0;
-      if (current <= 1) {
-        const updated = { ...prev };
-        delete updated[item.id];
-        return updated;
-      }
-      return { ...prev, [item.id]: current - 1 };
-    });
-  }, []);
-
-  const cartItems  = materials.filter((m) => cart[m.id] > 0);
-  const totalItems = Object.values(cart).reduce((a, b) => a + b, 0);
-  const totalPrice = cartItems.reduce((sum, m) => sum + m.price * cart[m.id], 0);
+  const cartItems  = materials.filter((m) => (m.quantity ?? 0) > 0);
+  const totalItems = cartItems.reduce((sum, m) => sum + (m.quantity ?? 0), 0);
+  const totalPrice = cartItems.reduce((sum, m) => sum + m.price * (m.quantity ?? 0), 0);
 
   const renderItem = useCallback(({ item }) => (
     <View style={styles.materialCardWrapper}>
       <MaterialCard
-        item={item}
-        quantity={cart[item.id] || 0}
-        onAdd={addToCart}
-        onRemove={removeFromCart}
-        onImagePress={() => navigation.navigate('MaterialDetail', { item })}
+        {...item}
+        onUpdate={handleUpdateQuantity}
+        onImagePress={handleImagePress}
       />
     </View>
-  ), [cart, addToCart, removeFromCart]);
+  ), [handleUpdateQuantity, handleImagePress]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -375,9 +376,9 @@ const MaterialView = () => {
             <TouchableOpacity style={styles.materialCheckoutBtnTouch} 
             activeOpacity={0.85}
             onPress={() => navigation.navigate('MaterialCheckout', {
-            cartItems: materials.filter((m) => cart[m.id] > 0),
-            cart,
-          })}>
+              cartItems,
+              cart: cartItems.reduce((acc, item) => ({ ...acc, [item.id]: item.quantity }), {}),
+            })}>
               <Text style={styles.materialCheckoutBtnText}>Checkout →</Text>
             </TouchableOpacity>
           </LinearGradient>
@@ -402,6 +403,19 @@ const RentalView = () => {
   });
 
   const activeCat = rentalCategories.find((c) => c.id === selectedCat);
+
+  const handleRentalPress = useCallback((item) => {
+    navigation.navigate('RentalDetail', { item });
+  }, [navigation]);
+
+  const renderItem = useCallback(({ item }) => (
+    <View style={styles.rentalCardWrapper}>
+      <RentalCard
+        item={item}
+        onPress={handleRentalPress}
+      />
+    </View>
+  ), [handleRentalPress]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -463,14 +477,7 @@ const RentalView = () => {
             <Text style={styles.skillEmptySub}>Try a different filter or search term</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={styles.rentalCardWrapper}>
-            <RentalCard
-              item={item}
-              onPress={(i) => navigation.navigate('RentalDetail', { item: i })}
-            />
-          </View>
-        )}
+        renderItem={renderItem}
       />
 
       {/* Filter Modal */}

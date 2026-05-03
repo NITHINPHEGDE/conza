@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -37,7 +37,7 @@ const PAYMENT_METHODS = [
 ];
 
 // ─── Selected Worker Row ──────────────────────────────────────────────────────
-const WorkerRow = ({ worker }) => (
+const WorkerRow = React.memo(({ worker }) => (
   <View style={styles.workerRow}>
     <LinearGradient
       colors={['#D0CDFF', '#A89CFF']}
@@ -57,10 +57,10 @@ const WorkerRow = ({ worker }) => (
     </View>
     <Text style={styles.workerPrice}>₹{worker.pricePerDay}</Text>
   </View>
-);
+));
 
 // ─── Payment Method Option ────────────────────────────────────────────────────
-const PaymentOption = ({ method, selected, onSelect }) => (
+const PaymentOption = React.memo(({ method, selected, onSelect }) => (
   <TouchableOpacity
     style={[styles.paymentOption, selected && styles.paymentOptionSelected]}
     onPress={() => onSelect(method.id)}
@@ -77,7 +77,7 @@ const PaymentOption = ({ method, selected, onSelect }) => (
       <Text style={styles.paymentSub}>{method.sub}</Text>
     </View>
   </TouchableOpacity>
-);
+));
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const LabourCheckoutScreen = ({ route, navigation }) => {
@@ -88,9 +88,14 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const [pincode, setPincode]         = useState('');
   const [paymentMethod, setPayment]   = useState('cod');
 
-  const subtotal     = selectedWorkers.reduce((sum, w) => sum + w.pricePerDay, 0);
-  const platformFee  = Math.round(subtotal * PLATFORM_FEE_RATE);
-  const total        = subtotal + platformFee;
+  const { subtotal, platformFee, total } = useMemo(() => {
+    const sub = selectedWorkers.reduce((sum, w) => sum + w.pricePerDay, 0);
+    const fee = Math.round(sub * PLATFORM_FEE_RATE);
+    const tot = sub + fee;
+    return { subtotal: sub, platformFee: fee, total: tot };
+  }, [selectedWorkers]);
+
+  const handleSelectPayment = useCallback((id) => setPayment(id), []);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -178,7 +183,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
               key={method.id}
               method={method}
               selected={paymentMethod === method.id}
-              onSelect={setPayment}
+              onSelect={handleSelectPayment}
             />
           ))}
         </View>

@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View, Text, FlatList, StyleSheet,
-   StatusBar, TouchableOpacity,
+  StatusBar, TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,7 +20,7 @@ const ProgressBar = ({ progress, color }) => (
   </View>
 );
 
-const ProjectCard = ({ item }) => (
+const ProjectCard = React.memo(({ item }) => (
   <TouchableOpacity style={styles.card} activeOpacity={0.8}>
     <View style={styles.cardHeader}>
       <View style={[styles.statusChip, { backgroundColor: item.statusColor + '18' }]}>
@@ -53,10 +53,13 @@ const ProjectCard = ({ item }) => (
       </View>
     </View>
   </TouchableOpacity>
-);
+));
 
 const ProjectScreen = () => {
   const insets = useSafeAreaInsets();
+
+  const renderItem = useCallback(({ item }) => <ProjectCard item={item} />, []);
+
   return (
     <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
@@ -77,7 +80,7 @@ const ProjectScreen = () => {
       <FlatList
         data={projects}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ProjectCard item={item} />}
+        renderItem={renderItem}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={<SectionHeader title={`${projects.length} Sites`} />}

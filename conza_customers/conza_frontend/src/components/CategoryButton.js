@@ -3,7 +3,7 @@ import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 
-const CategoryButton = ({ label, icon, isSelected, onPress }) => {
+const CategoryButton = React.memo(({ label, icon, isSelected, onPress }) => {
   if (isSelected) {
     return (
       <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={styles.wrapper}>
@@ -28,7 +28,7 @@ const CategoryButton = ({ label, icon, isSelected, onPress }) => {
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   wrapper: {

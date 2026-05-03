@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
 
-const SectionHeader = ({ title, actionLabel, onAction }) => (
+const SectionHeader = React.memo(({ title, actionLabel, onAction }) => (
   <View style={styles.container}>
     <Text style={styles.title}>{title}</Text>
     {actionLabel && (
@@ -11,7 +11,7 @@ const SectionHeader = ({ title, actionLabel, onAction }) => (
       </TouchableOpacity>
     )}
   </View>
-);
+));
 
 const styles = StyleSheet.create({
   container: {
