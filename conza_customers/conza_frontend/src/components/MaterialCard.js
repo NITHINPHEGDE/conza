@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ const MaterialCard = React.memo(({
   seller, 
   price, 
   unit, 
+  distance,
   image, 
   rating, 
   inStock, 
@@ -22,17 +23,28 @@ const MaterialCard = React.memo(({
   onUpdate, 
   onImagePress 
 }) => {
+  const imageSource = useMemo(() => ({ uri: image }), [image]);
+  
+  const stockDotStyle = useMemo(() => [
+    styles.stockDot, 
+    { backgroundColor: inStock ? colors.success : colors.danger }
+  ], [inStock]);
+
+  const stockTextStyle = useMemo(() => [
+    styles.stockText, 
+    { color: inStock ? colors.success : colors.danger }
+  ], [inStock]);
   
   const handleImagePress = useCallback(() => {
-    onImagePress && onImagePress({ id, name, seller, price, unit, image, rating, inStock, quantity });
-  }, [onImagePress, id, name, seller, price, unit, image, rating, inStock, quantity]);
+    onImagePress && onImagePress({ id, name, seller, price, unit, distance, image, rating, inStock, quantity });
+  }, [onImagePress, id, name, seller, price, unit, distance, image, rating, inStock, quantity]);
 
   const handleMinus = useCallback(() => {
-    onUpdate(id, Math.max(0, quantity - 1));
+    onUpdate(id, Math.max(0, (Number(quantity) || 0) - 1));
   }, [onUpdate, id, quantity]);
 
   const handlePlus = useCallback(() => {
-    onUpdate(id, quantity + 1);
+    onUpdate(id, (Number(quantity) || 0) + 1);
   }, [onUpdate, id, quantity]);
 
   const handleTextChange = useCallback((t) => {
@@ -48,10 +60,10 @@ const MaterialCard = React.memo(({
   return (
     <View style={styles.card}>
       <TouchableOpacity style={styles.imageWrapper} onPress={handleImagePress} activeOpacity={0.9}>
-        <Image source={{ uri: image }} style={styles.image} />
+        <Image source={imageSource} style={styles.image} />
         <View style={styles.stockBadge}>
-          <View style={[styles.stockDot, { backgroundColor: inStock ? colors.success : colors.danger }]} />
-          <Text style={[styles.stockText, { color: inStock ? colors.success : colors.danger }]}>
+          <View style={stockDotStyle} />
+          <Text style={stockTextStyle}>
             {inStock ? 'In Stock' : 'Out'}
           </Text>
         </View>
@@ -63,12 +75,16 @@ const MaterialCard = React.memo(({
       <View style={styles.details}>
         <Text style={styles.name} numberOfLines={1}>{name}</Text>
         <Text style={styles.seller} numberOfLines={1}>by {seller}</Text>
+        
+        <View style={styles.distanceRow}>
+          <Text style={styles.distanceText}>📍 {distance}</Text>
+        </View>
 
         <View style={styles.priceRow}>
-          <Text style={styles.price}>₹{price}</Text>
+          <Text style={styles.price}>₹{Number(price) || 0}</Text>
           <Text style={styles.unit}>{unit}</Text>
 
-          {quantity > 0 ? (
+          {(Number(quantity) || 0) > 0 ? (
             <View style={styles.qtyWrapper}>
               <View style={styles.qtyControl}>
                 <TouchableOpacity
@@ -105,16 +121,6 @@ const MaterialCard = React.memo(({
       </View>
     </View>
   );
-}, (prevProps, nextProps) => {
-  return (
-    prevProps.id === nextProps.id &&
-    prevProps.quantity === nextProps.quantity &&
-    prevProps.inStock === nextProps.inStock &&
-    prevProps.price === nextProps.price &&
-    prevProps.name === nextProps.name &&
-    prevProps.onUpdate === nextProps.onUpdate &&
-    prevProps.onImagePress === nextProps.onImagePress
-  );
 });
 
 const styles = StyleSheet.create({
@@ -127,8 +133,10 @@ const styles = StyleSheet.create({
   ratingBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255,255,255,0.93)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 20 },
   ratingText: { fontSize: 10, fontWeight: '700', color: colors.textPrimary },
   details: { padding: 11 },
-  name: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
-  seller: { fontSize: 11, color: colors.textMuted, marginBottom: 9 },
+  name: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
+  seller: { fontSize: 11, color: colors.textMuted, marginBottom: 4 },
+  distanceRow: { flexDirection: 'row', alignItems: 'center' },
+  distanceText: { fontSize: 11, color: colors.textSecondary, fontWeight: '600' },
   priceRow: { flexDirection: 'column', alignItems: 'flex-start', marginTop: 6, gap: 6 },
   price: { fontSize: 15, fontWeight: '800' },
   unit: { fontSize: 10, color: colors.textMuted },

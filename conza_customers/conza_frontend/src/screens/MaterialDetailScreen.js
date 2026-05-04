@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 import { materialDescriptions, materialOffers } from '../data/dummyData';
+import useAppStore from '../store/useAppStore';
 
 const { width } = Dimensions.get('window');
 
@@ -119,6 +120,8 @@ const QuantityDialog = React.memo(({ visible, item, onClose, onConfirm }) => {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const MaterialDetailScreen = ({ route, navigation }) => {
   const { item } = route.params || {};
+  const addToCart = useAppStore((s) => s.addToCart);
+  
   const [showDialog, setShowDialog]                 = useState(false);
   const [cartAdded, setCartAdded]                   = useState(false);
   const [showReturnTerms, setShowReturnTerms]       = useState(false);
@@ -139,9 +142,10 @@ const MaterialDetailScreen = ({ route, navigation }) => {
   }, [item, navigation]);
 
   const handleAddToCart = useCallback(() => {
+    addToCart(item);
     setCartAdded(true);
     setTimeout(() => setCartAdded(false), 2000);
-  }, []);
+  }, [addToCart, item]);
 
   const openDialog = useCallback(() => setShowDialog(true), []);
   const closeDialog = useCallback(() => setShowDialog(false), []);
@@ -150,6 +154,13 @@ const MaterialDetailScreen = ({ route, navigation }) => {
   const openReplacementTerms = useCallback(() => setShowReplacementTerms(true), []);
   const closeReplacementTerms = useCallback(() => setShowReplacementTerms(false), []);
 
+  const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
+
+  const buyButtonColors = useMemo(() => 
+    item.inStock ? [colors.gradientStart, colors.gradientEnd] : ['#ccc', '#bbb'],
+    [item.inStock]
+  );
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -157,7 +168,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
       {/* Back button — floats over image */}
       <TouchableOpacity
         style={styles.backBtn}
-        onPress={() => navigation.goBack()}
+        onPress={handleGoBack}
         activeOpacity={0.8}
       >
         <Text style={styles.backArrow}>←</Text>
@@ -308,7 +319,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
 
         {/* Buy Now — yellow gradient */}
         <LinearGradient
-          colors={item.inStock ? [colors.gradientStart, colors.gradientEnd] : ['#ccc', '#bbb']}
+          colors={buyButtonColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.buyBtn}

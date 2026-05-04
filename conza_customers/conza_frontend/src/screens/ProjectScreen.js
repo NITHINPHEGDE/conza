@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, StyleSheet,
   StatusBar, TouchableOpacity,
@@ -7,59 +7,118 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import SectionHeader from '../components/SectionHeader';
 import useAppStore from '../store/useAppStore';
+import { SectionLoader, ErrorState, EmptyState } from '../components/LoadingState';
 import { colors } from '../theme/colors';
 
-const ProgressBar = ({ progress, color }) => (
-  <View style={styles.progressTrack}>
-    <LinearGradient
-      colors={[colors.gradientStart, colors.gradientEnd]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 0 }}
-      style={[styles.progressFill, { width: `${progress}%` }]}
-    />
-  </View>
-);
+const ProgressBar = React.memo(({ progress }) => {
+  const fillStyle = useMemo(() => [
+    styles.progressFill, 
+    { width: `${progress}%` }
+  ], [progress]);
 
-const ProjectCard = React.memo(({ item }) => (
-  <TouchableOpacity style={styles.card} activeOpacity={0.8}>
-    <View style={styles.cardHeader}>
-      <View style={[styles.statusChip, { backgroundColor: item.statusColor + '18' }]}>
-        <View style={[styles.statusDot, { backgroundColor: item.statusColor }]} />
-        <Text style={[styles.statusText, { color: item.statusColor }]}>{item.status}</Text>
-      </View>
-      <Text style={styles.workers}>👷 {item.workers}</Text>
+  return (
+    <View style={styles.progressTrack}>
+      <LinearGradient
+        colors={[colors.gradientStart, colors.gradientEnd]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={fillStyle}
+      />
     </View>
+  );
+});
 
-    <Text style={styles.projectName}>{item.name}</Text>
-    <Text style={styles.location}>📍 {item.location}</Text>
+const ProjectCard = React.memo(({ item, onPress }) => {
+  const handlePress = useCallback(() => {
+    onPress && onPress(item);
+  }, [onPress, item]);
 
-    <View style={styles.progressSection}>
-      <View style={styles.progressLabel}>
-        <Text style={styles.progressTitle}>Progress</Text>
-        <Text style={styles.progressPercent}>{item.progress}%</Text>
+  const chipStyle = useMemo(() => [
+    styles.statusChip, 
+    { backgroundColor: item.statusColor + '18' }
+  ], [item.statusColor]);
+
+  const dotStyle = useMemo(() => [
+    styles.statusDot, 
+    { backgroundColor: item.statusColor }
+  ], [item.statusColor]);
+
+  const textStyle = useMemo(() => [
+    styles.statusText, 
+    { color: item.statusColor }
+  ], [item.statusColor]);
+
+  return (
+    <TouchableOpacity 
+      style={styles.card} 
+      activeOpacity={0.8}
+      onPress={handlePress}
+    >
+      <View style={styles.cardHeader}>
+        <View style={chipStyle}>
+          <View style={dotStyle} />
+          <Text style={textStyle}>{item.status}</Text>
+        </View>
+        <Text style={styles.workers}>👷 {item.workers}</Text>
       </View>
-      <ProgressBar progress={item.progress} color={item.statusColor} />
-    </View>
 
-    <View style={styles.dateRow}>
-      <View style={styles.dateItem}>
-        <Text style={styles.dateLabel}>Started</Text>
-        <Text style={styles.dateValue}>{item.startDate}</Text>
-      </View>
-      <View style={styles.dateDivider} />
-      <View style={styles.dateItem}>
-        <Text style={styles.dateLabel}>ETA</Text>
-        <Text style={styles.dateValue}>{item.eta}</Text>
-      </View>
-    </View>
-  </TouchableOpacity>
-));
+      <Text style={styles.projectName}>{item.name}</Text>
+      <Text style={styles.location}>📍 {item.location}</Text>
 
-const ProjectScreen = () => {
+      <View style={styles.progressSection}>
+        <View style={styles.progressLabel}>
+          <Text style={styles.progressTitle}>Progress</Text>
+          <Text style={styles.progressPercent}>{item.progress}%</Text>
+        </View>
+        <ProgressBar progress={item.progress} />
+      </View>
+
+      <View style={styles.dateRow}>
+        <View style={styles.dateItem}>
+          <Text style={styles.dateLabel}>Started</Text>
+          <Text style={styles.dateValue}>{item.startDate}</Text>
+        </View>
+        <View style={styles.dateDivider} />
+        <View style={styles.dateItem}>
+          <Text style={styles.dateLabel}>ETA</Text>
+          <Text style={styles.dateValue}>{item.eta}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+const ProjectScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const projects = useAppStore((s) => s.projects);
+  const projects        = useAppStore((s) => s.projects);
+  const projectsLoading = useAppStore((s) => s.projectsLoading);
+  const fetchProjects   = useAppStore((s) => s.fetchProjects);
 
-  const renderItem = useCallback(({ item }) => <ProjectCard item={item} />, []);
+  const handleProjectPress = useCallback((item) => {
+    navigation.navigate('ProjectDetail', { project: item });
+  }, [navigation]);
+
+  const renderItem = useCallback(({ item }) => (
+    <ProjectCard item={item} onPress={handleProjectPress} />
+  ), [handleProjectPress]);
+
+  const listHeader = useMemo(() => (
+    <SectionHeader title={`${projects.length} Sites`} />
+  ), [projects.length]);
+
+  const listEmpty = useMemo(() => (
+    <EmptyState emoji="📋" title="No projects yet" subtitle="Your active construction sites will appear here" />
+  ), []);
+
+  if (projectsLoading) return (
+    <View style={styles.safe}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>My Projects</Text>
+      </View>
+      <SectionLoader message="Loading your projects..." />
+    </View>
+  );
 
   return (
     <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>
@@ -84,15 +143,17 @@ const ProjectScreen = () => {
         renderItem={renderItem}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={<SectionHeader title={`${projects.length} Sites`} />}
-        initialNumToRender={5}
-        maxToRenderPerBatch={5}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={listEmpty}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
         windowSize={5}
         removeClippedSubviews={true}
       />
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },

@@ -210,14 +210,14 @@ const useAppStore = create((set, get) => ({
       set((state) => ({ cart: { ...state.cart, [item.id]: item._setQty } }));
     } else {
       set((state) => ({
-        cart: { ...state.cart, [item.id]: (state.cart[item.id] || 0) + 1 },
+        cart: { ...state.cart, [item.id]: (Number(state.cart[item.id]) || 0) + 1 },
       }));
     }
   },
 
   removeFromCart: (item) => {
     set((state) => {
-      const current = state.cart[item.id] || 0;
+      const current = Number(state.cart[item.id]) || 0;
       if (current <= 1) {
         const updated = { ...state.cart };
         delete updated[item.id];
@@ -231,18 +231,22 @@ const useAppStore = create((set, get) => ({
 
   getCartItems: () => {
     const { cart, materials } = get();
-    return materials.filter((m) => cart[m.id] > 0);
+    return materials.filter((m) => (Number(cart[m.id]) || 0) > 0);
   },
 
   getCartTotal: () => {
     const { cart, materials } = get();
     return materials
-      .filter((m) => cart[m.id] > 0)
-      .reduce((sum, m) => sum + m.price * cart[m.id], 0);
+      .filter((m) => (Number(cart[m.id]) || 0) > 0)
+      .reduce((sum, m) => {
+        const price = Number(m.price) || 0;
+        const qty = Number(cart[m.id]) || 0;
+        return sum + (price * qty);
+      }, 0);
   },
 
   getCartItemCount: () => {
-    return Object.values(get().cart).reduce((a, b) => a + b, 0);
+    return Object.values(get().cart).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0);
   },
 
 }));

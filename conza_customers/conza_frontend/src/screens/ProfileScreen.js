@@ -10,17 +10,18 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import useAppStore from '../store/useAppStore';
+import { SectionLoader } from '../components/LoadingState';
 import { colors } from '../theme/colors';
 
-const StatCard = ({ value, label }) => (
+const StatCard = React.memo(({ value, label }) => (
   <View style={styles.statCard}>
     <Text style={styles.statValue}>{value}</Text>
     <Text style={styles.statLabel}>{label}</Text>
   </View>
-);
+));
 
-const MenuItem = ({ icon, label, sub, danger }) => (
-  <TouchableOpacity style={styles.menuItem} activeOpacity={0.75}>
+const MenuItem = React.memo(({ icon, label, sub, danger, onPress }) => (
+  <TouchableOpacity style={styles.menuItem} activeOpacity={0.75} onPress={onPress}>
     <View style={[styles.menuIcon, danger && styles.menuIconDanger]}>
       <Text style={{ fontSize: 18 }}>{icon}</Text>
     </View>
@@ -30,12 +31,24 @@ const MenuItem = ({ icon, label, sub, danger }) => (
     </View>
     {!danger && <Text style={styles.menuArrow}>›</Text>}
   </TouchableOpacity>
-);
+));
 
 const ProfileScreen = () => {
-  const u = useAppStore((s) => s.userProfile);
+  const userProfile    = useAppStore((s) => s.userProfile);
+  const profileLoading = useAppStore((s) => s.profileLoading);
   const insets = useSafeAreaInsets();
-  const initials = u.name.split(' ').map((n) => n[0]).join('');
+
+  if (profileLoading || !userProfile) return (
+    <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>
+      <SectionLoader message="Loading profile..." />
+    </View>
+  );
+
+  const u = userProfile;
+  const initials = useMemo(() => 
+    u.name.split(' ').map((n) => n[0]).join(''),
+    [u.name]
+  );
 
   return (
      <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>

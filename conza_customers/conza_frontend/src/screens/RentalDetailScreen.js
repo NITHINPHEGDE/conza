@@ -342,6 +342,13 @@ const RentalDetailScreen = ({ route, navigation }) => {
     ))
   ), [item.pricePerDay]);
 
+  const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
+
+  const bookNowColors = useMemo(() => 
+    item.available ? [colors.gradientStart, colors.gradientEnd] : [colors.surfaceElevated, colors.surfaceElevated],
+    [item.available]
+  );
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
@@ -350,7 +357,7 @@ const RentalDetailScreen = ({ route, navigation }) => {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => navigation.goBack()}
+          onPress={handleGoBack}
           activeOpacity={0.7}
         >
           <Text style={styles.backArrow}>←</Text>
@@ -442,9 +449,7 @@ const RentalDetailScreen = ({ route, navigation }) => {
         </TouchableOpacity>
 
         <LinearGradient
-          colors={item.available
-            ? [colors.gradientStart, colors.gradientEnd]
-            : [colors.surfaceElevated, colors.surfaceElevated]}
+          colors={bookNowColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.bookNowBtn}

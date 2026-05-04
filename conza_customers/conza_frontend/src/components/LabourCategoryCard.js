@@ -1,44 +1,68 @@
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { TouchableOpacity, Text, View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 
-const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => (
-  <TouchableOpacity
-    style={[styles.card, isSelected && styles.cardSelected]}
-    onPress={() => onPress && onPress(item)}
-    activeOpacity={0.75}
-  >
-    {isSelected ? (
-      <LinearGradient
-        colors={[colors.gradientStart, colors.gradientEnd]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.emojiContainerSelected}
-      >
-        <Text style={styles.emoji}>{item.emoji}</Text>
-      </LinearGradient>
-    ) : (
-      <View style={styles.emojiContainer}>
-        <Text style={styles.emoji}>{item.emoji}</Text>
+const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
+  const handlePress = useCallback(() => {
+    onPress && onPress(item);
+  }, [onPress, item]);
+
+  const gradientColors = useMemo(() => [colors.gradientStart, colors.gradientEnd], []);
+
+  const cardStyle = useMemo(() => [
+    styles.card, 
+    isSelected && styles.cardSelected
+  ], [isSelected]);
+
+  const labelStyle = useMemo(() => [
+    styles.label, 
+    isSelected && styles.labelSelected
+  ], [isSelected]);
+
+  const availableStyle = useMemo(() => [
+    styles.available, 
+    isSelected && styles.availableSelected
+  ], [isSelected]);
+
+  return (
+    <TouchableOpacity
+      style={cardStyle}
+      onPress={handlePress}
+      activeOpacity={0.75}
+    >
+      {isSelected ? (
+        <LinearGradient
+          colors={gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.emojiContainerSelected}
+        >
+          <Text style={styles.emoji}>{item.emoji}</Text>
+        </LinearGradient>
+      ) : (
+        <View style={styles.emojiContainer}>
+          <Text style={styles.emoji}>{item.emoji}</Text>
+        </View>
+      )}
+
+      <Text style={labelStyle}>{item.label}</Text>
+
+      <View style={styles.metaRow}>
+        <Text style={styles.rating}>⭐ {item.rating}</Text>
+        <View style={styles.dot} />
+        <Text style={availableStyle}>
+          {item.available} free
+        </Text>
       </View>
-    )}
 
-    <Text style={[styles.label, isSelected && styles.labelSelected]}>{item.label}</Text>
+      {isSelected && (
+        <View style={styles.selectedIndicator} />
+      )}
+    </TouchableOpacity>
+  );
+});
 
-    <View style={styles.metaRow}>
-      <Text style={styles.rating}>⭐ {item.rating}</Text>
-      <View style={styles.dot} />
-      <Text style={[styles.available, isSelected && styles.availableSelected]}>
-        {item.available} free
-      </Text>
-    </View>
-
-    {isSelected && (
-      <View style={styles.selectedIndicator} />
-    )}
-  </TouchableOpacity>
-));
 
 const styles = StyleSheet.create({
   card: {

@@ -8,11 +8,13 @@ import {
   StyleSheet,
   StatusBar,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import { useBooking } from '../hooks/useBooking';
 
 const PLATFORM_FEE_RATE = 0.05;
 const DELIVERY_FEE = 149;
@@ -23,24 +25,30 @@ const PAYMENT_METHODS = [
   { id: 'card', label: 'Credit / Debit Card',  sub: 'All major cards accepted',    icon: '💳' },
 ];
 
-const PaymentOption = React.memo(({ method, selected, onSelect }) => (
-  <TouchableOpacity
-    style={[styles.paymentOption, selected && styles.paymentOptionSelected]}
-    onPress={() => onSelect(method.id)}
-    activeOpacity={0.75}
-  >
-    <View style={[styles.paymentRadio, selected && styles.paymentRadioSelected]}>
-      {selected && <View style={styles.paymentRadioDot} />}
-    </View>
-    <View style={styles.paymentIconBox}>
-      <Text style={{ fontSize: 18 }}>{method.icon}</Text>
-    </View>
-    <View style={{ flex: 1 }}>
-      <Text style={styles.paymentLabel}>{method.label}</Text>
-      <Text style={styles.paymentSub}>{method.sub}</Text>
-    </View>
-  </TouchableOpacity>
-));
+const PaymentOption = React.memo(({ method, selected, onSelect }) => {
+  const handlePress = useCallback(() => {
+    onSelect(method.id);
+  }, [onSelect, method.id]);
+
+  return (
+    <TouchableOpacity
+      style={[styles.paymentOption, selected && styles.paymentOptionSelected]}
+      onPress={handlePress}
+      activeOpacity={0.75}
+    >
+      <View style={[styles.paymentRadio, selected && styles.paymentRadioSelected]}>
+        {selected && <View style={styles.paymentRadioDot} />}
+      </View>
+      <View style={styles.paymentIconBox}>
+        <Text style={{ fontSize: 18 }}>{method.icon}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.paymentLabel}>{method.label}</Text>
+        <Text style={styles.paymentSub}>{method.sub}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 const RentalCheckoutScreen = ({ route, navigation }) => {
   const {
@@ -55,8 +63,12 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
   const [pincode, setPincode]       = useState('');
   const [paymentMethod, setPayment] = useState('cod');
 
+  const { submitBooking, loading: submitting, error: submitError } = useBooking('rental');
+
   const { subtotal, platformFee, total } = useMemo(() => {
-    const sub = (item?.pricePerDay || 0) * quantity;
+    const qty = Number(quantity) || 0;
+    const price = Number(item?.pricePerDay) || 0;
+    const sub = price * qty;
     const fee = Math.round(sub * PLATFORM_FEE_RATE);
     const tot = sub + fee + DELIVERY_FEE;
     return { subtotal: sub, platformFee: fee, total: tot };
@@ -65,17 +77,24 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
   const isScheduled = !!scheduledDate;
 
   const handleSelectPayment = useCallback((id) => setPayment(id), []);
+  const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
 
-  const renderedPaymentOptions = useMemo(() => (
-    PAYMENT_METHODS.map((method) => (
-      <PaymentOption
-        key={method.id}
-        method={method}
-        selected={paymentMethod === method.id}
-        onSelect={handleSelectPayment}
-      />
-    ))
-  ), [paymentMethod, handleSelectPayment]);
+  const handleConfirmRental = useCallback(async () => {
+    const ok = await submitBooking({
+      item,
+      quantity,
+      scheduledDate,
+      scheduledTime,
+      address,
+      city,
+      pincode,
+      paymentMethod,
+    });
+    if (ok) {
+      navigation.navigate('Booking');
+    }
+  }, [submitBooking, item, quantity, scheduledDate, scheduledTime, address, city, pincode, paymentMethod, navigation]);
+
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -85,7 +104,7 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => navigation.goBack()}
+          onPress={handleGoBack}
           activeOpacity={0.7}
         >
           <Text style={styles.backArrow}>←</Text>
@@ -97,7 +116,6 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
       <View style={styles.divider} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-
         {/* Order Summary */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order Summary</Text>
@@ -106,7 +124,7 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
             <View style={styles.itemInfo}>
               <Text style={styles.itemName}>{item?.name}</Text>
               <Text style={styles.itemSeller}>by {item?.seller}</Text>
-              <Text style={styles.itemQty}>Quantity: {quantity}</Text>
+              <Text style={styles.itemQty}>Quantity: {Number(quantity) || 0}</Text>
               {isScheduled && (
                 <View style={styles.scheduledTag}>
                   <Text style={styles.scheduledTagText}>
@@ -115,7 +133,7 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
                 </View>
               )}
             </View>
-            <Text style={styles.itemPrice}>₹{subtotal}/day</Text>
+            <Text style={styles.itemPrice}>₹{(subtotal).toLocaleString()}</Text>
           </View>
         </View>
 
@@ -169,22 +187,29 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
         {/* Payment */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
-          {renderedPaymentOptions}
+          {PAYMENT_METHODS.map((method) => (
+            <PaymentOption
+              key={method.id}
+              method={method}
+              selected={paymentMethod === method.id}
+              onSelect={handleSelectPayment}
+            />
+          ))}
         </View>
 
         {/* Bill */}
         <View style={styles.billSection}>
           <View style={styles.billRow}>
             <Text style={styles.billLabel}>Rental ({quantity} unit{quantity > 1 ? 's' : ''} × ₹{item?.pricePerDay}/day)</Text>
-            <Text style={styles.billValue}>₹{subtotal}</Text>
+            <Text style={styles.billValue}>₹{subtotal.toLocaleString()}</Text>
           </View>
           <View style={styles.billRow}>
             <Text style={styles.billLabel}>Delivery Fee</Text>
-            <Text style={styles.billValue}>₹{DELIVERY_FEE}</Text>
+            <Text style={styles.billValue}>₹{DELIVERY_FEE.toLocaleString()}</Text>
           </View>
           <View style={styles.billRow}>
             <Text style={styles.billLabel}>Platform Fee (5%)</Text>
-            <Text style={styles.billValue}>₹{platformFee}</Text>
+            <Text style={styles.billValue}>₹{platformFee.toLocaleString()}</Text>
           </View>
           <View style={styles.billDivider} />
           <View style={styles.billRow}>
@@ -204,16 +229,28 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
           end={{ x: 1, y: 0 }}
           style={styles.confirmBtn}
         >
-          <TouchableOpacity style={styles.confirmTouch} activeOpacity={0.85}>
-            <Text style={styles.confirmText}>
-              {isScheduled ? 'Confirm Appointment →' : 'Confirm Booking →'}
-            </Text>
+          <TouchableOpacity
+            style={styles.confirmTouch}
+            activeOpacity={0.85}
+            onPress={handleConfirmRental}
+          >
+            {submitting ? (
+              <ActivityIndicator color={colors.textPrimary} />
+            ) : (
+              <Text style={styles.confirmText}>
+                {isScheduled ? 'Confirm Appointment →' : 'Confirm Booking →'}
+              </Text>
+            )}
           </TouchableOpacity>
         </LinearGradient>
+        {submitError && (
+          <Text style={styles.submitError}>{submitError}</Text>
+        )}
       </View>
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
@@ -385,6 +422,13 @@ const styles = StyleSheet.create({
   confirmBtn: { borderRadius: 16, overflow: 'hidden' },
   confirmTouch: { paddingVertical: 17, alignItems: 'center' },
   confirmText: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
+  submitError: {
+    fontSize: 13,
+    color: colors.danger,
+    textAlign: 'center',
+    marginTop: 10,
+    fontWeight: '500',
+  },
 });
 
 export default RentalCheckoutScreen;

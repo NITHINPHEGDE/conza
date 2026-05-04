@@ -8,11 +8,13 @@ import {
   StyleSheet,
   StatusBar,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import { useBooking } from '../hooks/useBooking';
 
 const PLATFORM_FEE_RATE = 0.05;
 const DELIVERY_FEE = 99;
@@ -24,40 +26,52 @@ const PAYMENT_METHODS = [
 ];
 
 // ─── Material Item Row ────────────────────────────────────────────────────────
-const MaterialItemRow = React.memo(({ item, quantity }) => (
-  <View style={styles.itemRow}>
-    <Image source={{ uri: item.image }} style={styles.itemImage} resizeMode="cover" />
-    <View style={styles.itemInfo}>
-      <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
-      <Text style={styles.itemSeller}>by {item.seller}</Text>
-      <Text style={styles.itemUnit}>{item.unit}</Text>
+const MaterialItemRow = React.memo(({ item, quantity }) => {
+  const qty = Number(quantity) || 0;
+  const price = Number(item.price) || 0;
+  const total = qty * price;
+
+  return (
+    <View style={styles.itemRow}>
+      <Image source={{ uri: item.image }} style={styles.itemImage} resizeMode="cover" />
+      <View style={styles.itemInfo}>
+        <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
+        <Text style={styles.itemSeller}>by {item.seller}</Text>
+        <Text style={styles.itemUnit}>{item.unit}</Text>
+      </View>
+      <View style={styles.itemRight}>
+        <Text style={styles.itemQty}>×{qty}</Text>
+        <Text style={styles.itemPrice}>₹{total.toLocaleString()}</Text>
+      </View>
     </View>
-    <View style={styles.itemRight}>
-      <Text style={styles.itemQty}>×{quantity}</Text>
-      <Text style={styles.itemPrice}>₹{item.price * quantity}</Text>
-    </View>
-  </View>
-));
+  );
+});
 
 // ─── Payment Option ───────────────────────────────────────────────────────────
-const PaymentOption = React.memo(({ method, selected, onSelect }) => (
-  <TouchableOpacity
-    style={[styles.paymentOption, selected && styles.paymentOptionSelected]}
-    onPress={() => onSelect(method.id)}
-    activeOpacity={0.75}
-  >
-    <View style={[styles.paymentRadio, selected && styles.paymentRadioSelected]}>
-      {selected && <View style={styles.paymentRadioDot} />}
-    </View>
-    <View style={styles.paymentIconBox}>
-      <Text style={{ fontSize: 18 }}>{method.icon}</Text>
-    </View>
-    <View style={{ flex: 1 }}>
-      <Text style={styles.paymentLabel}>{method.label}</Text>
-      <Text style={styles.paymentSub}>{method.sub}</Text>
-    </View>
-  </TouchableOpacity>
-));
+const PaymentOption = React.memo(({ method, selected, onSelect }) => {
+  const handlePress = useCallback(() => {
+    onSelect(method.id);
+  }, [onSelect, method.id]);
+
+  return (
+    <TouchableOpacity
+      style={[styles.paymentOption, selected && styles.paymentOptionSelected]}
+      onPress={handlePress}
+      activeOpacity={0.75}
+    >
+      <View style={[styles.paymentRadio, selected && styles.paymentRadioSelected]}>
+        {selected && <View style={styles.paymentRadioDot} />}
+      </View>
+      <View style={styles.paymentIconBox}>
+        <Text style={{ fontSize: 18 }}>{method.icon}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.paymentLabel}>{method.label}</Text>
+        <Text style={styles.paymentSub}>{method.sub}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const MaterialCheckoutScreen = ({ route, navigation }) => {
@@ -68,42 +82,40 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
   const [pincode, setPincode]       = useState('');
   const [paymentMethod, setPayment] = useState('cod');
 
+  const { submitBooking, loading: submitting, error: submitError } = useBooking('material');
+
   const { subtotal, platformFee, total, totalItems } = useMemo(() => {
     const sub = cartItems.reduce((sum, item) => {
-      const qty = cart[item.id] ?? item.quantity ?? 0;
-      return sum + item.price * qty;
+      const qty = Number(cart[item.id] ?? item.quantity) || 0;
+      const price = Number(item.price) || 0;
+      return sum + (price * qty);
     }, 0);
     const fee = Math.round(sub * PLATFORM_FEE_RATE);
     const tot = sub + fee + DELIVERY_FEE;
     const itemsCount = cartItems.reduce((sum, item) => {
-      const qty = cart[item.id] ?? item.quantity ?? 0;
+      const qty = Number(cart[item.id] ?? item.quantity) || 0;
       return sum + qty;
     }, 0);
     return { subtotal: sub, platformFee: fee, total: tot, totalItems: itemsCount };
   }, [cartItems, cart]);
 
   const handleSelectPayment = useCallback((id) => setPayment(id), []);
+  const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
 
-  const renderedCartItems = useMemo(() => (
-    cartItems.map((item) => (
-      <MaterialItemRow
-        key={item.id}
-        item={item}
-        quantity={cart[item.id] ?? item.quantity ?? 0}
-      />
-    ))
-  ), [cartItems, cart]);
+  const handlePlaceOrder = useCallback(async () => {
+    const ok = await submitBooking({
+      cartItems,
+      cart,
+      address,
+      city,
+      pincode,
+      paymentMethod,
+    });
+    if (ok) {
+      navigation.navigate('Booking');
+    }
+  }, [submitBooking, cartItems, cart, address, city, pincode, paymentMethod, navigation]);
 
-  const renderedPaymentOptions = useMemo(() => (
-    PAYMENT_METHODS.map((method) => (
-      <PaymentOption
-        key={method.id}
-        method={method}
-        selected={paymentMethod === method.id}
-        onSelect={handleSelectPayment}
-      />
-    ))
-  ), [paymentMethod, handleSelectPayment]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -113,7 +125,7 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => navigation.goBack()}
+          onPress={handleGoBack}
           activeOpacity={0.7}
         >
           <Text style={styles.backArrow}>←</Text>
@@ -134,14 +146,19 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
             Order Summary
             <Text style={styles.sectionCount}> ({totalItems} items)</Text>
           </Text>
-          {renderedCartItems}
+          {cartItems.map((item) => (
+            <MaterialItemRow
+              key={item.id}
+              item={item}
+              quantity={cart[item.id] ?? item.quantity ?? 0}
+            />
+          ))}
         </View>
 
         {/* Delivery Address */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🚚  Delivery Address</Text>
 
-          {/* Auto fetch button */}
           <TouchableOpacity style={styles.fetchLocationBtn} activeOpacity={0.8}>
             <MaterialIcons name="my-location" size={22} color={colors.accentAmber} />
             <View style={{ flex: 1 }}>
@@ -189,7 +206,14 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
         {/* Payment Method */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
-          {renderedPaymentOptions}
+          {PAYMENT_METHODS.map((method) => (
+            <PaymentOption
+              key={method.id}
+              method={method}
+              selected={paymentMethod === method.id}
+              onSelect={handleSelectPayment}
+            />
+          ))}
         </View>
 
         {/* Bill Summary */}
@@ -227,17 +251,23 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
           <TouchableOpacity
             style={styles.confirmTouch}
             activeOpacity={0.85}
-            onPress={() => {
-              // TODO: submit order
-            }}
+            onPress={handlePlaceOrder}
           >
-            <Text style={styles.confirmText}>Place Order →</Text>
+            {submitting ? (
+              <ActivityIndicator color={colors.textPrimary} />
+            ) : (
+              <Text style={styles.confirmText}>Place Order →</Text>
+            )}
           </TouchableOpacity>
         </LinearGradient>
+        {submitError && (
+          <Text style={styles.submitError}>{submitError}</Text>
+        )}
       </View>
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
@@ -489,6 +519,13 @@ const styles = StyleSheet.create({
   confirmBtn: { borderRadius: 16, overflow: 'hidden' },
   confirmTouch: { paddingVertical: 17, alignItems: 'center' },
   confirmText: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
+  submitError: {
+    fontSize: 13,
+    color: colors.danger,
+    textAlign: 'center',
+    marginTop: 10,
+    fontWeight: '500',
+  },
 });
 
 export default MaterialCheckoutScreen;

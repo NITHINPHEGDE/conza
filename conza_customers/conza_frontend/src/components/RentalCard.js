@@ -1,40 +1,60 @@
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
 
-const RentalCard = React.memo(({ item, onPress }) => (
-  <TouchableOpacity
-    style={styles.card}
-    onPress={() => onPress && onPress(item)}
-    activeOpacity={0.8}
-  >
-    <View style={styles.imageWrapper}>
-      <Image source={{ uri: item.image }} style={styles.image} resizeMode="cover" />
-      <View style={styles.availBadge}>
-        <View style={[styles.availDot, {
-          backgroundColor: item.available ? colors.success : colors.danger
-        }]} />
-        <Text style={[styles.availText, {
-          color: item.available ? colors.success : colors.danger
-        }]}>
-          {item.available ? 'Available' : 'Booked'}
-        </Text>
-      </View>
-      <View style={styles.ratingBadge}>
-        <Text style={styles.ratingText}>⭐ {item.rating}</Text>
-      </View>
-    </View>
+const RentalCard = React.memo(({ item, onPress }) => {
+  const handlePress = useCallback(() => {
+    onPress && onPress(item);
+  }, [onPress, item]);
 
-    <View style={styles.details}>
-      <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-      <Text style={styles.seller} numberOfLines={1}>by {item.seller}</Text>
-      <View style={styles.priceRow}>
-        <Text style={styles.price}>₹{item.pricePerDay}</Text>
-        <Text style={styles.unit}>/day</Text>
+  const imageSource = useMemo(() => ({ uri: item.image }), [item.image]);
+
+  const availDotStyle = useMemo(() => [
+    styles.availDot,
+    { backgroundColor: item.available ? colors.success : colors.danger }
+  ], [item.available]);
+
+  const availTextStyle = useMemo(() => [
+    styles.availText,
+    { color: item.available ? colors.success : colors.danger }
+  ], [item.available]);
+
+  return (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={handlePress}
+      activeOpacity={0.8}
+    >
+      <View style={styles.imageWrapper}>
+        <Image source={imageSource} style={styles.image} resizeMode="cover" />
+        <View style={styles.availBadge}>
+          <View style={availDotStyle} />
+          <Text style={availTextStyle}>
+            {item.available ? 'Available' : 'Booked'}
+          </Text>
+        </View>
+        <View style={styles.ratingBadge}>
+          <Text style={styles.ratingText}>⭐ {item.rating}</Text>
+        </View>
       </View>
-    </View>
-  </TouchableOpacity>
-));
+
+      <View style={styles.details}>
+        <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.seller} numberOfLines={1}>by {item.seller}</Text>
+        
+        <View style={styles.distanceRow}>
+          <Text style={styles.distanceText}>📍 {item.distance}</Text>
+        </View>
+
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>₹{item.pricePerDay}</Text>
+          <Text style={styles.unit}>/day</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
 
 const styles = StyleSheet.create({
   card: {
@@ -85,7 +105,9 @@ const styles = StyleSheet.create({
   ratingText: { fontSize: 10, fontWeight: '700', color: colors.textPrimary },
   details: { padding: 11 },
   name: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
-  seller: { fontSize: 11, color: colors.textMuted, marginBottom: 6, fontWeight: '500' },
+  seller: { fontSize: 11, color: colors.textMuted, marginBottom: 4, fontWeight: '500' },
+  distanceRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  distanceText: { fontSize: 11, color: colors.textSecondary, fontWeight: '600' },
   priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
   price: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
   unit: { fontSize: 10, color: colors.textMuted, fontWeight: '500' },

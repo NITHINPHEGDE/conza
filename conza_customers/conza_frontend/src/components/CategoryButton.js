@@ -1,9 +1,16 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 
 const CategoryButton = React.memo(({ label, icon, isSelected, onPress }) => {
+  const gradientColors = useMemo(() => [colors.gradientStart, colors.gradientEnd], []);
+  
+  const buttonStyle = useMemo(() => [
+    styles.button, 
+    styles.buttonSelected
+  ], []);
+
   if (isSelected) {
     return (
       <TouchableOpacity 
@@ -12,10 +19,10 @@ const CategoryButton = React.memo(({ label, icon, isSelected, onPress }) => {
         style={styles.wrapper}
       >
         <LinearGradient
-          colors={[colors.gradientStart, colors.gradientEnd]}
+          colors={gradientColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[styles.button, styles.buttonSelected]}
+          style={buttonStyle}
         >
           <Text style={styles.iconSelected}>{icon}</Text>
           <Text style={styles.labelSelected}>{label}</Text>

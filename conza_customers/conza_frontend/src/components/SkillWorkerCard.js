@@ -1,65 +1,90 @@
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 
-const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => (
-  <TouchableOpacity
-    style={[styles.card, isSelected && styles.cardSelected]}
-    onPress={() => onToggle(worker)}
-    activeOpacity={0.8}
-  >
-    {/* Checkbox */}
-    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-      {isSelected && <Text style={styles.checkmark}>✓</Text>}
-    </View>
+const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
+  const handleToggle = useCallback(() => {
+    onToggle(worker);
+  }, [onToggle, worker]);
 
-    {/* Avatar */}
-    <LinearGradient
-      colors={isSelected
-        ? [colors.gradientStart, colors.gradientEnd]
-        : ['#D0CDFF', '#A89CFF']}
-      style={styles.avatar}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+  const gradientColors = useMemo(() => 
+    isSelected ? [colors.gradientStart, colors.gradientEnd] : ['#D0CDFF', '#A89CFF'],
+    [isSelected]
+  );
+
+  const cardStyle = useMemo(() => [
+    styles.card,
+    isSelected && styles.cardSelected
+  ], [isSelected]);
+
+  const checkboxStyle = useMemo(() => [
+    styles.checkbox,
+    isSelected && styles.checkboxSelected
+  ], [isSelected]);
+
+  const priceStyle = useMemo(() => [
+    styles.price,
+    isSelected && styles.priceSelected
+  ], [isSelected]);
+
+  return (
+    <TouchableOpacity
+      style={cardStyle}
+      onPress={handleToggle}
+      activeOpacity={0.8}
     >
-      <Text style={styles.avatarText}>{worker.initials}</Text>
-    </LinearGradient>
+      {/* Checkbox */}
+      <View style={checkboxStyle}>
+        {isSelected && <Text style={styles.checkmark}>✓</Text>}
+      </View>
 
-    {/* Info */}
-    <View style={styles.info}>
-      <View style={styles.nameRow}>
-        <Text style={styles.name}>{worker.name}</Text>
-        <View style={styles.ratingChip}>
-          <Text style={styles.ratingStar}>⭐</Text>
-          <Text style={styles.ratingValue}>{worker.rating}</Text>
+      {/* Avatar */}
+      <LinearGradient
+        colors={gradientColors}
+        style={styles.avatar}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <Text style={styles.avatarText}>{worker.initials}</Text>
+      </LinearGradient>
+
+      {/* Info */}
+      <View style={styles.info}>
+        <View style={styles.nameRow}>
+          <Text style={styles.name}>{worker.name}</Text>
+          <View style={styles.ratingChip}>
+            <Text style={styles.ratingStar}>⭐</Text>
+            <Text style={styles.ratingValue}>{worker.rating}</Text>
+          </View>
+        </View>
+
+        {/* Category tag */}
+        <View style={styles.categoryTag}>
+          <Text style={styles.categoryTagText}>{worker.category}</Text>
+        </View>
+
+        {/* Matching skills - Replaced FlatList with map for nesting stability */}
+        <View style={styles.skillsRow}>
+          {(worker.skills || []).map((skill) => (
+            <View key={skill} style={styles.skillTag}>
+              <Text style={styles.skillText}>{skill}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Distance + Price */}
+        <View style={styles.metaRow}>
+          <Text style={styles.distance}>📍 {worker.distance}</Text>
+          <Text style={priceStyle}>
+            ₹{Number(worker.pricePerDay) || 0}/day
+          </Text>
         </View>
       </View>
+    </TouchableOpacity>
+  );
+});
 
-      {/* Category tag */}
-      <View style={styles.categoryTag}>
-        <Text style={styles.categoryTagText}>{worker.category}</Text>
-      </View>
-
-      {/* Matching skills */}
-      <View style={styles.skillsRow}>
-        {worker.skills.map((s) => (
-          <View key={s} style={styles.skillTag}>
-            <Text style={styles.skillText}>{s}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Distance + Price */}
-      <View style={styles.metaRow}>
-        <Text style={styles.distance}>📍 {worker.distance}</Text>
-        <Text style={[styles.price, isSelected && styles.priceSelected]}>
-          ₹{worker.pricePerDay}/day
-        </Text>
-      </View>
-    </View>
-  </TouchableOpacity>
-));
 
 const styles = StyleSheet.create({
   card: {

@@ -7,11 +7,13 @@ import {
   TextInput,
   StyleSheet,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import { useBooking } from '../hooks/useBooking';
 
 const PLATFORM_FEE_RATE = 0.05;
 
@@ -55,29 +57,35 @@ const WorkerRow = React.memo(({ worker }) => (
         <Text style={styles.workerMetaText}>📍 {worker.distance}</Text>
       </View>
     </View>
-    <Text style={styles.workerPrice}>₹{worker.pricePerDay}</Text>
+    <Text style={styles.workerPrice}>₹{Number(worker.pricePerDay) || 0}</Text>
   </View>
 ));
 
 // ─── Payment Method Option ────────────────────────────────────────────────────
-const PaymentOption = React.memo(({ method, selected, onSelect }) => (
-  <TouchableOpacity
-    style={[styles.paymentOption, selected && styles.paymentOptionSelected]}
-    onPress={() => onSelect(method.id)}
-    activeOpacity={0.75}
-  >
-    <View style={[styles.paymentRadio, selected && styles.paymentRadioSelected]}>
-      {selected && <View style={styles.paymentRadioDot} />}
-    </View>
-    <View style={styles.paymentIconBox}>
-      <Text style={{ fontSize: 18 }}>{method.icon}</Text>
-    </View>
-    <View style={{ flex: 1 }}>
-      <Text style={styles.paymentLabel}>{method.label}</Text>
-      <Text style={styles.paymentSub}>{method.sub}</Text>
-    </View>
-  </TouchableOpacity>
-));
+const PaymentOption = React.memo(({ method, selected, onSelect }) => {
+  const handlePress = useCallback(() => {
+    onSelect(method.id);
+  }, [onSelect, method.id]);
+
+  return (
+    <TouchableOpacity
+      style={[styles.paymentOption, selected && styles.paymentOptionSelected]}
+      onPress={handlePress}
+      activeOpacity={0.75}
+    >
+      <View style={[styles.paymentRadio, selected && styles.paymentRadioSelected]}>
+        {selected && <View style={styles.paymentRadioDot} />}
+      </View>
+      <View style={styles.paymentIconBox}>
+        <Text style={{ fontSize: 18 }}>{method.icon}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.paymentLabel}>{method.label}</Text>
+        <Text style={styles.paymentSub}>{method.sub}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const LabourCheckoutScreen = ({ route, navigation }) => {
@@ -88,31 +96,31 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const [pincode, setPincode]         = useState('');
   const [paymentMethod, setPayment]   = useState('cod');
 
+  const { submitBooking, loading: submitting, error: submitError } = useBooking('labour');
+
   const { subtotal, platformFee, total } = useMemo(() => {
-    const sub = selectedWorkers.reduce((sum, w) => sum + w.pricePerDay, 0);
+    const sub = selectedWorkers.reduce((sum, w) => sum + (Number(w.pricePerDay) || 0), 0);
     const fee = Math.round(sub * PLATFORM_FEE_RATE);
     const tot = sub + fee;
     return { subtotal: sub, platformFee: fee, total: tot };
   }, [selectedWorkers]);
 
   const handleSelectPayment = useCallback((id) => setPayment(id), []);
+  const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
 
-  const renderedWorkers = useMemo(() => (
-    selectedWorkers.map((worker) => (
-      <WorkerRow key={worker.id} worker={worker} />
-    ))
-  ), [selectedWorkers]);
-
-  const renderedPaymentOptions = useMemo(() => (
-    PAYMENT_METHODS.map((method) => (
-      <PaymentOption
-        key={method.id}
-        method={method}
-        selected={paymentMethod === method.id}
-        onSelect={handleSelectPayment}
-      />
-    ))
-  ), [paymentMethod, handleSelectPayment]);
+  const handleConfirmBooking = useCallback(async () => {
+    const ok = await submitBooking({
+      selectedWorkers,
+      category,
+      address,
+      city,
+      pincode,
+      paymentMethod,
+    });
+    if (ok) {
+      navigation.navigate('Booking');
+    }
+  }, [submitBooking, selectedWorkers, category, address, city, pincode, paymentMethod, navigation]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -122,7 +130,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => navigation.goBack()}
+          onPress={handleGoBack}
           activeOpacity={0.7}
         >
           <Text style={styles.backArrow}>←</Text>
@@ -137,23 +145,24 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-
         {/* Selected Workers */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Selected Workers</Text>
-          {renderedWorkers}
+          {selectedWorkers.map((worker) => (
+            <WorkerRow key={worker.id} worker={worker} />
+          ))}
         </View>
 
         {/* Work Location */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📍  Work Location</Text>
           <TouchableOpacity style={styles.fetchLocationBtn} activeOpacity={0.8}>
-          <MaterialIcons name="my-location" size={22} color={colors.accentAmber} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.fetchLocationText}>Auto Fetch My Location</Text>
-            <Text style={styles.fetchLocationSub}>Uses your current GPS location</Text>
-          </View>
-        </TouchableOpacity>
+            <MaterialIcons name="my-location" size={22} color={colors.accentAmber} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fetchLocationText}>Auto Fetch My Location</Text>
+              <Text style={styles.fetchLocationSub}>Uses your current GPS location</Text>
+            </View>
+          </TouchableOpacity>
 
           <Text style={styles.inputLabel}>Street Address</Text>
           <TextInput
@@ -193,7 +202,14 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         {/* Payment Method */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
-          {renderedPaymentOptions}
+          {PAYMENT_METHODS.map((method) => (
+            <PaymentOption
+              key={method.id}
+              method={method}
+              selected={paymentMethod === method.id}
+              onSelect={handleSelectPayment}
+            />
+          ))}
         </View>
 
         {/* Bill Summary */}
@@ -202,16 +218,16 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
             <Text style={styles.billLabel}>
               Subtotal ({selectedWorkers.length} worker{selectedWorkers.length > 1 ? 's' : ''})
             </Text>
-            <Text style={styles.billValue}>₹{subtotal}</Text>
+            <Text style={styles.billValue}>₹{subtotal.toLocaleString()}</Text>
           </View>
           <View style={styles.billRow}>
             <Text style={styles.billLabel}>Platform Fee</Text>
-            <Text style={styles.billValue}>₹{platformFee}</Text>
+            <Text style={styles.billValue}>₹{platformFee.toLocaleString()}</Text>
           </View>
           <View style={styles.billDivider} />
           <View style={styles.billRow}>
             <Text style={styles.billTotalLabel}>Total Amount</Text>
-            <Text style={styles.billTotalValue}>₹{total}</Text>
+            <Text style={styles.billTotalValue}>₹{total.toLocaleString()}</Text>
           </View>
         </View>
 
@@ -229,17 +245,23 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
           <TouchableOpacity
             style={styles.confirmTouch}
             activeOpacity={0.85}
-            onPress={() => {
-              // TODO: submit booking
-            }}
+            onPress={handleConfirmBooking}
           >
-            <Text style={styles.confirmText}>Confirm Booking</Text>
+            {submitting ? (
+              <ActivityIndicator color={colors.textPrimary} />
+            ) : (
+              <Text style={styles.confirmText}>Confirm Booking</Text>
+            )}
           </TouchableOpacity>
         </LinearGradient>
+        {submitError && (
+          <Text style={styles.submitError}>{submitError}</Text>
+        )}
       </View>
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
@@ -464,6 +486,13 @@ const styles = StyleSheet.create({
   confirmBtn: { borderRadius: 16, overflow: 'hidden' },
   confirmTouch: { paddingVertical: 17, alignItems: 'center' },
   confirmText: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
+  submitError: {
+    fontSize: 13,
+    color: colors.danger,
+    textAlign: 'center',
+    marginTop: 10,
+    fontWeight: '500',
+  },
 });
 
 export default LabourCheckoutScreen;
