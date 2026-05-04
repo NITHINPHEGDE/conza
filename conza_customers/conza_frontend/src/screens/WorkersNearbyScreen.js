@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { workersByCategory } from '../data/dummyData';
+import useAppStore from '../store/useAppStore';
 import { colors } from '../theme/colors';
 
 // ─── Worker Card ──────────────────────────────────────────────────────────────
@@ -85,7 +85,8 @@ const FilterChip = React.memo(({ label, active, onPress }) => (
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const WorkersNearbyScreen = ({ route, navigation }) => {
   const { category } = route.params;
-  const allWorkers = useMemo(() => workersByCategory[category] || [], [category]);
+  const getWorkersByCategory = useAppStore((s) => s.getWorkersByCategory);
+  const allWorkers = getWorkersByCategory(category);
 
   const [selected, setSelected]       = useState([]);
   const [filterAvail, setFilterAvail] = useState('All');

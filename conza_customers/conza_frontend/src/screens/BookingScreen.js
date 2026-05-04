@@ -19,7 +19,7 @@ import MaterialCard      from '../components/MaterialCard';
 import SectionHeader     from '../components/SectionHeader';
 import SkillWorkerCard   from '../components/SkillWorkerCard';
 import RentalCard from '../components/RentalCard';
-import { labourCategories, materials as dummyMaterials, rentalItems, rentalCategories, allWorkers } from '../data/dummyData';
+import useAppStore from '../store/useAppStore';
 import { colors } from '../theme/colors';
 
 const CATEGORIES = [
@@ -32,12 +32,9 @@ const CATEGORIES = [
 const SkillSearchView = ({ query, onClear }) => {
   const navigation = useNavigation();
   const [selected, setSelected] = useState([]);
+  const searchWorkers = useAppStore((s) => s.searchWorkers);
 
-  const results = (allWorkers || []).filter((w) =>
-  w.skills.some((s) => s.toLowerCase().includes(query.toLowerCase())) ||
-  w.category.toLowerCase().includes(query.toLowerCase()) ||
-  w.name.toLowerCase().includes(query.toLowerCase())
-);
+  const results = searchWorkers(query);
 
   const toggleWorker = useCallback((worker) => {
     setSelected((prev) =>
@@ -134,6 +131,7 @@ const LabourView = () => {
   const [showModal, setShowModal]   = useState(false);
   const [quantity, setQuantity]     = useState(1);
 
+  const labourCategories = useAppStore((s) => s.labourCategories);
   const selectedItem = labourCategories.find((l) => l.id === selectedId);
 
   const handleContinue = () => {
@@ -287,38 +285,29 @@ const LabourView = () => {
 const MaterialView = () => {
   const navigation = useNavigation();
   const [query, setQuery] = useState('');
-  const [materials, setMaterials] = useState([]);
 
-  useEffect(() => {
-    const initialized = dummyMaterials.map(item => ({
-      ...item,
-      quantity: item.quantity ?? 0,
-    }));
-    setMaterials(initialized);
-  }, []);
+  const materials        = useAppStore((s) => s.materials);
+  const cart             = useAppStore((s) => s.cart);
+  const addToCart        = useAppStore((s) => s.addToCart);
+  const removeFromCart   = useAppStore((s) => s.removeFromCart);
+  const getCartTotal     = useAppStore((s) => s.getCartTotal);
+  const getCartItemCount = useAppStore((s) => s.getCartItemCount);
+  const getCartItems     = useAppStore((s) => s.getCartItems);
+  const searchMaterials  = useAppStore((s) => s.searchMaterials);
 
   const handleUpdateQuantity = useCallback((id, newQty) => {
-    setMaterials((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, quantity: newQty } : item
-      )
-    );
-  }, []);
+    addToCart({ id, _setQty: newQty });
+  }, [addToCart]);
 
   const handleImagePress = useCallback((item) => {
     navigation.navigate('MaterialDetail', { item });
   }, [navigation]);
 
-  const filtered = query.trim()
-    ? materials.filter((m) =>
-        m.name.toLowerCase().includes(query.toLowerCase()) ||
-        m.seller.toLowerCase().includes(query.toLowerCase())
-      )
-    : materials;
+  const filtered = searchMaterials(query);
 
-  const cartItems  = materials.filter((m) => (m.quantity ?? 0) > 0);
-  const totalItems = cartItems.reduce((sum, m) => sum + (m.quantity ?? 0), 0);
-  const totalPrice = cartItems.reduce((sum, m) => sum + m.price * (m.quantity ?? 0), 0);
+  const cartItems  = getCartItems();
+  const totalItems = getCartItemCount();
+  const totalPrice = getCartTotal();
 
   const renderItem = useCallback(({ item }) => (
     <View style={styles.materialCardWrapper}>
@@ -407,12 +396,10 @@ const RentalView = () => {
   const [selectedCat, setSelectedCat]   = useState('all');
   const [showFilter, setShowFilter]     = useState(false);
 
-  const filtered = rentalItems.filter((item) => {
-    const matchCat   = selectedCat === 'all' || item.category === selectedCat;
-    const matchQuery = item.name.toLowerCase().includes(query.toLowerCase()) ||
-                       item.seller.toLowerCase().includes(query.toLowerCase());
-    return matchCat && (query.trim() === '' || matchQuery);
-  });
+  const filterRentalItems = useAppStore((s) => s.filterRentalItems);
+  const rentalCategories  = useAppStore((s) => s.rentalCategories);
+
+  const filtered = filterRentalItems(selectedCat, query);
 
   const activeCat = rentalCategories.find((c) => c.id === selectedCat);
 

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { userProfile } from '../data/dummyData';
+import useAppStore from '../store/useAppStore';
 import { colors } from '../theme/colors';
 
 const StatCard = ({ value, label }) => (
@@ -33,7 +33,7 @@ const MenuItem = ({ icon, label, sub, danger }) => (
 );
 
 const ProfileScreen = () => {
-  const u = userProfile;
+  const u = useAppStore((s) => s.userProfile);
   const insets = useSafeAreaInsets();
   const initials = u.name.split(' ').map((n) => n[0]).join('');
 

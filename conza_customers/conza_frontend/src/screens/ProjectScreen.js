@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import SectionHeader from '../components/SectionHeader';
-import { projects } from '../data/dummyData';
+import useAppStore from '../store/useAppStore';
 import { colors } from '../theme/colors';
 
 const ProgressBar = ({ progress, color }) => (
@@ -57,6 +57,7 @@ const ProjectCard = React.memo(({ item }) => (
 
 const ProjectScreen = () => {
   const insets = useSafeAreaInsets();
+  const projects = useAppStore((s) => s.projects);
 
   const renderItem = useCallback(({ item }) => <ProjectCard item={item} />, []);
 
