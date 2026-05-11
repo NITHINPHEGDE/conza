@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import usePartnerStore from '../store/usePartnerStore';
+import { logout } from '../services/authService';
 import { colors } from '../theme/colors';
 
 const StatCard = React.memo(({ value, label }) => (
@@ -19,8 +20,9 @@ const StatCard = React.memo(({ value, label }) => (
   </View>
 ));
 
-const MenuItem = React.memo(({ icon, label, sub, danger }) => (
-  <TouchableOpacity style={styles.menuItem} activeOpacity={0.75}>
+
+const MenuItem = React.memo(({ icon, label, sub, danger, onPress }) => (
+  <TouchableOpacity style={styles.menuItem} activeOpacity={0.75} onPress={onPress}>
     <View style={[styles.menuIcon, danger && styles.menuIconDanger]}>
       <Text style={{ fontSize: 18 }}>{icon}</Text>
     </View>
@@ -93,7 +95,15 @@ const ProfileScreen = () => {
         </View>
 
         <View style={styles.section}>
-          <MenuItem icon="🚪" label="Logout" danger />
+          <MenuItem
+            icon="🚪"
+            label="Logout"
+            danger
+            onPress={async () => {
+            await logout();
+            navigation.replace('Auth');
+  }}
+/> 
         </View>
 
         <Text style={styles.version}>Conza Partner v1.0.0</Text>

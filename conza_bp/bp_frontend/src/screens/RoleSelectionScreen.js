@@ -38,10 +38,10 @@ const RoleSelectionScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
 
   const handleContinue = () => {
-    if (selectedRole === 'labour') {
-      navigation.replace('MainApp');
-    }
-  };
+  if (selectedRole === 'labour') {
+    navigation.navigate('AuthLanding');
+  }
+};
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
