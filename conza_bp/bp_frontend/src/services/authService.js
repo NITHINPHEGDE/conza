@@ -1,115 +1,61 @@
 // src/services/authService.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from './apiClient';
 
-const USERS_KEY = 'conza_users';
-const SESSION_KEY = 'conza_session';
+const TOKEN_KEY  = 'conza_token';
+const WORKER_KEY = 'conza_worker';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const getUsers = async () => {
-  const raw = await AsyncStorage.getItem(USERS_KEY);
-  return raw ? JSON.parse(raw) : [];
+// ── Persist helpers ───────────────────────────────────────────────────────
+export const saveSession = async (token, worker) => {
+  await AsyncStorage.multiSet([
+    [TOKEN_KEY,  token],
+    [WORKER_KEY, JSON.stringify(worker)],
+  ]);
 };
 
-const saveUsers = async (users) => {
-  await AsyncStorage.setItem(USERS_KEY, JSON.stringify(users));
+export const clearSession = async () => {
+  await AsyncStorage.multiRemove([TOKEN_KEY, WORKER_KEY]);
 };
 
-// ── Auth API ──────────────────────────────────────────────────────────────────
+export const getStoredToken = () => AsyncStorage.getItem(TOKEN_KEY);
 
-export const signUp = async (userData) => {
-  const users = await getUsers();
+export const getStoredWorker = async () => {
+  const raw = await AsyncStorage.getItem(WORKER_KEY);
+  return raw ? JSON.parse(raw) : null;
+};
 
-  const phoneExists = users.find((u) => u.phone === userData.phone);
-  if (phoneExists) throw new Error('Phone number already registered.');
+// ── Auth API calls ─────────────────────────────────────────────────────────
 
-  const usernameExists = users.find(
-    (u) => u.username.toLowerCase() === userData.username.toLowerCase()
-  );
-  if (usernameExists) throw new Error('Username already taken.');
-
-  if (userData.email) {
-    const emailExists = users.find(
-      (u) => u.email && u.email.toLowerCase() === userData.email.toLowerCase()
-    );
-    if (emailExists) throw new Error('Email already registered.');
-  }
-
-  const newUser = {
-    id: `user_${Date.now()}`,
-    ...userData,
-    createdAt: new Date().toISOString(),
-  };
-
-  await saveUsers([...users, newUser]);
-
-  // Auto-login after sign up
-  const session = { userId: newUser.id, createdAt: Date.now() };
-  await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
-
-  return newUser;
+export const signUp = async (formData) => {
+  const data = await api.post('/workers/signup', formData);
+  await saveSession(data.token, data.worker);
+  return data.worker;
 };
 
 export const login = async (identifier, password) => {
-  const users = await getUsers();
-
-  const user = users.find(
-    (u) =>
-      (u.phone === identifier ||
-        u.username.toLowerCase() === identifier.toLowerCase() ||
-        (u.email && u.email.toLowerCase() === identifier.toLowerCase())) &&
-      u.password === password
-  );
-
-  if (!user) {
-    const identifierExists = users.find(
-      (u) =>
-        u.phone === identifier ||
-        u.username.toLowerCase() === identifier.toLowerCase() ||
-        (u.email && u.email.toLowerCase() === identifier.toLowerCase())
-    );
-    if (!identifierExists) throw new Error('No account found with that username or phone.');
-    throw new Error('Incorrect password.');
-  }
-
-  const session = { userId: user.id, createdAt: Date.now() };
-  await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
-
-  return user;
+  const data = await api.post('/workers/login', { identifier, password });
+  await saveSession(data.token, data.worker);
+  return data.worker;
 };
 
 export const logout = async () => {
-  await AsyncStorage.removeItem(SESSION_KEY);
-};
-
-export const getSession = async () => {
-  const raw = await AsyncStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
-  const session = JSON.parse(raw);
-  return session;
+  await clearSession();
 };
 
 export const getLoggedInUser = async () => {
-  const session = await getSession();
-  if (!session) return null;
-  const users = await getUsers();
-  return users.find((u) => u.id === session.userId) || null;
+  const token = await getStoredToken();
+  if (!token) return null;
+  return getStoredWorker();
 };
 
-export const forgotPassword = async (identifier) => {
-  const users = await getUsers();
-  const user = users.find(
-    (u) =>
-      u.phone === identifier ||
-      u.username.toLowerCase() === identifier.toLowerCase() ||
-      (u.email && u.email.toLowerCase() === identifier.toLowerCase())
-  );
-  if (!user) throw new Error('No account found with that username, phone, or email.');
-  // In production: trigger SMS/email OTP here
-  // For now, return masked hint
-  return {
-    hint: user.email
-      ? `Reset link sent to ${user.email.replace(/(.{2}).+(@.+)/, '$1***$2')}`
-      : `OTP sent to ${user.phone.replace(/(\d{3})\d{5}(\d{2})/, '$1*****$2')}`,
-  };
+export const getMe = async () => {
+  try {
+    const data = await api.get('/workers/me');
+    const worker = data.worker;
+    const token  = await getStoredToken();
+    await saveSession(token, worker);
+    return worker;
+  } catch {
+    return null;
+  }
 };

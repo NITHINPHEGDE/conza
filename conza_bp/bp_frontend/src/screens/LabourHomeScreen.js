@@ -43,10 +43,10 @@ const LabourHomeScreen = ({ navigation }) => {
       <View style={styles.greetingRow}>
         <View>
           <Text style={styles.greeting}>
-            Hello, {profile.name.split(' ')[0]} 👋
+            Hello, {(profile.fullName || profile.name || 'Partner').split(' ')[0]} 👋
           </Text>
           <Text style={styles.greetingSub}>
-            {profile.category} · {profile.location}
+            {profile.category || ''} · {profile.locationText || profile.location || ''}
           </Text>
         </View>
         <TouchableOpacity

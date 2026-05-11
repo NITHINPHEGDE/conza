@@ -13,33 +13,22 @@ import ActiveJobScreen      from '../screens/ActiveJobScreen';
 import HistoryScreen        from '../screens/HistoryScreen';
 import ProfileScreen        from '../screens/ProfileScreen';
 import PaymentScreen        from '../screens/PaymentScreen';
+import AuthLandingScreen    from '../screens/auth/AuthLandingScreen';
+import LoginScreen          from '../screens/auth/LoginScreen';
+import SignUpScreen         from '../screens/auth/SignUpScreen';
 
-// Auth screens
-import AuthLandingScreen from '../screens/auth/AuthLandingScreen';
-import LoginScreen       from '../screens/auth/LoginScreen';
-import SignUpScreen      from '../screens/auth/SignUpScreen';
-
-import usePartnerStore, {
-  selectActiveJob, selectJobStatus,
-} from '../store/usePartnerStore';
+import usePartnerStore, { selectActiveJob, selectJobStatus } from '../store/usePartnerStore';
 import { getLoggedInUser } from '../services/authService';
 import { colors } from '../theme/colors';
 
 const Stack = createNativeStackNavigator();
 const Tab   = createBottomTabNavigator();
 
-const TAB_ICONS   = { Home: '🏠', Earnings: '💳', Active: '🔧', History: '📋', Profile: '👤' };
-const GRAD_START  = { x: 0, y: 0 };
-const GRAD_END    = { x: 1, y: 0 };
-const STACK_OPTS  = { headerShown: false };
-const CARD_OPTS   = { presentation: 'card', headerShown: false };
-
-// Static tab label options
-const HOME_OPTS     = { title: 'Home'     };
-const EARNINGS_OPTS = { title: 'Earnings' };
-const ACTIVE_OPTS   = { title: 'Active'   };
-const HISTORY_OPTS  = { title: 'History'  };
-const PROFILE_OPTS  = { title: 'Profile'  };
+const TAB_ICONS  = { Home: '🏠', Earnings: '💳', Active: '🔧', History: '📋', Profile: '👤' };
+const GRAD_START = { x: 0, y: 0 };
+const GRAD_END   = { x: 1, y: 0 };
+const STACK_OPTS = { headerShown: false };
+const CARD_OPTS  = { presentation: 'card', headerShown: false };
 
 const TabIcon = React.memo(({ name, focused }) => (
   <View style={styles.iconWrapper}>
@@ -50,20 +39,14 @@ const TabIcon = React.memo(({ name, focused }) => (
         style={styles.activePill}
       />
     )}
-    <Text style={focused ? styles.tabIconActive : styles.tabIcon}>
-      {TAB_ICONS[name]}
-    </Text>
+    <Text style={focused ? styles.tabIconActive : styles.tabIcon}>{TAB_ICONS[name]}</Text>
   </View>
 ));
 
 const FloatingJobButton = React.memo(({ navigation }) => {
   const activeJob = usePartnerStore(selectActiveJob);
   const jobStatus = usePartnerStore(selectJobStatus);
-
-  const handlePress = useCallback(
-    () => navigation.navigate('ActiveJob'),
-    [navigation],
-  );
+  const handlePress = useCallback(() => navigation.navigate('ActiveJob'), [navigation]);
 
   if (!activeJob || jobStatus === 'completed') return null;
 
@@ -101,11 +84,11 @@ const tabScreenOptions = ({ route }) => ({
 const MainTabs = ({ navigation }) => (
   <View style={styles.flex}>
     <Tab.Navigator initialRouteName="Home" screenOptions={tabScreenOptions}>
-      <Tab.Screen name="Home"     component={LabourHomeScreen} options={HOME_OPTS}     />
-      <Tab.Screen name="Earnings" component={PaymentScreen}    options={EARNINGS_OPTS} />
-      <Tab.Screen name="Active"   component={ActiveJobScreen}  options={ACTIVE_OPTS}   />
-      <Tab.Screen name="History"  component={HistoryScreen}    options={HISTORY_OPTS}  />
-      <Tab.Screen name="Profile"  component={ProfileScreen}    options={PROFILE_OPTS}  />
+      <Tab.Screen name="Home"     component={LabourHomeScreen} options={{ title: 'Home'     }} />
+      <Tab.Screen name="Earnings" component={PaymentScreen}    options={{ title: 'Earnings' }} />
+      <Tab.Screen name="Active"   component={ActiveJobScreen}  options={{ title: 'Active'   }} />
+      <Tab.Screen name="History"  component={HistoryScreen}    options={{ title: 'History'  }} />
+      <Tab.Screen name="Profile"  component={ProfileScreen}    options={{ title: 'Profile'  }} />
     </Tab.Navigator>
     <FloatingJobButton navigation={navigation} />
   </View>
@@ -119,7 +102,6 @@ const MainAppStack = () => (
   </Stack.Navigator>
 );
 
-// ── Auth Stack ────────────────────────────────────────────────────────────────
 const AuthStack = () => (
   <Stack.Navigator screenOptions={STACK_OPTS}>
     <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
@@ -129,15 +111,23 @@ const AuthStack = () => (
   </Stack.Navigator>
 );
 
-// ── Root Navigator — checks session on mount ──────────────────────────────────
+// ── Root Navigator ─────────────────────────────────────────────────────────
 const AppNavigator = () => {
-  const [initialRoute, setInitialRoute] = useState(null); // null = loading
+  const [initialRoute, setInitialRoute] = useState(null);
+  const setWorker       = usePartnerStore((s) => s.setWorker);
+  const syncOnlineState = usePartnerStore((s) => s.syncOnlineState);
 
   useEffect(() => {
     let mounted = true;
-    getLoggedInUser().then((user) => {
+    getLoggedInUser().then((worker) => {
       if (!mounted) return;
-      setInitialRoute(user ? 'MainApp' : 'Auth');
+      if (worker) {
+        setWorker(worker);
+        syncOnlineState(worker.isOnline || false);
+        setInitialRoute('MainApp');
+      } else {
+        setInitialRoute('Auth');
+      }
     }).catch(() => {
       if (mounted) setInitialRoute('Auth');
     });
@@ -162,10 +152,7 @@ const AppNavigator = () => {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName={initialRoute}
-        screenOptions={STACK_OPTS}
-      >
+      <Stack.Navigator initialRouteName={initialRoute} screenOptions={STACK_OPTS}>
         <Stack.Screen name="Auth"    component={AuthStack}    />
         <Stack.Screen name="MainApp" component={MainAppStack} />
       </Stack.Navigator>
@@ -174,23 +161,23 @@ const AppNavigator = () => {
 };
 
 const styles = StyleSheet.create({
-  flex:            { flex: 1 },
-  tabBar:          { backgroundColor: colors.tabBar, borderTopColor: colors.tabBarBorder, borderTopWidth: 1, height: 70, paddingBottom: 10, paddingTop: 8 },
-  tabLabel:        { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
-  iconWrapper:     { alignItems: 'center', justifyContent: 'center', position: 'relative', width: 44, height: 30 },
-  activePill:      { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 10, opacity: 0.2 },
-  tabIcon:         { fontSize: 21, opacity: 0.4 },
-  tabIconActive:   { fontSize: 21, opacity: 1 },
-  floatingBtn:     { position: 'absolute', bottom: 84, alignSelf: 'center', zIndex: 999, borderRadius: 30 },
-  floatingBtnInner:{ flexDirection: 'row', alignItems: 'center', borderRadius: 30, paddingHorizontal: 20, paddingVertical: 11, gap: 8 },
-  floatingPulse:   { fontSize: 10, color: colors.danger, fontWeight: '900' },
-  floatingBtnText: { fontSize: 13, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
-  floatingArrow:   { fontSize: 18, color: colors.textPrimary, fontWeight: '300', lineHeight: 22 },
-  splash:          { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  splashBadge:     { width: 80, height: 80, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  splashEmoji:     { fontSize: 36 },
-  splashBrand:     { fontSize: 20, fontWeight: '900', color: colors.textPrimary, letterSpacing: 0.5 },
-  splashSpinner:   { marginTop: 8 },
+  flex:             { flex: 1 },
+  tabBar:           { backgroundColor: colors.tabBar, borderTopColor: colors.tabBarBorder, borderTopWidth: 1, height: 70, paddingBottom: 10, paddingTop: 8 },
+  tabLabel:         { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+  iconWrapper:      { alignItems: 'center', justifyContent: 'center', position: 'relative', width: 44, height: 30 },
+  activePill:       { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 10, opacity: 0.2 },
+  tabIcon:          { fontSize: 21, opacity: 0.4 },
+  tabIconActive:    { fontSize: 21, opacity: 1 },
+  floatingBtn:      { position: 'absolute', bottom: 84, alignSelf: 'center', zIndex: 999, borderRadius: 30 },
+  floatingBtnInner: { flexDirection: 'row', alignItems: 'center', borderRadius: 30, paddingHorizontal: 20, paddingVertical: 11, gap: 8 },
+  floatingPulse:    { fontSize: 10, color: colors.danger, fontWeight: '900' },
+  floatingBtnText:  { fontSize: 13, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
+  floatingArrow:    { fontSize: 18, color: colors.textPrimary, fontWeight: '300', lineHeight: 22 },
+  splash:           { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', gap: 14 },
+  splashBadge:      { width: 80, height: 80, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  splashEmoji:      { fontSize: 36 },
+  splashBrand:      { fontSize: 20, fontWeight: '900', color: colors.textPrimary, letterSpacing: 0.5 },
+  splashSpinner:    { marginTop: 8 },
 });
 
 export default AppNavigator;

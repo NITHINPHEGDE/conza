@@ -6,7 +6,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { login, forgotPassword } from '../../services/authService';
+import { login } from '../../services/authService';
+import usePartnerStore from '../../store/usePartnerStore';
 import { colors } from '../../theme/colors';
 
 const GRAD_START = { x: 0, y: 0 };
@@ -49,6 +50,8 @@ const fieldStyles = StyleSheet.create({
 // ── Screen ────────────────────────────────────────────────────────────────────
 const LoginScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
+  const setWorker       = usePartnerStore((s) => s.setWorker);
+  const syncOnlineState = usePartnerStore((s) => s.syncOnlineState);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword]     = useState('');
   const [showPass, setShowPass]     = useState(false);
@@ -73,9 +76,10 @@ const LoginScreen = ({ navigation, route }) => {
     setLoading(true);
     setErrors({});
     try {
-      const user = await login(identifier.trim(), password);
-      // Merge user into partner store
-      navigation.replace('MainApp', { user });
+      const worker = await login(identifier.trim(), password);
+      setWorker(worker);
+      syncOnlineState(worker.isOnline || false);
+      navigation.replace('MainApp');
     } catch (err) {
       const msg = err.message;
       if (msg.includes('password')) setErrors({ password: msg });
@@ -93,7 +97,8 @@ const LoginScreen = ({ navigation, route }) => {
     setForgotLoading(true);
     setForgotMsg('');
     try {
-      const res = await forgotPassword(forgotId.trim());
+      // TODO: hook up forgot password API
+      const res = { hint: "Password reset coming soon." };
       setForgotMsg(res.hint);
     } catch (err) {
       setForgotMsg(err.message);

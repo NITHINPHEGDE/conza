@@ -1,37 +1,34 @@
 // src/utils/cloudinary.js
-
-const CLOUDINARY_CLOUD_NAME =
-  process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
-
-const CLOUDINARY_UPLOAD_PRESET =
-  process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
+import { api } from '../services/apiClient';
 
 export const uploadImageToCloudinary = async (imageUri) => {
-  const formData = new FormData();
+  // Step 1 — get signature from our backend
+  const { signature, timestamp, folder, cloud_name, api_key } =
+    await api.get('/workers/upload-signature');
 
+  // Step 2 — build multipart form
   const filename = imageUri.split('/').pop();
-  const match = /\.(\w+)$/.exec(filename);
-  const type = match ? `image/${match[1]}` : 'image/jpeg';
+  const match    = /\.(\w+)$/.exec(filename);
+  const type     = match ? `image/${match[1]}` : 'image/jpeg';
 
-  formData.append('file', { uri: imageUri, name: filename, type });
-  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-  formData.append('folder', 'conza_partners');
+  const formData = new FormData();
+  formData.append('file',      { uri: imageUri, name: filename, type });
+  formData.append('timestamp', String(timestamp));
+  formData.append('signature', signature);
+  formData.append('api_key',   api_key);
+  formData.append('folder',    folder);
 
-  const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
-  console.log('[Cloudinary] Uploading to:', url);
-  console.log('[Cloudinary] Using preset:', CLOUDINARY_UPLOAD_PRESET);
-
-  const response = await fetch(url, { method: 'POST', body: formData });
+  // Step 3 — upload directly to Cloudinary (signed, no preset needed)
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${cloud_name}/image/upload`,
+    { method: 'POST', body: formData }
+  );
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    console.error('[Cloudinary] Upload failed:', response.status, errorData);
-    throw new Error(errorData.error?.message || 'Image upload failed');
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Image upload failed');
   }
 
   const data = await response.json();
-  console.log('[Cloudinary] Upload success:', data.secure_url);
   return data.secure_url;
-
 };

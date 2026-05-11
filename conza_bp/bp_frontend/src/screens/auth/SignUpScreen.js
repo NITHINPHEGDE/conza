@@ -10,6 +10,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { signUp } from '../../services/authService';
+import usePartnerStore from '../../store/usePartnerStore';
+import { updateProfileImageAPI } from '../../services/workerService';
 import { uploadImageToCloudinary } from '../../utils/cloudinary';
 import { colors } from '../../theme/colors';
 
@@ -85,6 +87,8 @@ const secStyles = StyleSheet.create({
 const SignUpScreen = ({ navigation }) => {
   const insets  = useSafeAreaInsets();
   const scrollRef = useRef(null);
+  const setWorker       = usePartnerStore((s) => s.setWorker);
+  const syncOnlineState = usePartnerStore((s) => s.syncOnlineState);
 
   const [form, setForm] = useState({
     fullName: '', username: '', password: '', confirmPassword: '',
@@ -121,6 +125,7 @@ const SignUpScreen = ({ navigation }) => {
     if (!result.canceled && result.assets[0]) {
       setImgUploading(true);
       try {
+        // Upload image directly to Cloudinary using signed signature
         const url = await uploadImageToCloudinary(result.assets[0].uri);
         setForm((prev) => ({ ...prev, profileImage: url }));
       } catch (err) {
@@ -193,7 +198,7 @@ const SignUpScreen = ({ navigation }) => {
     }
     setLoading(true);
     try {
-      const user = await signUp({
+      const worker = await signUp({
         fullName:    form.fullName.trim(),
         username:    form.username.trim(),
         password:    form.password,
@@ -201,7 +206,7 @@ const SignUpScreen = ({ navigation }) => {
         category:    form.category,
         skills:      form.skills,
         minCharge:   form.minCharge ? Number(form.minCharge) : null,
-        location:    form.location.trim(),
+        locationText: form.location.trim(),
         experience:  form.experience ? Number(form.experience) : null,
         bio:         form.bio.trim(),
         availability:form.availability,
@@ -211,7 +216,9 @@ const SignUpScreen = ({ navigation }) => {
         totalJobs:   0,
         memberSince: new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
       });
-      navigation.replace('MainApp', { user });
+      setWorker(worker);
+      syncOnlineState(false);
+      navigation.replace('MainApp');
     } catch (err) {
       const msg = err.message;
       if (msg.toLowerCase().includes('phone'))    setErrors({ phone: msg });

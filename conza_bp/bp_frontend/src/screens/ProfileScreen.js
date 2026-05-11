@@ -6,11 +6,13 @@ import {
   StyleSheet,
   StatusBar,
   ScrollView,
+  Image, 
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import usePartnerStore from '../store/usePartnerStore';
 import { logout } from '../services/authService';
+import { stopLocationTracking } from '../services/locationService';
 import { colors } from '../theme/colors';
 
 const StatCard = React.memo(({ value, label }) => (
@@ -34,17 +36,19 @@ const MenuItem = React.memo(({ icon, label, sub, danger, onPress }) => (
   </TouchableOpacity>
 ));
 
-const ProfileScreen = () => {
+const ProfileScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const profile = usePartnerStore((s) => s.profile);
+  const profile = usePartnerStore((s) => s.worker) || {};
   const todaysJobs = usePartnerStore((s) => s.todaysJobs);
   const todaysEarnings = usePartnerStore((s) => s.todaysEarnings);
   const rating = usePartnerStore((s) => s.rating);
 
   const initials = useMemo(() =>
-    profile.name.split(' ').map((n) => n[0]).join(''),
-    [profile.name]
-  );
+  (profile.fullName || profile.name || 'W').split(' ').map((n) => n[0]).join(''),
+  [profile.fullName, profile.name]
+);
+
+const profileImage = profile.profileImage || null;
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 10 }]}>
@@ -53,17 +57,25 @@ const ProfileScreen = () => {
 
         {/* Avatar Section */}
         <View style={styles.avatarSection}>
-          <LinearGradient
-            colors={[colors.gradientStart, colors.gradientEnd]}
-            style={styles.avatar}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.avatarInitials}>{initials}</Text>
-          </LinearGradient>
-          <Text style={styles.userName}>{profile.name}</Text>
-          <Text style={styles.userCategory}>⭐ {rating} · {profile.category}</Text>
-          <Text style={styles.userPhone}>{profile.phone}</Text>
+              {profileImage ? (
+        <Image
+          source={{ uri: profileImage }}
+          style={styles.avatarImage}
+          resizeMode="cover"
+        />
+      ) : (
+        <LinearGradient
+          colors={[colors.gradientStart, colors.gradientEnd]}
+          style={styles.avatar}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Text style={styles.avatarInitials}>{initials}</Text>
+        </LinearGradient>
+      )}
+          <Text style={styles.userName}>{profile.fullName || profile.name || "Worker"}</Text>
+          <Text style={styles.userCategory}>⭐ {rating} · {profile.category || ""}</Text>
+          <Text style={styles.userPhone}>{profile.phone || ""}</Text>
           <TouchableOpacity style={styles.editBtn} activeOpacity={0.8}>
             <Text style={styles.editBtnText}>Edit Profile</Text>
           </TouchableOpacity>
@@ -81,7 +93,7 @@ const ProfileScreen = () => {
         {/* Account */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-          <MenuItem icon="📍" label="Service Location" sub={profile.location} />
+          <MenuItem icon="📍" label="Service Location" sub={profile.locationText || profile.location || ''} />
           <MenuItem icon="🔧" label="Skills & Category" sub={profile.category} />
           <MenuItem icon="💳" label="Bank & Payments" sub="Add bank account" />
           <MenuItem icon="🔔" label="Notifications" sub="Job alerts, earnings" />
@@ -100,9 +112,10 @@ const ProfileScreen = () => {
             label="Logout"
             danger
             onPress={async () => {
-            await logout();
-            navigation.replace('Auth');
-  }}
+              stopLocationTracking();
+              await logout();
+              navigation.replace('Auth');
+            }}
 /> 
         </View>
 
@@ -279,6 +292,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontWeight: '500',
   },
+  avatarImage: {
+  width: 80,
+  height: 80,
+  borderRadius: 26,
+  marginBottom: 12,
+},
 });
 
 export default ProfileScreen;

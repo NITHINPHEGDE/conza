@@ -1,36 +1,72 @@
 // src/store/usePartnerStore.js
 import { create } from 'zustand';
-import { partnerProfile, newRequests, historyData } from '../data/dummyData';
+import { toggleOnlineAPI } from '../services/workerService';
+import { startLocationTracking, stopLocationTracking } from '../services/locationService';
 
-const usePartnerStore = create((set) => ({
-  // Profile
-  profile: partnerProfile,
+const usePartnerStore = create((set, get) => ({
+  // ── Auth / Profile ─────────────────────────────────────────────────────
+  worker: null,          // populated after login / getMe
 
-  // Stats
-  todaysJobs: 2,
-  todaysEarnings: 1550,
-  rating: 4.8,
+  setWorker: (worker) => set({ worker }),
 
-  // Availability
-  isOnline: true,
-  toggleOnline: () => set((state) => ({ isOnline: !state.isOnline })),
+  clearWorker: () => set({ worker: null, isOnline: false }),
 
-  // Requests
-  requests: newRequests,
+  // ── Stats (derived from worker or local session totals) ────────────────
+  todaysJobs:     0,
+  todaysEarnings: 0,
 
-  // History
-  history: historyData,
+  // ── Availability ───────────────────────────────────────────────────────
+  isOnline: false,
 
-  // Active Job
-  activeJob: null,
-  jobStatus: null,
-  checkInTime: null,
+  toggleOnline: async () => {
+    try {
+      const data = await toggleOnlineAPI();
+      set({ isOnline: data.isOnline });
+
+      if (data.isOnline) {
+        await startLocationTracking();
+      } else {
+        stopLocationTracking();
+      }
+
+      // Sync into worker object too
+      set((state) => ({
+        worker: state.worker ? { ...state.worker, isOnline: data.isOnline } : state.worker,
+      }));
+    } catch (err) {
+      console.error('[Store] toggleOnline failed:', err.message);
+      throw err;
+    }
+  },
+
+  // Called after login / app boot to sync server isOnline state
+  syncOnlineState: (isOnline) => {
+    set({ isOnline });
+    if (isOnline) {
+      startLocationTracking();
+    } else {
+      stopLocationTracking();
+    }
+  },
+
+  // ── Requests (will be fetched from backend — kept for future) ─────────
+  requests: [],
+  setRequests: (requests) => set({ requests }),
+
+  // ── History ────────────────────────────────────────────────────────────
+  history: [],
+  setHistory: (history) => set({ history }),
+
+  // ── Active Job ─────────────────────────────────────────────────────────
+  activeJob:    null,
+  jobStatus:    null,
+  checkInTime:  null,
   checkOutTime: null,
 
   acceptJob: (request) => set({
-    activeJob: request,
-    jobStatus: 'on_way',
-    checkInTime: null,
+    activeJob:    request,
+    jobStatus:    'on_way',
+    checkInTime:  null,
     checkOutTime: null,
   }),
 
@@ -39,73 +75,68 @@ const usePartnerStore = create((set) => ({
   })),
 
   markArrived: () => {
-    const timeStr = new Date().toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     set({ jobStatus: 'arrived', checkInTime: timeStr });
   },
 
   startWork: () => set({ jobStatus: 'in_progress' }),
 
   completeJob: () => set((state) => {
-    const timeStr = new Date().toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     const { activeJob, checkInTime, todaysJobs, todaysEarnings, history, requests } = state;
 
     const completedEntry = {
-      id: `hist_${Date.now()}`,
-      userName: activeJob.userName,
-      location: activeJob.location,
-      area: activeJob.area,
-      distance: activeJob.distance,
-      timeAway: activeJob.timeAway,
-      amount: activeJob.estimatedAmount,
-      service: activeJob.service,
+      id:         `hist_${Date.now()}`,
+      userName:   activeJob.userName,
+      location:   activeJob.location,
+      area:       activeJob.area,
+      distance:   activeJob.distance,
+      timeAway:   activeJob.timeAway,
+      amount:     activeJob.estimatedAmount,
+      service:    activeJob.service,
       subService: activeJob.subService,
-      status: 'completed',
-      checkIn: checkInTime,
-      checkOut: timeStr,
-      date: 'Today',
+      status:     'completed',
+      checkIn:    checkInTime,
+      checkOut:   timeStr,
+      date:       'Today',
     };
 
     return {
-      jobStatus: 'completed',
-      checkOutTime: timeStr,
-      todaysJobs: todaysJobs + 1,
-      todaysEarnings: todaysEarnings + activeJob.estimatedAmount,
-      history: [completedEntry, ...history],
-      requests: requests.filter((r) => r.id !== activeJob.id),
+      jobStatus:       'completed',
+      checkOutTime:    timeStr,
+      todaysJobs:      todaysJobs + 1,
+      todaysEarnings:  todaysEarnings + activeJob.estimatedAmount,
+      history:         [completedEntry, ...history],
+      requests:        requests.filter((r) => r.id !== activeJob.id),
     };
   }),
 
   resetActiveJob: () => set({
-    activeJob: null,
-    jobStatus: null,
+    activeJob:   null,
+    jobStatus:   null,
     checkInTime: null,
     checkOutTime: null,
   }),
 }));
 
-// ── Selectors (use these in every component, never the raw hook) ──────────────
-export const selectProfile       = (s) => s.profile;
-export const selectIsOnline      = (s) => s.isOnline;
-export const selectToggleOnline  = (s) => s.toggleOnline;
-export const selectTodaysJobs    = (s) => s.todaysJobs;
-export const selectTodaysEarnings= (s) => s.todaysEarnings;
-export const selectRating        = (s) => s.rating;
-export const selectRequests      = (s) => s.requests;
-export const selectHistory       = (s) => s.history;
-export const selectActiveJob     = (s) => s.activeJob;
-export const selectJobStatus     = (s) => s.jobStatus;
-export const selectCheckInTime   = (s) => s.checkInTime;
-export const selectAcceptJob     = (s) => s.acceptJob;
-export const selectDeclineJob    = (s) => s.declineJob;
-export const selectMarkArrived   = (s) => s.markArrived;
-export const selectStartWork     = (s) => s.startWork;
-export const selectCompleteJob   = (s) => s.completeJob;
-export const selectResetActiveJob= (s) => s.resetActiveJob;
+// ── Selectors ──────────────────────────────────────────────────────────────
+export const selectWorker          = (s) => s.worker;
+export const selectProfile         = (s) => s.worker || {};
+export const selectIsOnline        = (s) => s.isOnline;
+export const selectToggleOnline    = (s) => s.toggleOnline;
+export const selectTodaysJobs      = (s) => s.todaysJobs;
+export const selectTodaysEarnings  = (s) => s.todaysEarnings;
+export const selectRating          = (s) => s.worker?.rating ?? 5.0;
+export const selectRequests        = (s) => s.requests;
+export const selectHistory         = (s) => s.history;
+export const selectActiveJob       = (s) => s.activeJob;
+export const selectJobStatus       = (s) => s.jobStatus;
+export const selectCheckInTime     = (s) => s.checkInTime;
+export const selectAcceptJob       = (s) => s.acceptJob;
+export const selectDeclineJob      = (s) => s.declineJob;
+export const selectMarkArrived     = (s) => s.markArrived;
+export const selectStartWork       = (s) => s.startWork;
+export const selectCompleteJob     = (s) => s.completeJob;
+export const selectResetActiveJob  = (s) => s.resetActiveJob;
 
 export default usePartnerStore;
