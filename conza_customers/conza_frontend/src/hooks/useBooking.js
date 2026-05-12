@@ -1,16 +1,16 @@
 import { useState, useCallback } from 'react';
 import useAppStore from '../store/useAppStore';
+import { bookingAPI } from '../api/bookingAPI';
 
-/**
- * Custom hook to handle booking submissions for Labour, Materials, and Rental.
- * @param {string} type - 'labour', 'material', or 'rental'
- */
 export const useBooking = (type) => {
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(null);
+  const [error,   setError]   = useState(null);
   const [success, setSuccess] = useState(false);
 
-  const clearCart = useAppStore((s) => s.clearCart);
+  const clearCart  = useAppStore((s) => s.clearCart);
+  const userLat    = useAppStore((s) => s.userLat);
+  const userLng    = useAppStore((s) => s.userLng);
+  const userProfile = useAppStore((s) => s.userProfile);
 
   const submitBooking = useCallback(async (bookingData) => {
     try {
@@ -18,20 +18,53 @@ export const useBooking = (type) => {
       setError(null);
       setSuccess(false);
 
-      // ── Simulate API delay ──
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const { address, city, pincode, paymentMethod, area, state, latitude, longitude } = bookingData;
 
-      // ── Validation (example) ──
-      if (!bookingData.address || !bookingData.city || !bookingData.pincode) {
+      if (!address || !city || !pincode) {
         throw new Error('Please provide complete delivery details');
       }
 
-      // ── Success ──
-      console.log(`[useBooking] Submitted ${type} booking:`, bookingData);
-      
-      if (type === 'material') {
-        clearCart();
+      // Build payload based on type
+      let payload = {
+        bookingType:   type,
+        address,
+        area:          area    || '',
+        city,
+        state:         state   || '',
+        pincode,
+        latitude:      latitude  || userLat,
+        longitude:     longitude || userLng,
+        paymentMethod: paymentMethod || 'cod',
+      };
+
+      if (type === 'labour') {
+        const { selectedWorkers, category } = bookingData;
+        const subtotal    = (selectedWorkers || []).reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0);
+        const platformFee = Math.round(subtotal * 0.05);
+        payload = {
+          ...payload,
+          category,
+          workers:        (selectedWorkers || []).map((w) => w._id || w.id),
+          workerSnapshot: selectedWorkers || [],
+          subtotal,
+          platformFee,
+          total: subtotal + platformFee,
+        };
       }
+
+      if (type === 'material') {
+        const { items, subtotal, platformFee, total } = bookingData;
+        payload = { ...payload, items, subtotal, platformFee, total };
+      }
+
+      if (type === 'rental') {
+        const { items, subtotal, platformFee, total, scheduledDate, notes } = bookingData;
+        payload = { ...payload, items, subtotal, platformFee, total, scheduledDate, notes };
+      }
+
+      await bookingAPI.createBooking(payload);
+
+      if (type === 'material') clearCart();
 
       setSuccess(true);
       return true;
@@ -42,7 +75,7 @@ export const useBooking = (type) => {
     } finally {
       setLoading(false);
     }
-  }, [type, clearCart]);
+  }, [type, clearCart, userLat, userLng]);
 
   return { submitBooking, loading, error, success };
 };

@@ -1,65 +1,117 @@
 import { create } from 'zustand';
 import {
-  labourCategories    as dummyLabourCategories,
-  workersByCategory   as dummyWorkersByCategory,
-  allWorkers          as dummyAllWorkers,
-  materials           as dummyMaterials,
-  rentalItems         as dummyRentalItems,
-  rentalCategories    as dummyRentalCategories,
-  userProfile         as dummyUserProfile,
-  projects            as dummyProjects,
+  materials        as dummyMaterials,
+  rentalItems      as dummyRentalItems,
+  rentalCategories as dummyRentalCategories,
+  projects         as dummyProjects,
 } from '../data/dummyData';
 
-// ─── When backend is ready, import API calls here ─────────────────────────────
-// import { labourAPI }    from '../api/labour';
-// import { materialsAPI } from '../api/materials';
-// import { rentalAPI }    from '../api/rental';
-// import { authAPI }      from '../api/auth';
+import * as Location from 'expo-location';
+import { workerAPI  } from '../api/workerAPI';
+import { bookingAPI } from '../api/bookingAPI';
+import { authAPI    } from '../api/authAPI';
+
+const EMPTY_ARRAY = [];
+const EMPTY_OBJ   = {};
 
 const useAppStore = create((set, get) => ({
 
-  // ── App init ─────────────────────────────────────────────────────────────────
+  // ── App init ────────────────────────────────────────────────────────────────
   initialized: false,
+
   initApp: async () => {
+    // 1. Fetch data that doesn't strictly depend on location first
     await Promise.all([
-      get().fetchLabourData(),
       get().fetchMaterials(),
       get().fetchRentalData(),
       get().fetchUserProfile(),
-      get().fetchProjects(),
     ]);
+
+    // 2. If no location from profile, try to get from device
+    const profile = get().userProfile;
+    if (!profile?.location?.coordinates) {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          
+          let locationText = '';
+          try {
+            const [place] = await Location.reverseGeocodeAsync({
+              latitude: pos.coords.latitude, longitude: pos.coords.longitude,
+            });
+            locationText = [place.city, place.region].filter(Boolean).join(', ');
+          } catch {
+            const data = await authAPI.reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+            locationText = data.locationText;
+          }
+
+          get().setUserLocation({
+            latitude:  pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            locationText,
+          });
+        }
+      } catch (e) {
+        console.warn("Could not auto-fetch location:", e.message);
+      }
+    }
+
+    // 3. Finally fetch labour data (which needs lat/lng)
+    await get().fetchLabourData();
+
     set({ initialized: true });
   },
 
-  // ── Labour ───────────────────────────────────────────────────────────────────
-  labourCategories: [],
+  // ── User / Auth ─────────────────────────────────────────────────────────────
+  userProfile:    null,
+  profileLoading: false,
+
+  setUserProfile: (user) => {
+    const newState = { userProfile: user };
+    if (user?.location?.coordinates) {
+      const [lng, lat] = user.location.coordinates;
+      newState.userLat = lat;
+      newState.userLng = lng;
+      newState.userLocationText = user.locationText || '';
+    }
+    set(newState);
+  },
+
+  fetchUserProfile: async () => {
+    try {
+      set({ profileLoading: true });
+      const data = await authAPI.getMe();
+      set({ userProfile: data.user });
+    } catch {
+      // Not logged in — ignore
+    } finally {
+      set({ profileLoading: false });
+    }
+  },
+
+  // ── Location ────────────────────────────────────────────────────────────────
+  userLat: null,
+  userLng: null,
+  userLocationText: '',
+
+  setUserLocation: ({ latitude, longitude, locationText }) => {
+    set({ userLat: latitude, userLng: longitude, userLocationText: locationText || '' });
+  },
+
+  // ── Labour / Workers ────────────────────────────────────────────────────────
+  labourCategories:  [],
   workersByCategory: {},
-  allWorkers: [],
-  labourLoading: false,
-  labourError: null,
+  allWorkers:        [],
+  labourLoading:     false,
+  labourError:       null,
 
   fetchLabourData: async () => {
+    const { userLat, userLng } = get();
     try {
       set({ labourLoading: true, labourError: null });
-
-      // ── DUMMY ──
-      set({
-        labourCategories:  dummyLabourCategories,
-        workersByCategory: dummyWorkersByCategory,
-        allWorkers:        dummyAllWorkers,
-      });
-
-      // ── REAL API (uncomment when ready) ──
-      // const [cats, workers] = await Promise.all([
-      //   labourAPI.getCategories(),
-      //   labourAPI.getAllWorkers(),
-      // ]);
-      // set({
-      //   labourCategories:  cats.categories,
-      //   workersByCategory: workers.byCategory,
-      //   allWorkers:        workers.all,
-      // });
-
+      const data = await workerAPI.getCategories({ lat: userLat, lng: userLng });
+      set({ labourCategories: data.categories || [] });
     } catch (err) {
       set({ labourError: err.message });
     } finally {
@@ -67,38 +119,49 @@ const useAppStore = create((set, get) => ({
     }
   },
 
-  // Workers filtered by category — derived, no extra fetch needed
-  getWorkersByCategory: (category) => {
-    return get().workersByCategory[category] || [];
+  fetchWorkersByCategory: async (category) => {
+    const { userLat, userLng } = get();
+    try {
+      set({ labourLoading: true, labourError: null });
+      const data = await workerAPI.getNearbyWorkers({
+        category,
+        lat:    userLat,
+        lng:    userLng,
+        radius: 5000,
+      });
+      set((state) => ({
+        workersByCategory: { ...state.workersByCategory, [category]: data.workers || [] },
+        allWorkers:        [...(get().allWorkers), ...(data.workers || [])],
+      }));
+    } catch (err) {
+      set({ labourError: err.message });
+    } finally {
+      set({ labourLoading: false });
+    }
   },
 
-  // Skill search — derived from allWorkers, no extra fetch needed
-  searchWorkers: (query) => {
+  getWorkersByCategory: (category) => get().workersByCategory[category] || EMPTY_ARRAY,
+
+  searchWorkers: async (query) => {
+    const { userLat, userLng } = get();
     if (!query || query.trim() === '') return [];
-    const q = query.toLowerCase();
-    return get().allWorkers.filter((w) =>
-      w.skills.some((s) => s.toLowerCase().includes(q)) ||
-      w.category.toLowerCase().includes(q) ||
-      w.name.toLowerCase().includes(q)
-    );
+    try {
+      const data = await workerAPI.searchWorkers({ q: query, lat: userLat, lng: userLng });
+      return data.workers || [];
+    } catch {
+      return EMPTY_ARRAY;
+    }
   },
 
-  // ── Materials ─────────────────────────────────────────────────────────────────
-  materials: [],
+  // ── Materials (still dummy — backend for materials not built yet) ───────────
+  materials:       [],
   materialsLoading: false,
-  materialsError: null,
+  materialsError:  null,
 
   fetchMaterials: async () => {
     try {
-      set({ materialsLoading: true, materialsError: null });
-
-      // ── DUMMY ──
+      set({ materialsLoading: true });
       set({ materials: dummyMaterials });
-
-      // ── REAL API ──
-      // const res = await materialsAPI.getMaterials();
-      // set({ materials: res.materials });
-
     } catch (err) {
       set({ materialsError: err.message });
     } finally {
@@ -106,39 +169,24 @@ const useAppStore = create((set, get) => ({
     }
   },
 
-  // Search materials — derived, no extra fetch
   searchMaterials: (query) => {
     if (!query || query.trim() === '') return get().materials;
     const q = query.toLowerCase();
-    return get().materials.filter((m) =>
-      m.name.toLowerCase().includes(q) ||
-      m.seller.toLowerCase().includes(q)
+    return get().materials.filter(
+      (m) => m.name.toLowerCase().includes(q) || m.seller.toLowerCase().includes(q)
     );
   },
 
-  // ── Rental ────────────────────────────────────────────────────────────────────
-  rentalItems: [],
+  // ── Rental (still dummy) ────────────────────────────────────────────────────
+  rentalItems:      [],
   rentalCategories: [],
-  rentalLoading: false,
-  rentalError: null,
+  rentalLoading:    false,
+  rentalError:      null,
 
   fetchRentalData: async () => {
     try {
-      set({ rentalLoading: true, rentalError: null });
-
-      // ── DUMMY ──
-      set({
-        rentalItems:      dummyRentalItems,
-        rentalCategories: dummyRentalCategories,
-      });
-
-      // ── REAL API ──
-      // const [items, cats] = await Promise.all([
-      //   rentalAPI.getRentalItems(),
-      //   rentalAPI.getRentalCategories(),
-      // ]);
-      // set({ rentalItems: items.items, rentalCategories: cats.categories });
-
+      set({ rentalLoading: true });
+      set({ rentalItems: dummyRentalItems, rentalCategories: dummyRentalCategories });
     } catch (err) {
       set({ rentalError: err.message });
     } finally {
@@ -146,7 +194,6 @@ const useAppStore = create((set, get) => ({
     }
   },
 
-  // Filter rental items — derived, no extra fetch
   filterRentalItems: (category = 'all', query = '') => {
     return get().rentalItems.filter((item) => {
       const matchCat   = category === 'all' || item.category === category;
@@ -157,52 +204,43 @@ const useAppStore = create((set, get) => ({
     });
   },
 
-  // ── User Profile ──────────────────────────────────────────────────────────────
-  userProfile: null,
-  profileLoading: false,
-
-  fetchUserProfile: async () => {
-    try {
-      set({ profileLoading: true });
-
-      // ── DUMMY ──
-      set({ userProfile: dummyUserProfile });
-
-      // ── REAL API ──
-      // const res = await authAPI.getProfile();
-      // set({ userProfile: res.user });
-
-    } catch (err) {
-      console.error('Profile fetch failed:', err.message);
-    } finally {
-      set({ profileLoading: false });
-    }
-  },
-
-  // ── Projects ──────────────────────────────────────────────────────────────────
-  projects: [],
+  // ── Projects / Bookings ─────────────────────────────────────────────────────
+  projects:        [],
   projectsLoading: false,
 
   fetchProjects: async () => {
     try {
       set({ projectsLoading: true });
-
-      // ── DUMMY ──
-      const { projects: dummyProjects } = require('../data/dummyData');
+      const data = await bookingAPI.getMyBookings();
+      // Map bookings → project shape the ProjectScreen expects
+      const projects = (data.bookings || []).map((b) => ({
+        id:        b._id,
+        name:      b.category
+          ? `${b.category} Booking`
+          : b.bookingType === 'material' ? 'Material Order'
+          : b.bookingType === 'rental'   ? 'Equipment Rental'
+          : 'Booking',
+        status:    b.status.charAt(0).toUpperCase() + b.status.slice(1).replace('_', ' '),
+        progress:  b.status === 'completed' ? 100 : b.status === 'in_progress' ? 60 : b.status === 'confirmed' ? 30 : 10,
+        location:  `${b.city}`,
+        startDate: new Date(b.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        eta:       '—',
+        workers:   b.workers?.length || 0,
+        statusColor:
+          b.status === 'completed'  ? '#6366F1' :
+          b.status === 'in_progress'? '#F97316' :
+          b.status === 'confirmed'  ? '#22C55E' : '#94A3B8',
+      }));
+      set({ projects });
+    } catch {
+      // Not logged in — fall back to dummy
       set({ projects: dummyProjects });
-
-      // ── REAL API ──
-      // const res = await bookingAPI.getMyBookings();
-      // set({ projects: res.projects });
-
-    } catch (err) {
-      console.error('Projects fetch failed:', err.message);
     } finally {
       set({ projectsLoading: false });
     }
   },
 
-  // ── Cart (materials) ──────────────────────────────────────────────────────────
+  // ── Cart ────────────────────────────────────────────────────────────────────
   cart: {},
 
   addToCart: (item) => {
@@ -238,17 +276,11 @@ const useAppStore = create((set, get) => ({
     const { cart, materials } = get();
     return materials
       .filter((m) => (Number(cart[m.id]) || 0) > 0)
-      .reduce((sum, m) => {
-        const price = Number(m.price) || 0;
-        const qty = Number(cart[m.id]) || 0;
-        return sum + (price * qty);
-      }, 0);
+      .reduce((sum, m) => sum + (Number(m.price) || 0) * (Number(cart[m.id]) || 0), 0);
   },
 
-  getCartItemCount: () => {
-    return Object.values(get().cart).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0);
-  },
-
+  getCartItemCount: () =>
+    Object.values(get().cart).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0),
 }));
 
 export default useAppStore;

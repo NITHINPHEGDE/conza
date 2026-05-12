@@ -8,10 +8,14 @@ import {
   StyleSheet,
   StatusBar,
   ActivityIndicator,
+  Alert,
+  Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
 import { useBooking } from '../hooks/useBooking';
 
@@ -96,6 +100,12 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const [pincode, setPincode]         = useState('');
   const [paymentMethod, setPayment]   = useState('cod');
 
+  const [area,  setArea]  = useState('');
+  const [state, setState] = useState('');
+  const [lat,   setLat]   = useState(null);
+  const [lng,   setLng]   = useState(null);
+  const [fetching, setFetching] = useState(false);
+
   const { submitBooking, loading: submitting, error: submitError } = useBooking('labour');
 
   const { subtotal, platformFee, total } = useMemo(() => {
@@ -108,19 +118,84 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const handleSelectPayment = useCallback((id) => setPayment(id), []);
   const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
 
+  const handleAutoFetch = async () => {
+    try {
+      setFetching(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required to autofill address.');
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = pos.coords;
+      setLat(latitude);
+      setLng(longitude);
+
+      let place = null;
+
+      // 1. Try Native Geocoding (Native only, Web is known to fail in SDK 49+)
+      if (Platform.OS !== 'web') {
+        try {
+          const results = await Location.reverseGeocodeAsync({ latitude, longitude });
+          if (results && results.length > 0) place = results[0];
+        } catch (err) {
+          console.warn("Native geocoding failed:", err.message);
+        }
+      }
+
+      // 2. Fallback to Backend Geocoding (Used if Web or if Native failed)
+      if (!place) {
+        try {
+          const { authAPI } = require('../api/authAPI');
+          const data = await authAPI.reverseGeocode(latitude, longitude);
+          if (data && data.address) {
+            place = {
+              street:     data.address.street  || '',
+              district:   data.address.area    || '',
+              city:       data.address.city    || '',
+              region:     data.address.state   || '',
+              postalCode: data.address.pincode || '',
+            };
+          }
+        } catch (backendErr) {
+          console.error("Backend geocoding failed:", backendErr.message);
+        }
+      }
+
+      if (place) {
+        setAddress(place.street || place.name || '');
+        setArea(place.district || place.subregion || '');
+        setCity(place.city || '');
+        setState(place.region || '');
+        setPincode(place.postalCode || '');
+      } else if (Platform.OS === 'web') {
+        Alert.alert('Location Found', 'Coordinates captured. Please enter the address manually.');
+      }
+    } catch (err) {
+      console.error("handleAutoFetch Error:", err);
+      Alert.alert('Error', 'Could not fetch location. Please enter manually.');
+    } finally {
+      setFetching(false);
+    }
+  };
+
   const handleConfirmBooking = useCallback(async () => {
     const ok = await submitBooking({
       selectedWorkers,
       category,
       address,
+      area,
       city,
+      state,
       pincode,
       paymentMethod,
+      latitude: lat,
+      longitude: lng,
     });
     if (ok) {
       navigation.navigate('Booking');
     }
-  }, [submitBooking, selectedWorkers, category, address, city, pincode, paymentMethod, navigation]);
+  }, [submitBooking, selectedWorkers, category, address, area, city, state, pincode, paymentMethod, lat, lng, navigation]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -156,12 +231,20 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         {/* Work Location */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📍  Work Location</Text>
-          <TouchableOpacity style={styles.fetchLocationBtn} activeOpacity={0.8}>
-            <MaterialIcons name="my-location" size={22} color={colors.accentAmber} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fetchLocationText}>Auto Fetch My Location</Text>
-              <Text style={styles.fetchLocationSub}>Uses your current GPS location</Text>
-            </View>
+          <TouchableOpacity 
+            style={styles.autoFetchBtn} 
+            onPress={handleAutoFetch} 
+            disabled={fetching}
+            activeOpacity={0.8}
+          >
+            {fetching ? (
+              <ActivityIndicator size="small" color={colors.accentGreen} />
+            ) : (
+              <>
+                <MaterialIcons name="my-location" size={20} color={colors.accentGreen} />
+                <Text style={styles.autoFetchText}>Autofetch My Location</Text>
+              </>
+            )}
           </TouchableOpacity>
 
           <Text style={styles.inputLabel}>Street Address</Text>
@@ -336,35 +419,22 @@ const styles = StyleSheet.create({
   workerMetaDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.textMuted },
   workerPrice: { fontSize: 15, fontWeight: '800', color: colors.accentAmber },
 
-  fetchLocationBtn: {
+  autoFetchBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.accentYellowSoft,
+    justifyContent: 'center',
+    backgroundColor: colors.accentGreenSoft,
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1.5,
-    borderColor: colors.accentYellow,
-    gap: 12,
+    borderColor: colors.accentGreen,
+    gap: 10,
   },
-  fetchLocationIcon: {
-    fontSize: 22,
-  },
-  fetchLocationText: {
+  autoFetchText: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 2,
-  },
-  fetchLocationSub: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  fetchLocationArrow: {
-    fontSize: 16,
-    color: colors.accentAmber,
-    fontWeight: '700',
+    color: colors.accentGreen,
   },
 
   // Inputs

@@ -1,0 +1,76 @@
+const Booking = require('../models/Booking');
+const Worker  = require('../models/Worker');
+
+// ── POST /api/bookings ─────────────────────────────────────────────────────────
+const createBooking = async (req, res) => {
+  try {
+    const {
+      bookingType, workers: workerIds, workerSnapshot, category, items,
+      address, area, city, state, pincode, latitude, longitude,
+      subtotal, platformFee, total, paymentMethod, scheduledDate, notes,
+    } = req.body;
+
+    if (!bookingType || !address || !city || !pincode || !total) {
+      return res.status(400).json({ success: false, message: 'Missing required booking fields' });
+    }
+
+    const booking = await Booking.create({
+      user: req.user._id,
+      bookingType,
+      workers:       workerIds  || [],
+      workerSnapshot: workerSnapshot || [],
+      category:      category   || '',
+      items:         items      || [],
+      address, area: area || '', city, state: state || '', pincode,
+      latitude:  latitude  || null,
+      longitude: longitude || null,
+      subtotal:    subtotal    || 0,
+      platformFee: platformFee || 0,
+      total,
+      paymentMethod: paymentMethod || 'cod',
+      scheduledDate: scheduledDate || null,
+      notes:         notes || '',
+    });
+
+    // If labour booking, bump totalJobs on each worker
+    if (bookingType === 'labour' && workerIds && workerIds.length > 0) {
+      await Worker.updateMany(
+        { _id: { $in: workerIds } },
+        { $inc: { totalJobs: 1 } }
+      );
+    }
+
+    res.status(201).json({ success: true, booking });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── GET /api/bookings/my ───────────────────────────────────────────────────────
+const getMyBookings = async (req, res) => {
+  try {
+    const bookings = await Booking.find({ user: req.user._id })
+      .sort({ createdAt: -1 })
+      .populate('workers', 'fullName category profileImage');
+
+    res.json({ success: true, bookings });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── GET /api/bookings/:id ──────────────────────────────────────────────────────
+const getBookingById = async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id })
+      .populate('workers', 'fullName category profileImage rating');
+
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    res.json({ success: true, booking });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { createBooking, getMyBookings, getBookingById };

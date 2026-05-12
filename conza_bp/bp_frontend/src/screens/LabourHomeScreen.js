@@ -1,5 +1,4 @@
-// src/screens/LabourHomeScreen.js
-import React, { useCallback, useMemo } from 'react';
+import React, { useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, StatusBar,
 } from 'react-native';
@@ -32,6 +31,23 @@ const LabourHomeScreen = ({ navigation }) => {
   const todaysEarnings = usePartnerStore(selectTodaysEarnings);
   const rating         = usePartnerStore(selectRating);
   const requests       = usePartnerStore(selectRequests);
+  const fetchRequests  = usePartnerStore((s) => s.fetchRequests);
+
+  // Poll for requests when online
+  useEffect(() => {
+    fetchRequests(); // initial fetch
+
+    let intervalId = null;
+    if (isOnline) {
+      intervalId = setInterval(() => {
+        fetchRequests();
+      }, 10000); // Poll every 10 seconds
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isOnline, fetchRequests]);
 
   const handleViewDetails = useCallback((request) => {
     navigation.navigate('RequestDetails', { request });

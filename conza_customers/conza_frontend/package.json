@@ -1,6 +1,6 @@
 {
   "name": "conza_frontend",
-  "main": "node_modules/expo/AppEntry.js",
+  "main": "index.js",
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
@@ -28,6 +28,7 @@
     "expo-image-picker": "~17.0.11",
     "expo-linear-gradient": "^55.0.13",
     "expo-linking": "~8.0.11",
+    "expo-location": "~19.0.8",
     "expo-router": "~6.0.23",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",

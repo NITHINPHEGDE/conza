@@ -49,8 +49,50 @@ const usePartnerStore = create((set, get) => ({
     }
   },
 
-  // ── Requests (will be fetched from backend — kept for future) ─────────
+  // ── Requests (Fetched from backend) ──────────────────────────────────
   requests: [],
+  
+  fetchRequests: async () => {
+    try {
+      const { api } = require('../services/apiClient');
+      const data = await api.get('/bookings/requests');
+      if (data.success) {
+        // Map backend booking to the shape the UI expects
+        const mapped = data.requests.map(r => ({
+          id:               r._id,
+          userName:         r.userName || 'Client',
+          location:         `${r.city}, ${r.area}`,
+          area:             r.area,
+          distance:         'Nearby',
+          timeAway:         '15 mins',
+          estimatedAmount:  r.total,
+          service:          r.category,
+          subService:       'General',
+          ...r
+        }));
+        set({ requests: mapped });
+      }
+    } catch (err) {
+      console.error('[Store] fetchRequests failed:', err.message);
+    }
+  },
+
+  updateRequestStatus: async (requestId, status) => {
+    try {
+      const { api } = require('../services/apiClient');
+      await api.patch(`/bookings/${requestId}/status`, { status });
+      // If accepted, move to activeJob locally too (though next poll would handle it)
+      if (status === 'confirmed') {
+        const req = get().requests.find(r => r.id === requestId);
+        if (req) get().acceptJob(req);
+      }
+      // Refresh list
+      await get().fetchRequests();
+    } catch (err) {
+      console.error('[Store] updateRequestStatus failed:', err.message);
+    }
+  },
+
   setRequests: (requests) => set({ requests }),
 
   // ── History ────────────────────────────────────────────────────────────
@@ -119,14 +161,16 @@ const usePartnerStore = create((set, get) => ({
   }),
 }));
 
+const EMPTY_OBJ = {};
+
 // ── Selectors ──────────────────────────────────────────────────────────────
 export const selectWorker          = (s) => s.worker;
-export const selectProfile         = (s) => s.worker || {};
+export const selectProfile         = (s) => s.worker || EMPTY_OBJ;
 export const selectIsOnline        = (s) => s.isOnline;
 export const selectToggleOnline    = (s) => s.toggleOnline;
 export const selectTodaysJobs      = (s) => s.todaysJobs;
 export const selectTodaysEarnings  = (s) => s.todaysEarnings;
-export const selectRating          = (s) => s.worker?.rating ?? 5.0;
+export const selectRating          = (s) => s.worker?.rating || 5.0;
 export const selectRequests        = (s) => s.requests;
 export const selectHistory         = (s) => s.history;
 export const selectActiveJob       = (s) => s.activeJob;

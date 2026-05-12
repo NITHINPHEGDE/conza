@@ -3,7 +3,6 @@ import { View, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
-
 import BookingScreen       from '../screens/BookingScreen';
 import WorkersNearbyScreen from '../screens/WorkersNearbyScreen';
 import ProjectScreen       from '../screens/ProjectScreen';
@@ -13,10 +12,13 @@ import MaterialCheckoutScreen from '../screens/MaterialCheckoutScreen';
 import MaterialDetailScreen from '../screens/MaterialDetailScreen';
 import RentalDetailScreen   from '../screens/RentalDetailScreen';
 import RentalCheckoutScreen from '../screens/RentalCheckoutScreen';
+import LoginScreen   from '../screens/LoginScreen';
+import SignupScreen  from '../screens/SignupScreen';
 import { colors }          from '../theme/colors';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+
 
 // Placeholder
 const PlaceholderScreen = ({ label }) => (
@@ -40,6 +42,14 @@ const BookingStack = () => (
     <Stack.Screen name="MaterialDetail" component={MaterialDetailScreen} />
      <Stack.Screen name="RentalDetail"     component={RentalDetailScreen}     />
     <Stack.Screen name="RentalCheckout"   component={RentalCheckoutScreen}   />
+  </Stack.Navigator>
+);
+
+// Add new Auth stack:
+export const AuthStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="Login"  component={LoginScreen}  />
+    <Stack.Screen name="Signup" component={SignupScreen} />
   </Stack.Navigator>
 );
 

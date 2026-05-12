@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,15 @@ import {
   StyleSheet,
   StatusBar,
   ScrollView,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import useAppStore from '../store/useAppStore';
 import { SectionLoader } from '../components/LoadingState';
+import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 
 const StatCard = React.memo(({ value, label }) => (
@@ -37,6 +41,29 @@ const ProfileScreen = () => {
   const userProfile    = useAppStore((s) => s.userProfile);
   const profileLoading = useAppStore((s) => s.profileLoading);
   const insets = useSafeAreaInsets();
+  const { logout, updateProfile, loading } = useAuth();
+
+  const [editVisible, setEditVisible] = React.useState(false);
+  const [form, setForm] = React.useState({ fullName: '', email: '', locationText: '' });
+
+  const openEdit = () => {
+    setForm({
+      fullName:     userProfile.fullName || '',
+      email:        userProfile.email || '',
+      locationText: userProfile.locationText || '',
+    });
+    setEditVisible(true);
+  };
+
+  const handleUpdateProfile = async () => {
+    const res = await updateProfile(form);
+    if (res.success) setEditVisible(false);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    // Navigation will auto-switch to Auth stack due to userProfile becoming null
+  };
 
   if (profileLoading || !userProfile) return (
     <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>
@@ -46,8 +73,8 @@ const ProfileScreen = () => {
 
   const u = userProfile;
   const initials = useMemo(() => 
-    u.name.split(' ').map((n) => n[0]).join(''),
-    [u.name]
+    u.fullName?.split(' ').map((n) => n[0]).join('') || '??',
+    [u.fullName]
   );
 
   return (
@@ -68,9 +95,9 @@ const ProfileScreen = () => {
           >
             <Text style={styles.avatarInitials}>{initials}</Text>
           </LinearGradient>
-          <Text style={styles.userName}>{u.name}</Text>
+          <Text style={styles.userName}>{u.fullName}</Text>
           <Text style={styles.userPhone}>{u.phone}</Text>
-          <TouchableOpacity style={styles.editBtn} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.editBtn} activeOpacity={0.8} onPress={openEdit}>
             <Text style={styles.editBtnText}>Edit Profile</Text>
           </TouchableOpacity>
         </LinearGradient>
@@ -87,7 +114,7 @@ const ProfileScreen = () => {
         {/* Menu */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-          <MenuItem icon="📍" label="Saved Addresses"      sub={u.location} />
+          <MenuItem icon="📍" label="Saved Addresses"      sub={u.locationText || 'No address set'} />
           <MenuItem icon="📋" label="My Orders"            sub="View past bookings" />
           <MenuItem icon="💳" label="Payment Methods"      sub="UPI, Card, COD" />
           <MenuItem icon="🔔" label="Notifications"        sub="Manage alerts" />
@@ -101,11 +128,65 @@ const ProfileScreen = () => {
         </View>
 
         <View style={styles.section}>
-          <MenuItem icon="🚪" label="Logout" danger />
+          <MenuItem icon="🚪" label="Logout" danger onPress={handleLogout} />
         </View>
 
         <Text style={styles.version}>ConstructApp v1.0.0</Text>
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal visible={editVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+            
+            <ScrollView style={{ maxHeight: 400 }}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Full Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={form.fullName}
+                  onChangeText={(v) => setForm({ ...form, fullName: v })}
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  value={form.email}
+                  onChangeText={(v) => setForm({ ...form, email: v })}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Location Address</Text>
+                <TextInput
+                  style={styles.input}
+                  value={form.locationText}
+                  onChangeText={(v) => setForm({ ...form, locationText: v })}
+                  multiline
+                />
+              </View>
+            </ScrollView>
+
+            <LinearGradient
+              colors={[colors.gradientStart, colors.gradientEnd]}
+              style={styles.saveBtn}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            >
+              <TouchableOpacity style={styles.saveBtnTouch} onPress={handleUpdateProfile} disabled={loading}>
+                {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.saveBtnText}>Save Changes</Text>}
+              </TouchableOpacity>
+            </LinearGradient>
+
+            <TouchableOpacity onPress={() => setEditVisible(false)} style={styles.cancelBtn}>
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -270,6 +351,19 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontWeight: '500',
   },
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: colors.background, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, textAlign: 'center', marginBottom: 24 },
+  inputGroup: { marginBottom: 18 },
+  label: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 8 },
+  input: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, fontSize: 15, color: colors.textPrimary },
+  saveBtn: { borderRadius: 16, overflow: 'hidden', marginTop: 12 },
+  saveBtnTouch: { paddingVertical: 16, alignItems: 'center' },
+  saveBtnText: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
+  cancelBtn: { marginTop: 12, paddingVertical: 12, alignItems: 'center' },
+  cancelBtnText: { fontSize: 14, color: colors.textMuted, fontWeight: '600' },
 });
 
 export default ProfileScreen;

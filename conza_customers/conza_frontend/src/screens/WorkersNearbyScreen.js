@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   StatusBar,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -139,11 +140,25 @@ const AutoBookCard = React.memo(({ category, onPress }) => (
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const WorkersNearbyScreen = ({ route, navigation }) => {
   const { category } = route.params;
-  const getWorkersByCategory = useAppStore((s) => s.getWorkersByCategory);
-  const labourLoading        = useAppStore((s) => s.labourLoading);
-  const labourError          = useAppStore((s) => s.labourError);
-  const fetchLabour          = useAppStore((s) => s.fetchLabourData);
-  const allWorkers           = useMemo(() => getWorkersByCategory(category), [getWorkersByCategory, category]);
+  const getWorkersByCategory    = useAppStore((s) => s.getWorkersByCategory);
+const fetchWorkersByCategory  = useAppStore((s) => s.fetchWorkersByCategory);
+const labourLoading           = useAppStore((s) => s.labourLoading);
+const labourError             = useAppStore((s) => s.labourError);
+
+const [refreshing, setRefreshing] = useState(false);
+
+const handleRefresh = useCallback(async () => {
+  setRefreshing(true);
+  await fetchWorkersByCategory(category);
+  setRefreshing(false);
+}, [category, fetchWorkersByCategory]);
+
+// Fetch workers for this category when screen mounts
+useEffect(() => {
+  fetchWorkersByCategory(category);
+}, [category]);
+
+const allWorkers = useMemo(() => getWorkersByCategory(category), [getWorkersByCategory, category]);
 
   const [selected, setSelected]       = useState([]);
   const [filterAvail, setFilterAvail] = useState('All');
@@ -216,8 +231,8 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
     </View>
   ), []);
 
-  if (labourLoading) return <SectionLoader message="Finding workers nearby..." />;
-  if (labourError)   return <ErrorState message={labourError} onRetry={fetchLabour} />;
+  if (labourLoading && !refreshing) return <SectionLoader message="Finding workers nearby..." />;
+  if (labourError)   return <ErrorState message={labourError} onRetry={() => fetchWorkersByCategory(category)} />;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -256,6 +271,14 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
         windowSize={5}
         removeClippedSubviews={true}
         extraData={selected}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.accentAmber]}
+            tintColor={colors.accentAmber}
+          />
+        }
       />
 
       {selected.length > 0 && (

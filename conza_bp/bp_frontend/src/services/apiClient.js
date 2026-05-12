@@ -1,7 +1,7 @@
 // src/services/apiClient.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:5000/api';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.205.241.155:5005/api';
 // Android emulator: 10.0.2.2 → host machine localhost
 // iOS simulator / physical device: use your machine's local IP e.g. http://192.168.1.X:5000/api
 

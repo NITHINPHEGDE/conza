@@ -8,8 +8,9 @@ const errorHandler = require('./middleware/errorHandler');
 const AppError     = require('./utils/AppError');
 
 // ── Routes ─────────────────────────────────────────────────────────────────
-const authRoutes   = require('./routes/authRoutes');
-const workerRoutes = require('./routes/workerRoutes');
+const authRoutes    = require('./routes/authRoutes');
+const workerRoutes  = require('./routes/workerRoutes');
+const bookingRoutes = require('./routes/bookingRoutes');
 
 const app = express();
 
@@ -23,8 +24,9 @@ app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));
 
 // ── API Routes ─────────────────────────────────────────────────────────────
-app.use('/api/workers', authRoutes);
-app.use('/api/workers', workerRoutes);
+app.use('/api/workers',  authRoutes);
+app.use('/api/workers',  workerRoutes);
+app.use('/api/bookings', bookingRoutes);
 
 // ── Health check ───────────────────────────────────────────────────────────
 app.get('/health', (req, res) =>

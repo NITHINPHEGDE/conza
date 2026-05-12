@@ -38,6 +38,13 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysPermission": "Allow Conza Partner to use your location to match you with nearby jobs.",
+          "locationWhenInUsePermission": "Allow Conza Partner to use your location while you are online."
+        }
       ]
     ],
     "experiments": {

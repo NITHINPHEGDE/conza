@@ -33,18 +33,28 @@ const SectionBox = memo(({ title, children }) => (
 const RequestDetailsScreen = ({ navigation, route }) => {
   const { request } = route.params;
   const insets     = useSafeAreaInsets();
-  const acceptJob  = usePartnerStore(selectAcceptJob);
-  const declineJob = usePartnerStore(selectDeclineJob);
+  const updateRequestStatus = usePartnerStore((s) => s.updateRequestStatus);
+  const [updating, setUpdating] = React.useState(false);
 
-  const handleAccept = useCallback(() => {
-    acceptJob(request);
-    navigation.navigate('ActiveJob');
-  }, [acceptJob, request, navigation]);
+  const handleAccept = useCallback(async () => {
+    try {
+      setUpdating(true);
+      await updateRequestStatus(request.id, 'confirmed');
+      navigation.navigate('ActiveJob');
+    } catch {
+      setUpdating(false);
+    }
+  }, [updateRequestStatus, request.id, navigation]);
 
-  const handleDecline = useCallback(() => {
-    declineJob(request.id);
-    navigation.goBack();
-  }, [declineJob, request.id, navigation]);
+  const handleDecline = useCallback(async () => {
+    try {
+      setUpdating(true);
+      await updateRequestStatus(request.id, 'cancelled');
+      navigation.goBack();
+    } catch {
+      setUpdating(false);
+    }
+  }, [updateRequestStatus, request.id, navigation]);
 
   const handleBack = useCallback(() => navigation.goBack(), [navigation]);
 
@@ -103,16 +113,26 @@ const RequestDetailsScreen = ({ navigation, route }) => {
       </ScrollView>
 
       <View style={bottomStyle}>
-        <TouchableOpacity style={styles.declineBtn} onPress={handleDecline} activeOpacity={0.8}>
-          <Text style={styles.declineBtnText}>Decline</Text>
+        <TouchableOpacity 
+          style={styles.declineBtn} 
+          onPress={handleDecline} 
+          activeOpacity={0.8}
+          disabled={updating}
+        >
+          <Text style={styles.declineBtnText}>{updating ? '...' : 'Decline'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleAccept} activeOpacity={0.85} style={styles.flex}>
+        <TouchableOpacity 
+          onPress={handleAccept} 
+          activeOpacity={0.85} 
+          style={styles.flex}
+          disabled={updating}
+        >
           <LinearGradient
             colors={[colors.gradientStart, colors.gradientEnd]}
             start={GRAD_START} end={GRAD_END}
             style={styles.acceptBtn}
           >
-            <Text style={styles.acceptBtnText}>✓ Accept Job</Text>
+            <Text style={styles.acceptBtnText}>{updating ? 'Processing...' : '✓ Accept Job'}</Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>
