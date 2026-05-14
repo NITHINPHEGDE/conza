@@ -17,13 +17,17 @@ const bookingSchema = new mongoose.Schema(
     items: [mongoose.Schema.Types.Mixed],
 
     // Address
-    address:   { type: String, required: true },
-    area:      { type: String, default: '' },
-    city:      { type: String, required: true },
-    state:     { type: String, default: '' },
-    pincode:   { type: String, required: true },
-    latitude:  { type: Number, default: null },
-    longitude: { type: Number, default: null },
+    houseNumber: { type: String, default: '' },
+    houseName:   { type: String, default: '' },
+    street:      { type: String, default: '' },
+    address:     { type: String }, // optional combined field
+    area:        { type: String, default: '' },
+    city:        { type: String, required: true },
+    district:    { type: String, default: '' },
+    state:       { type: String, default: '' },
+    pincode:     { type: String, required: true },
+    latitude:    { type: Number, default: null },
+    longitude:   { type: Number, default: null },
 
     // Financials
     subtotal:    { type: Number, required: true },
@@ -41,7 +45,9 @@ const bookingSchema = new mongoose.Schema(
     },
 
     scheduledDate: { type: Date, default: null },
+    isImmediate:   { type: Boolean, default: true },
     notes:         { type: String, default: '' },
+    description:   { type: String, default: '' },
   },
   { timestamps: true }
 );

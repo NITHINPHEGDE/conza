@@ -58,18 +58,50 @@ const usePartnerStore = create((set, get) => ({
       const data = await api.get('/bookings/requests');
       if (data.success) {
         // Map backend booking to the shape the UI expects
-        const mapped = data.requests.map(r => ({
-          id:               r._id,
-          userName:         r.userName || 'Client',
-          location:         `${r.city}, ${r.area}`,
-          area:             r.area,
-          distance:         'Nearby',
-          timeAway:         '15 mins',
-          estimatedAmount:  r.total,
-          service:          r.category,
-          subService:       'General',
-          ...r
-        }));
+        const mapped = data.requests.map(r => {
+          let dateStr = 'Immediate';
+          if (!r.isImmediate && r.scheduledDate) {
+            try {
+              dateStr = new Date(r.scheduledDate).toLocaleString('en-IN', { 
+                day: 'numeric', 
+                month: 'short', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              });
+            } catch (e) {
+              dateStr = 'Scheduled';
+            }
+          }
+
+          // Construct full address string
+          const addrParts = [
+            r.houseNumber ? `No. ${r.houseNumber}` : '',
+            r.houseName ? `${r.houseName}` : '',
+            r.street ? `${r.street}` : '',
+            r.area ? `${r.area}` : '',
+            r.city ? `${r.city}` : '',
+            r.pincode ? `(${r.pincode})` : ''
+          ].filter(p => p && p.trim().length > 0);
+          
+          const fullAddress = addrParts.join(', ');
+
+          return {
+            ...r,
+            id:               r._id,
+            userName:         r.user?.fullName || r.user?.name || 'Client',
+            phone:            r.user?.phone    || 'N/A',
+            location:         r.city ? `${r.city}, ${r.area || ''}` : 'Location N/A',
+            address:          fullAddress || r.address || 'Address not provided',
+            area:             r.area || '',
+            distance:         r.distance || '2.5 km',
+            timeAway:         r.timeAway || 'Nearby',
+            estimatedAmount:  r.total || r.estimatedAmount || 0,
+            service:          r.category || r.service || 'Service',
+            subService:       r.subService || 'General',
+            description:      r.description || r.notes || 'No description provided',
+            scheduledTime:    dateStr,
+          };
+        });
         set({ requests: mapped });
       }
     } catch (err) {

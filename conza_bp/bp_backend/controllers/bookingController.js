@@ -1,4 +1,5 @@
 const Booking = require('../models/Booking');
+require('../models/User'); // Register User model for population
 
 // @desc    Get all pending requests for the logged-in worker
 // @route   GET /api/bookings/requests
@@ -12,6 +13,7 @@ const getWorkerRequests = async (req, res) => {
       workers: workerId,
       status: 'pending'
     })
+    .populate('user', 'fullName phone')
     .sort({ createdAt: -1 });
 
     res.json({

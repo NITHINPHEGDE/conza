@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { reverseGeocodeFullAddress } from '../hooks/useAuth';
 import {
   View,
   Text,
@@ -15,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
 import { useBooking } from '../hooks/useBooking';
@@ -95,16 +97,26 @@ const PaymentOption = React.memo(({ method, selected, onSelect }) => {
 const LabourCheckoutScreen = ({ route, navigation }) => {
   const { selectedWorkers = [], category = '' } = route.params || {};
 
-  const [address, setAddress]         = useState('');
-  const [city, setCity]               = useState('');
-  const [pincode, setPincode]         = useState('');
+  const [houseNumber, setHouseNumber] = useState('');
+  const [houseName,   setHouseName]   = useState('');
+  const [street,      setStreet]      = useState('');
+  const [area,        setArea]        = useState('');
+  const [city,        setCity]        = useState('');
+  const [district,    setDistrict]    = useState('');
+  const [state,       setState]       = useState('');
+  const [pincode,     setPincode]     = useState('');
   const [paymentMethod, setPayment]   = useState('cod');
+  
+  const [lat,         setLat]         = useState(null);
+  const [lng,         setLng]         = useState(null);
+  const [fetching,    setFetching]    = useState(false);
 
-  const [area,  setArea]  = useState('');
-  const [state, setState] = useState('');
-  const [lat,   setLat]   = useState(null);
-  const [lng,   setLng]   = useState(null);
-  const [fetching, setFetching] = useState(false);
+  const [description, setDescription] = useState('');
+  const [bookingType, setBookingType] = useState('immediate'); // 'immediate' or 'scheduled'
+  const [scheduledDate, setScheduledDate] = useState(new Date());
+  const [scheduledTime, setScheduledTime] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const { submitBooking, loading: submitting, error: submitError } = useBooking('labour');
 
@@ -119,83 +131,90 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
 
   const handleAutoFetch = async () => {
-    try {
-      setFetching(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission is required to autofill address.');
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const { latitude, longitude } = pos.coords;
-      setLat(latitude);
-      setLng(longitude);
-
-      let place = null;
-
-      // 1. Try Native Geocoding (Native only, Web is known to fail in SDK 49+)
-      if (Platform.OS !== 'web') {
-        try {
-          const results = await Location.reverseGeocodeAsync({ latitude, longitude });
-          if (results && results.length > 0) place = results[0];
-        } catch (err) {
-          console.warn("Native geocoding failed:", err.message);
-        }
-      }
-
-      // 2. Fallback to Backend Geocoding (Used if Web or if Native failed)
-      if (!place) {
-        try {
-          const { authAPI } = require('../api/authAPI');
-          const data = await authAPI.reverseGeocode(latitude, longitude);
-          if (data && data.address) {
-            place = {
-              street:     data.address.street  || '',
-              district:   data.address.area    || '',
-              city:       data.address.city    || '',
-              region:     data.address.state   || '',
-              postalCode: data.address.pincode || '',
-            };
-          }
-        } catch (backendErr) {
-          console.error("Backend geocoding failed:", backendErr.message);
-        }
-      }
-
-      if (place) {
-        setAddress(place.street || place.name || '');
-        setArea(place.district || place.subregion || '');
-        setCity(place.city || '');
-        setState(place.region || '');
-        setPincode(place.postalCode || '');
-      } else if (Platform.OS === 'web') {
-        Alert.alert('Location Found', 'Coordinates captured. Please enter the address manually.');
-      }
-    } catch (err) {
-      console.error("handleAutoFetch Error:", err);
-      Alert.alert('Error', 'Could not fetch location. Please enter manually.');
-    } finally {
-      setFetching(false);
+  try {
+    setFetching(true);
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Location permission is required to autofill address.');
+      return;
     }
-  };
+
+    const pos = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+
+    // Use Mappls for accurate Indian address breakdown
+    const place = await reverseGeocodeFullAddress(
+      pos.coords.latitude,
+      pos.coords.longitude,
+    );
+
+    if (place) {
+      setHouseNumber(place.houseNumber);
+      setHouseName(place.houseName);
+      setStreet(place.street);
+      setArea(place.area);
+      setCity(place.city);
+      setDistrict(place.district);
+      setState(place.state);
+      setPincode(place.pincode);
+    }
+
+    setLat(pos.coords.latitude);
+    setLng(pos.coords.longitude);
+  } catch {
+    Alert.alert('Error', 'Could not fetch location. Please enter manually.');
+  } finally {
+    setFetching(false);
+  }
+};
+
+  const combinedScheduledDate = useMemo(() => {
+    const d = new Date(scheduledDate);
+    d.setHours(scheduledTime.getHours());
+    d.setMinutes(scheduledTime.getMinutes());
+    return d;
+  }, [scheduledDate, scheduledTime]);
 
   const handleConfirmBooking = useCallback(async () => {
     const ok = await submitBooking({
       selectedWorkers,
       category,
-      address,
+      houseNumber,
+      houseName,
+      street,
       area,
       city,
+      district,
       state,
       pincode,
       paymentMethod,
+      description,
+      isImmediate: bookingType === 'immediate',
+      scheduledDate: bookingType === 'scheduled' ? combinedScheduledDate : null,
       latitude: lat,
       longitude: lng,
     });
     if (ok) {
-      navigation.navigate('Booking');
+      navigation.navigate('BookingHome');
     }
-  }, [submitBooking, selectedWorkers, category, address, area, city, state, pincode, paymentMethod, lat, lng, navigation]);
+  }, [submitBooking, selectedWorkers, category, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, lat, lng, navigation]);
+
+  const handleDateChange = (event, date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (date) {
+      setScheduledDate(date);
+      if (Platform.OS === 'android') setShowDatePicker(false);
+    }
+  };
+
+  const handleTimeChange = (event, time) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    if (time) {
+      setScheduledTime(time);
+      if (Platform.OS === 'android') setShowTimePicker(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -231,6 +250,24 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         {/* Work Location */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📍  Work Location</Text>
+          {showDatePicker && (
+            <DateTimePicker
+              value={scheduledDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
+              onChange={handleDateChange}
+              minimumDate={new Date()}
+            />
+          )}
+          {showTimePicker && (
+            <DateTimePicker
+              value={scheduledTime}
+              mode="time"
+              display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
+              onChange={handleTimeChange}
+            />
+          )}
+
           <TouchableOpacity 
             style={styles.autoFetchBtn} 
             onPress={handleAutoFetch} 
@@ -247,39 +284,138 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
             )}
           </TouchableOpacity>
 
-          <Text style={styles.inputLabel}>Street Address</Text>
+          <View style={styles.inputRow}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={styles.inputLabel}>House No.</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: 12"
+                placeholderTextColor={colors.textMuted}
+                value={houseNumber}
+                onChangeText={setHouseNumber}
+              />
+            </View>
+            <View style={{ flex: 2 }}>
+              <Text style={styles.inputLabel}>Building/House Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: Prestige Shantiniketan"
+                placeholderTextColor={colors.textMuted}
+                value={houseName}
+                onChangeText={setHouseName}
+              />
+            </View>
+          </View>
+
+          <Text style={styles.inputLabel}>Street / Road</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter your address"
+            placeholder="Ex: ITPL Main Road"
             placeholderTextColor={colors.textMuted}
-            value={address}
-            onChangeText={setAddress}
+            value={street}
+            onChangeText={setStreet}
           />
 
           <View style={styles.inputRow}>
             <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={styles.inputLabel}>Area / Locality</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: Whitefield"
+                placeholderTextColor={colors.textMuted}
+                value={area}
+                onChangeText={setArea}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.inputLabel}>City</Text>
               <TextInput
                 style={styles.input}
-                placeholder="City"
+                placeholder="Ex: Bengaluru"
                 placeholderTextColor={colors.textMuted}
                 value={city}
                 onChangeText={setCity}
               />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.inputLabel}>Pincode</Text>
+          </View>
+
+          <View style={styles.inputRow}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={styles.inputLabel}>District</Text>
               <TextInput
                 style={styles.input}
-                placeholder="000000"
+                placeholder="District"
                 placeholderTextColor={colors.textMuted}
-                value={pincode}
-                onChangeText={setPincode}
-                keyboardType="numeric"
-                maxLength={6}
+                value={district}
+                onChangeText={setDistrict}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inputLabel}>State</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="State"
+                placeholderTextColor={colors.textMuted}
+                value={state}
+                onChangeText={setState}
               />
             </View>
           </View>
+
+          <View style={{ width: '50%', marginBottom: 20 }}>
+            <Text style={styles.inputLabel}>Pincode</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="000000"
+              placeholderTextColor={colors.textMuted}
+              value={pincode}
+              onChangeText={setPincode}
+              keyboardType="numeric"
+              maxLength={6}
+            />
+          </View>
+
+          <View style={styles.sectionDivider} />
+
+          <Text style={styles.inputLabel}>Booking Schedule</Text>
+          <View style={styles.bookingTypeRow}>
+            <TouchableOpacity 
+              style={[styles.typeBtn, bookingType === 'immediate' && styles.typeBtnActive]}
+              onPress={() => setBookingType('immediate')}
+            >
+              <Text style={[styles.typeBtnText, bookingType === 'immediate' && styles.typeBtnTextActive]}>⚡ Immediate</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.typeBtn, bookingType === 'scheduled' && styles.typeBtnActive]}
+              onPress={() => setBookingType('scheduled')}
+            >
+              <Text style={[styles.typeBtnText, bookingType === 'scheduled' && styles.typeBtnTextActive]}>📅 Schedule</Text>
+            </TouchableOpacity>
+          </View>
+
+          {bookingType === 'scheduled' && (
+            <View style={styles.scheduleRow}>
+              <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowDatePicker(true)}>
+                <Text style={styles.dateTimeLabel}>Date</Text>
+                <Text style={styles.dateTimeValue}>{scheduledDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowTimePicker(true)}>
+                <Text style={styles.dateTimeLabel}>Time</Text>
+                <Text style={styles.dateTimeValue}>{scheduledTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <Text style={styles.inputLabel}>Job Description</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="Tell the worker what needs to be done..."
+            placeholderTextColor={colors.textMuted}
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={4}
+          />
         </View>
 
         {/* Payment Method */}
@@ -562,6 +698,80 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
     fontWeight: '500',
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: colors.borderLight,
+    marginVertical: 20,
+  },
+  bookingTypeRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  typeBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  typeBtnActive: {
+    borderColor: colors.accentAmber,
+    backgroundColor: colors.accentYellowSoft,
+  },
+  typeBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  typeBtnTextActive: {
+    color: colors.textPrimary,
+  },
+  scheduleRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  dateTimeBtn: {
+    flex: 1,
+    backgroundColor: colors.inputBg,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  dateTimeLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  dateTimeValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.accentAmber,
+  },
+  textArea: {
+    height: 100,
+    paddingTop: 12,
+    textAlignVertical: 'top',
+  },
+  webPickerContainer: {
+    backgroundColor: colors.surfaceElevated,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 16,
+  },
+  closeWebPicker: {
+    marginTop: 10,
+    alignItems: 'center',
+    padding: 8,
   },
 });
 

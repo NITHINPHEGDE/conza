@@ -18,20 +18,27 @@ export const useBooking = (type) => {
       setError(null);
       setSuccess(false);
 
-      const { address, city, pincode, paymentMethod, area, state, latitude, longitude } = bookingData;
+      const { houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, isImmediate, scheduledDate, latitude, longitude } = bookingData;
 
-      if (!address || !city || !pincode) {
-        throw new Error('Please provide complete delivery details');
+      if (!city || !pincode) {
+        throw new Error('Please provide at least city and pincode');
       }
 
       // Build payload based on type
       let payload = {
         bookingType:   type,
-        address,
-        area:          area    || '',
+        houseNumber:   houseNumber || '',
+        houseName:     houseName   || '',
+        street:        street      || '',
+        address:       bookingData.address || street || '',
+        area:          area        || '',
         city,
-        state:         state   || '',
+        district:      district    || '',
+        state:         state       || '',
         pincode,
+        description:   description || '',
+        isImmediate:   isImmediate !== undefined ? isImmediate : true,
+        scheduledDate: scheduledDate || null,
         latitude:      latitude  || userLat,
         longitude:     longitude || userLng,
         paymentMethod: paymentMethod || 'cod',

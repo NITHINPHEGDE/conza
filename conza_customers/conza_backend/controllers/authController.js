@@ -165,34 +165,46 @@ const reverseGeocode = async (req, res) => {
       return res.status(400).json({ success: false, message: 'lat and lng are required' });
     }
 
-    const apiKey = process.env.OPENCAGE_API_KEY;
+    const apiKey = process.env.MAPPLS_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ success: false, message: 'OpenCage API key missing on server' });
+      return res.status(500).json({ success: false, message: 'Mappls API key missing on server' });
     }
 
-    const url = `https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lng}&key=${apiKey}`;
+    const url = `https://apis.mappls.com/advancedmaps/v1/${apiKey}/rev_geocode?lat=${lat}&lng=${lng}&region=IND`;
     const response = await fetch(url);
     const data = await response.json();
 
     if (data.results && data.results.length > 0) {
-      const components = data.results[0].components;
-      const city    = components.city || components.town || components.village || components.suburb || '';
-      const state   = components.state || components.province || '';
-      const area    = components.neighbourhood || components.suburb || components.district || '';
-      const pincode = components.postcode || '';
-      const street  = components.road || '';
+      const r = data.results[0];
+      
+      const houseNumber = r.houseNumber || '';
+      const houseName   = r.houseName   || '';
+      const street      = r.street      || '';
+      const area        = r.subLocality || r.locality || '';
+      const city        = r.city        || r.district || '';
+      const district    = r.district    || '';
+      const state       = r.state       || '';
+      const pincode     = r.pincode     || '';
+      
+      const fullAddress = [houseNumber, houseName, street, area]
+        .filter(Boolean)
+        .join(', ');
 
-      const locationText = [city, state].filter(Boolean).join(', ');
+      const locationText = [area, city, state].filter(Boolean).join(', ');
       
       res.json({ 
         success: true, 
         locationText, 
         address: {
-          city,
-          state,
+          houseNumber,
+          houseName,
+          street,
           area,
+          city,
+          district,
+          state,
           pincode,
-          street
+          fullAddress
         }
       });
     } else {

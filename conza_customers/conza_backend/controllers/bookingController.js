@@ -6,11 +6,13 @@ const createBooking = async (req, res) => {
   try {
     const {
       bookingType, workers: workerIds, workerSnapshot, category, items,
-      address, area, city, state, pincode, latitude, longitude,
-      subtotal, platformFee, total, paymentMethod, scheduledDate, notes,
+      houseNumber, houseName, street, area, city, district, state, pincode,
+      address, latitude, longitude,
+      subtotal, platformFee, total, paymentMethod, scheduledDate, 
+      notes, description, isImmediate
     } = req.body;
 
-    if (!bookingType || !address || !city || !pincode || !total) {
+    if (!bookingType || !city || !pincode || !total) {
       return res.status(400).json({ success: false, message: 'Missing required booking fields' });
     }
 
@@ -21,15 +23,25 @@ const createBooking = async (req, res) => {
       workerSnapshot: workerSnapshot || [],
       category:      category   || '',
       items:         items      || [],
-      address, area: area || '', city, state: state || '', pincode,
-      latitude:  latitude  || null,
-      longitude: longitude || null,
-      subtotal:    subtotal    || 0,
-      platformFee: platformFee || 0,
+      houseNumber:   houseNumber || '',
+      houseName:     houseName   || '',
+      street:        street      || '',
+      address:       address     || street || '',
+      area:          area        || '',
+      city,
+      district:      district    || '',
+      state:         state       || '',
+      pincode,
+      latitude:      latitude    || null,
+      longitude:     longitude   || null,
+      subtotal:      subtotal    || 0,
+      platformFee:   platformFee || 0,
       total,
       paymentMethod: paymentMethod || 'cod',
       scheduledDate: scheduledDate || null,
-      notes:         notes || '',
+      isImmediate:   isImmediate !== undefined ? isImmediate : true,
+      notes:         notes       || '',
+      description:   description || '',
     });
 
     // If labour booking, bump totalJobs on each worker

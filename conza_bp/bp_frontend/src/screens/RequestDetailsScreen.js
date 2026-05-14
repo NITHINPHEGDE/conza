@@ -81,7 +81,7 @@ const RequestDetailsScreen = ({ navigation, route }) => {
         >
           <Text style={styles.amountLabel}>Estimated Earning</Text>
           <Text style={styles.amountValue}>₹{request.estimatedAmount}</Text>
-          <Text style={styles.amountSub}>{request.timeAway} · {request.distance}</Text>
+          <Text style={styles.amountSub}>{request.distance} · {request.timeAway}</Text>
         </LinearGradient>
 
         <SectionBox title="Customer Info">

@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
 import { useBooking } from '../hooks/useBooking';
 
@@ -58,10 +59,20 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
     scheduledTime = null,
   } = route.params || {};
 
-  const [address, setAddress]       = useState('');
-  const [city, setCity]             = useState('');
-  const [pincode, setPincode]       = useState('');
-  const [paymentMethod, setPayment] = useState('cod');
+  const [houseNumber, setHouseNumber] = useState('');
+  const [houseName,   setHouseName]   = useState('');
+  const [street,      setStreet]      = useState('');
+  const [area,        setArea]        = useState('');
+  const [city,        setCity]        = useState('');
+  const [district,    setDistrict]    = useState('');
+  const [state,       setState]       = useState('');
+  const [pincode,     setPincode]     = useState('');
+  const [paymentMethod, setPayment]   = useState('cod');
+  
+  const [lat,         setLat]         = useState(null);
+  const [lng,         setLng]         = useState(null);
+  const [fetching,    setFetching]    = useState(false);
+  const [description, setDescription] = useState('');
 
   const { submitBooking, loading: submitting, error: submitError } = useBooking('rental');
 
@@ -79,21 +90,58 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
   const handleSelectPayment = useCallback((id) => setPayment(id), []);
   const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
 
+  const handleAutoFetch = async () => {
+    try {
+      setFetching(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+
+      const pos = await Location.getCurrentPositionAsync({});
+      const { reverseGeocodeFullAddress } = require('../hooks/useAuth');
+      const place = await reverseGeocodeFullAddress(pos.coords.latitude, pos.coords.longitude);
+
+      if (place) {
+        setHouseNumber(place.houseNumber);
+        setHouseName(place.houseName);
+        setStreet(place.street);
+        setArea(place.area);
+        setCity(place.city);
+        setDistrict(place.district);
+        setState(place.state);
+        setPincode(place.pincode);
+      }
+      setLat(pos.coords.latitude);
+      setLng(pos.coords.longitude);
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setFetching(false);
+    }
+  };
+
   const handleConfirmRental = useCallback(async () => {
     const ok = await submitBooking({
       item,
       quantity,
       scheduledDate,
       scheduledTime,
-      address,
+      houseNumber,
+      houseName,
+      street,
+      area,
       city,
+      district,
+      state,
       pincode,
       paymentMethod,
+      description,
+      latitude: lat,
+      longitude: lng,
     });
     if (ok) {
-      navigation.navigate('Booking');
+      navigation.navigate('BookingHome');
     }
-  }, [submitBooking, item, quantity, scheduledDate, scheduledTime, address, city, pincode, paymentMethod, navigation]);
+  }, [submitBooking, item, quantity, scheduledDate, scheduledTime, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, lat, lng, navigation]);
 
 
   return (
@@ -141,25 +189,70 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📍  Delivery Address</Text>
 
-          <TouchableOpacity style={styles.fetchLocationBtn} activeOpacity={0.8}>
-            <MaterialIcons name="my-location" size={22} color={colors.accentAmber} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fetchLocationText}>Auto Fetch My Location</Text>
-              <Text style={styles.fetchLocationSub}>Uses your current GPS location</Text>
-            </View>
-            <Text style={styles.fetchLocationArrow}>→</Text>
+          <TouchableOpacity 
+            style={styles.fetchLocationBtn} 
+            onPress={handleAutoFetch}
+            disabled={fetching}
+            activeOpacity={0.8}
+          >
+            {fetching ? (
+              <ActivityIndicator size="small" color={colors.accentAmber} />
+            ) : (
+              <>
+                <MaterialIcons name="my-location" size={22} color={colors.accentAmber} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fetchLocationText}>Auto Fetch My Location</Text>
+                  <Text style={styles.fetchLocationSub}>Uses your current GPS location</Text>
+                </View>
+                <Text style={styles.fetchLocationArrow}>→</Text>
+              </>
+            )}
           </TouchableOpacity>
 
-          <Text style={styles.inputLabel}>Street Address</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter delivery address"
-            placeholderTextColor={colors.textMuted}
-            value={address}
-            onChangeText={setAddress}
-          />
           <View style={styles.inputRow}>
             <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={styles.inputLabel}>House No.</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: 12"
+                placeholderTextColor={colors.textMuted}
+                value={houseNumber}
+                onChangeText={setHouseNumber}
+              />
+            </View>
+            <View style={{ flex: 2 }}>
+              <Text style={styles.inputLabel}>Building/House Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: Shantiniketan"
+                placeholderTextColor={colors.textMuted}
+                value={houseName}
+                onChangeText={setHouseName}
+              />
+            </View>
+          </View>
+
+          <Text style={styles.inputLabel}>Street / Road</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ex: ITPL Main Road"
+            placeholderTextColor={colors.textMuted}
+            value={street}
+            onChangeText={setStreet}
+          />
+
+          <View style={styles.inputRow}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={styles.inputLabel}>Area / Locality</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Area"
+                placeholderTextColor={colors.textMuted}
+                value={area}
+                onChangeText={setArea}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.inputLabel}>City</Text>
               <TextInput
                 style={styles.input}
@@ -169,19 +262,55 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
                 onChangeText={setCity}
               />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.inputLabel}>Pincode</Text>
+          </View>
+
+          <View style={styles.inputRow}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={styles.inputLabel}>District</Text>
               <TextInput
                 style={styles.input}
-                placeholder="000000"
+                placeholder="District"
                 placeholderTextColor={colors.textMuted}
-                value={pincode}
-                onChangeText={setPincode}
-                keyboardType="numeric"
-                maxLength={6}
+                value={district}
+                onChangeText={setDistrict}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inputLabel}>State</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="State"
+                placeholderTextColor={colors.textMuted}
+                value={state}
+                onChangeText={setState}
               />
             </View>
           </View>
+
+          <View style={{ width: '50%' }}>
+            <Text style={styles.inputLabel}>Pincode</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="000000"
+              placeholderTextColor={colors.textMuted}
+              value={pincode}
+              onChangeText={setPincode}
+              keyboardType="numeric"
+              maxLength={6}
+            />
+          </View>
+
+          <View style={{ height: 20 }} />
+          <Text style={styles.inputLabel}>Rental Description</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="Any special instructions or details..."
+            placeholderTextColor={colors.textMuted}
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={4}
+          />
         </View>
 
         {/* Payment */}
@@ -428,6 +557,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
     fontWeight: '500',
+  },
+  textArea: {
+    height: 100,
+    paddingTop: 12,
+    textAlignVertical: 'top',
   },
 });
 
