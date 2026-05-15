@@ -203,7 +203,7 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
       longitude: lng,
     });
     if (ok) {
-      navigation.navigate('BookingHome');
+      navigation.navigate('Status');
     }
   }, [submitBooking, cartItems, cart, subtotal, platformFee, total, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, lat, lng, navigation]);
 

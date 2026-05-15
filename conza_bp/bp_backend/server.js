@@ -11,8 +11,14 @@ const AppError     = require('./utils/AppError');
 const authRoutes    = require('./routes/authRoutes');
 const workerRoutes  = require('./routes/workerRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
+const http          = require('http');
+const { initSocket } = require('./services/socketService');
 
-const app = express();
+const app    = express();
+const server = http.createServer(app);
+
+// Initialize Socket.io
+initSocket(server);
 
 // ── Connect DB ─────────────────────────────────────────────────────────────
 connectDB();
@@ -43,8 +49,8 @@ app.use(errorHandler);
 
 // ── Start Server ───────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () =>
-  console.log(`🚀 Conza backend running on port ${PORT} [${process.env.NODE_ENV}]`)
+server.listen(PORT, () =>
+  console.log(`🚀 Conza BP backend running on port ${PORT} [${process.env.NODE_ENV}]`)
 );
 
 module.exports = app;

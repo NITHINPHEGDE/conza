@@ -196,7 +196,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       longitude: lng,
     });
     if (ok) {
-      navigation.navigate('BookingHome');
+      navigation.navigate('Status');
     }
   }, [submitBooking, selectedWorkers, category, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, lat, lng, navigation]);
 
@@ -243,7 +243,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Selected Workers</Text>
           {selectedWorkers.map((worker) => (
-            <WorkerRow key={worker.id} worker={worker} />
+            <WorkerRow key={worker._id} worker={worker} />
           ))}
         </View>
 

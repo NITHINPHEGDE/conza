@@ -14,6 +14,7 @@ import RentalDetailScreen   from '../screens/RentalDetailScreen';
 import RentalCheckoutScreen from '../screens/RentalCheckoutScreen';
 import LoginScreen   from '../screens/LoginScreen';
 import SignupScreen  from '../screens/SignupScreen';
+import BookingTrackingScreen from '../screens/BookingTrackingScreen';
 import { colors }          from '../theme/colors';
 
 const Tab   = createBottomTabNavigator();
@@ -57,7 +58,7 @@ const TAB_ICONS = {
   Booking:  '🏠',
   Explore:  '🔍',
   Projects: '📋',
-  Messages: '💬',
+  Status:   '🔔',
   Profile:  '👤',
 };
 
@@ -93,7 +94,7 @@ const TabNavigator = () => (
     <Tab.Screen name="Booking"  component={BookingStack}   options={{ title: 'Home'     }} />
     <Tab.Screen name="Explore"  component={ExploreScreen}  options={{ title: 'Explore'  }} />
     <Tab.Screen name="Projects" component={ProjectScreen}  options={{ title: 'Projects' }} />
-    <Tab.Screen name="Messages" component={MessagesScreen} options={{ title: 'Messages' }} />
+    <Tab.Screen name="Status"   component={BookingTrackingScreen} options={{ title: 'Status'   }} />
     <Tab.Screen name="Profile"  component={ProfileScreen}  options={{ title: 'Profile'  }} />
   </Tab.Navigator>
 );

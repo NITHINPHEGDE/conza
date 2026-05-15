@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   materials        as dummyMaterials,
   rentalItems      as dummyRentalItems,
@@ -65,6 +66,13 @@ const useAppStore = create((set, get) => ({
 
     // 3. Finally fetch labour data (which needs lat/lng)
     await get().fetchLabourData();
+
+    // 4. Check for active booking in storage
+    const activeId = await AsyncStorage.getItem('activeBookingId');
+    if (activeId) {
+      set({ activeBookingId: activeId });
+      get().fetchActiveBooking(activeId);
+    }
 
     set({ initialized: true });
   },
@@ -145,26 +153,6 @@ const useAppStore = create((set, get) => ({
     }
   },
 
-  initSocketHandlers: () => {
-    socket.on('worker_updated', (data) => {
-      console.log('🔄 Worker update received:', data);
-      get().fetchLabourData(); // Refresh category counts
-      
-      // If we have the full document, only refresh the specific category
-      if (data.fullDocument?.category) {
-        get().fetchWorkersByCategory(data.fullDocument.category);
-      } else {
-        // Fallback: refresh all active categories
-        const activeCategories = Object.keys(get().workersByCategory);
-        activeCategories.forEach(cat => get().fetchWorkersByCategory(cat));
-      }
-    });
-
-    socket.on('booking_updated', (data) => {
-      console.log('🔄 Booking update received:', data);
-      get().fetchProjects();
-    });
-  },
 
   getWorkersByCategory: (category) => get().workersByCategory[category] || EMPTY_ARRAY,
 
@@ -266,6 +254,53 @@ const useAppStore = create((set, get) => ({
     }
   },
 
+  // ── Active Booking Tracking ────────────────────────────────────────────────
+  activeBookingId: null,
+  activeBooking:   null,
+
+  setActiveBookingId: async (id) => {
+    if (id) {
+      await AsyncStorage.setItem('activeBookingId', id);
+    } else {
+      await AsyncStorage.removeItem('activeBookingId');
+    }
+    set({ activeBookingId: id, activeBooking: id ? get().activeBooking : null });
+    if (id) get().fetchActiveBooking(id);
+  },
+
+  fetchActiveBooking: async (id) => {
+    const bookingId = id || get().activeBookingId;
+    if (!bookingId) return;
+
+    try {
+      const data = await bookingAPI.getBookingById(bookingId);
+      if (data.success) {
+        set({ activeBooking: data.booking });
+        // Join socket room for this booking
+        socket.emit('join_booking', bookingId);
+      }
+    } catch (err) {
+      console.error('Failed to fetch active booking:', err.message);
+    }
+  },
+
+  cancelActiveBooking: async () => {
+    const id = get().activeBookingId;
+    if (!id) return;
+    try {
+      await bookingAPI.cancelBooking(id);
+      // Wait for socket to refresh or manually refresh
+      get().fetchActiveBooking(id);
+    } catch (err) {
+      alert(err.message);
+    }
+  },
+
+  clearActiveBooking: async () => {
+    await AsyncStorage.removeItem('activeBookingId');
+    set({ activeBookingId: null, activeBooking: null });
+  },
+
   // ── Cart ────────────────────────────────────────────────────────────────────
   cart: {},
 
@@ -307,6 +342,35 @@ const useAppStore = create((set, get) => ({
 
   getCartItemCount: () =>
     Object.values(get().cart).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0),
+
+  initSocketHandlers: () => {
+    socket.off('booking_updated');
+    socket.off('booking_status_changed');
+    socket.off('worker_updated');
+
+    socket.on('booking_updated', (data) => {
+      console.log('🔄 Booking update received:', data);
+      get().fetchProjects();
+      if (get().activeBookingId === data.bookingId) {
+        get().fetchActiveBooking(data.bookingId);
+      }
+    });
+
+    socket.on('booking_status_changed', (data) => {
+      console.log('🔄 Booking status changed:', data.status);
+      if (get().activeBookingId === data.bookingId) {
+        get().fetchActiveBooking(data.bookingId);
+      }
+    });
+
+    socket.on('worker_updated', (data) => {
+      console.log('🔄 Worker updated:', data.workerId);
+      get().fetchLabourData();
+      if (data.fullDocument?.category) {
+        get().fetchWorkersByCategory(data.fullDocument.category);
+      }
+    });
+  },
 }));
 
 export default useAppStore;

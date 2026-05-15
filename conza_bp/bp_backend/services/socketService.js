@@ -12,15 +12,15 @@ const initSocket = (server) => {
   });
 
   io.on('connection', (socket) => {
-    console.log(`🔌 Client connected: ${socket.id}`);
+    console.log(`🔌 [BP] Client connected: ${socket.id}`);
 
     socket.on('join_booking', (bookingId) => {
       socket.join(`booking_${bookingId}`);
-      console.log(`🔌 Client joined booking room: booking_${bookingId}`);
+      console.log(`🔌 [BP] Client joined booking room: booking_${bookingId}`);
     });
 
     socket.on('disconnect', () => {
-      console.log(`🔌 Client disconnected: ${socket.id}`);
+      console.log(`🔌 [BP] Client disconnected: ${socket.id}`);
     });
   });
 
@@ -34,34 +34,26 @@ const watchChanges = () => {
   const db = mongoose.connection;
 
   const startWatching = () => {
-    console.log('👀 Watching MongoDB collections for changes...');
+    console.log('👀 [BP] Watching MongoDB collections for changes...');
 
-    // 1. Watch Workers collection
-    const workerChangeStream = db.collection('workers').watch([], { fullDocument: 'updateLookup' });
-    workerChangeStream.on('change', (change) => {
-      console.log('✨ Worker change detected:', change.operationType);
-      io.emit('worker_updated', {
-        operationType: change.operationType,
-        workerId:      change.documentKey._id,
-        fullDocument:  change.fullDocument,
-      });
-    });
-
-    // 2. Watch Bookings collection
+    // Watch Bookings collection
     const bookingChangeStream = db.collection('bookings').watch([], { fullDocument: 'updateLookup' });
     bookingChangeStream.on('change', (change) => {
-      console.log('✨ Booking change detected:', change.operationType);
+      console.log('✨ [BP] Booking change detected:', change.operationType);
       
+      // Emit to all for lists
       io.emit('booking_updated', {
         operationType: change.operationType,
         bookingId:     change.documentKey._id,
         status:        change.fullDocument?.status
       });
 
+      // Also emit to specific room if relevant
       if (change.documentKey._id) {
         io.to(`booking_${change.documentKey._id}`).emit('booking_status_changed', {
           bookingId: change.documentKey._id,
           status:    change.fullDocument?.status,
+          booking:   change.fullDocument
         });
       }
     });

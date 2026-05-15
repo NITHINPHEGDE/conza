@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import RoleSelectionScreen  from '../screens/RoleSelectionScreen';
 import LabourHomeScreen     from '../screens/LabourHomeScreen';
@@ -51,9 +52,10 @@ const FloatingJobButton = React.memo(({ navigation }) => {
   if (!activeJob || jobStatus === 'completed') return null;
 
   const statusLabel =
-    jobStatus === 'on_way'      ? '🚗 On the Way' :
+    jobStatus === 'accepted'    ? '🚗 On the Way' :
     jobStatus === 'arrived'     ? '📍 Arrived'    :
-    jobStatus === 'in_progress' ? '⚒️ Working'    : '';
+    jobStatus === 'in_progress' ? '⚒️ Working'    : 
+    jobStatus === 'cancelled'   ? '❌ Cancelled'  : 'View Status';
 
   return (
     <TouchableOpacity style={styles.floatingBtn} onPress={handlePress} activeOpacity={0.9}>
@@ -116,6 +118,7 @@ const AppNavigator = () => {
   const [initialRoute, setInitialRoute] = useState(null);
   const setWorker       = usePartnerStore((s) => s.setWorker);
   const syncOnlineState = usePartnerStore((s) => s.syncOnlineState);
+  const setActiveJobId  = usePartnerStore((s) => s.setActiveJobId);
 
   useEffect(() => {
     let mounted = true;
@@ -124,6 +127,12 @@ const AppNavigator = () => {
       if (worker) {
         setWorker(worker);
         syncOnlineState(worker.isOnline || false);
+        
+        // Recover active job
+        AsyncStorage.getItem('activeJobId').then(id => {
+          if (id) setActiveJobId(id);
+        });
+
         setInitialRoute('MainApp');
       } else {
         setInitialRoute('Auth');

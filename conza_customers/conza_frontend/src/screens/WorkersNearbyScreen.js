@@ -174,8 +174,8 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
 
   const toggleWorker = useCallback((worker) => {
     setSelected((prev) =>
-      prev.find((w) => w.id === worker.id)
-        ? prev.filter((w) => w.id !== worker.id)
+      prev.find((w) => w._id === worker._id)
+        ? prev.filter((w) => w._id !== worker._id)
         : [...prev, worker]
     );
   }, []);
@@ -188,7 +188,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
   const renderItem = useCallback(({ item }) => (
     <WorkerCard
       worker={item}
-      isSelected={!!selected.find((w) => w.id === item.id)}
+      isSelected={!!selected.find((w) => w._id === item._id)}
       onToggle={toggleWorker}
     />
   ), [selected, toggleWorker]);
@@ -262,7 +262,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
 
       <FlatList
         data={displayed}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item._id}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}

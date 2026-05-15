@@ -16,6 +16,7 @@ const createBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing required booking fields' });
     }
 
+    console.log('📝 Creating booking for workers:', workerIds);
     const booking = await Booking.create({
       user: req.user._id,
       bookingType,
@@ -43,6 +44,7 @@ const createBooking = async (req, res) => {
       notes:         notes       || '',
       description:   description || '',
     });
+    console.log('✅ Booking created:', booking._id, 'Workers:', booking.workers);
 
     // If labour booking, bump totalJobs on each worker
     if (bookingType === 'labour' && workerIds && workerIds.length > 0) {
@@ -75,7 +77,7 @@ const getMyBookings = async (req, res) => {
 const getBookingById = async (req, res) => {
   try {
     const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id })
-      .populate('workers', 'fullName category profileImage rating');
+      .populate('workers', 'fullName category profileImage rating phone bio');
 
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
 
@@ -85,4 +87,25 @@ const getBookingById = async (req, res) => {
   }
 };
 
-module.exports = { createBooking, getMyBookings, getBookingById };
+// ── PATCH /api/bookings/:id/cancel ──────────────────────────────────────────
+const cancelBooking = async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id });
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (booking.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Cannot cancel booking after it has been accepted' });
+    }
+
+    booking.status = 'cancelled';
+    await booking.save();
+
+    res.json({ success: true, booking });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { createBooking, getMyBookings, getBookingById, cancelBooking };

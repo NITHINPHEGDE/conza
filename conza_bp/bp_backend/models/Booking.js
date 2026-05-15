@@ -10,14 +10,17 @@ const bookingSchema = new mongoose.Schema(
 
     // For labour bookings
     workers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Worker' }],
-    workerSnapshot: [mongoose.Schema.Types.Mixed],
+    workerSnapshot: [mongoose.Schema.Types.Mixed],  // stores name/price at time of booking
     category: { type: String, default: '' },
+
+    // For material / rental bookings
+    items: [mongoose.Schema.Types.Mixed],
 
     // Address
     houseNumber: { type: String, default: '' },
     houseName:   { type: String, default: '' },
     street:      { type: String, default: '' },
-    address:     { type: String }, 
+    address:     { type: String }, // optional combined field
     area:        { type: String, default: '' },
     city:        { type: String, required: true },
     district:    { type: String, default: '' },
@@ -37,12 +40,16 @@ const bookingSchema = new mongoose.Schema(
     // Status
     status: {
       type: String,
-      enum: ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'],
+      enum: ['pending', 'accepted', 'arrived', 'completed', 'cancelled'],
       default: 'pending',
     },
 
     scheduledDate: { type: Date, default: null },
     isImmediate:   { type: Boolean, default: true },
+    acceptedAt:    { type: Date, default: null },
+    checkInTime:   { type: Date, default: null },
+    checkOutTime:  { type: Date, default: null },
+    workerCancelled: { type: Boolean, default: false },
     notes:         { type: String, default: '' },
     description:   { type: String, default: '' },
   },

@@ -11,6 +11,7 @@ export const useBooking = (type) => {
   const userLat    = useAppStore((s) => s.userLat);
   const userLng    = useAppStore((s) => s.userLng);
   const userProfile = useAppStore((s) => s.userProfile);
+  const setActiveBookingId = useAppStore((s) => s.setActiveBookingId);
 
   const submitBooking = useCallback(async (bookingData) => {
     try {
@@ -69,7 +70,11 @@ export const useBooking = (type) => {
         payload = { ...payload, items, subtotal, platformFee, total, scheduledDate, notes };
       }
 
-      await bookingAPI.createBooking(payload);
+      const result = await bookingAPI.createBooking(payload);
+
+      if (result.success && result.booking?._id) {
+        await setActiveBookingId(result.booking._id);
+      }
 
       if (type === 'material') clearCart();
 

@@ -8,6 +8,7 @@ import SplashScreen from './src/screens/SplashScreen';
 import './src/hooks/useAuth';
 import { useAuth } from './src/hooks/useAuth';
 import useAppStore from './src/store/useAppStore';
+import BookingTrackingScreen from './src/screens/BookingTrackingScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -43,7 +44,9 @@ export default function App() {
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {userProfile ? (
-            <Stack.Screen name="Main" component={TabNavigator} />
+            <>
+              <Stack.Screen name="Main" component={TabNavigator} />
+            </>
           ) : (
             <Stack.Screen name="Auth" component={AuthStack} />
           )}

@@ -39,7 +39,7 @@ const RequestDetailsScreen = ({ navigation, route }) => {
   const handleAccept = useCallback(async () => {
     try {
       setUpdating(true);
-      await updateRequestStatus(request.id, 'confirmed');
+      await updateRequestStatus(request.id, 'accepted');
       navigation.navigate('ActiveJob');
     } catch {
       setUpdating(false);

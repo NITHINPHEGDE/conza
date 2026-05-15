@@ -2,14 +2,25 @@
 import { create } from 'zustand';
 import { toggleOnlineAPI } from '../services/workerService';
 import { startLocationTracking, stopLocationTracking } from '../services/locationService';
+import { socket, connectSocket } from '../utils/socket';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const usePartnerStore = create((set, get) => ({
   // ── Auth / Profile ─────────────────────────────────────────────────────
   worker: null,          // populated after login / getMe
 
-  setWorker: (worker) => set({ worker }),
+  setWorker: (worker) => {
+    set({ worker });
+    if (worker) {
+      connectSocket();
+      get().initSocketHandlers();
+    }
+  },
 
-  clearWorker: () => set({ worker: null, isOnline: false }),
+  clearWorker: () => {
+    set({ worker: null, isOnline: false, activeJob: null, activeJobId: null });
+    AsyncStorage.removeItem('activeJobId');
+  },
 
   // ── Stats (derived from worker or local session totals) ────────────────
   todaysJobs:     0,
@@ -109,16 +120,39 @@ const usePartnerStore = create((set, get) => ({
     }
   },
 
+  initSocketHandlers: () => {
+    socket.off('booking_updated');
+    socket.off('booking_status_changed');
+
+    socket.on('booking_updated', (data) => {
+      console.log('🔄 BP: Booking update received:', data);
+      get().fetchRequests();
+      if (get().activeJobId === data.bookingId) {
+        get().fetchActiveJob(data.bookingId);
+      }
+    });
+
+    socket.on('booking_status_changed', (data) => {
+      console.log('🔄 BP: Booking status changed:', data.status);
+      if (get().activeJobId === data.bookingId) {
+        get().fetchActiveJob(data.bookingId);
+      }
+    });
+  },
+
   updateRequestStatus: async (requestId, status) => {
     try {
       const { api } = require('../services/apiClient');
       await api.patch(`/bookings/${requestId}/status`, { status });
-      // If accepted, move to activeJob locally too (though next poll would handle it)
-      if (status === 'confirmed') {
-        const req = get().requests.find(r => r.id === requestId);
-        if (req) get().acceptJob(req);
+      
+      if (status === 'accepted') {
+        await get().setActiveJobId(requestId);
       }
-      // Refresh list
+      
+      if (status === 'cancelled' && get().activeJobId === requestId) {
+        await get().setActiveJobId(null);
+      }
+
       await get().fetchRequests();
     } catch (err) {
       console.error('[Store] updateRequestStatus failed:', err.message);
@@ -130,6 +164,36 @@ const usePartnerStore = create((set, get) => ({
   // ── History ────────────────────────────────────────────────────────────
   history: [],
   setHistory: (history) => set({ history }),
+
+  fetchHistory: async () => {
+    try {
+      const { api } = require('../services/apiClient');
+      const data = await api.get('/bookings/history');
+      if (data.success) {
+        const mapped = data.history.map(h => {
+          // Helper to format Date to HH:mm
+          const fmtTime = (date) => date ? new Date(date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—';
+          
+          return {
+            ...h,
+            id:         h._id,
+            userName:   h.user?.fullName || 'Client',
+            location:   h.city ? `${h.city}, ${h.area || ''}` : 'Location N/A',
+            amount:     h.total || 0,
+            service:    h.category || 'Service',
+            subService: h.subService || 'General',
+            checkIn:    fmtTime(h.checkInTime),
+            checkOut:   fmtTime(h.checkOutTime),
+            date:       new Date(h.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+            distance:   h.distance || '—',
+          };
+        });
+        set({ history: mapped });
+      }
+    } catch (err) {
+      console.error('[Store] fetchHistory failed:', err.message);
+    }
+  },
 
   // ── Active Job ─────────────────────────────────────────────────────────
   activeJob:    null,
@@ -148,17 +212,31 @@ const usePartnerStore = create((set, get) => ({
     requests: state.requests.filter((r) => r.id !== requestId),
   })),
 
-  markArrived: () => {
+  markArrived: async () => {
+    const { activeJob, updateRequestStatus } = get();
+    if (!activeJob) return;
+    
+    await updateRequestStatus(activeJob.id, 'arrived');
     const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     set({ jobStatus: 'arrived', checkInTime: timeStr });
   },
 
-  startWork: () => set({ jobStatus: 'in_progress' }),
+  startWork: async () => {
+    const { activeJob, updateRequestStatus } = get();
+    if (!activeJob) return;
+    
+    await updateRequestStatus(activeJob.id, 'in_progress');
+    set({ jobStatus: 'in_progress' });
+  },
 
-  completeJob: () => set((state) => {
+  completeJob: async () => {
+    const { activeJob, updateRequestStatus, todaysJobs, todaysEarnings, history, requests } = get();
+    if (!activeJob) return;
+
+    await updateRequestStatus(activeJob.id, 'completed');
+    
     const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-    const { activeJob, checkInTime, todaysJobs, todaysEarnings, history, requests } = state;
-
+    
     const completedEntry = {
       id:         `hist_${Date.now()}`,
       userName:   activeJob.userName,
@@ -170,27 +248,72 @@ const usePartnerStore = create((set, get) => ({
       service:    activeJob.service,
       subService: activeJob.subService,
       status:     'completed',
-      checkIn:    checkInTime,
+      checkIn:    get().checkInTime,
       checkOut:   timeStr,
       date:       'Today',
     };
 
-    return {
+    set({
       jobStatus:       'completed',
       checkOutTime:    timeStr,
       todaysJobs:      todaysJobs + 1,
       todaysEarnings:  todaysEarnings + activeJob.estimatedAmount,
       history:         [completedEntry, ...history],
       requests:        requests.filter((r) => r.id !== activeJob.id),
-    };
-  }),
+    });
+  },
 
-  resetActiveJob: () => set({
-    activeJob:   null,
-    jobStatus:   null,
-    checkInTime: null,
-    checkOutTime: null,
-  }),
+  resetActiveJob: () => {
+    set({
+      activeJob:   null,
+      activeJobId: null,
+      jobStatus:   null,
+      checkInTime: null,
+      checkOutTime: null,
+    });
+    AsyncStorage.removeItem('activeJobId');
+  },
+
+  activeJobId: null,
+
+  setActiveJobId: async (id) => {
+    if (id) {
+      await AsyncStorage.setItem('activeJobId', id);
+    } else {
+      await AsyncStorage.removeItem('activeJobId');
+    }
+    set({ activeJobId: id });
+    if (id) get().fetchActiveJob(id);
+    else set({ activeJob: null });
+  },
+
+  fetchActiveJob: async (id) => {
+    const bookingId = id || get().activeJobId;
+    if (!bookingId) return;
+
+    try {
+      const { api } = require('../services/apiClient');
+      const data = await api.get(`/bookings/${bookingId}`);
+      if (data.success) {
+        // Map data.booking to what UI expects
+        const r = data.booking;
+        const mapped = {
+          ...r,
+          id:               r._id,
+          userName:         r.user?.fullName || 'Client',
+          phone:            r.user?.phone    || 'N/A',
+          location:         r.city ? `${r.city}, ${r.area || ''}` : 'Location N/A',
+          address:          r.address || 'Address not provided',
+          estimatedAmount:  r.total || 0,
+          service:          r.category || 'Service',
+        };
+        set({ activeJob: mapped, jobStatus: r.status });
+        socket.emit('join_booking', bookingId);
+      }
+    } catch (err) {
+      console.error('Failed to fetch active job:', err.message);
+    }
+  },
 }));
 
 const EMPTY_OBJ = {};
@@ -205,6 +328,7 @@ export const selectTodaysEarnings  = (s) => s.todaysEarnings;
 export const selectRating          = (s) => s.worker?.rating || 5.0;
 export const selectRequests        = (s) => s.requests;
 export const selectHistory         = (s) => s.history;
+export const selectFetchHistory     = (s) => s.fetchHistory;
 export const selectActiveJob       = (s) => s.activeJob;
 export const selectJobStatus       = (s) => s.jobStatus;
 export const selectCheckInTime     = (s) => s.checkInTime;

@@ -15,4 +15,9 @@ export const bookingAPI = {
     const res = await api.get(`/bookings/${id}`);
     return res.data;
   },
+
+  cancelBooking: async (id) => {
+    const res = await api.patch(`/bookings/${id}/cancel`);
+    return res.data;
+  },
 };

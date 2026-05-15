@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Modal, StatusBar,
+  ScrollView, Modal, StatusBar, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -140,10 +140,10 @@ const ActiveJobScreen = ({ navigation }) => {
 
   // Compute all 3 step statuses in one pass instead of calling getStatusForStep 3 times
   const stepStatuses = useMemo(() => {
-    const order = ['on_way', 'arrived', 'in_progress', 'completed'];
+    const order = ['pending', 'accepted', 'arrived', 'completed'];
     const currentIdx = order.indexOf(jobStatus);
     return [0, 1, 2].map((i) =>
-      i < currentIdx ? 'done' : i === currentIdx ? 'active' : 'pending'
+      i < (currentIdx - 1) ? 'done' : i === (currentIdx - 1) ? 'active' : 'pending'
     );
   }, [jobStatus]);
 
@@ -160,6 +160,20 @@ const ActiveJobScreen = ({ navigation }) => {
 
   const handleNavigate = useCallback(() => {}, []);
   const handleBack     = useCallback(() => navigation.goBack(), [navigation]);
+
+  const handleCancelJob = useCallback(() => {
+    Alert.alert(
+      "Cancel Job",
+      "Are you sure you want to cancel this job? This may affect your rating.",
+      [
+        { text: "No", style: "cancel" },
+        { text: "Yes, Cancel", onPress: async () => {
+          await usePartnerStore.getState().updateRequestStatus(activeJob.id, 'cancelled');
+          navigation.navigate('Tabs', { screen: 'Home' });
+        }, style: "destructive" }
+      ]
+    );
+  }, [activeJob, navigation]);
 
   const containerStyle = useMemo(
     () => [styles.screen, { paddingTop: insets.top }],
@@ -207,23 +221,29 @@ const ActiveJobScreen = ({ navigation }) => {
         <Text style={styles.workflowTitle}>Job Progress</Text>
 
         <StatusCard
-          step={1} title="On the Way"
-          description="Head to the customer's location. Tap when you've arrived."
-          status={stepStatuses[0]} buttonLabel="Mark as Arrived"
+          step={1} title="Waiting for Arrival"
+          description="You've accepted the job. Head to the customer's location."
+          status={jobStatus === 'accepted' ? 'active' : 'done'} buttonLabel="Mark as Arrived"
           onPress={markArrived}
         />
         <StatusCard
-          step={2} title="Arrived at Location"
-          description="You've reached the site. Confirm with the customer and start the job."
-          status={stepStatuses[1]} buttonLabel="Start Work"
+          step={2} title="At Location"
+          description="You've reached the site. Click below to start the work timer."
+          status={jobStatus === 'arrived' ? 'active' : (['in_progress', 'completed'].includes(jobStatus) ? 'done' : 'pending')} buttonLabel="Start Work ▶"
           onPress={startWork}
         />
         <StatusCard
           step={3} title="Work in Progress"
-          description="Complete the job carefully. Tap when all work is done."
-          status={stepStatuses[2]} buttonLabel="Work Done ✓"
+          description="Finish the work and collect payment from the customer."
+          status={jobStatus === 'in_progress' ? 'active' : (jobStatus === 'completed' ? 'done' : 'pending')} buttonLabel="Work Completed ✓"
           onPress={handleWorkDone} isLast
         />
+
+        {jobStatus !== 'completed' && (
+          <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelJob}>
+            <Text style={styles.cancelBtnText}>Cancel Job</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       <CompletionModal
@@ -291,6 +311,8 @@ const styles = StyleSheet.create({
   qrHint:          { fontSize: 12, color: colors.textMuted, marginBottom: 14, fontWeight: '500', textAlign: 'center' },
   backLink:        { marginTop: 12, paddingVertical: 6 },
   backLinkText:    { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
+  cancelBtn:       { marginTop: 20, padding: 15, alignItems: 'center' },
+  cancelBtnText:   { color: colors.danger, fontWeight: '700', fontSize: 14 },
 });
 
 export default ActiveJobScreen;

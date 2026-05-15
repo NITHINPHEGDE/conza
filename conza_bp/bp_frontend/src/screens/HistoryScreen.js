@@ -4,8 +4,9 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import usePartnerStore, { selectHistory } from '../store/usePartnerStore';
+import usePartnerStore, { selectHistory, selectFetchHistory } from '../store/usePartnerStore';
 import { colors } from '../theme/colors';
+import { RefreshControl } from 'react-native';
 
 const TABS = ['All', 'Completed', 'Cancelled'];
 
@@ -74,7 +75,19 @@ const ListEmpty = React.memo(({ tab }) => (
 const HistoryScreen = () => {
   const insets    = useSafeAreaInsets();
   const history   = usePartnerStore(selectHistory);
+  const fetchHistory = usePartnerStore(selectFetchHistory);
   const [activeTab, setActiveTab] = useState('All');
+  const [refreshing, setRefreshing] = useState(false);
+
+  React.useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchHistory();
+    setRefreshing(false);
+  }, [fetchHistory]);
 
   const filtered = useMemo(() => {
     if (activeTab === 'All') return history;
@@ -116,6 +129,9 @@ const HistoryScreen = () => {
         ListEmptyComponent={ListEmptyComponent}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.accentAmber]} tintColor={colors.accentAmber} />
+        }
         removeClippedSubviews
         maxToRenderPerBatch={8}
         windowSize={10}
