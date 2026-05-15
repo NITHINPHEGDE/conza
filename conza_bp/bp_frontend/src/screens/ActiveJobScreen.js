@@ -2,10 +2,11 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Modal, StatusBar, Alert,
+  ScrollView, Modal, StatusBar, Alert, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { WebView } from 'react-native-webview';
 import usePartnerStore, {
   selectActiveJob, selectJobStatus, selectCheckInTime,
   selectMarkArrived, selectStartWork, selectCompleteJob, selectResetActiveJob,
@@ -13,32 +14,51 @@ import usePartnerStore, {
 import StatusCard from '../components/StatusCard';
 import { colors } from '../theme/colors';
 
-// ── Static map grid — computed once, never recreated ─────────────────────────
-const MAP_CELLS = Array.from({ length: 30 }, (_, i) => i);
+const GRAD_START = { x: 0, y: 0 };
+const GRAD_END   = { x: 1, y: 0 };
 
-const MapPlaceholder = React.memo(({ onNavigate }) => (
-  <View style={styles.mapPlaceholder}>
-    <View style={styles.mapGrid}>
-      {MAP_CELLS.map((i) => <View key={i} style={styles.mapCell} />)}
-    </View>
-    <View style={styles.mapPin}>
-      <Text style={{ fontSize: 28 }}>📍</Text>
-    </View>
-    <TouchableOpacity style={styles.navigateBtn} onPress={onNavigate} activeOpacity={0.85}>
-      <LinearGradient
-        colors={[colors.gradientStart, colors.gradientEnd]}
-        start={GRAD_START} end={GRAD_END}
-        style={styles.navigateBtnInner}
-      >
-        <Text style={styles.navigateBtnText}>🗺️  Navigate</Text>
-      </LinearGradient>
-    </TouchableOpacity>
-  </View>
-));
+// ── Map with WebView + Navigate button ───────────────────────────────────────
+const MapPlaceholder = React.memo(({ onNavigate, address, latitude, longitude }) => {
+  const hasCoords = latitude && longitude;
 
-// ── CompletionModal — owns its own paymentDone state so parent doesn't re-render
+  const mapUrl = hasCoords
+    ? `https://maps.google.com/maps?q=${latitude},${longitude}&z=15&output=embed`
+    : address
+    ? `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=15&output=embed`
+    : null;
+
+  return (
+    <View style={styles.mapPlaceholder}>
+      {mapUrl ? (
+        <WebView
+          source={{ uri: mapUrl }}
+          style={styles.webview}
+          scrollEnabled={false}
+          pointerEvents="none"
+        />
+      ) : (
+        <View style={styles.mapFallback}>
+          <Text style={{ fontSize: 32 }}>🗺️</Text>
+          <Text style={styles.mapFallbackText}>No location data</Text>
+        </View>
+      )}
+
+      <TouchableOpacity style={styles.navigateBtn} onPress={onNavigate} activeOpacity={0.85}>
+        <LinearGradient
+          colors={[colors.gradientStart, colors.gradientEnd]}
+          start={GRAD_START} end={GRAD_END}
+          style={styles.navigateBtnInner}
+        >
+          <Text style={styles.navigateBtnText}>🗺️  Navigate</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+// ── CompletionModal ───────────────────────────────────────────────────────────
 const CompletionModal = React.memo(({ visible, amount, onFinished }) => {
-  const [showQR, setShowQR]         = useState(false);
+  const [showQR, setShowQR]           = useState(false);
   const [paymentDone, setPaymentDone] = useState(false);
 
   const handleCash = useCallback(() => {
@@ -50,8 +70,8 @@ const CompletionModal = React.memo(({ visible, amount, onFinished }) => {
     }, 1800);
   }, [onFinished]);
 
-  const handleShowQR  = useCallback(() => setShowQR(true),  []);
-  const handleBackQR  = useCallback(() => setShowQR(false), []);
+  const handleShowQR = useCallback(() => setShowQR(true),  []);
+  const handleBackQR = useCallback(() => setShowQR(false), []);
 
   const qrDots = useMemo(() =>
     Array.from({ length: 81 }, (_, i) => (
@@ -115,10 +135,6 @@ const CompletionModal = React.memo(({ visible, amount, onFinished }) => {
   );
 });
 
-// ── Static gradient vectors ───────────────────────────────────────────────────
-const GRAD_START = { x: 0, y: 0 };
-const GRAD_END   = { x: 1, y: 0 };
-
 // ── No-job placeholder ────────────────────────────────────────────────────────
 const NoJobView = () => (
   <View style={[styles.screen, styles.noJobState]}>
@@ -129,16 +145,15 @@ const NoJobView = () => (
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 const ActiveJobScreen = ({ navigation }) => {
-  const insets        = useSafeAreaInsets();
-  const activeJob     = usePartnerStore(selectActiveJob);
-  const jobStatus     = usePartnerStore(selectJobStatus);
-  const markArrived   = usePartnerStore(selectMarkArrived);
-  const startWork     = usePartnerStore(selectStartWork);
-  const completeJob   = usePartnerStore(selectCompleteJob);
-  const resetActiveJob= usePartnerStore(selectResetActiveJob);
+  const insets         = useSafeAreaInsets();
+  const activeJob      = usePartnerStore(selectActiveJob);
+  const jobStatus      = usePartnerStore(selectJobStatus);
+  const markArrived    = usePartnerStore(selectMarkArrived);
+  const startWork      = usePartnerStore(selectStartWork);
+  const completeJob    = usePartnerStore(selectCompleteJob);
+  const resetActiveJob = usePartnerStore(selectResetActiveJob);
   const [showModal, setShowModal] = useState(false);
 
-  // Compute all 3 step statuses in one pass instead of calling getStatusForStep 3 times
   const stepStatuses = useMemo(() => {
     const order = ['pending', 'accepted', 'arrived', 'completed'];
     const currentIdx = order.indexOf(jobStatus);
@@ -158,19 +173,54 @@ const ActiveJobScreen = ({ navigation }) => {
     navigation.navigate('Tabs', { screen: 'Home' });
   }, [resetActiveJob, navigation]);
 
-  const handleNavigate = useCallback(() => {}, []);
-  const handleBack     = useCallback(() => navigation.goBack(), [navigation]);
+  // ── Navigate button — opens Google Maps ──────────────────────────────────
+  const handleNavigate = useCallback(() => {
+    if (!activeJob) return;
+
+    const { latitude, longitude, address } = activeJob;
+
+    let url;
+    if (latitude && longitude) {
+      // Coords available — most accurate
+      url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}&travelmode=driving`;
+    } else if (address) {
+      // Fall back to address string
+      url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
+    } else {
+      Alert.alert('No Location', 'No address or coordinates available for this job.');
+      return;
+    }
+
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) {
+        Linking.openURL(url);
+      } else {
+        // Fallback to browser maps
+        Linking.openURL(
+          `https://maps.google.com/?q=${latitude && longitude
+            ? `${latitude},${longitude}`
+            : encodeURIComponent(address)}`
+        );
+      }
+    });
+  }, [activeJob]);
+
+  const handleBack = useCallback(() => navigation.goBack(), [navigation]);
 
   const handleCancelJob = useCallback(() => {
     Alert.alert(
-      "Cancel Job",
-      "Are you sure you want to cancel this job? This may affect your rating.",
+      'Cancel Job',
+      'Are you sure you want to cancel this job? This may affect your rating.',
       [
-        { text: "No", style: "cancel" },
-        { text: "Yes, Cancel", onPress: async () => {
-          await usePartnerStore.getState().updateRequestStatus(activeJob.id, 'cancelled');
-          navigation.navigate('Tabs', { screen: 'Home' });
-        }, style: "destructive" }
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            await usePartnerStore.getState().updateRequestStatus(activeJob.id, 'cancelled');
+            navigation.navigate('Tabs', { screen: 'Home' });
+          },
+        },
       ]
     );
   }, [activeJob, navigation]);
@@ -198,7 +248,13 @@ const ActiveJobScreen = ({ navigation }) => {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <MapPlaceholder onNavigate={handleNavigate} />
+
+        <MapPlaceholder
+          onNavigate={handleNavigate}
+          address={activeJob.address}
+          latitude={activeJob.latitude}
+          longitude={activeJob.longitude}
+        />
 
         <View style={styles.jobInfoCard}>
           <View style={styles.jobInfoRow}>
@@ -244,6 +300,7 @@ const ActiveJobScreen = ({ navigation }) => {
             <Text style={styles.cancelBtnText}>Cancel Job</Text>
           </TouchableOpacity>
         )}
+
       </ScrollView>
 
       <CompletionModal
@@ -256,63 +313,63 @@ const ActiveJobScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  screen:          { flex: 1, backgroundColor: colors.background },
-  noJobState:      { alignItems: 'center', justifyContent: 'center', gap: 16 },
-  noJobText:       { fontSize: 16, color: colors.textMuted, fontWeight: '600' },
-  navHeader:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface },
-  backBtn:         { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  backIcon:        { fontSize: 28, color: colors.textPrimary, fontWeight: '300', lineHeight: 32 },
-  navTitle:        { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
-  liveBadge:       { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(224,59,59,0.12)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, gap: 5, borderWidth: 1, borderColor: 'rgba(224,59,59,0.3)' },
-  liveDot:         { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.danger },
-  liveText:        { fontSize: 10, fontWeight: '800', color: colors.danger, letterSpacing: 0.8 },
-  content:         { paddingBottom: 40 },
-  mapPlaceholder:  { height: 200, backgroundColor: '#E8EDF5', margin: 20, borderRadius: 18, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, position: 'relative' },
-  mapGrid:         { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'row', flexWrap: 'wrap' },
-  mapCell:         { width: '10%', height: 40, borderWidth: 0.3, borderColor: 'rgba(100,120,150,0.15)' },
-  mapPin:          { position: 'absolute', alignItems: 'center' },
-  navigateBtn:     { position: 'absolute', bottom: 14, right: 14 },
-  navigateBtnInner:{ borderRadius: 12, paddingHorizontal: 16, paddingVertical: 9 },
-  navigateBtnText: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
-  jobInfoCard:     { marginHorizontal: 20, marginBottom: 24, backgroundColor: colors.surface, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: colors.border },
-  jobInfoRow:      { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 12 },
-  jobInfoFlex:     { flex: 1 },
-  customerAvatar:  { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.accentYellowSoft, borderWidth: 1.5, borderColor: colors.accentYellow, alignItems: 'center', justifyContent: 'center' },
+  screen:           { flex: 1, backgroundColor: colors.background },
+  noJobState:       { alignItems: 'center', justifyContent: 'center', gap: 16 },
+  noJobText:        { fontSize: 16, color: colors.textMuted, fontWeight: '600' },
+  navHeader:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface },
+  backBtn:          { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  backIcon:         { fontSize: 28, color: colors.textPrimary, fontWeight: '300', lineHeight: 32 },
+  navTitle:         { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  liveBadge:        { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(224,59,59,0.12)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, gap: 5, borderWidth: 1, borderColor: 'rgba(224,59,59,0.3)' },
+  liveDot:          { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.danger },
+  liveText:         { fontSize: 10, fontWeight: '800', color: colors.danger, letterSpacing: 0.8 },
+  content:          { paddingBottom: 40 },
+  mapPlaceholder:   { height: 200, backgroundColor: '#E8EDF5', margin: 20, borderRadius: 18, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, position: 'relative' },
+  webview:          { flex: 1, width: '100%', height: '100%' },
+  mapFallback:      { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  mapFallbackText:  { fontSize: 13, color: colors.textMuted, fontWeight: '500' },
+  navigateBtn:      { position: 'absolute', bottom: 14, right: 14 },
+  navigateBtnInner: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 9 },
+  navigateBtnText:  { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
+  jobInfoCard:      { marginHorizontal: 20, marginBottom: 24, backgroundColor: colors.surface, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: colors.border },
+  jobInfoRow:       { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 12 },
+  jobInfoFlex:      { flex: 1 },
+  customerAvatar:   { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.accentYellowSoft, borderWidth: 1.5, borderColor: colors.accentYellow, alignItems: 'center', justifyContent: 'center' },
   customerAvatarText: { fontSize: 18, fontWeight: '800', color: colors.accentAmber },
-  customerName:    { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
-  customerService: { fontSize: 12, color: colors.textSecondary, fontWeight: '500' },
-  earningBadge:    { backgroundColor: colors.accentAmberSoft, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(240,165,0,0.25)' },
-  earningText:     { fontSize: 15, fontWeight: '800', color: colors.accentAmber },
-  divider:         { height: 1, backgroundColor: colors.border, marginBottom: 10 },
-  jobAddress:      { fontSize: 12, color: colors.textSecondary, marginBottom: 6, fontWeight: '500' },
-  jobDesc:         { fontSize: 12, color: colors.textMuted, lineHeight: 17 },
-  workflowTitle:   { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginHorizontal: 20, marginBottom: 16, letterSpacing: 0.2 },
-  fullWidth:       { width: '100%' },
-  modalOverlay:    { flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center' },
-  modalCard:       { width: '80%', backgroundColor: colors.surface, borderRadius: 24, padding: 32, alignItems: 'center', gap: 4 },
-  modalEmoji:      { fontSize: 52, marginBottom: 12 },
-  modalTitle:      { fontSize: 22, fontWeight: '800', color: colors.textPrimary },
-  modalAmount:     { fontSize: 36, fontWeight: '900', color: colors.statusGreen },
-  modalSub:        { fontSize: 13, color: colors.textMuted, marginBottom: 20, fontWeight: '500', textAlign: 'center' },
-  modalBtn:        { borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, alignItems: 'center' },
-  modalBtnText:    { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
-  qrBtn:           { width: '100%', marginTop: 10, paddingVertical: 14, borderRadius: 14, alignItems: 'center', borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surfaceElevated },
-  qrBtnText:       { fontSize: 15, fontWeight: '700', color: colors.textSecondary, letterSpacing: 0.3 },
-  qrBox:           { width: 200, height: 200, marginVertical: 16, borderRadius: 16, backgroundColor: colors.white, padding: 10, borderWidth: 1, borderColor: colors.border },
-  qrInner:         { flex: 1, position: 'relative', alignItems: 'center', justifyContent: 'center' },
-  qrCorner:        { position: 'absolute', width: 22, height: 22, borderWidth: 3, borderColor: colors.textPrimary },
-  qrTL:            { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 },
-  qrTR:            { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
-  qrBL:            { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
-  qrBR:            { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
-  qrGrid:          { flexDirection: 'row', flexWrap: 'wrap', width: 126, height: 126, marginBottom: 6 },
-  qrDot:           { width: 14, height: 14, backgroundColor: colors.textPrimary },
-  qrLabel:         { fontSize: 9, color: colors.textMuted, fontWeight: '500', letterSpacing: 0.3 },
-  qrHint:          { fontSize: 12, color: colors.textMuted, marginBottom: 14, fontWeight: '500', textAlign: 'center' },
-  backLink:        { marginTop: 12, paddingVertical: 6 },
-  backLinkText:    { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
-  cancelBtn:       { marginTop: 20, padding: 15, alignItems: 'center' },
-  cancelBtnText:   { color: colors.danger, fontWeight: '700', fontSize: 14 },
+  customerName:     { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
+  customerService:  { fontSize: 12, color: colors.textSecondary, fontWeight: '500' },
+  earningBadge:     { backgroundColor: colors.accentAmberSoft, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(240,165,0,0.25)' },
+  earningText:      { fontSize: 15, fontWeight: '800', color: colors.accentAmber },
+  divider:          { height: 1, backgroundColor: colors.border, marginBottom: 10 },
+  jobAddress:       { fontSize: 12, color: colors.textSecondary, marginBottom: 6, fontWeight: '500' },
+  jobDesc:          { fontSize: 12, color: colors.textMuted, lineHeight: 17 },
+  workflowTitle:    { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginHorizontal: 20, marginBottom: 16, letterSpacing: 0.2 },
+  fullWidth:        { width: '100%' },
+  modalOverlay:     { flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center' },
+  modalCard:        { width: '80%', backgroundColor: colors.surface, borderRadius: 24, padding: 32, alignItems: 'center', gap: 4 },
+  modalEmoji:       { fontSize: 52, marginBottom: 12 },
+  modalTitle:       { fontSize: 22, fontWeight: '800', color: colors.textPrimary },
+  modalAmount:      { fontSize: 36, fontWeight: '900', color: colors.statusGreen },
+  modalSub:         { fontSize: 13, color: colors.textMuted, marginBottom: 20, fontWeight: '500', textAlign: 'center' },
+  modalBtn:         { borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, alignItems: 'center' },
+  modalBtnText:     { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
+  qrBtn:            { width: '100%', marginTop: 10, paddingVertical: 14, borderRadius: 14, alignItems: 'center', borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surfaceElevated },
+  qrBtnText:        { fontSize: 15, fontWeight: '700', color: colors.textSecondary, letterSpacing: 0.3 },
+  qrBox:            { width: 200, height: 200, marginVertical: 16, borderRadius: 16, backgroundColor: colors.white, padding: 10, borderWidth: 1, borderColor: colors.border },
+  qrInner:          { flex: 1, position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  qrCorner:         { position: 'absolute', width: 22, height: 22, borderWidth: 3, borderColor: colors.textPrimary },
+  qrTL:             { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 },
+  qrTR:             { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
+  qrBL:             { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
+  qrBR:             { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
+  qrGrid:           { flexDirection: 'row', flexWrap: 'wrap', width: 126, height: 126, marginBottom: 6 },
+  qrDot:            { width: 14, height: 14, backgroundColor: colors.textPrimary },
+  qrLabel:          { fontSize: 9, color: colors.textMuted, fontWeight: '500', letterSpacing: 0.3 },
+  qrHint:           { fontSize: 12, color: colors.textMuted, marginBottom: 14, fontWeight: '500', textAlign: 'center' },
+  backLink:         { marginTop: 12, paddingVertical: 6 },
+  backLinkText:     { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
+  cancelBtn:        { marginTop: 20, padding: 15, alignItems: 'center' },
+  cancelBtnText:    { color: colors.danger, fontWeight: '700', fontSize: 14 },
 });
 
 export default ActiveJobScreen;

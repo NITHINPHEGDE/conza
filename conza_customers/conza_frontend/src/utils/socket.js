@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = 'http://NITHIN.local:5000'; // Match your backend port
+const SOCKET_URL = 'http://10.247.177.155:5000'; // Match your backend port
 
 export const socket = io(SOCKET_URL, {
   autoConnect: false, // Connect manually when app starts
