@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import useAppStore from '../store/useAppStore';
+import useAppStore, { EMPTY_ARRAY } from '../store/useAppStore';
 import { SectionLoader, ErrorState, EmptyState } from '../components/LoadingState';
 import { colors } from '../theme/colors';
 
@@ -139,26 +139,27 @@ const AutoBookCard = React.memo(({ category, onPress }) => (
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const WorkersNearbyScreen = ({ route, navigation }) => {
-  const { category } = route.params;
-  const getWorkersByCategory    = useAppStore((s) => s.getWorkersByCategory);
-const fetchWorkersByCategory  = useAppStore((s) => s.fetchWorkersByCategory);
-const labourLoading           = useAppStore((s) => s.labourLoading);
-const labourError             = useAppStore((s) => s.labourError);
+  const category = route?.params?.category;
+  
+  const allWorkers = useAppStore((s) => (category ? s.workersByCategory[category] : null) || EMPTY_ARRAY);
+  const labourLoading = useAppStore((s) => s.labourLoading);
+  const labourError   = useAppStore((s) => s.labourError);
+  const fetchWorkersByCategory = useAppStore((s) => s.fetchWorkersByCategory);
 
-const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-const handleRefresh = useCallback(async () => {
-  setRefreshing(true);
-  await fetchWorkersByCategory(category);
-  setRefreshing(false);
-}, [category, fetchWorkersByCategory]);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchWorkersByCategory(category);
+    setRefreshing(false);
+  }, [category, fetchWorkersByCategory]);
 
-// Fetch workers for this category when screen mounts
-useEffect(() => {
-  fetchWorkersByCategory(category);
-}, [category]);
-
-const allWorkers = useMemo(() => getWorkersByCategory(category), [getWorkersByCategory, category]);
+  // Fetch workers for this category when screen mounts
+  useEffect(() => {
+    if (category) {
+      fetchWorkersByCategory(category);
+    }
+  }, [category, fetchWorkersByCategory]);
 
   const [selected, setSelected]       = useState([]);
   const [filterAvail, setFilterAvail] = useState('All');
@@ -231,6 +232,7 @@ const allWorkers = useMemo(() => getWorkersByCategory(category), [getWorkersByCa
     </View>
   ), []);
 
+  if (!category) return <ErrorState message="No category selected" onRetry={() => navigation.goBack()} />;
   if (labourLoading && !refreshing) return <SectionLoader message="Finding workers nearby..." />;
   if (labourError)   return <ErrorState message={labourError} onRetry={() => fetchWorkersByCategory(category)} />;
 

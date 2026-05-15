@@ -11,7 +11,9 @@ import { workerAPI  } from '../api/workerAPI';
 import { bookingAPI } from '../api/bookingAPI';
 import { authAPI    } from '../api/authAPI';
 
-const EMPTY_ARRAY = [];
+import { socket, connectSocket } from '../utils/socket';
+
+export const EMPTY_ARRAY = [];
 const EMPTY_OBJ   = {};
 
 const useAppStore = create((set, get) => ({
@@ -20,7 +22,11 @@ const useAppStore = create((set, get) => ({
   initialized: false,
 
   initApp: async () => {
-    // 1. Fetch data that doesn't strictly depend on location first
+    // 1. Connect Socket
+    connectSocket();
+    get().initSocketHandlers();
+
+    // 2. Fetch data that doesn't strictly depend on location first
     await Promise.all([
       get().fetchMaterials(),
       get().fetchRentalData(),
@@ -111,7 +117,7 @@ const useAppStore = create((set, get) => ({
     try {
       set({ labourLoading: true, labourError: null });
       const data = await workerAPI.getCategories({ lat: userLat, lng: userLng });
-      set({ labourCategories: data.categories || [] });
+      set({ labourCategories: data.categories || EMPTY_ARRAY });
     } catch (err) {
       set({ labourError: err.message });
     } finally {
@@ -130,14 +136,34 @@ const useAppStore = create((set, get) => ({
         radius: 5000,
       });
       set((state) => ({
-        workersByCategory: { ...state.workersByCategory, [category]: data.workers || [] },
-        allWorkers:        [...(get().allWorkers), ...(data.workers || [])],
+        workersByCategory: { ...state.workersByCategory, [category]: data.workers || EMPTY_ARRAY },
       }));
     } catch (err) {
       set({ labourError: err.message });
     } finally {
       set({ labourLoading: false });
     }
+  },
+
+  initSocketHandlers: () => {
+    socket.on('worker_updated', (data) => {
+      console.log('🔄 Worker update received:', data);
+      get().fetchLabourData(); // Refresh category counts
+      
+      // If we have the full document, only refresh the specific category
+      if (data.fullDocument?.category) {
+        get().fetchWorkersByCategory(data.fullDocument.category);
+      } else {
+        // Fallback: refresh all active categories
+        const activeCategories = Object.keys(get().workersByCategory);
+        activeCategories.forEach(cat => get().fetchWorkersByCategory(cat));
+      }
+    });
+
+    socket.on('booking_updated', (data) => {
+      console.log('🔄 Booking update received:', data);
+      get().fetchProjects();
+    });
   },
 
   getWorkersByCategory: (category) => get().workersByCategory[category] || EMPTY_ARRAY,

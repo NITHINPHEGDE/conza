@@ -102,6 +102,7 @@ const getCategories = async (req, res) => {
             spherical:     true,
           },
         },
+        { $match: { isOnline: true } },
         { $group: { _id: '$category', count: { $sum: 1 }, avgRating: { $avg: '$rating' } } },
       ];
 
