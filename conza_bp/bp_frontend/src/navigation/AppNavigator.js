@@ -20,6 +20,7 @@ import SignUpScreen         from '../screens/auth/SignUpScreen';
 
 import usePartnerStore, { selectActiveJob, selectJobStatus } from '../store/usePartnerStore';
 import { getLoggedInUser } from '../services/authService';
+import { socket } from '../utils/socket';
 import { colors } from '../theme/colors';
 
 const Stack = createNativeStackNavigator();
@@ -120,17 +121,23 @@ const AppNavigator = () => {
   const syncOnlineState = usePartnerStore((s) => s.syncOnlineState);
   const setActiveJobId  = usePartnerStore((s) => s.setActiveJobId);
 
-  useEffect(() => {
+ useEffect(() => {
     let mounted = true;
     getLoggedInUser().then((worker) => {
       if (!mounted) return;
       if (worker) {
         setWorker(worker);
         syncOnlineState(worker.isOnline || false);
-        
-        // Recover active job
+
+        // Recover active job — emit join_booking only after socket is connected
         AsyncStorage.getItem('activeJobId').then(id => {
-          if (id) setActiveJobId(id);
+          if (!id) return;
+          setActiveJobId(id);
+          if (socket.connected) {
+            socket.emit('join_booking', id);
+          } else {
+            socket.once('connect', () => socket.emit('join_booking', id));
+          }
         });
 
         setInitialRoute('MainApp');

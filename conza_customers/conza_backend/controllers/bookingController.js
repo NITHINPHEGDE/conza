@@ -88,6 +88,8 @@ const getBookingById = async (req, res) => {
 };
 
 // ── PATCH /api/bookings/:id/cancel ──────────────────────────────────────────
+const { getIO } = require('../services/socketService');
+
 const cancelBooking = async (req, res) => {
   try {
     const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id });
@@ -101,6 +103,22 @@ const cancelBooking = async (req, res) => {
 
     booking.status = 'cancelled';
     await booking.save();
+
+    // Notify all connected clients (labour app) immediately
+    try {
+      const io = getIO();
+      io.emit('booking_updated', {
+        operationType: 'update',
+        bookingId: booking._id,
+        status: 'cancelled',
+      });
+      io.to(`booking_${booking._id}`).emit('booking_status_changed', {
+        bookingId: booking._id,
+        status: 'cancelled',
+      });
+    } catch (_) {
+      // Socket not critical — don't fail the request
+    }
 
     res.json({ success: true, booking });
   } catch (err) {

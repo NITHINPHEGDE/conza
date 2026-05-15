@@ -6,7 +6,7 @@ let io;
 const initSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: '*', // Adjust for production
+      origin: '*',
       methods: ['GET', 'POST'],
     },
   });
@@ -24,7 +24,6 @@ const initSocket = (server) => {
     });
   });
 
-  // Start watching changes in MongoDB
   watchChanges();
 
   return io;
@@ -36,35 +35,50 @@ const watchChanges = () => {
   const startWatching = () => {
     console.log('👀 Watching MongoDB collections for changes...');
 
-    // 1. Watch Workers collection
-    const workerChangeStream = db.collection('workers').watch([], { fullDocument: 'updateLookup' });
-    workerChangeStream.on('change', (change) => {
-      console.log('✨ Worker change detected:', change.operationType);
-      io.emit('worker_updated', {
-        operationType: change.operationType,
-        workerId:      change.documentKey._id,
-        fullDocument:  change.fullDocument,
-      });
-    });
-
-    // 2. Watch Bookings collection
-    const bookingChangeStream = db.collection('bookings').watch([], { fullDocument: 'updateLookup' });
-    bookingChangeStream.on('change', (change) => {
-      console.log('✨ Booking change detected:', change.operationType);
-      
-      io.emit('booking_updated', {
-        operationType: change.operationType,
-        bookingId:     change.documentKey._id,
-        status:        change.fullDocument?.status
-      });
-
-      if (change.documentKey._id) {
-        io.to(`booking_${change.documentKey._id}`).emit('booking_status_changed', {
-          bookingId: change.documentKey._id,
-          status:    change.fullDocument?.status,
+    try {
+      // Watch Workers collection
+      const workerChangeStream = db.collection('workers').watch([], { fullDocument: 'updateLookup' });
+      workerChangeStream.on('change', (change) => {
+        console.log('✨ Worker change detected:', change.operationType);
+        io.emit('worker_updated', {
+          operationType: change.operationType,
+          workerId:      change.documentKey._id.toString(),
+          fullDocument:  change.fullDocument,
         });
-      }
-    });
+      });
+      workerChangeStream.on('error', (err) => {
+        console.error('❌ Worker change stream error:', err.message);
+        setTimeout(startWatching, 5000);
+      });
+
+      // Watch Bookings collection
+      const bookingChangeStream = db.collection('bookings').watch([], { fullDocument: 'updateLookup' });
+      bookingChangeStream.on('change', (change) => {
+        console.log('✨ Booking change detected:', change.operationType, 'status:', change.fullDocument?.status);
+
+        io.emit('booking_updated', {
+          operationType: change.operationType,
+          bookingId:     change.documentKey._id.toString(),
+          status:        change.fullDocument?.status,
+        });
+
+        if (change.documentKey._id) {
+          io.to(`booking_${change.documentKey._id}`).emit('booking_status_changed', {
+            bookingId: change.documentKey._id.toString(),
+            status:    change.fullDocument?.status,
+          });
+        }
+      });
+      bookingChangeStream.on('error', (err) => {
+        console.error('❌ Booking change stream error:', err.message);
+        setTimeout(startWatching, 5000);
+      });
+
+    } catch (err) {
+      console.error('❌ Failed to start change streams:', err.message);
+      console.error('   → Make sure MongoDB is running as a replica set for Change Streams to work.');
+      console.error('   → Run: mongod --replSet rs0   OR use MongoDB Atlas');
+    }
   };
 
   if (db.readyState === 1) {
@@ -75,9 +89,7 @@ const watchChanges = () => {
 };
 
 const getIO = () => {
-  if (!io) {
-    throw new Error('Socket.io not initialized!');
-  }
+  if (!io) throw new Error('Socket.io not initialized!');
   return io;
 };
 

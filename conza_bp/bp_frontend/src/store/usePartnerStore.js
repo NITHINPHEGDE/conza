@@ -10,12 +10,13 @@ const usePartnerStore = create((set, get) => ({
   worker: null,          // populated after login / getMe
 
   setWorker: (worker) => {
-    set({ worker });
-    if (worker) {
-      connectSocket();
-      get().initSocketHandlers();
-    }
-  },
+  set({ worker });
+  if (worker) {
+    connectSocket();
+    // Small delay ensures socket is connected before registering handlers
+    setTimeout(() => get().initSocketHandlers(), 300);
+  }
+},
 
   clearWorker: () => {
     set({ worker: null, isOnline: false, activeJob: null, activeJobId: null });
@@ -125,12 +126,22 @@ const usePartnerStore = create((set, get) => ({
     socket.off('booking_status_changed');
 
     socket.on('booking_updated', (data) => {
-      console.log('🔄 BP: Booking update received:', data);
-      get().fetchRequests();
-      if (get().activeJobId === data.bookingId) {
-        get().fetchActiveJob(data.bookingId);
-      }
-    });
+  console.log('🔄 BP: Booking update received:', data);
+
+  // If the updated booking is now cancelled/not pending, remove it from requests immediately
+  if (data.status && data.status !== 'pending') {
+    set((state) => ({
+      requests: state.requests.filter(
+        (r) => r.id?.toString() !== data.bookingId?.toString()
+      ),
+    }));
+  }
+
+  get().fetchRequests(); // Then re-sync from server
+  if (get().activeJobId === data.bookingId) {
+    get().fetchActiveJob(data.bookingId);
+  }
+});
 
     socket.on('booking_status_changed', (data) => {
       console.log('🔄 BP: Booking status changed:', data.status);
@@ -314,7 +325,14 @@ const usePartnerStore = create((set, get) => ({
       console.error('Failed to fetch active job:', err.message);
     }
   },
+  // Called on app boot if worker already logged in (AsyncStorage restore)
+  bootstrapSocket: () => {
+    connectSocket();
+    // Wait for connection then register handlers
+    setTimeout(() => get().initSocketHandlers(), 500);
+  },
 }));
+
 
 const EMPTY_OBJ = {};
 

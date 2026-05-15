@@ -6,7 +6,7 @@ let io;
 const initSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: '*', // Adjust for production
+      origin: '*',
       methods: ['GET', 'POST'],
     },
   });
@@ -24,7 +24,6 @@ const initSocket = (server) => {
     });
   });
 
-  // Start watching changes in MongoDB
   watchChanges();
 
   return io;
@@ -36,27 +35,38 @@ const watchChanges = () => {
   const startWatching = () => {
     console.log('👀 [BP] Watching MongoDB collections for changes...');
 
-    // Watch Bookings collection
-    const bookingChangeStream = db.collection('bookings').watch([], { fullDocument: 'updateLookup' });
-    bookingChangeStream.on('change', (change) => {
-      console.log('✨ [BP] Booking change detected:', change.operationType);
-      
-      // Emit to all for lists
-      io.emit('booking_updated', {
-        operationType: change.operationType,
-        bookingId:     change.documentKey._id,
-        status:        change.fullDocument?.status
+    try {
+      const bookingChangeStream = db.collection('bookings').watch([], { fullDocument: 'updateLookup' });
+
+      bookingChangeStream.on('change', (change) => {
+        console.log('✨ [BP] Booking change detected:', change.operationType, 'status:', change.fullDocument?.status);
+
+        io.emit('booking_updated', {
+          operationType: change.operationType,
+          bookingId:     change.documentKey._id.toString(),
+          status:        change.fullDocument?.status,
+        });
+
+        if (change.documentKey._id) {
+          io.to(`booking_${change.documentKey._id}`).emit('booking_status_changed', {
+            bookingId: change.documentKey._id.toString(),
+            status:    change.fullDocument?.status,
+            booking:   change.fullDocument,
+          });
+        }
       });
 
-      // Also emit to specific room if relevant
-      if (change.documentKey._id) {
-        io.to(`booking_${change.documentKey._id}`).emit('booking_status_changed', {
-          bookingId: change.documentKey._id,
-          status:    change.fullDocument?.status,
-          booking:   change.fullDocument
-        });
-      }
-    });
+      bookingChangeStream.on('error', (err) => {
+        console.error('❌ [BP] Booking change stream error:', err.message);
+        // Retry after 5 seconds
+        setTimeout(startWatching, 5000);
+      });
+
+    } catch (err) {
+      console.error('❌ [BP] Failed to start change stream:', err.message);
+      console.error('   → Make sure MongoDB is running as a replica set for Change Streams to work.');
+      console.error('   → Run: mongod --replSet rs0   OR use MongoDB Atlas');
+    }
   };
 
   if (db.readyState === 1) {
@@ -67,9 +77,7 @@ const watchChanges = () => {
 };
 
 const getIO = () => {
-  if (!io) {
-    throw new Error('Socket.io not initialized!');
-  }
+  if (!io) throw new Error('Socket.io not initialized!');
   return io;
 };
 

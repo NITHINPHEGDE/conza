@@ -284,17 +284,18 @@ const useAppStore = create((set, get) => ({
     }
   },
 
-  cancelActiveBooking: async () => {
-    const id = get().activeBookingId;
-    if (!id) return;
-    try {
-      await bookingAPI.cancelBooking(id);
-      // Wait for socket to refresh or manually refresh
-      get().fetchActiveBooking(id);
-    } catch (err) {
-      alert(err.message);
-    }
-  },
+  // Replace cancelActiveBooking in useAppStore.js (store/useAppStore.js):
+cancelActiveBooking: async () => {
+  const id = get().activeBookingId;
+  if (!id) return;
+  try {
+    await bookingAPI.cancelBooking(id);
+    // Await so the UI re-renders with status: 'cancelled' before returning
+    await get().fetchActiveBooking(id);
+  } catch (err) {
+    throw new Error(err.message); // Let the screen show the Alert
+  }
+},
 
   clearActiveBooking: async () => {
     await AsyncStorage.removeItem('activeBookingId');
