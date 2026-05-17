@@ -255,8 +255,28 @@ const useAppStore = create((set, get) => ({
   },
 
   // ── Active Booking Tracking ────────────────────────────────────────────────
+  // ── Active Booking Tracking ────────────────────────────────────────────────
   activeBookingId: null,
   activeBooking:   null,
+
+  // ── All Active Bookings (for Status tab list) ──────────────────────────────
+  activeBookings:        [],
+  activeBookingsLoading: false,
+
+  fetchActiveBookings: async () => {
+    try {
+      set({ activeBookingsLoading: true });
+      const data = await bookingAPI.getMyBookings();
+      const active = (data.bookings || []).filter(
+        (b) => !['completed', 'cancelled'].includes(b.status)
+      );
+      set({ activeBookings: active });
+    } catch (err) {
+      console.error('fetchActiveBookings error:', err.message);
+    } finally {
+      set({ activeBookingsLoading: false });
+    }
+  },
 
   setActiveBookingId: async (id) => {
     if (id) {
@@ -352,6 +372,7 @@ cancelActiveBooking: async () => {
     socket.on('booking_updated', (data) => {
       console.log('🔄 Booking update received:', data);
       get().fetchProjects();
+      get().fetchActiveBookings();
       if (get().activeBookingId === data.bookingId) {
         get().fetchActiveBooking(data.bookingId);
       }

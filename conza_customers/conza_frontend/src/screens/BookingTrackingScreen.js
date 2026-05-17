@@ -36,9 +36,9 @@ const BookingTrackingScreen = ({ navigation }) => {
   };
 
   const handleOK = async () => {
-  await clearActiveBooking();
-  navigation.navigate('Booking', { screen: 'BookingHome' });
-};
+    await clearActiveBooking();
+    navigation.navigate('StatusList'); // goes back to the list
+  };
 
   // ── No active booking ────────────────────────────────────────────────────
   if (!activeBookingId) {
