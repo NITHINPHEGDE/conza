@@ -29,7 +29,6 @@ import {
   stopAlertSound,
   registerPushToken,
 } from '../utils/notificationService';
-import { setupCallChannel } from '../utils/callNotification';
 import * as Notifications from 'expo-notifications';
 
 const Stack = createNativeStackNavigator();
@@ -64,7 +63,7 @@ const FloatingJobButton = React.memo(({ navigation }) => {
   const statusLabel =
     jobStatus === 'accepted'    ? '🚗 On the Way' :
     jobStatus === 'arrived'     ? '📍 Arrived'    :
-    jobStatus === 'in_progress' ? '⚒️ Working'    : 
+    jobStatus === 'in_progress' ? '⚒️ Working'    :
     jobStatus === 'cancelled'   ? '❌ Cancelled'  : 'View Status';
 
   return (
@@ -108,7 +107,7 @@ const MainTabs = ({ navigation }) => (
 
 const MainAppStack = () => (
   <Stack.Navigator screenOptions={STACK_OPTS}>
-    <Stack.Screen name="Tabs"           component={MainTabs}            />
+    <Stack.Screen name="Tabs"           component={MainTabs}             />
     <Stack.Screen name="RequestDetails" component={RequestDetailsScreen} options={CARD_OPTS} />
     <Stack.Screen name="ActiveJob"      component={ActiveJobScreen}      options={CARD_OPTS} />
   </Stack.Navigator>
@@ -132,42 +131,40 @@ const AppNavigator = () => {
 
   // ── One-time setup: permissions + notification channel ──────────────────
   useEffect(() => {
-  requestNotificationPermissions();
-  setupNotificationChannel();
-  setupCallChannel();
-  registerBackgroundFetch();
+    requestNotificationPermissions();
+    setupNotificationChannel();
+    registerBackgroundFetch();
 
-  const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-    stopAlertSound();
-    const data = response.notification.request.content.data;
-    if (data?.type === 'new_request') {
-      usePartnerStore.getState().fetchRequests();
-    }
-  });
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      stopAlertSound();
+      const data = response.notification.request.content.data;
+      if (data?.type === 'new_request') {
+        usePartnerStore.getState().fetchRequests();
+      }
+    });
 
-  return () => sub.remove();
-}, []);
+    return () => sub.remove();
+  }, []);
 
-// ── Save push token as soon as worker is confirmed logged in ──────────────
-useEffect(() => {
-  if (!initialRoute || initialRoute === 'Auth') return;
+  // ── Save push token as soon as worker is confirmed logged in ─────────────
+  useEffect(() => {
+    if (!initialRoute || initialRoute === 'Auth') return;
 
-  const savePushToken = async () => {
-    try {
-      console.log('[Push] Attempting to save push token after login...');
-      const token = await registerPushToken();
-      if (!token) return;
+    const savePushToken = async () => {
+      try {
+        console.log('[Push] Attempting to save push token after login...');
+        const token = await registerPushToken();
+        if (!token) return;
+        const { api } = require('../services/apiClient');
+        const result = await api.patch('/workers/push-token', { pushToken: token });
+        console.log('[Push] ✅ Token saved to backend:', result);
+      } catch (err) {
+        console.warn('[Push] Failed to save token:', err.message);
+      }
+    };
 
-      const { api } = require('../services/apiClient');
-      const result = await api.patch('/workers/push-token', { pushToken: token });
-      console.log('[Push] ✅ Token saved to backend:', result);
-    } catch (err) {
-      console.warn('[Push] Failed to save token:', err.message);
-    }
-  };
-
-  savePushToken();
-}, [initialRoute]);
+    savePushToken();
+  }, [initialRoute]);
 
   useEffect(() => {
     let mounted = true;
@@ -177,7 +174,6 @@ useEffect(() => {
         setWorker(worker);
         syncOnlineState(worker.isOnline || false);
 
-        // Recover active job — emit join_booking only after socket is connected
         AsyncStorage.getItem('activeJobId').then(id => {
           if (!id) return;
           setActiveJobId(id);
