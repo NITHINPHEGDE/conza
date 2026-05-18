@@ -45,7 +45,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
+      
       [
         "expo-audio",
         {
@@ -83,10 +83,7 @@
       ],
       "expo-background-task"
     ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    },
+    
     "extra": {
       "router": {},
       "eas": {
