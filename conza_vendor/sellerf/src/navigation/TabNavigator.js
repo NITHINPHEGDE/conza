@@ -3,13 +3,14 @@ import { View, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
-import HomeScreen       from '../screens/HomeScreen';
-import OrdersScreen     from '../screens/OrdersScreen';
-import InventoryScreen  from '../screens/InventoryScreen';
-import AddProductScreen from '../screens/AddProductScreen';
-import EarningsScreen   from '../screens/EarningsScreen';
-import ProfileScreen    from '../screens/ProfileScreen';
-import { colors }       from '../theme/colors';
+import HomeScreen        from '../screens/HomeScreen';
+import OrdersScreen      from '../screens/OrdersScreen';
+import OrderDetailScreen from '../screens/OrderDetailScreen';
+import InventoryScreen   from '../screens/InventoryScreen';
+import AddProductScreen  from '../screens/AddProductScreen';
+import EarningsScreen    from '../screens/EarningsScreen';
+import ProfileScreen     from '../screens/ProfileScreen';
+import { colors }        from '../theme/colors';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -37,7 +38,13 @@ const TabIcon = ({ name, focused }) => (
   </View>
 );
 
-// ── Inventory Stack ───────────────────────────────────────────────────────────
+const OrdersStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="OrdersList"   component={OrdersScreen}      />
+    <Stack.Screen name="OrderDetail"  component={OrderDetailScreen} />
+  </Stack.Navigator>
+);
+
 const InventoryStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="InventoryList" component={InventoryScreen}  />
@@ -45,7 +52,6 @@ const InventoryStack = () => (
   </Stack.Navigator>
 );
 
-// ── Tab Navigator ─────────────────────────────────────────────────────────────
 const TabNavigator = () => (
   <Tab.Navigator
     initialRouteName="Home"
@@ -60,7 +66,7 @@ const TabNavigator = () => (
     })}
   >
     <Tab.Screen name="Home"      component={HomeScreen}      options={{ title: 'Home'      }} />
-    <Tab.Screen name="Orders"    component={OrdersScreen}    options={{ title: 'Orders'    }} />
+    <Tab.Screen name="Orders"    component={OrdersStack}     options={{ title: 'Orders'    }} />
     <Tab.Screen name="Inventory" component={InventoryStack}  options={{ title: 'Inventory' }} />
     <Tab.Screen name="Earnings"  component={EarningsScreen}  options={{ title: 'Earnings'  }} />
     <Tab.Screen name="Profile"   component={ProfileScreen}   options={{ title: 'Profile'   }} />

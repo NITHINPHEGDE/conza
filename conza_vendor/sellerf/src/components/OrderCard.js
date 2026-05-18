@@ -16,8 +16,14 @@ const PAYMENT_CONFIG = {
 };
 
 const OrderCard = ({ order }) => {
-  const s  = STATUS_CONFIG[order.status]  || STATUS_CONFIG.pending;
+  const s  = STATUS_CONFIG[order.status]        || STATUS_CONFIG.pending;
   const p  = PAYMENT_CONFIG[order.paymentStatus] || PAYMENT_CONFIG.pending;
+  const displayAmount   = order.amount   || order.total        || 0;
+  const displayProduct  = order.product  || order.items?.[0]?.name || 'Item';
+  const displayQty      = order.quantity || order.items?.reduce((sum, i) => sum + i.qty, 0) || 0;
+  const displayLocation = order.location || order.customerAddress || 'N/A';
+  const displayDate     = order.date     || '';
+  const displayCustomer = order.customerName || '';
 
   return (
     <View style={styles.card}>
@@ -30,13 +36,13 @@ const OrderCard = ({ order }) => {
       <View style={styles.body}>
         {/* Row 1 — product + amount */}
         <View style={styles.row}>
-          <Text style={styles.product} numberOfLines={1}>{order.product}</Text>
-          <Text style={styles.amount}>₹{order.amount.toLocaleString('en-IN')}</Text>
+          <Text style={styles.product} numberOfLines={1}>{displayProduct}</Text>
+          <Text style={styles.amount}>₹{displayAmount.toLocaleString('en-IN')}</Text>
         </View>
 
         {/* Row 2 — customer + status */}
         <View style={styles.row}>
-          <Text style={styles.customer}>👤 {order.customerName}</Text>
+          <Text style={styles.customer}>👤 {displayCustomer}</Text>
           <View style={[styles.statusBadge, { backgroundColor: s.bg }]}>
             <Text style={[styles.statusText, { color: s.color }]}>{s.icon} {s.label}</Text>
           </View>
@@ -44,7 +50,7 @@ const OrderCard = ({ order }) => {
 
         {/* Row 3 — location + type tag */}
         <View style={styles.row}>
-          <Text style={styles.meta} numberOfLines={1}>📍 {order.location}</Text>
+          <Text style={styles.meta} numberOfLines={1}>📍 {displayLocation}</Text>
           <View style={[styles.typeTag, { backgroundColor: order.type === 'rental' ? colors.indigoSoft : colors.accentAmberSoft }]}>
             <Text style={[styles.typeText, { color: order.type === 'rental' ? colors.indigo : colors.accentAmber }]}>
               {order.type === 'rental' ? 'Rental' : 'Material'}
@@ -54,10 +60,10 @@ const OrderCard = ({ order }) => {
 
         {/* Row 4 — date + payment + qty */}
         <View style={styles.row}>
-          <Text style={styles.meta}>🕐 {order.date}</Text>
+          <Text style={styles.meta}>🕐 {displayDate}</Text>
           <View style={styles.rightMeta}>
             <Text style={[styles.payment, { color: p.color }]}>{p.label}</Text>
-            <Text style={styles.qty}>  ×{order.quantity}</Text>
+            <Text style={styles.qty}>  ×{displayQty}</Text>
           </View>
         </View>
 
