@@ -235,15 +235,16 @@ const useAppStore = create((set, get) => ({
           : b.bookingType === 'rental'   ? 'Equipment Rental'
           : 'Booking',
         status:    b.status.charAt(0).toUpperCase() + b.status.slice(1).replace('_', ' '),
-        progress:  b.status === 'completed' ? 100 : b.status === 'in_progress' ? 60 : b.status === 'confirmed' ? 30 : 10,
+        progress:  b.status === 'completed' ? 100 : b.status === 'in_progress' ? 60 : b.status === 'accepted' ? 40 : b.status === 'arrived' ? 70 : 10,
         location:  `${b.city}`,
         startDate: new Date(b.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
         eta:       '—',
         workers:   b.workers?.length || 0,
         statusColor:
-          b.status === 'completed'  ? '#6366F1' :
-          b.status === 'in_progress'? '#F97316' :
-          b.status === 'confirmed'  ? '#22C55E' : '#94A3B8',
+  b.status === 'completed'   ? '#6366F1' :
+  b.status === 'in_progress' ? '#F97316' :
+  b.status === 'arrived'     ? '#3B82F6' :
+  b.status === 'accepted'    ? '#22C55E' : '#94A3B8',
       }));
       set({ projects });
     } catch {

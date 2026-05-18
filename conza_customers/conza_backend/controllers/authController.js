@@ -102,8 +102,8 @@ const getMe = async (req, res) => {
     });
 
     const activeBookings = await require('../models/Booking').countDocuments({
-      user: req.user._id, status: { $in: ['pending', 'confirmed', 'in_progress'] },
-    });
+  user: req.user._id, status: { $in: ['pending', 'accepted', 'arrived', 'in_progress'] },
+});
 
     res.json({
       success: true,

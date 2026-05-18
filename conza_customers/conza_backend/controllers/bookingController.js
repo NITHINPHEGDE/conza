@@ -1,6 +1,29 @@
 const Booking = require('../models/Booking');
 const Worker  = require('../models/Worker');
 
+const sendPushNotification = async (pushToken, title, body, data = {}) => {
+  try {
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Accept':        'application/json',
+      },
+      body: JSON.stringify({
+        to:       pushToken,
+        title,
+        body,
+        data,
+        sound:    'default',
+        priority: 'high',
+        channelId: 'job-requests',
+      }),
+    });
+  } catch (err) {
+    console.warn('[Push] Failed to send notification:', err.message);
+  }
+};
+
 // ── POST /api/bookings ─────────────────────────────────────────────────────────
 const createBooking = async (req, res) => {
   try {
@@ -45,7 +68,20 @@ const createBooking = async (req, res) => {
       description:   description || '',
     });
     console.log('✅ Booking created:', booking._id, 'Workers:', booking.workers);
-
+    // Send push notification to each worker
+if (bookingType === 'labour' && workerIds && workerIds.length > 0) {
+  const workers = await Worker.find({ _id: { $in: workerIds } }).select('pushToken fullName');
+  for (const worker of workers) {
+    if (worker.pushToken) {
+      await sendPushNotification(
+        worker.pushToken,
+        '🔧 New Job Request!',
+        `New ${category || 'labour'} job in ${city}. ₹${total}`,
+        { bookingId: booking._id.toString(), type: 'new_request' }
+      );
+    }
+  }
+}
     // If labour booking, bump totalJobs on each worker
     if (bookingType === 'labour' && workerIds && workerIds.length > 0) {
       await Worker.updateMany(

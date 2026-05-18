@@ -40,6 +40,7 @@ const workerSchema = new mongoose.Schema(
     },
 
     // ── Stats ──────────────────────────────────────────────────────────────
+    pushToken: { type: String, default: null },
     rating:    { type: Number, default: 5.0,  min: 0, max: 5 },
     totalJobs: { type: Number, default: 0 },
     memberSince: {

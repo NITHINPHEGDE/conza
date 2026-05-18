@@ -1,20 +1,36 @@
-// src/store/usePartnerStore.js
 import { create } from 'zustand';
 import { toggleOnlineAPI } from '../services/workerService';
 import { startLocationTracking, stopLocationTracking } from '../services/locationService';
 import { socket, connectSocket } from '../utils/socket';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  showJobNotification,
+  scheduleJobNotification,
+  startAlertSound,
+  stopAlertSound,
+ registerPushToken,} from '../utils/notificationService';
+import { scheduleLocalAlert, cancelLocalAlert } from '../utils/scheduledJobAlerts';
 
 const usePartnerStore = create((set, get) => ({
   // ── Auth / Profile ─────────────────────────────────────────────────────
   worker: null,          // populated after login / getMe
 
-  setWorker: (worker) => {
+ setWorker: (worker) => {
   set({ worker });
   if (worker) {
     connectSocket();
-    // Small delay ensures socket is connected before registering handlers
     setTimeout(() => get().initSocketHandlers(), 300);
+
+    // Register push token and save to backend
+    registerPushToken().then(async (token) => {
+      if (!token) return;
+      try {
+        const { api } = require('../services/apiClient');
+        await api.patch('/workers/push-token', { pushToken: token });
+      } catch (err) {
+        console.warn('[Push] Could not save token:', err.message);
+      }
+    });
   }
 },
 
@@ -65,61 +81,87 @@ const usePartnerStore = create((set, get) => ({
   requests: [],
   
   fetchRequests: async () => {
-    try {
-      const { api } = require('../services/apiClient');
-      const data = await api.get('/bookings/requests');
-      if (data.success) {
-        // Map backend booking to the shape the UI expects
-        const mapped = data.requests.map(r => {
-          let dateStr = 'Immediate';
-          if (!r.isImmediate && r.scheduledDate) {
-            try {
-              dateStr = new Date(r.scheduledDate).toLocaleString('en-IN', { 
-                day: 'numeric', 
-                month: 'short', 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              });
-            } catch (e) {
-              dateStr = 'Scheduled';
-            }
+  try {
+    const { api } = require('../services/apiClient');
+    const data = await api.get('/bookings/requests');
+    if (data.success) {
+      const previousIds = new Set(get().requests.map(r => r.id?.toString()));
+
+      const mapped = data.requests.map(r => {
+        let dateStr = 'Immediate';
+        if (!r.isImmediate && r.scheduledDate) {
+          try {
+            dateStr = new Date(r.scheduledDate).toLocaleString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+          } catch (e) {
+            dateStr = 'Scheduled';
           }
+        }
 
-          // Construct full address string
-          const addrParts = [
-            r.houseNumber ? `No. ${r.houseNumber}` : '',
-            r.houseName ? `${r.houseName}` : '',
-            r.street ? `${r.street}` : '',
-            r.area ? `${r.area}` : '',
-            r.city ? `${r.city}` : '',
-            r.pincode ? `(${r.pincode})` : ''
-          ].filter(p => p && p.trim().length > 0);
-          
-          const fullAddress = addrParts.join(', ');
+        const addrParts = [
+          r.houseNumber ? `No. ${r.houseNumber}` : '',
+          r.houseName   ? `${r.houseName}`        : '',
+          r.street      ? `${r.street}`           : '',
+          r.area        ? `${r.area}`              : '',
+          r.city        ? `${r.city}`              : '',
+          r.pincode     ? `(${r.pincode})`         : '',
+        ].filter(p => p && p.trim().length > 0);
 
-          return {
-            ...r,
-            id:               r._id,
-            userName:         r.user?.fullName || r.user?.name || 'Client',
-            phone:            r.user?.phone    || 'N/A',
-            location:         r.city ? `${r.city}, ${r.area || ''}` : 'Location N/A',
-            address:          fullAddress || r.address || 'Address not provided',
-            area:             r.area || '',
-            distance:         r.distance || '2.5 km',
-            timeAway:         r.timeAway || 'Nearby',
-            estimatedAmount:  r.total || r.estimatedAmount || 0,
-            service:          r.category || r.service || 'Service',
-            subService:       r.subService || 'General',
-            description:      r.description || r.notes || 'No description provided',
-            scheduledTime:    dateStr,
-          };
+        const fullAddress = addrParts.join(', ');
+
+        return {
+          ...r,
+          id:              r._id,
+          userName:        r.user?.fullName || r.user?.name || 'Client',
+          phone:           r.user?.phone    || 'N/A',
+          location:        r.city ? `${r.city}, ${r.area || ''}` : 'Location N/A',
+          address:         fullAddress || r.address || 'Address not provided',
+          area:            r.area  || '',
+          distance:        r.distance  || '2.5 km',
+          timeAway:        r.timeAway  || 'Nearby',
+          estimatedAmount: r.total || r.estimatedAmount || 0,
+          service:         r.category  || r.service || 'Service',
+          subService:      r.subService || 'General',
+          description:     r.description || r.notes || 'No description provided',
+          scheduledTime:   dateStr,
+          // Keep raw scheduledDate for timer scheduling
+          scheduledDate:   r.scheduledDate || null,
+          isImmediate:     r.isImmediate !== false,
+        };
+      });
+
+      set({ requests: mapped });
+
+      // ── Handle NEW requests that weren't in the previous list ────────────
+      const workerIsOnline = get().isOnline;
+      if (workerIsOnline) {
+        mapped.forEach(async (req) => {
+          const isNew = !previousIds.has(req.id?.toString());
+          if (!isNew) return;
+
+          if (req.isImmediate) {
+            // Immediate: notify + start ringing now
+            await showJobNotification(req);
+            await startAlertSound();
+          } else {
+            // Scheduled: send notification 45 min before + set local timer for ringing
+            await scheduleJobNotification(req);
+            scheduleLocalAlert(req, async (scheduledReq) => {
+              await showJobNotification(scheduledReq);
+              await startAlertSound();
+            });
+          }
         });
-        set({ requests: mapped });
       }
-    } catch (err) {
-      console.error('[Store] fetchRequests failed:', err.message);
     }
-  },
+  } catch (err) {
+    console.error('[Store] fetchRequests failed:', err.message);
+  }
+},
 
   initSocketHandlers: () => {
     socket.off('booking_updated');
@@ -152,23 +194,27 @@ const usePartnerStore = create((set, get) => ({
   },
 
   updateRequestStatus: async (requestId, status) => {
-    try {
-      const { api } = require('../services/apiClient');
-      await api.patch(`/bookings/${requestId}/status`, { status });
-      
-      if (status === 'accepted') {
-        await get().setActiveJobId(requestId);
-      }
-      
-      if (status === 'cancelled' && get().activeJobId === requestId) {
-        await get().setActiveJobId(null);
-      }
+  try {
+    const { api } = require('../services/apiClient');
+    await api.patch(`/bookings/${requestId}/status`, { status });
 
-      await get().fetchRequests();
-    } catch (err) {
-      console.error('[Store] updateRequestStatus failed:', err.message);
+    // Stop ringing whenever worker takes any action on a request
+    await stopAlertSound();
+    cancelLocalAlert(requestId);
+
+    if (status === 'accepted') {
+      await get().setActiveJobId(requestId);
     }
-  },
+
+    if (status === 'cancelled' && get().activeJobId === requestId) {
+      await get().setActiveJobId(null);
+    }
+
+    await get().fetchRequests();
+  } catch (err) {
+    console.error('[Store] updateRequestStatus failed:', err.message);
+  }
+},
 
   setRequests: (requests) => set({ requests }),
 
@@ -241,38 +287,42 @@ const usePartnerStore = create((set, get) => ({
   },
 
   completeJob: async () => {
-    const { activeJob, updateRequestStatus, todaysJobs, todaysEarnings, history, requests } = get();
-    if (!activeJob) return;
+  const { activeJob, updateRequestStatus, todaysJobs, todaysEarnings, history, requests } = get();
+  if (!activeJob) return;
 
-    await updateRequestStatus(activeJob.id, 'completed');
-    
-    const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-    
-    const completedEntry = {
-      id:         `hist_${Date.now()}`,
-      userName:   activeJob.userName,
-      location:   activeJob.location,
-      area:       activeJob.area,
-      distance:   activeJob.distance,
-      timeAway:   activeJob.timeAway,
-      amount:     activeJob.estimatedAmount,
-      service:    activeJob.service,
-      subService: activeJob.subService,
-      status:     'completed',
-      checkIn:    get().checkInTime,
-      checkOut:   timeStr,
-      date:       'Today',
-    };
+  await updateRequestStatus(activeJob.id, 'completed');
 
-    set({
-      jobStatus:       'completed',
-      checkOutTime:    timeStr,
-      todaysJobs:      todaysJobs + 1,
-      todaysEarnings:  todaysEarnings + activeJob.estimatedAmount,
-      history:         [completedEntry, ...history],
-      requests:        requests.filter((r) => r.id !== activeJob.id),
-    });
-  },
+  const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
+  const completedEntry = {
+    id:         `hist_${Date.now()}`,
+    userName:   activeJob.userName,
+    location:   activeJob.location,
+    area:       activeJob.area,
+    distance:   activeJob.distance,
+    timeAway:   activeJob.timeAway,
+    amount:     activeJob.estimatedAmount,
+    service:    activeJob.service,
+    subService: activeJob.subService,
+    status:     'completed',
+    checkIn:    get().checkInTime,
+    checkOut:   timeStr,
+    date:       'Today',
+  };
+
+  set({
+    jobStatus:       'completed',
+    checkOutTime:    timeStr,
+    todaysJobs:      todaysJobs + 1,
+    todaysEarnings:  todaysEarnings + activeJob.estimatedAmount,
+    history:         [completedEntry, ...history],
+    requests:        requests.filter((r) => r.id !== activeJob.id),
+  });
+
+  // Clear persisted active job id so it doesn't reload on app restart
+  await AsyncStorage.removeItem('activeJobId');
+  set({ activeJobId: null });
+},
 
   resetActiveJob: () => {
     set({

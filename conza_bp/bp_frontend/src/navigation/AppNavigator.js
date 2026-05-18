@@ -6,6 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerBackgroundFetch } from '../utils/backgroundTask';
 
 import RoleSelectionScreen  from '../screens/RoleSelectionScreen';
 import LabourHomeScreen     from '../screens/LabourHomeScreen';
@@ -22,6 +23,12 @@ import usePartnerStore, { selectActiveJob, selectJobStatus } from '../store/useP
 import { getLoggedInUser } from '../services/authService';
 import { socket } from '../utils/socket';
 import { colors } from '../theme/colors';
+import {
+  requestNotificationPermissions,
+  setupNotificationChannel,
+  stopAlertSound,
+} from '../utils/notificationService';
+import * as Notifications from 'expo-notifications';
 
 const Stack = createNativeStackNavigator();
 const Tab   = createBottomTabNavigator();
@@ -121,7 +128,26 @@ const AppNavigator = () => {
   const syncOnlineState = usePartnerStore((s) => s.syncOnlineState);
   const setActiveJobId  = usePartnerStore((s) => s.setActiveJobId);
 
- useEffect(() => {
+  // ── One-time setup: permissions + notification channel ──────────────────
+  useEffect(() => {
+    requestNotificationPermissions();
+    setupNotificationChannel();
+    registerBackgroundFetch();
+
+    // Stop ringing if the worker taps the notification to open the app
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+  stopAlertSound();
+  const data = response.notification.request.content.data;
+  if (data?.type === 'new_request') {
+    // Fetch fresh requests when worker taps notification
+    usePartnerStore.getState().fetchRequests();
+  }
+});
+
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
     getLoggedInUser().then((worker) => {
       if (!mounted) return;

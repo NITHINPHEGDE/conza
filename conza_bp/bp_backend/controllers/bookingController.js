@@ -60,9 +60,9 @@ const updateBookingStatus = async (req, res) => {
       booking.acceptedAt = new Date();
     }
     
-    if (status === 'in_progress' && !booking.checkInTime) {
-      booking.checkInTime = new Date();
-    } 
+    if (status === 'arrived' && !booking.checkInTime) {
+  booking.checkInTime = new Date();
+}
     
     if (status === 'completed' && !booking.checkOutTime) {
       booking.checkOutTime = new Date();
