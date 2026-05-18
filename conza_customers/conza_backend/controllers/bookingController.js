@@ -10,13 +10,15 @@ const sendPushNotification = async (pushToken, title, body, data = {}) => {
         'Accept':       'application/json',
       },
       body: JSON.stringify({
-        to:        pushToken,
+        to:           pushToken,
         title,
         body,
-        data,
-        sound:     'alert.mp3',
-        priority:  'high',
-        channelId: 'job-requests',
+        data:         { ...data, showFullScreen: 'true' },
+        sound:        'alert',
+        priority:     'high',
+        channelId:    'job-alert',
+        ttl:          300,
+        expiration:   300,
       }),
     });
     const result = await res.json();

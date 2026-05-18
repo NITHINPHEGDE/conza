@@ -27,7 +27,9 @@ import {
   requestNotificationPermissions,
   setupNotificationChannel,
   stopAlertSound,
+  registerPushToken,
 } from '../utils/notificationService';
+import { setupCallChannel } from '../utils/callNotification';
 import * as Notifications from 'expo-notifications';
 
 const Stack = createNativeStackNavigator();
@@ -130,22 +132,42 @@ const AppNavigator = () => {
 
   // ── One-time setup: permissions + notification channel ──────────────────
   useEffect(() => {
-    requestNotificationPermissions();
-    setupNotificationChannel();
-    registerBackgroundFetch();
+  requestNotificationPermissions();
+  setupNotificationChannel();
+  setupCallChannel();
+  registerBackgroundFetch();
 
-    // Stop ringing if the worker taps the notification to open the app
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-  stopAlertSound();
-  const data = response.notification.request.content.data;
-  if (data?.type === 'new_request') {
-    // Fetch fresh requests when worker taps notification
-    usePartnerStore.getState().fetchRequests();
-  }
-});
+  const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+    stopAlertSound();
+    const data = response.notification.request.content.data;
+    if (data?.type === 'new_request') {
+      usePartnerStore.getState().fetchRequests();
+    }
+  });
 
-    return () => sub.remove();
-  }, []);
+  return () => sub.remove();
+}, []);
+
+// ── Save push token as soon as worker is confirmed logged in ──────────────
+useEffect(() => {
+  if (!initialRoute || initialRoute === 'Auth') return;
+
+  const savePushToken = async () => {
+    try {
+      console.log('[Push] Attempting to save push token after login...');
+      const token = await registerPushToken();
+      if (!token) return;
+
+      const { api } = require('../services/apiClient');
+      const result = await api.patch('/workers/push-token', { pushToken: token });
+      console.log('[Push] ✅ Token saved to backend:', result);
+    } catch (err) {
+      console.warn('[Push] Failed to save token:', err.message);
+    }
+  };
+
+  savePushToken();
+}, [initialRoute]);
 
   useEffect(() => {
     let mounted = true;

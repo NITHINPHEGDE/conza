@@ -15,12 +15,16 @@ router.patch('/profile-image',  upload.single('image'), updateProfileImage);
 router.patch('/push-token', async (req, res) => {
   try {
     const { pushToken } = req.body;
+    console.log('[PushToken] Saving token for worker:', req.worker._id, 'token:', pushToken);
     await require('../models/Worker').findByIdAndUpdate(
       req.worker._id,
-      { pushToken }
+      { pushToken },
+      { new: true }
     );
+    console.log('[PushToken] ✅ Saved successfully');
     res.json({ success: true });
   } catch (err) {
+    console.error('[PushToken] ❌ Failed:', err.message);
     res.status(500).json({ success: false, message: err.message });
   }
 });

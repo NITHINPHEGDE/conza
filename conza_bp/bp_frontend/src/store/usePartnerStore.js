@@ -10,6 +10,7 @@ import {
   stopAlertSound,
  registerPushToken,} from '../utils/notificationService';
 import { scheduleLocalAlert, cancelLocalAlert } from '../utils/scheduledJobAlerts';
+import { showIncomingJobAlert, cancelJobAlert } from '../utils/callNotification';
 
 const usePartnerStore = create((set, get) => ({
   // ── Auth / Profile ─────────────────────────────────────────────────────
@@ -21,16 +22,22 @@ const usePartnerStore = create((set, get) => ({
     connectSocket();
     setTimeout(() => get().initSocketHandlers(), 300);
 
-    // Register push token and save to backend
-    registerPushToken().then(async (token) => {
-      if (!token) return;
+    // Delay token registration to ensure permissions are ready
+    setTimeout(async () => {
       try {
+        const token = await registerPushToken();
+        if (!token) {
+          console.warn('[Push] No token returned from registerPushToken');
+          return;
+        }
+        console.log('[Push] Saving token to backend:', token);
         const { api } = require('../services/apiClient');
-        await api.patch('/workers/push-token', { pushToken: token });
+        const result = await api.patch('/workers/push-token', { pushToken: token });
+        console.log('[Push] Token save result:', result);
       } catch (err) {
         console.warn('[Push] Could not save token:', err.message);
       }
-    });
+    }, 2000);
   }
 },
 
@@ -145,7 +152,7 @@ const usePartnerStore = create((set, get) => ({
 
           if (req.isImmediate) {
             // Immediate: notify + start ringing now
-            await showJobNotification(req);
+            await showIncomingJobAlert(req);
             await startAlertSound();
           } else {
             // Scheduled: send notification 45 min before + set local timer for ringing
@@ -200,6 +207,7 @@ const usePartnerStore = create((set, get) => ({
 
     // Stop ringing whenever worker takes any action on a request
     await stopAlertSound();
+    await cancelJobAlert();
     cancelLocalAlert(requestId);
 
     if (status === 'accepted') {
