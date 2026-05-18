@@ -68,7 +68,19 @@ const createBooking = async (req, res) => {
       description:   description || '',
     });
     console.log('✅ Booking created:', booking._id, 'Workers:', booking.workers);
-    // Send push notification to each worker
+
+// Emit socket event to all connected BP workers immediately
+try {
+  const { getIO } = require('../services/socketService');
+  const io = getIO();
+  io.emit('booking_updated', {
+    operationType: 'insert',
+    bookingId:     booking._id.toString(),
+    status:        'pending',
+  });
+} catch (_) {}
+
+// Send push notification to each worker    // Send push notification to each worker
 if (bookingType === 'labour' && workerIds && workerIds.length > 0) {
   const workers = await Worker.find({ _id: { $in: workerIds } }).select('pushToken fullName');
   for (const worker of workers) {
