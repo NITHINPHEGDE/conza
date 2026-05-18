@@ -11,11 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": [
-          "audio",
-          "fetch",
-          "remote-notification"
-        ]
+        "UIBackgroundModes": ["audio", "fetch", "remote-notification"]
       }
     },
     "android": {
@@ -45,7 +41,6 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      
       [
         "expo-audio",
         {
@@ -57,9 +52,7 @@
         {
           "icon": "./assets/images/icon.png",
           "color": "#F0A500",
-          "sounds": [
-            "./assets/alert.mp3"
-          ]
+          "sounds": ["./assets/alert.mp3"]
         }
       ],
       [
@@ -83,9 +76,7 @@
       ],
       "expo-background-task"
     ],
-    
     "extra": {
-      "router": {},
       "eas": {
         "projectId": "4c31a52e-a761-4b69-b6d0-0e460e97cb0b"
       }

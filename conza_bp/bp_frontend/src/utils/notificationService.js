@@ -8,26 +8,12 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldShowList:   true,
-    shouldPlaySound:  false,
+    shouldPlaySound:  true,
     shouldSetBadge:   true,
   }),
 });
 
 let player = null;
-
-export const registerPushToken = async () => {
-  try {
-    const { data: token } = await Notifications.getExpoPushTokenAsync({
-      projectId: Constants.expoConfig.extra.eas.projectId,
-    });
-    console.log('[Push] Expo push token:', token);
-    return token;
-  } catch (err) {
-    console.warn('[Push] Could not get push token:', err.message);
-    return null;
-  }
-};
-
 
 export const requestNotificationPermissions = async () => {
   const { status: existing } = await Notifications.getPermissionsAsync();
@@ -36,14 +22,40 @@ export const requestNotificationPermissions = async () => {
   return status === 'granted';
 };
 
+export const registerPushToken = async () => {
+  try {
+    const granted = await requestNotificationPermissions();
+    if (!granted) {
+      console.warn('[Push] Notification permission not granted');
+      return null;
+    }
+
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      Constants.easConfig?.projectId;
+
+    if (!projectId) {
+      console.warn('[Push] No projectId found in app.json');
+      return null;
+    }
+
+    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+    console.log('[Push] ✅ Expo push token:', token);
+    return token;
+  } catch (err) {
+    console.warn('[Push] Could not get push token:', err.message);
+    return null;
+  }
+};
+
 export const setupNotificationChannel = async () => {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('job-requests', {
-      name: 'Job Requests',
-      importance: Notifications.AndroidImportance.MAX,
+      name:             'Job Requests',
+      importance:       Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      sound: null,
-      lightColor: '#F0A500',
+      sound:            'alert.mp3',
+      lightColor:       '#F0A500',
     });
   }
 };
@@ -53,7 +65,8 @@ export const showJobNotification = async (request) => {
     content: {
       title: '🔧 New Job Request!',
       body:  `${request.userName} needs ${request.service} at ${request.location}. ₹${request.estimatedAmount}`,
-      data:  { requestId: request.id, type: 'immediate' },
+      data:  { requestId: request.id, type: 'new_request' },
+      sound: 'alert.mp3',
       ...(Platform.OS === 'android' && { channelId: 'job-requests' }),
     },
     trigger: null,
@@ -70,6 +83,7 @@ export const scheduleJobNotification = async (request) => {
       title: '⏰ Upcoming Job in 45 mins!',
       body:  `${request.userName} — ${request.service} at ${request.location}. ₹${request.estimatedAmount}`,
       data:  { requestId: request.id, type: 'scheduled' },
+      sound: 'alert.mp3',
       ...(Platform.OS === 'android' && { channelId: 'job-requests' }),
     },
     trigger: { date: fireAt },
