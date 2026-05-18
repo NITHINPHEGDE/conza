@@ -87,3 +87,5 @@ Thumbs.db
 
 # Local properties
 android/local.properties
+
+google-services.json
