@@ -13,12 +13,13 @@ const sendPushNotification = async (pushToken, title, body, data = {}) => {
         to:           pushToken,
         title,
         body,
-        data:         { ...data, showFullScreen: 'true' },
-        sound:        'alert',
+        data:         { ...data, showFullScreen: 'true', type: 'new_request' },
+        sound:        'alert.mp3',
         priority:     'high',
         channelId:    'job-alert',
         ttl:          300,
         expiration:   300,
+        _displayInForeground: true,
       }),
     });
     const result = await res.json();

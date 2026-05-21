@@ -50,12 +50,26 @@ export const registerPushToken = async () => {
 
 export const setupNotificationChannel = async () => {
   if (Platform.OS === 'android') {
+    // Main job-requests channel
     await Notifications.setNotificationChannelAsync('job-requests', {
       name:             'Job Requests',
       importance:       Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       sound:            'alert.mp3',
       lightColor:       '#F0A500',
+      bypassDnd:        true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    });
+
+    // Alias channel used by CS backend push payload (channelId: 'job-alert')
+    await Notifications.setNotificationChannelAsync('job-alert', {
+      name:             'Job Alert',
+      importance:       Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      sound:            'alert.mp3',
+      lightColor:       '#F0A500',
+      bypassDnd:        true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
   }
 };

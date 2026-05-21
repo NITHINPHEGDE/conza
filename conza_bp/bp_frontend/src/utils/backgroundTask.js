@@ -64,7 +64,7 @@ export const registerBackgroundFetch = async () => {
     const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
     if (!isRegistered) {
       await BackgroundTask.registerTaskAsync(BACKGROUND_FETCH_TASK, {
-        minimumInterval: 60,
+        minimumInterval: 15 * 60, // 15 min — Android OS minimum, don't go lower
         stopOnTerminate: false,
         startOnBoot:     true,
       });

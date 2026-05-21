@@ -29,6 +29,7 @@ import {
   stopAlertSound,
   registerPushToken,
 } from '../utils/notificationService';
+import { requestBatteryOptimizationExemption } from '../utils/batteryOptimization';
 import * as Notifications from 'expo-notifications';
 
 const Stack = createNativeStackNavigator();
@@ -130,10 +131,11 @@ const AppNavigator = () => {
   const setActiveJobId  = usePartnerStore((s) => s.setActiveJobId);
 
   // ── One-time setup: permissions + notification channel ──────────────────
-  useEffect(() => {
+useEffect(() => {
     requestNotificationPermissions();
     setupNotificationChannel();
     registerBackgroundFetch();
+    requestBatteryOptimizationExemption();
 
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       stopAlertSound();
