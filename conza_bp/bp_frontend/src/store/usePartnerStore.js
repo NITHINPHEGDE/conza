@@ -184,10 +184,10 @@ const usePartnerStore = create((set, get) => ({
     });
   },
 
-  updateRequestStatus: async (requestId, status) => {
+  updateRequestStatus: async (requestId, status, extraData = {}) => {
     try {
       const { api } = require('../services/apiClient');
-      await api.patch(`/bookings/${requestId}/status`, { status });
+      await api.patch(`/bookings/${requestId}/status`, { status, ...extraData });
 
       await stopAlertSound();
       stopNativeAlert();
@@ -223,16 +223,18 @@ const usePartnerStore = create((set, get) => ({
             : '—';
           return {
             ...h,
-            id:         h._id,
-            userName:   h.user?.fullName || 'Client',
-            location:   h.city ? `${h.city}, ${h.area || ''}` : 'Location N/A',
-            amount:     h.total || 0,
-            service:    h.category || 'Service',
-            subService: h.subService || 'General',
-            checkIn:    fmtTime(h.checkInTime),
-            checkOut:   fmtTime(h.checkOutTime),
-            date:       new Date(h.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
-            distance:   h.distance || '—',
+            id:            h._id,
+            userName:      h.user?.fullName || 'Client',
+            location:      h.city ? `${h.city}, ${h.area || ''}` : 'Location N/A',
+            amount:        h.total || 0,
+            service:       h.category || 'Service',
+            subService:    h.subService || 'General',
+            checkIn:       fmtTime(h.checkInTime),
+            checkOut:      fmtTime(h.checkOutTime),
+            date:          new Date(h.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+            distance:      h.distance || '—',
+            paymentMethod: h.paymentMethod || 'cod',
+            status:        h.status,
           };
         });
         set({ history: mapped });
@@ -274,27 +276,29 @@ const usePartnerStore = create((set, get) => ({
     set({ jobStatus: 'in_progress' });
   },
 
-  completeJob: async () => {
+  completeJob: async (paymentMethod = 'cod') => {
     const { activeJob, updateRequestStatus, todaysJobs, todaysEarnings, history, requests } = get();
     if (!activeJob) return;
 
-    await updateRequestStatus(activeJob.id, 'completed');
+    await updateRequestStatus(activeJob.id, 'completed', { paymentMethod });
 
     const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    // paymentMethod is set by setLastPaymentMethod right after this completes
     const completedEntry = {
-      id:         `hist_${Date.now()}`,
-      userName:   activeJob.userName,
-      location:   activeJob.location,
-      area:       activeJob.area,
-      distance:   activeJob.distance,
-      timeAway:   activeJob.timeAway,
-      amount:     activeJob.estimatedAmount,
-      service:    activeJob.service,
-      subService: activeJob.subService,
-      status:     'completed',
-      checkIn:    get().checkInTime,
-      checkOut:   timeStr,
-      date:       'Today',
+      id:            `hist_${Date.now()}`,
+      userName:      activeJob.userName,
+      location:      activeJob.location,
+      area:          activeJob.area,
+      distance:      activeJob.distance,
+      timeAway:      activeJob.timeAway,
+      amount:        activeJob.estimatedAmount,
+      service:       activeJob.service,
+      subService:    activeJob.subService,
+      status:        'completed',
+      checkIn:       get().checkInTime,
+      checkOut:      timeStr,
+      date:          'Today',
+      paymentMethod: paymentMethod,
     };
 
     set({
@@ -310,13 +314,18 @@ const usePartnerStore = create((set, get) => ({
     set({ activeJobId: null });
   },
 
+lastPaymentMethod: null,
+
+  setLastPaymentMethod: (method) => set({ lastPaymentMethod: method }),
+
   resetActiveJob: () => {
     set({
-      activeJob:    null,
-      activeJobId:  null,
-      jobStatus:    null,
-      checkInTime:  null,
-      checkOutTime: null,
+      activeJob:         null,
+      activeJobId:       null,
+      jobStatus:         null,
+      checkInTime:       null,
+      checkOutTime:      null,
+      lastPaymentMethod: null,
     });
     AsyncStorage.removeItem('activeJobId');
   },

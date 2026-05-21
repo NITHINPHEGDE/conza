@@ -60,13 +60,24 @@ const MapPlaceholder = React.memo(({ onNavigate, address, latitude, longitude })
 const CompletionModal = React.memo(({ visible, amount, onFinished }) => {
   const [showQR, setShowQR]           = useState(false);
   const [paymentDone, setPaymentDone] = useState(false);
+  const [paymentType, setPaymentType] = useState('cash'); // 'cash' | 'online'
 
   const handleCash = useCallback(() => {
+    setPaymentType('cash');
     setShowQR(false);
     setPaymentDone(true);
     setTimeout(() => {
       setPaymentDone(false);
-      onFinished();
+      onFinished('cash');
+    }, 1800);
+  }, [onFinished]);
+
+  const handleQRDone = useCallback(() => {
+    setPaymentType('online');
+    setPaymentDone(true);
+    setTimeout(() => {
+      setPaymentDone(false);
+      onFinished('online');
     }, 1800);
   }, [onFinished]);
 
@@ -87,7 +98,9 @@ const CompletionModal = React.memo(({ visible, amount, onFinished }) => {
               <Text style={styles.modalEmoji}>🎉</Text>
               <Text style={styles.modalTitle}>Money Received!</Text>
               <Text style={styles.modalAmount}>+₹{amount}</Text>
-              <Text style={styles.modalSub}>Added to today's earnings</Text>
+              <Text style={styles.modalSub}>
+                {paymentType === 'online' ? '📱 Online · Added to Online Earned' : '💵 Cash · Commission due to Conza'}
+              </Text>
             </>
           ) : !showQR ? (
             <>
@@ -119,7 +132,7 @@ const CompletionModal = React.memo(({ visible, amount, onFinished }) => {
                 </View>
               </View>
               <Text style={styles.qrHint}>Ask customer to scan this code</Text>
-              <TouchableOpacity onPress={handleCash} activeOpacity={0.85} style={styles.fullWidth}>
+              <TouchableOpacity onPress={handleQRDone} activeOpacity={0.85} style={styles.fullWidth}>
                 <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} start={GRAD_START} end={GRAD_END} style={styles.modalBtn}>
                   <Text style={styles.modalBtnText}>✓  Payment Done</Text>
                 </LinearGradient>
@@ -163,15 +176,15 @@ const ActiveJobScreen = ({ navigation }) => {
   }, [jobStatus]);
 
   const handleWorkDone = useCallback(() => {
-    completeJob();
     setShowModal(true);
-  }, [completeJob]);
+  }, []);
 
-  const handleFinished = useCallback(() => {
+  const handleFinished = useCallback(async (paymentType) => {
     setShowModal(false);
+    await completeJob(paymentType === 'online' ? 'upi' : 'cod');
     resetActiveJob();
     navigation.navigate('Tabs', { screen: 'Home' });
-  }, [resetActiveJob, navigation]);
+  }, [completeJob, resetActiveJob, navigation]);
 
   // ── Navigate button — opens Google Maps ──────────────────────────────────
   const handleNavigate = useCallback(() => {

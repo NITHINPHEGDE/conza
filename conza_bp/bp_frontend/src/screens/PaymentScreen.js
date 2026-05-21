@@ -1,108 +1,59 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  StatusBar,
-  Modal,
-  TextInput,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView,
+  StatusBar, Modal, TextInput, RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
+import usePartnerStore, { selectHistory, selectFetchHistory } from '../store/usePartnerStore';
 
 const COMMISSION_RATE = 0.03;
-
-const PAYMENT_HISTORY = [
-  {
-    id: 'p1',
-    type: 'by_conza',
-    label: 'Payment by Conza',
-    amount: 850,
-    commission: 25.5,
-    date: 'Today',
-    time: '12:45 PM',
-    customer: 'Priya K',
-    service: 'Water Tank Repair',
-    method: 'Online',
-  },
-  {
-    id: 'p2',
-    type: 'to_conza',
-    label: 'Commission to Conza',
-    amount: 700,
-    commission: 21,
-    date: 'Yesterday',
-    time: '09:50 AM',
-    customer: 'Rahul D',
-    service: 'Pipe Fitting',
-    method: 'Cash',
-  },
-  {
-    id: 'p3',
-    type: 'by_conza',
-    label: 'Payment by Conza',
-    amount: 1100,
-    commission: 33,
-    date: '5 days ago',
-    time: '05:35 PM',
-    customer: 'Ajay V',
-    service: 'Full Bathroom Fix',
-    method: 'Online',
-  },
-  {
-    id: 'p4',
-    type: 'to_conza',
-    label: 'Commission to Conza',
-    amount: 600,
-    commission: 18,
-    date: '6 days ago',
-    time: '03:10 PM',
-    customer: 'Suresh M',
-    service: 'Leak Repair',
-    method: 'Cash',
-  },
-];
-
 const PAYMENT_OPTIONS = ['UPI', 'Net Banking', 'Debit Card', 'Wallet'];
 
 // ── Detail Modal ──────────────────────────────────────────────────────────────
 const DetailModal = ({ visible, item, onClose }) => {
   if (!item) return null;
-  const isByConza = item.type === 'by_conza';
+  const commission = parseFloat((item.amount * COMMISSION_RATE).toFixed(2));
+  const net        = parseFloat((item.amount - commission).toFixed(2));
+  const isCash     = item.paymentMethod === 'cod';
+
   return (
     <Modal visible={visible} transparent animationType="fade">
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.detailCard}>
-          <View style={[styles.detailBadge, isByConza ? styles.detailBadgeGreen : styles.detailBadgeRed]}>
-            <Text style={styles.detailBadgeText}>{isByConza ? '📥 Received' : '📤 Paid'}</Text>
+          <View style={[styles.detailBadge, isCash ? styles.detailBadgeRed : styles.detailBadgeGreen]}>
+            <Text style={styles.detailBadgeText}>{isCash ? '💵 Cash' : '📥 Online'}</Text>
           </View>
-          <Text style={styles.detailCustomer}>{item.customer}</Text>
-          <Text style={styles.detailService}>{item.service} · {item.method}</Text>
-          <Text style={styles.detailDate}>{item.date} · {item.time}</Text>
+          <Text style={styles.detailCustomer}>{item.userName}</Text>
+          <Text style={styles.detailService}>{item.service} · {item.paymentMethod?.toUpperCase()}</Text>
+          <Text style={styles.detailDate}>{item.date}</Text>
 
           <View style={styles.detailDivider} />
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailRowLabel}>Payment</Text>
+            <Text style={styles.detailRowLabel}>Job Amount</Text>
             <Text style={styles.detailRowValue}>₹{item.amount}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailRowLabel}>Commission (3%)</Text>
-            <Text style={[styles.detailRowValue, { color: colors.danger }]}>-₹{item.commission}</Text>
+            <Text style={[styles.detailRowValue, { color: colors.danger }]}>-₹{commission}</Text>
           </View>
           <View style={[styles.detailDivider, { marginVertical: 8 }]} />
           <View style={styles.detailRow}>
-            <Text style={[styles.detailRowLabel, { fontWeight: '800', color: colors.textPrimary }]}>Total</Text>
-            <Text style={[styles.detailRowValue, {
-              color: isByConza ? colors.statusGreen : colors.danger,
-              fontSize: 18,
-            }]}>
-              {isByConza ? '+' : '-'}₹{(item.amount - item.commission).toFixed(0)}
+            <Text style={[styles.detailRowLabel, { fontWeight: '800', color: colors.textPrimary }]}>You Earn</Text>
+            <Text style={[styles.detailRowValue, { color: colors.statusGreen, fontSize: 18 }]}>
+              +₹{net}
             </Text>
           </View>
+
+          {isCash && (
+            <View style={styles.cashNote}>
+              <Text style={styles.cashNoteText}>
+                💡 Cash job — pay ₹{commission} commission to Conza
+              </Text>
+            </View>
+          )}
 
           <TouchableOpacity onPress={onClose} style={styles.detailClose}>
             <Text style={styles.detailCloseText}>Close</Text>
@@ -114,12 +65,22 @@ const DetailModal = ({ visible, item, onClose }) => {
 };
 
 // ── Withdraw Modal ────────────────────────────────────────────────────────────
-const WithdrawModal = ({ visible, onClose }) => {
-  const [amount, setAmount] = useState('');
-  const [done, setDone] = useState(false);
+const WithdrawModal = ({ visible, onClose, availableBalance }) => {
+  const [amount, setAmount]   = useState('');
+  const [done, setDone]       = useState(false);
+  const [error, setError]     = useState('');
 
   const handleSubmit = () => {
-    if (!amount) return;
+    const num = parseFloat(amount);
+    if (!amount || isNaN(num) || num <= 0) {
+      setError('Enter a valid amount.');
+      return;
+    }
+    if (num > availableBalance) {
+      setError(`Max available: ₹${availableBalance.toFixed(0)}`);
+      return;
+    }
+    setError('');
     setDone(true);
     setTimeout(() => {
       setDone(false);
@@ -142,16 +103,17 @@ const WithdrawModal = ({ visible, onClose }) => {
             <>
               <Text style={styles.actionEmoji}>💸</Text>
               <Text style={styles.actionTitle}>Withdraw Request</Text>
-              <Text style={styles.actionSub}>Enter the amount you want to withdraw</Text>
+              <Text style={styles.actionSub}>Available balance: ₹{availableBalance.toFixed(0)}</Text>
 
               <TextInput
-                style={styles.input}
+                style={[styles.input, error ? styles.inputError : null]}
                 placeholder="Enter amount (₹)"
                 placeholderTextColor={colors.textMuted}
                 keyboardType="numeric"
                 value={amount}
-                onChangeText={setAmount}
+                onChangeText={(t) => { setAmount(t); setError(''); }}
               />
+              {!!error && <Text style={styles.errorText}>{error}</Text>}
 
               <TouchableOpacity onPress={handleSubmit} activeOpacity={0.85} style={{ width: '100%' }}>
                 <LinearGradient
@@ -177,7 +139,7 @@ const WithdrawModal = ({ visible, onClose }) => {
 // ── Pay Platform Modal ────────────────────────────────────────────────────────
 const PayPlatformModal = ({ visible, onClose, pendingAmount }) => {
   const [selected, setSelected] = useState(null);
-  const [done, setDone] = useState(false);
+  const [done, setDone]         = useState(false);
 
   const handlePay = () => {
     if (!selected) return;
@@ -197,17 +159,17 @@ const PayPlatformModal = ({ visible, onClose, pendingAmount }) => {
             <>
               <Text style={styles.actionEmoji}>🎉</Text>
               <Text style={styles.actionTitle}>Payment Done!</Text>
-              <Text style={styles.actionSub}>₹{pendingAmount} paid to Conza successfully.</Text>
+              <Text style={styles.actionSub}>₹{pendingAmount.toFixed(0)} paid to Conza successfully.</Text>
             </>
           ) : (
             <>
               <Text style={styles.actionEmoji}>🏦</Text>
-              <Text style={styles.actionTitle}>Pay Pending Amount</Text>
+              <Text style={styles.actionTitle}>Pay Commission</Text>
               <Text style={styles.actionSub}>Pending commission due to Conza</Text>
 
               <View style={styles.pendingBox}>
                 <Text style={styles.pendingLabel}>Amount Due</Text>
-                <Text style={styles.pendingAmount}>₹{pendingAmount}</Text>
+                <Text style={styles.pendingAmount}>₹{pendingAmount.toFixed(0)}</Text>
               </View>
 
               <Text style={styles.optionsLabel}>Choose Payment Method</Text>
@@ -237,7 +199,7 @@ const PayPlatformModal = ({ visible, onClose, pendingAmount }) => {
                   style={styles.actionBtn}
                 >
                   <Text style={[styles.actionBtnText, !selected && { color: colors.textMuted }]}>
-                    Pay ₹{pendingAmount}
+                    Pay ₹{pendingAmount.toFixed(0)}
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>
@@ -255,29 +217,76 @@ const PayPlatformModal = ({ visible, onClose, pendingAmount }) => {
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 const PaymentScreen = () => {
-  const insets = useSafeAreaInsets();
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [showWithdraw, setShowWithdraw] = useState(false);
+  const insets       = useSafeAreaInsets();
+  const history      = usePartnerStore(selectHistory);
+  const fetchHistory = usePartnerStore(selectFetchHistory);
+  const [refreshing, setRefreshing]         = useState(false);
+  const [selectedItem, setSelectedItem]     = useState(null);
+  const [showWithdraw, setShowWithdraw]     = useState(false);
   const [showPayPlatform, setShowPayPlatform] = useState(false);
 
+  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchHistory();
+    setRefreshing(false);
+  }, [fetchHistory]);
+
+  // ── Derive payment entries from completed booking history ──────────────
+  const paymentEntries = useMemo(() =>
+    history
+      .filter(h => h.status === 'completed')
+      .map(h => {
+        const amount     = h.amount || h.total || 0;
+        const commission = parseFloat((amount * COMMISSION_RATE).toFixed(2));
+        const net        = parseFloat((amount - commission).toFixed(2));
+        const isCash     = h.paymentMethod === 'cod';
+        return {
+          id:            h.id || h._id,
+          userName:      h.userName || 'Client',
+          service:       h.service  || 'Service',
+          date:          h.date     || '—',
+          checkIn:       h.checkIn  || '—',
+          checkOut:      h.checkOut || '—',
+          amount,
+          commission,
+          net,
+          paymentMethod: h.paymentMethod || 'cod',
+          isCash,
+        };
+      }),
+    [history]
+  );
+
+  // ── Summary calculations ───────────────────────────────────────────────
   const summary = useMemo(() => {
-    let onlinePaid = 0, cashCollected = 0, byConza = 0, toConza = 0;
-    PAYMENT_HISTORY.forEach((p) => {
-      if (p.method === 'Online') onlinePaid += p.amount;
-      if (p.method === 'Cash') cashCollected += p.amount;
-      if (p.type === 'by_conza') byConza += (p.amount - p.commission);
-      if (p.type === 'to_conza') toConza += p.commission;
+    let onlineEarned = 0, cashEarned = 0, totalCommission = 0, cashCommissionDue = 0;
+    paymentEntries.forEach(p => {
+      totalCommission += p.commission;
+      if (p.isCash) {
+        cashEarned       += p.amount;        // collected full amount in hand
+        cashCommissionDue += p.commission;   // must pay this to Conza
+      } else {
+        onlineEarned += p.net;               // already received net from Conza
+      }
     });
-    return { onlinePaid, cashCollected, byConza, toConza };
-  }, []);
+    // Balance available to withdraw = online net earnings - commission due
+    const availableBalance = onlineEarned - cashCommissionDue;
+    return { onlineEarned, cashEarned, totalCommission, cashCommissionDue, availableBalance };
+  }, [paymentEntries]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 10 }]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
-      {/* Scrollable content */}
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.accentAmber]} tintColor={colors.accentAmber} />
+        }
+      >
         {/* Header */}
         <View style={styles.pageHeader}>
           <Text style={styles.pageTitle}>Payments</Text>
@@ -289,63 +298,70 @@ const PaymentScreen = () => {
         {/* Summary Cards */}
         <View style={styles.summaryGrid}>
           <View style={[styles.summaryCard, styles.summaryCardGreen]}>
-            <Text style={styles.summaryIcon}>💳</Text>
-            <Text style={styles.summaryValue}>₹{summary.onlinePaid}</Text>
-            <Text style={styles.summaryLabel}>Online Paid</Text>
+            <Text style={styles.summaryIcon}>📥</Text>
+            <Text style={styles.summaryValue}>₹{summary.onlineEarned.toFixed(0)}</Text>
+            <Text style={styles.summaryLabel}>Online Earned</Text>
           </View>
           <View style={[styles.summaryCard, styles.summaryCardAmber]}>
             <Text style={styles.summaryIcon}>💵</Text>
-            <Text style={styles.summaryValue}>₹{summary.cashCollected}</Text>
+            <Text style={styles.summaryValue}>₹{summary.cashEarned.toFixed(0)}</Text>
             <Text style={styles.summaryLabel}>Cash Collected</Text>
           </View>
         </View>
 
         <View style={styles.summaryGrid}>
           <View style={[styles.summaryCard, styles.summaryCardBlue]}>
-            <Text style={styles.summaryIcon}>📥</Text>
-            <Text style={styles.summaryValue}>₹{summary.byConza}</Text>
-            <Text style={styles.summaryLabel}>Payment by Conza</Text>
+            <Text style={styles.summaryIcon}>💰</Text>
+            <Text style={styles.summaryValue}>₹{summary.availableBalance.toFixed(0)}</Text>
+            <Text style={styles.summaryLabel}>Available Balance (Online Earned - Commission Due)</Text>
           </View>
           <View style={[styles.summaryCard, styles.summaryCardRed]}>
             <Text style={styles.summaryIcon}>📤</Text>
-            <Text style={styles.summaryValue}>₹{summary.toConza}</Text>
-            <Text style={styles.summaryLabel}>Payment to Conza</Text>
+            <Text style={styles.summaryValue}>₹{summary.cashCommissionDue.toFixed(0)}</Text>
+            <Text style={styles.summaryLabel}>Commission Due</Text>
           </View>
         </View>
 
         {/* History */}
-        <Text style={styles.sectionTitle}>Payment History</Text>
+        <Text style={styles.sectionTitle}>
+          Payment History {paymentEntries.length > 0 ? `(${paymentEntries.length})` : ''}
+        </Text>
 
-        {PAYMENT_HISTORY.map((item) => {
-          const isByConza = item.type === 'by_conza';
-          return (
+        {paymentEntries.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>💳</Text>
+            <Text style={styles.emptyTitle}>No Payments Yet</Text>
+            <Text style={styles.emptySub}>Completed jobs will appear here</Text>
+          </View>
+        ) : (
+          paymentEntries.map(item => (
             <TouchableOpacity
               key={item.id}
               style={styles.historyCard}
               onPress={() => setSelectedItem(item)}
               activeOpacity={0.8}
             >
-              <View style={[styles.historyIconBox, isByConza ? styles.historyIconGreen : styles.historyIconRed]}>
-                <Text style={{ fontSize: 18 }}>{isByConza ? '📥' : '📤'}</Text>
+              <View style={[styles.historyIconBox, item.isCash ? styles.historyIconAmber : styles.historyIconGreen]}>
+                <Text style={{ fontSize: 18 }}>{item.isCash ? '💵' : '📱'}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.historyLabel}>{item.label}</Text>
-                <Text style={styles.historySub}>{item.customer} · {item.service}</Text>
-                <Text style={styles.historyDate}>{item.date} · {item.time}</Text>
+                <Text style={styles.historyLabel}>{item.userName}</Text>
+                <Text style={styles.historySub}>{item.service}</Text>
+                <Text style={styles.historyDate}>{item.date} · {item.checkIn} → {item.checkOut}</Text>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={[styles.historyAmount, { color: isByConza ? colors.statusGreen : colors.danger }]}>
-                  {isByConza ? '+' : '-'}₹{(item.amount - item.commission).toFixed(0)}
+                <Text style={[styles.historyAmount, { color: colors.statusGreen }]}>
+                  +₹{item.net.toFixed(0)}
                 </Text>
-                <Text style={styles.historyMethod}>{item.method}</Text>
+                <Text style={styles.historyCommission}>-₹{item.commission} fee</Text>
+                <Text style={styles.historyMethod}>{item.isCash ? 'Cash' : 'Online'}</Text>
               </View>
             </TouchableOpacity>
-          );
-        })}
-
+          ))
+        )}
       </ScrollView>
 
-      {/* Static Bottom Bar — always visible, never scrolls */}
+      {/* Bottom Bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
         <TouchableOpacity
           style={styles.withdrawBtn}
@@ -353,21 +369,26 @@ const PaymentScreen = () => {
           activeOpacity={0.85}
         >
           <Text style={styles.withdrawIcon}>💸</Text>
-          <Text style={styles.withdrawBtnText}>Withdraw Request</Text>
+          <Text style={styles.withdrawBtnText}>Withdraw</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setShowPayPlatform(true)}
           activeOpacity={0.85}
           style={{ flex: 1 }}
+          disabled={summary.cashCommissionDue <= 0}
         >
           <LinearGradient
-            colors={[colors.gradientStart, colors.gradientEnd]}
+            colors={summary.cashCommissionDue > 0
+              ? [colors.gradientStart, colors.gradientEnd]
+              : [colors.surfaceElevated, colors.border]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
             style={styles.payBtn}
           >
             <Text style={styles.payIcon}>🏦</Text>
-            <Text style={styles.payBtnText}>Pay Platform</Text>
+            <Text style={[styles.payBtnText, summary.cashCommissionDue <= 0 && { color: colors.textMuted }]}>
+              Pay Commission {summary.cashCommissionDue > 0 ? `₹${summary.cashCommissionDue.toFixed(0)}` : ''}
+            </Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -378,428 +399,137 @@ const PaymentScreen = () => {
         item={selectedItem}
         onClose={() => setSelectedItem(null)}
       />
-      <WithdrawModal visible={showWithdraw} onClose={() => setShowWithdraw(false)} />
+      <WithdrawModal
+        visible={showWithdraw}
+        onClose={() => setShowWithdraw(false)}
+        availableBalance={summary.availableBalance}
+      />
       <PayPlatformModal
         visible={showPayPlatform}
         onClose={() => setShowPayPlatform(false)}
-        pendingAmount={summary.toConza}
+        pendingAmount={summary.cashCommissionDue}
       />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-
-  // Extra bottom padding so last card clears the static bar
-  scroll: { paddingBottom: 140 },
+  screen:  { flex: 1, backgroundColor: colors.background },
+  scroll:  { paddingBottom: 140 },
 
   pageHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 18,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingBottom: 18,
   },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    letterSpacing: 0.2,
-  },
+  pageTitle: { fontSize: 24, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.2 },
   commissionBadge: {
-    backgroundColor: colors.accentYellowSoft,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: colors.accentYellow,
+    backgroundColor: colors.accentYellowSoft, borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: colors.accentYellow,
   },
-  commissionText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.accentAmber,
-  },
+  commissionText: { fontSize: 11, fontWeight: '700', color: colors.accentAmber },
 
-  summaryGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-    marginBottom: 12,
-  },
-  summaryCard: {
-    flex: 1,
-    borderRadius: 18,
-    padding: 16,
-    alignItems: 'flex-start',
-    borderWidth: 1,
-  },
-  summaryCardGreen: {
-    backgroundColor: colors.statusGreenSoft,
-    borderColor: colors.statusGreen,
-  },
-  summaryCardAmber: {
-    backgroundColor: colors.accentAmberSoft,
-    borderColor: colors.accentAmber,
-  },
-  summaryCardBlue: {
-    backgroundColor: 'rgba(59,130,246,0.08)',
-    borderColor: 'rgba(59,130,246,0.3)',
-  },
-  summaryCardRed: {
-    backgroundColor: colors.dangerSoft,
-    borderColor: colors.danger,
-  },
-  summaryIcon: { fontSize: 22, marginBottom: 8 },
-  summaryValue: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  summaryLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
+  summaryGrid: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, marginBottom: 12 },
+  summaryCard: { flex: 1, borderRadius: 18, padding: 16, alignItems: 'flex-start', borderWidth: 1 },
+  summaryCardGreen: { backgroundColor: colors.statusGreenSoft, borderColor: colors.statusGreen },
+  summaryCardAmber: { backgroundColor: colors.accentAmberSoft, borderColor: colors.accentAmber },
+  summaryCardBlue:  { backgroundColor: 'rgba(59,130,246,0.08)', borderColor: 'rgba(59,130,246,0.3)' },
+  summaryCardRed:   { backgroundColor: colors.dangerSoft, borderColor: colors.danger },
+  summaryIcon:  { fontSize: 22, marginBottom: 8 },
+  summaryValue: { fontSize: 20, fontWeight: '900', color: colors.textPrimary, marginBottom: 4 },
+  summaryLabel: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
 
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    paddingHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 14,
-    letterSpacing: 0.2,
+    fontSize: 17, fontWeight: '700', color: colors.textPrimary,
+    paddingHorizontal: 20, marginTop: 8, marginBottom: 14, letterSpacing: 0.2,
   },
 
   historyCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginHorizontal: 20,
-    marginBottom: 10,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 2,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginHorizontal: 20, marginBottom: 10,
+    backgroundColor: colors.surface, borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: colors.border,
+    shadowColor: colors.cardShadow, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12, shadowRadius: 6, elevation: 2,
   },
   historyIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
+    width: 44, height: 44, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 1,
   },
-  historyIconGreen: {
-    backgroundColor: colors.statusGreenSoft,
-    borderColor: colors.statusGreen,
-  },
-  historyIconRed: {
-    backgroundColor: colors.dangerSoft,
-    borderColor: colors.danger,
-  },
-  historyLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 2,
-  },
-  historySub: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  historyDate: {
-    fontSize: 10,
-    color: colors.textMuted,
-    fontWeight: '400',
-  },
-  historyAmount: {
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 3,
-  },
-  historyMethod: {
-    fontSize: 10,
-    color: colors.textMuted,
-    fontWeight: '500',
-  },
+  historyIconGreen: { backgroundColor: colors.statusGreenSoft, borderColor: colors.statusGreen },
+  historyIconAmber: { backgroundColor: colors.accentAmberSoft, borderColor: colors.accentAmber },
+  historyLabel:      { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
+  historySub:        { fontSize: 11, color: colors.textSecondary, fontWeight: '500', marginBottom: 2 },
+  historyDate:       { fontSize: 10, color: colors.textMuted, fontWeight: '400' },
+  historyAmount:     { fontSize: 15, fontWeight: '800', marginBottom: 1 },
+  historyCommission: { fontSize: 10, color: colors.danger, fontWeight: '600', marginBottom: 2 },
+  historyMethod:     { fontSize: 10, color: colors.textMuted, fontWeight: '500' },
 
-  // ── Static bottom bar ──────────────────────────────────────────────
+  emptyState: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 40 },
+  emptyIcon:  { fontSize: 48, marginBottom: 16 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary, marginBottom: 8 },
+  emptySub:   { fontSize: 13, color: colors.textMuted, textAlign: 'center', lineHeight: 19 },
+
   bottomBar: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 10,
+    flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingTop: 14,
+    backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border,
+    shadowColor: colors.cardShadow, shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08, shadowRadius: 10, elevation: 10,
   },
   withdrawBtn: {
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.accentYellow,
-    backgroundColor: colors.accentYellowSoft,
-    gap: 4,
+    flex: 1, borderRadius: 14, paddingVertical: 13,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: colors.accentYellow,
+    backgroundColor: colors.accentYellowSoft, gap: 4,
   },
-  withdrawIcon: { fontSize: 18 },
-  withdrawBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.accentAmber,
-  },
-  payBtn: {
-    borderRadius: 14,
-    paddingVertical: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  payIcon: { fontSize: 18 },
-  payBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    letterSpacing: 0.3,
-  },
+  withdrawIcon:    { fontSize: 18 },
+  withdrawBtnText: { fontSize: 12, fontWeight: '700', color: colors.accentAmber },
+  payBtn:          { borderRadius: 14, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  payIcon:         { fontSize: 18 },
+  payBtnText:      { fontSize: 12, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
 
-  // ── Modals ─────────────────────────────────────────────────────────
-  overlay: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
+  overlay:      { flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center', padding: 20 },
+  detailCard:   { width: '90%', backgroundColor: colors.surface, borderRadius: 24, padding: 24, alignItems: 'center' },
+  detailBadge:  { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, marginBottom: 14, borderWidth: 1 },
+  detailBadgeGreen: { backgroundColor: colors.statusGreenSoft, borderColor: colors.statusGreen },
+  detailBadgeRed:   { backgroundColor: colors.accentAmberSoft, borderColor: colors.accentAmber },
+  detailBadgeText:  { fontSize: 12, fontWeight: '700', color: colors.textPrimary },
+  detailCustomer:   { fontSize: 18, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
+  detailService:    { fontSize: 13, color: colors.textSecondary, fontWeight: '500', marginBottom: 2 },
+  detailDate:       { fontSize: 12, color: colors.textMuted, marginBottom: 16 },
+  detailDivider:    { width: '100%', height: 1, backgroundColor: colors.border, marginVertical: 12 },
+  detailRow:        { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 6 },
+  detailRowLabel:   { fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
+  detailRowValue:   { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  cashNote: {
+    width: '100%', backgroundColor: colors.accentYellowSoft, borderRadius: 10,
+    padding: 10, marginTop: 8, borderWidth: 1, borderColor: colors.accentYellow,
   },
-  detailCard: {
-    width: '90%',
-    backgroundColor: colors.surface,
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-  },
-  detailBadge: {
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    marginBottom: 14,
-    borderWidth: 1,
-  },
-  detailBadgeGreen: {
-    backgroundColor: colors.statusGreenSoft,
-    borderColor: colors.statusGreen,
-  },
-  detailBadgeRed: {
-    backgroundColor: colors.dangerSoft,
-    borderColor: colors.danger,
-  },
-  detailBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  detailCustomer: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  detailService: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  detailDate: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginBottom: 16,
-  },
-  detailDivider: {
-    width: '100%',
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 12,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 6,
-  },
-  detailRowLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  detailRowValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  detailClose: {
-    marginTop: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 28,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
-  },
-  detailCloseText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  actionCard: {
-    width: '100%',
-    backgroundColor: colors.surface,
-    borderRadius: 24,
-    padding: 28,
-    alignItems: 'center',
-  },
+  cashNoteText: { fontSize: 12, color: colors.accentAmber, fontWeight: '600', textAlign: 'center' },
+  detailClose:     { marginTop: 20, paddingVertical: 8, paddingHorizontal: 28, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceElevated },
+  detailCloseText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+
+  actionCard:  { width: '100%', backgroundColor: colors.surface, borderRadius: 24, padding: 28, alignItems: 'center' },
   actionEmoji: { fontSize: 44, marginBottom: 12 },
-  actionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 6,
-  },
-  actionSub: {
-    fontSize: 13,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 18,
-  },
-  input: {
-    width: '100%',
-    backgroundColor: colors.inputBg,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16,
-  },
-  actionBtn: {
-    width: '100%',
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  actionBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    letterSpacing: 0.3,
-  },
-  cancelBtn: {
-    marginTop: 12,
-    paddingVertical: 8,
-  },
-  cancelBtnText: {
-    fontSize: 13,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
-  pendingBox: {
-    width: '100%',
-    backgroundColor: colors.dangerSoft,
-    borderRadius: 14,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.danger,
-    marginBottom: 20,
-  },
-  pendingLabel: {
-    fontSize: 11,
-    color: colors.danger,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  pendingAmount: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: colors.danger,
-  },
-  optionsLabel: {
-    alignSelf: 'flex-start',
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
-    marginBottom: 8,
-    gap: 12,
-  },
-  optionRowActive: {
-    borderColor: colors.accentYellow,
-    backgroundColor: colors.accentYellowSoft,
-  },
-  optionRadio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  optionRadioActive: {
-    borderColor: colors.accentAmber,
-  },
-  optionRadioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.accentAmber,
-  },
-  optionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  optionTextActive: {
-    color: colors.accentAmber,
-    fontWeight: '700',
-  },
+  actionTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, marginBottom: 6 },
+  actionSub:   { fontSize: 13, color: colors.textMuted, textAlign: 'center', marginBottom: 20, lineHeight: 18 },
+  input:       { width: '100%', backgroundColor: colors.inputBg, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, fontWeight: '600', color: colors.textPrimary, borderWidth: 1, borderColor: colors.border, marginBottom: 8 },
+  inputError:  { borderColor: colors.danger },
+  errorText:   { fontSize: 12, color: colors.danger, fontWeight: '500', alignSelf: 'flex-start', marginBottom: 12 },
+  actionBtn:   { width: '100%', borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
+  actionBtnText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
+  cancelBtn:   { marginTop: 12, paddingVertical: 8 },
+  cancelBtnText: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
+  pendingBox:  { width: '100%', backgroundColor: colors.dangerSoft, borderRadius: 14, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: colors.danger, marginBottom: 20 },
+  pendingLabel:  { fontSize: 11, color: colors.danger, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  pendingAmount: { fontSize: 28, fontWeight: '900', color: colors.danger },
+  optionsLabel:  { alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
+  optionRow:     { flexDirection: 'row', alignItems: 'center', width: '100%', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceElevated, marginBottom: 8, gap: 12 },
+  optionRowActive: { borderColor: colors.accentYellow, backgroundColor: colors.accentYellowSoft },
+  optionRadio:     { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  optionRadioActive: { borderColor: colors.accentAmber },
+  optionRadioDot:  { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accentAmber },
+  optionText:      { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
+  optionTextActive: { color: colors.accentAmber, fontWeight: '700' },
 });
 
 export default PaymentScreen;

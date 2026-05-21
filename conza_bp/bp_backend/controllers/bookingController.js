@@ -66,6 +66,10 @@ const updateBookingStatus = async (req, res) => {
     
     if (status === 'completed' && !booking.checkOutTime) {
       booking.checkOutTime = new Date();
+      // Update payment method if worker specified how they collected
+      if (req.body.paymentMethod) {
+        booking.paymentMethod = req.body.paymentMethod;
+      }
     }
 
     if (status === 'cancelled') {
