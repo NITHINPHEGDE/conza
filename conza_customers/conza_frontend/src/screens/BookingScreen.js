@@ -201,6 +201,7 @@ const LabourView = React.memo(() => {
 const MaterialView = React.memo(() => {
   const navigation      = useNavigation();
   const searchMaterials = useAppStore((s) => s.searchMaterials);
+  const materials       = useAppStore((s) => s.materials);  // subscribe so list re-renders on load
   const materialsLoading = useAppStore((s) => s.materialsLoading);
   const materialsError  = useAppStore((s) => s.materialsError);
   const fetchMaterials  = useAppStore((s) => s.fetchMaterials);
@@ -211,7 +212,7 @@ const MaterialView = React.memo(() => {
   const getCartItemCount = useAppStore((s) => s.getCartItemCount);
 
   const [query, setQuery] = useState('');
-  const filtered          = useMemo(() => searchMaterials(query), [searchMaterials, query]);
+  const filtered          = useMemo(() => searchMaterials(query), [materials, searchMaterials, query]);
   const totalItems        = useMemo(() => getCartItemCount(), [getCartItemCount, cart]);
   const totalPrice        = useMemo(() => getCartTotal(), [getCartTotal, cart]);
 
@@ -336,6 +337,7 @@ const MaterialView = React.memo(() => {
 const RentalView = React.memo(() => {
   const navigation        = useNavigation();
   const filterRentalItems = useAppStore((s) => s.filterRentalItems);
+  const rentalItems       = useAppStore((s) => s.rentalItems);  // subscribe so list re-renders on load
   const rentalCategories  = useAppStore((s) => s.rentalCategories);
   const rentalLoading     = useAppStore((s) => s.rentalLoading);
   const rentalError       = useAppStore((s) => s.rentalError);
@@ -345,7 +347,7 @@ const RentalView = React.memo(() => {
   const [selectedCat, setSelectedCat] = useState('all');
   const [showFilter,  setShowFilter]  = useState(false);
 
-  const filtered  = useMemo(() => filterRentalItems(selectedCat, query), [filterRentalItems, selectedCat, query]);
+  const filtered  = useMemo(() => filterRentalItems(selectedCat, query), [rentalItems, filterRentalItems, selectedCat, query]);
   const activeCat = useMemo(() => rentalCategories.find((c) => c.id === selectedCat), [rentalCategories, selectedCat]);
 
   const handleClearQuery = useCallback(() => setQuery(''), []);

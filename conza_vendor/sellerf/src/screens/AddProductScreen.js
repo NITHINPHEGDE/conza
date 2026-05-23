@@ -2,11 +2,16 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Image, Alert, KeyboardAvoidingView, Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import useVendorStore from '../store/useVendorStore';
+import useModeStore from '../store/useModeStore';
 import { colors } from '../theme/colors';
+import { uploadImagesToCloudinary } from '../utils/cloudinary';
+
 
 const CATEGORIES = [
   'Cement', 'Steel', 'Sand', 'Bricks',
@@ -19,6 +24,10 @@ const MAX_IMAGES = 5;
 
 const AddProductScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { addProduct } = useVendorStore();
+  const { mode }       = useModeStore();
+  const [loading,     setLoading]     = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');  // e.g. "Uploading 1 of 3..."
 
   // Form state
   const [images,      setImages]      = useState([]);
@@ -69,29 +78,54 @@ const AddProductScreen = ({ navigation }) => {
     navigation.goBack();
   };
 
-  // ── Add (non-functional placeholder) ────────────────────────────────────────
-  const handleAdd = () => {
-    // Basic validation
-    if (!name.trim()) {
-      Alert.alert('Missing Field', 'Please enter a product name.');
-      return;
+  // ── Add Product API Call ────────────────────────────────────────────
+  const handleAdd = async () => {
+    if (!name.trim()) { Alert.alert('Missing Field', 'Please enter a product name.'); return; }
+    if (!category)    { Alert.alert('Missing Field', 'Please select a category.');    return; }
+    if (!price)       { Alert.alert('Missing Field', 'Please enter a price.');         return; }
+
+    setLoading(true);
+    try {
+      // 1. Upload images directly from device to Cloudinary
+      let imageUrls = [];
+      if (images.length > 0) {
+        setUploadProgress(`Uploading images...`);
+        imageUrls = await uploadImagesToCloudinary(
+          images,
+          (done, total) => setUploadProgress(`Uploading image ${done} of ${total}...`)
+        );
+      }
+
+      setUploadProgress('Saving product...');
+
+      // 2. Send product data + Cloudinary URLs to your backend
+      const productType = mode === 'materials' ? 'material' : 'rental';
+      await addProduct({
+        title:         name,
+        brand,
+        category,
+        unit,
+        type:          productType,
+        price:         parseFloat(price),
+        rentalPrice:   productType === 'rental' ? parseFloat(price) : null,
+        stock:         parseInt(stock  || '0'),
+        sku,
+        description,
+        minOrder:      parseInt(minOrder || '1'),
+        weight,
+        hsnCode:       hsn,
+        images:        imageUrls,   // ← clean Cloudinary URLs, no base64
+      });
+
+      Alert.alert('Product Added', `${name} is now listed in your inventory.`, [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    } catch (err) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setLoading(false);
+      setUploadProgress('');
     }
-    if (!category) {
-      Alert.alert('Missing Field', 'Please select a category.');
-      return;
-    }
-    if (!price.trim()) {
-      Alert.alert('Missing Field', 'Please enter a price.');
-      return;
-    }
-    if (!unit) {
-      Alert.alert('Missing Field', 'Please select a unit.');
-      return;
-    }
-    // Will be wired to API later
-    Alert.alert('Success', 'Product added successfully! (Demo)', [
-      { text: 'OK', onPress: () => navigation.goBack() },
-    ]);
   };
 
   return (
@@ -313,6 +347,11 @@ const AddProductScreen = ({ navigation }) => {
             </View>
           </View>
         </View>
+        {loading && uploadProgress ? (
+          <Text style={{ textAlign: 'center', color: colors.textMuted, marginBottom: 12, fontSize: 13 }}>
+            {uploadProgress}
+          </Text>
+        ) : null}
 
         {/* ── Buttons ── */}
         <View style={styles.buttonsRow}>
@@ -320,13 +359,22 @@ const AddProductScreen = ({ navigation }) => {
             <Text style={styles.cancelBtnText}>Cancel</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.addBtnWrap} onPress={handleAdd} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.addBtnWrap} onPress={handleAdd} activeOpacity={0.85} disabled={loading}>
             <LinearGradient
               colors={[colors.gradientStart, colors.gradientEnd]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               style={styles.addBtn}
             >
-              <Text style={styles.addBtnText}>+ Add Product</Text>
+              {loading ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <ActivityIndicator color={colors.white} />
+                  {uploadProgress ? (
+                    <Text style={[styles.addBtnText, { fontSize: 13 }]}>{uploadProgress}</Text>
+                  ) : null}
+                </View>
+              ) : (
+                <Text style={styles.addBtnText}>+ Add Product</Text>
+              )}
             </LinearGradient>
           </TouchableOpacity>
         </View>

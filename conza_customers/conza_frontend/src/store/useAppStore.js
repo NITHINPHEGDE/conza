@@ -167,17 +167,49 @@ const useAppStore = create((set, get) => ({
     }
   },
 
-  // ── Materials (still dummy — backend for materials not built yet) ───────────
+  // ── Materials (fetched from vendor backend via customer backend proxy) ─────────
   materials:       [],
   materialsLoading: false,
   materialsError:  null,
 
   fetchMaterials: async () => {
     try {
-      set({ materialsLoading: true });
-      set({ materials: dummyMaterials });
+      set({ materialsLoading: true, materialsError: null });
+      const BASE_URL = 'http://10.44.176.155:5000/api';
+      const res = await fetch(`${BASE_URL}/products/public?type=material&limit=100`);
+      const data = await res.json();
+
+      if (data.success && data.products?.length) {
+        const normalized = data.products.map((p) => ({
+          id:          p._id?.toString() || p.id,
+          name:        p.title,
+          price:       p.price,
+          seller:      p.seller?.shopName || p.seller?.name || 'Vendor',
+          unit:        `per ${p.unit || 'piece'}`,
+          distance:    '—',
+          image:       p.images?.[0] || null,
+          inStock:     (p.stock > 0) && p.isAvailable,
+          rating:      4.5,
+          returnable:  false,
+          replaceable: false,
+          returnPolicy: 'Contact seller for return policy.',
+          replacementPolicy: 'Contact seller for replacement policy.',
+          // extra fields for cart/checkout
+          sellerId:    p.seller?._id?.toString(),
+          sellerPhone: p.seller?.phone,
+          sellerCity:  p.seller?.city,
+          category:    p.category,
+          brand:       p.brand || '',
+          description: p.description || '',
+        }));
+        set({ materials: normalized });
+      } else {
+        // Fall back to dummy data if no real products yet
+        set({ materials: dummyMaterials });
+      }
     } catch (err) {
-      set({ materialsError: err.message });
+      console.warn('[Materials] API error, falling back to dummy:', err.message);
+      set({ materials: dummyMaterials, materialsError: null });
     } finally {
       set({ materialsLoading: false });
     }
@@ -187,11 +219,14 @@ const useAppStore = create((set, get) => ({
     if (!query || query.trim() === '') return get().materials;
     const q = query.toLowerCase();
     return get().materials.filter(
-      (m) => m.name.toLowerCase().includes(q) || m.seller.toLowerCase().includes(q)
+      (m) =>
+        (m.name  || '').toLowerCase().includes(q) ||
+        (m.seller|| '').toLowerCase().includes(q) ||
+        (m.category || '').toLowerCase().includes(q)
     );
   },
 
-  // ── Rental (still dummy) ────────────────────────────────────────────────────
+  // ── Rental (fetched from vendor backend via customer backend proxy) ──────────
   rentalItems:      [],
   rentalCategories: [],
   rentalLoading:    false,
@@ -199,10 +234,52 @@ const useAppStore = create((set, get) => ({
 
   fetchRentalData: async () => {
     try {
-      set({ rentalLoading: true });
-      set({ rentalItems: dummyRentalItems, rentalCategories: dummyRentalCategories });
+      set({ rentalLoading: true, rentalError: null });
+      const BASE_URL = 'http://10.44.176.155:5000/api';
+      const res = await fetch(`${BASE_URL}/products/public?type=rental&limit=100`);
+      const data = await res.json();
+
+      if (data.success && data.products?.length) {
+        const normalized = data.products.map((p) => ({
+          id:          p._id?.toString() || p.id,
+          name:        p.title,
+          category:    (p.category || 'Other').toLowerCase().replace(/\s+/g, '_'),
+          emoji:       '🏗️',
+          pricePerDay: p.rentalPrice || p.price,
+          distance:    '—',
+          image:       p.images?.[0] || null,
+          available:   p.isAvailable && (p.stock > 0),
+          rating:      4.5,
+          seller:      p.seller?.shopName || p.seller?.name || 'Vendor',
+          sellerId:    p.seller?._id?.toString(),
+          sellerPhone: p.seller?.phone,
+          sellerCity:  p.seller?.city,
+          description: p.description || '',
+          deposit:     p.deposit || 0,
+          minDays:     p.minRentalDays || 1,
+          features:    [],
+          specs:       [],
+        }));
+
+        // Build dynamic category list from returned products
+        const catSet = new Set(normalized.map((i) => i.category));
+        const categories = [
+          { id: 'all', label: 'All', emoji: '🏗️' },
+          ...Array.from(catSet).map((c) => ({
+            id:    c,
+            label: c.charAt(0).toUpperCase() + c.slice(1).replace(/_/g, ' '),
+            emoji: '📦',
+          })),
+        ];
+
+        set({ rentalItems: normalized, rentalCategories: categories });
+      } else {
+        // Fall back to dummy data
+        set({ rentalItems: dummyRentalItems, rentalCategories: dummyRentalCategories });
+      }
     } catch (err) {
-      set({ rentalError: err.message });
+      console.warn('[Rentals] API error, falling back to dummy:', err.message);
+      set({ rentalItems: dummyRentalItems, rentalCategories: dummyRentalCategories, rentalError: null });
     } finally {
       set({ rentalLoading: false });
     }
@@ -212,8 +289,8 @@ const useAppStore = create((set, get) => ({
     return get().rentalItems.filter((item) => {
       const matchCat   = category === 'all' || item.category === category;
       const matchQuery = query.trim() === '' ||
-        item.name.toLowerCase().includes(query.toLowerCase()) ||
-        item.seller.toLowerCase().includes(query.toLowerCase());
+        (item.name   || '').toLowerCase().includes(query.toLowerCase()) ||
+        (item.seller || '').toLowerCase().includes(query.toLowerCase());
       return matchCat && matchQuery;
     });
   },

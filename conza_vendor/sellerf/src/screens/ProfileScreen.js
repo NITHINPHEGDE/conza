@@ -6,6 +6,7 @@ import useModeStore   from '../store/useModeStore';
 import useVendorStore from '../store/useVendorStore';
 import ModeToggle     from '../components/ModeToggle';
 import { colors }     from '../theme/colors';
+import { logoutSeller } from '../services/authService';
 
 const MenuItem = ({ icon, label, value }) => (
   <TouchableOpacity style={styles.menuItem}>
@@ -18,7 +19,7 @@ const MenuItem = ({ icon, label, value }) => (
 const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
   const { mode } = useModeStore();
-  const { vendor } = useVendorStore();
+  const { seller, clearSeller } = useVendorStore();
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -36,11 +37,11 @@ const ProfileScreen = () => {
           style={styles.avatarCard}
         >
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{vendor.name.charAt(0)}</Text>
+            <Text style={styles.avatarText}>{(seller?.name || '').charAt(0)}</Text>
           </View>
           <View>
-            <Text style={styles.vendorName}>{vendor.name}</Text>
-            <Text style={styles.shopName}>{vendor.shopName}</Text>
+            <Text style={styles.vendorName}>{seller?.name}</Text>
+            <Text style={styles.shopName}>{seller?.shopName}</Text>
             <Text style={styles.modeTag}>{mode === 'materials' ? '🧱 Material Seller' : '🏗️ Rental Provider'}</Text>
           </View>
         </LinearGradient>
@@ -73,7 +74,17 @@ const ProfileScreen = () => {
           <MenuItem icon="🔔" label="Notifications" />
           <MenuItem icon="🔒" label="Privacy"       />
           <MenuItem icon="❓" label="Help & Support" />
-          <MenuItem icon="🚪" label="Logout"        />
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={async () => {
+              await logoutSeller();
+              clearSeller();
+            }}
+          >
+            <Text style={styles.menuIcon}>🚪</Text>
+            <Text style={styles.menuLabel}>Logout</Text>
+            <Text style={styles.menuValue}>›</Text>
+          </TouchableOpacity>
         </View>
 
       </ScrollView>

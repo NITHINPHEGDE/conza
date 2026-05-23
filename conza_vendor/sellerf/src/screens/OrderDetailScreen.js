@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MATERIAL_STATUS_CONFIG, RENTAL_STATUS_CONFIG } from './OrdersScreen';
 import { colors } from '../theme/colors';
+import useVendorStore from '../store/useVendorStore';
 
 const PAYMENT_COLOR = {
   paid:     colors.green,
@@ -301,22 +302,30 @@ const OrderDetailScreen = ({ route, navigation }) => {
   const statusConfig = isRental ? RENTAL_STATUS_CONFIG : MATERIAL_STATUS_CONFIG;
   const s = statusConfig[order.status] || statusConfig.new;
 
+  const { updateOrderStatus } = useVendorStore();
+
+  const handleStatusChange = async (newStatus) => {
+    try {
+      await updateOrderStatus(order.id, newStatus);
+      setOrder((prev) => ({ ...prev, status: newStatus }));
+      Alert.alert('Updated', `Order status set to ${newStatus}`);
+    } catch (err) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
   const handleAccept = () => {
     Alert.alert('Accept', `Confirm accepting this ${isRental ? 'rental' : 'order'}?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Accept', onPress: () => setOrder((prev) => ({ ...prev, status: isRental ? 'active' : 'accepted' })) },
+      { text: 'Accept', onPress: () => handleStatusChange(isRental ? 'active' : 'accepted') },
     ]);
   };
 
   const handleReject = () => {
     Alert.alert('Reject', `Reject this ${isRental ? 'rental request' : 'order'}?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Reject', style: 'destructive', onPress: () => setOrder((prev) => ({ ...prev, status: 'cancelled' })) },
+      { text: 'Reject', style: 'destructive', onPress: () => handleStatusChange('cancelled') },
     ]);
-  };
-
-  const handleStatusChange = (newStatus) => {
-    setOrder((prev) => ({ ...prev, status: newStatus }));
   };
 
   return (

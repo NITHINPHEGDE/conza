@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,7 +18,11 @@ const StatRow = ({ label, value, color }) => (
 const EarningsScreen = () => {
   const insets  = useSafeAreaInsets();
   const { mode } = useModeStore();
-  const { vendor, chartData } = useVendorStore();
+  const { vendor, chartData, fetchDashboard, dashLoading } = useVendorStore();
+
+  useEffect(() => {
+    fetchDashboard();
+  }, []);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>

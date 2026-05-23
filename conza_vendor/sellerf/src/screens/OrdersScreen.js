@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ScrollView,
+  TouchableOpacity, ScrollView, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -306,10 +306,14 @@ const RentalOrderCard = ({ order, onViewDetails, onAccept, onReject }) => {
 const OrdersScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { mode } = useModeStore();
-  const { materialOrders, rentalOrders } = useVendorStore();
+  const { getFilteredOrders, fetchOrders, ordersLoading, updateOrderStatus } = useVendorStore();
+  const materialOrders = useVendorStore((s) => s.materialOrders);
+  const rentalOrders   = useVendorStore((s) => s.rentalOrders);
 
-  const [matOrders,  setMatOrders]  = useState(materialOrders);
-  const [rentOrders, setRentOrders] = useState(rentalOrders);
+  useEffect(() => {
+    fetchOrders(mode);
+  }, [mode]);
+
   const [matTab,     setMatTab]     = useState('all');
   const [rentTab,    setRentTab]    = useState('all');
 
@@ -317,19 +321,9 @@ const OrdersScreen = ({ navigation }) => {
   const tabs        = isMaterials ? MATERIAL_TABS : RENTAL_TABS;
   const activeTab   = isMaterials ? matTab        : rentTab;
   const setTab      = isMaterials ? setMatTab     : setRentTab;
-  const orders      = isMaterials ? matOrders     : rentOrders;
-
-  const handleAccept = (id) => {
-    const update = (prev) =>
-      prev.map((o) => o.id === id ? { ...o, status: isMaterials ? 'accepted' : 'active' } : o);
-    isMaterials ? setMatOrders(update) : setRentOrders(update);
-  };
-
-  const handleReject = (id) => {
-    const update = (prev) =>
-      prev.map((o) => o.id === id ? { ...o, status: 'cancelled' } : o);
-    isMaterials ? setMatOrders(update) : setRentOrders(update);
-  };
+  const orders      = useMemo(() => {
+    return getFilteredOrders(mode);
+  }, [materialOrders, rentalOrders, mode]);
 
   const handleViewDetails = (order) => {
     navigation.navigate('OrderDetail', { order, mode });
@@ -398,20 +392,36 @@ const OrdersScreen = ({ navigation }) => {
             <Text style={styles.emptyText}>No orders found</Text>
           </View>
         }
-        renderItem={({ item }) =>
+        renderItem={({ item: order }) =>
           isMaterials ? (
             <MaterialOrderCard
-              order={item}
+              order={order}
               onViewDetails={handleViewDetails}
-              onAccept={handleAccept}
-              onReject={handleReject}
+              onAccept={async () => {
+                try {
+                  await updateOrderStatus(order.id, order.type === 'rental' ? 'active' : 'accepted');
+                } catch (e) { Alert.alert('Error', e.message); }
+              }}
+              onReject={async () => {
+                try {
+                  await updateOrderStatus(order.id, 'cancelled');
+                } catch (e) { Alert.alert('Error', e.message); }
+              }}
             />
           ) : (
             <RentalOrderCard
-              order={item}
+              order={order}
               onViewDetails={handleViewDetails}
-              onAccept={handleAccept}
-              onReject={handleReject}
+              onAccept={async () => {
+                try {
+                  await updateOrderStatus(order.id, order.type === 'rental' ? 'active' : 'accepted');
+                } catch (e) { Alert.alert('Error', e.message); }
+              }}
+              onReject={async () => {
+                try {
+                  await updateOrderStatus(order.id, 'cancelled');
+                } catch (e) { Alert.alert('Error', e.message); }
+              }}
             />
           )
         }

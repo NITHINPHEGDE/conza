@@ -1,7 +1,7 @@
 // src/services/apiClient.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.247.177.155:5005/api';
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.44.176.155:5005/api';
 // Android emulator: 10.0.2.2 → host machine localhost
 // iOS simulator / physical device: use your machine's local IP e.g. http://192.168.1.X:5000/api
 
@@ -22,7 +22,7 @@ const request = async (method, endpoint, body = null, isFormData = false) => {
   };
 
   const response = await fetch(`${BASE_URL}${endpoint}`, config);
-  const data     = await response.json();
+  const data = await response.json();
 
   if (!response.ok) {
     throw new Error(data.message || 'Something went wrong');
@@ -32,8 +32,8 @@ const request = async (method, endpoint, body = null, isFormData = false) => {
 };
 
 export const api = {
-  get:    (endpoint)              => request('GET',    endpoint),
-  post:   (endpoint, body)        => request('POST',   endpoint, body),
-  patch:  (endpoint, body)        => request('PATCH',  endpoint, body),
-  upload: (endpoint, formData)    => request('PATCH',  endpoint, formData, true),
+  get: (endpoint) => request('GET', endpoint),
+  post: (endpoint, body) => request('POST', endpoint, body),
+  patch: (endpoint, body) => request('PATCH', endpoint, body),
+  upload: (endpoint, formData) => request('PATCH', endpoint, formData, true),
 };

@@ -1,358 +1,270 @@
-import { create } from 'zustand';
-
-const DUMMY_MATERIAL_ORDERS = [
-  {
-    id: 'ORD-2001',
-    customerName: 'Rajesh Kumar',
-    customerPhone: '9876543210',
-    customerAddress: '24, 3rd Cross, Koramangala 5th Block, Bengaluru - 560095',
-    date: '17 May 2026',
-    time: '10:32 AM',
-    status: 'new',
-    paymentStatus: 'pending',
-    paymentMethod: 'COD',
-    subtotal: 4200,
-    deliveryCharge: 150,
-    total: 4350,
-    type: 'material',
-    items: [
-      { id: 'i1', name: 'Portland Cement 50kg', qty: 6, price: 700, unit: 'bag' },
-    ],
-  },
-  {
-    id: 'ORD-2002',
-    customerName: 'Suresh Nair',
-    customerPhone: '9845012345',
-    customerAddress: '12, Whitefield Main Rd, Whitefield, Bengaluru - 560066',
-    date: '16 May 2026',
-    time: '09:15 AM',
-    status: 'accepted',
-    paymentStatus: 'paid',
-    paymentMethod: 'UPI',
-    subtotal: 8750,
-    deliveryCharge: 200,
-    total: 8950,
-    type: 'material',
-    items: [
-      { id: 'i2', name: 'Steel Rods 12mm', qty: 25, price: 350, unit: 'piece' },
-    ],
-  },
-  {
-    id: 'ORD-2003',
-    customerName: 'Anita Sharma',
-    customerPhone: '9741122334',
-    customerAddress: '88, HSR Layout Sector 2, Bengaluru - 560102',
-    date: '16 May 2026',
-    time: '04:45 PM',
-    status: 'out_for_delivery',
-    paymentStatus: 'paid',
-    paymentMethod: 'Online',
-    subtotal: 6200,
-    deliveryCharge: 100,
-    total: 6300,
-    type: 'material',
-    items: [
-      { id: 'i3', name: 'River Sand 1 Ton', qty: 1,   price: 3100, unit: 'ton'   },
-      { id: 'i4', name: 'M-Sand Fine',      qty: 1,   price: 2400, unit: 'ton'   },
-      { id: 'i5', name: 'Red Clay Bricks',  qty: 100, price: 7,    unit: 'piece' },
-    ],
-  },
-  {
-    id: 'ORD-2004',
-    customerName: 'Vijay Reddy',
-    customerPhone: '9632587410',
-    customerAddress: '5, Indiranagar 100ft Rd, Bengaluru - 560038',
-    date: '15 May 2026',
-    time: '01:20 PM',
-    status: 'delivered',
-    paymentStatus: 'paid',
-    paymentMethod: 'COD',
-    subtotal: 3600,
-    deliveryCharge: 0,
-    total: 3600,
-    type: 'material',
-    items: [
-      { id: 'i6', name: 'Portland Cement 50kg', qty: 2,   price: 700,  unit: 'bag' },
-      { id: 'i7', name: '20mm Blue Metal',      qty: 1,   price: 1800, unit: 'ton' },
-      { id: 'i8', name: 'River Sand 1 Ton',     qty: 0.3, price: 3100, unit: 'ton' },
-    ],
-  },
-  {
-    id: 'ORD-2005',
-    customerName: 'Meera Pillai',
-    customerPhone: '9988776655',
-    customerAddress: '33, JP Nagar 6th Phase, Bengaluru - 560078',
-    date: '15 May 2026',
-    time: '11:05 AM',
-    status: 'cancelled',
-    paymentStatus: 'refunded',
-    paymentMethod: 'UPI',
-    subtotal: 3100,
-    deliveryCharge: 150,
-    total: 3250,
-    type: 'material',
-    items: [
-      { id: 'i9', name: 'River Sand 1 Ton', qty: 1, price: 3100, unit: 'ton' },
-    ],
-  },
-  {
-    id: 'ORD-2006',
-    customerName: 'Kiran Bhat',
-    customerPhone: '9123456789',
-    customerAddress: '7, Malleshwaram 8th Cross, Bengaluru - 560003',
-    date: '14 May 2026',
-    time: '03:00 PM',
-    status: 'new',
-    paymentStatus: 'pending',
-    paymentMethod: 'COD',
-    subtotal: 5600,
-    deliveryCharge: 200,
-    total: 5800,
-    type: 'material',
-    items: [
-      { id: 'i10', name: 'Steel Rods 12mm',      qty: 10, price: 350, unit: 'piece' },
-      { id: 'i11', name: 'Portland Cement 50kg', qty: 3,  price: 700, unit: 'bag'   },
-    ],
-  },
-];
-
-const DUMMY_RENTAL_ORDERS = [
-  {
-    id: 'RNT-1001',
-    customerName: 'Arjun Shetty',
-    customerPhone: '9876501234',
-    customerAddress: '14, Banashankari 2nd Stage, Bengaluru - 560070',
-    date: '17 May 2026',
-    time: '08:00 AM',
-    status: 'new',
-    paymentStatus: 'pending',
-    paymentMethod: 'COD',
-    type: 'rental',
-    depositAmount: 5000,
-    depositStatus: 'pending',
-    startDate: '18 May 2026',
-    endDate: '25 May 2026',
-    durationDays: 7,
-    subtotal: 10500,
-    deliveryCharge: 300,
-    total: 10800,
-    items: [
-      {
-        id: 'ri1',
-        name: 'Concrete Mixer 500L',
-        qty: 1,
-        pricePerDay: 1500,
-        days: 7,
-        unit: 'unit',
-        deposit: 5000,
-      },
-    ],
-  },
-  {
-    id: 'RNT-1002',
-    customerName: 'Deepa Menon',
-    customerPhone: '9845098765',
-    customerAddress: '56, Jayanagar 4th Block, Bengaluru - 560041',
-    date: '16 May 2026',
-    time: '11:30 AM',
-    status: 'active',
-    paymentStatus: 'paid',
-    paymentMethod: 'UPI',
-    type: 'rental',
-    depositAmount: 8000,
-    depositStatus: 'collected',
-    startDate: '16 May 2026',
-    endDate: '22 May 2026',
-    durationDays: 6,
-    subtotal: 7200,
-    deliveryCharge: 200,
-    total: 7400,
-    items: [
-      {
-        id: 'ri2',
-        name: 'Scaffolding Set (20ft)',
-        qty: 2,
-        pricePerDay: 600,
-        days: 6,
-        unit: 'set',
-        deposit: 4000,
-      },
-    ],
-  },
-  {
-    id: 'RNT-1003',
-    customerName: 'Praveen Kumar',
-    customerPhone: '9632147850',
-    customerAddress: '3, Electronic City Phase 1, Bengaluru - 560100',
-    date: '15 May 2026',
-    time: '02:00 PM',
-    status: 'overdue',
-    paymentStatus: 'paid',
-    paymentMethod: 'Online',
-    type: 'rental',
-    depositAmount: 3000,
-    depositStatus: 'collected',
-    startDate: '10 May 2026',
-    endDate: '14 May 2026',
-    durationDays: 4,
-    subtotal: 4000,
-    deliveryCharge: 150,
-    total: 4150,
-    items: [
-      {
-        id: 'ri3',
-        name: 'Plate Compactor',
-        qty: 1,
-        pricePerDay: 1000,
-        days: 4,
-        unit: 'unit',
-        deposit: 3000,
-      },
-    ],
-  },
-  {
-    id: 'RNT-1004',
-    customerName: 'Lakshmi Nair',
-    customerPhone: '9741236985',
-    customerAddress: '22, Yelahanka New Town, Bengaluru - 560064',
-    date: '14 May 2026',
-    time: '09:45 AM',
-    status: 'returned',
-    paymentStatus: 'paid',
-    paymentMethod: 'UPI',
-    type: 'rental',
-    depositAmount: 6000,
-    depositStatus: 'refunded',
-    startDate: '10 May 2026',
-    endDate: '13 May 2026',
-    durationDays: 3,
-    subtotal: 5400,
-    deliveryCharge: 200,
-    total: 5600,
-    items: [
-      {
-        id: 'ri4',
-        name: 'Tower Light 1000W',
-        qty: 2,
-        pricePerDay: 900,
-        days: 3,
-        unit: 'unit',
-        deposit: 3000,
-      },
-    ],
-  },
-  {
-    id: 'RNT-1005',
-    customerName: 'Harish Gowda',
-    customerPhone: '9988001122',
-    customerAddress: '8, Hebbal Ring Rd, Bengaluru - 560024',
-    date: '13 May 2026',
-    time: '04:15 PM',
-    status: 'cancelled',
-    paymentStatus: 'refunded',
-    paymentMethod: 'COD',
-    type: 'rental',
-    depositAmount: 4000,
-    depositStatus: 'refunded',
-    startDate: '15 May 2026',
-    endDate: '18 May 2026',
-    durationDays: 3,
-    subtotal: 3600,
-    deliveryCharge: 0,
-    total: 3600,
-    items: [
-      {
-        id: 'ri5',
-        name: 'Concrete Vibrator',
-        qty: 1,
-        pricePerDay: 1200,
-        days: 3,
-        unit: 'unit',
-        deposit: 4000,
-      },
-    ],
-  },
-  {
-    id: 'RNT-1006',
-    customerName: 'Sowmya Rao',
-    customerPhone: '9123004567',
-    customerAddress: '91, Rajajinagar 1st Block, Bengaluru - 560010',
-    date: '12 May 2026',
-    time: '10:00 AM',
-    status: 'new',
-    paymentStatus: 'pending',
-    paymentMethod: 'COD',
-    type: 'rental',
-    depositAmount: 7000,
-    depositStatus: 'pending',
-    startDate: '20 May 2026',
-    endDate: '27 May 2026',
-    durationDays: 7,
-    subtotal: 8400,
-    deliveryCharge: 350,
-    total: 8750,
-    items: [
-      {
-        id: 'ri6',
-        name: 'Boom Lift 12m',
-        qty: 1,
-        pricePerDay: 1200,
-        days: 7,
-        unit: 'unit',
-        deposit: 7000,
-      },
-    ],
-  },
-];
-
-const DUMMY_INVENTORY = [
-  { id: '1', name: 'Portland Cement 50kg', stock: 3,  price: 700,  type: 'material', lowStock: true  },
-  { id: '2', name: 'Steel Rods 12mm',      stock: 40, price: 350,  type: 'material', lowStock: false },
-  { id: '3', name: 'Concrete Mixer',       stock: 2,  price: 1500, type: 'rental',   lowStock: true  },
-  { id: '4', name: 'Scaffolding Set',      stock: 5,  price: 2200, type: 'rental',   lowStock: false },
-  { id: '5', name: 'River Sand 1 Ton',     stock: 8,  price: 3100, type: 'material', lowStock: false },
-];
-
-const DUMMY_CHART = {
-  day:   [2, 4, 3, 6, 5, 8, 7],
-  week:  [18, 24, 20, 30, 28, 35, 32],
-  month: [80, 95, 110, 130, 120, 150, 145],
-};
+// conzavf/src/store/useVendorStore.js
+import { create }       from 'zustand';
+import AsyncStorage     from '@react-native-async-storage/async-storage';
+import { api }          from '../services/apiClient';
+import { socket, connectSocket } from '../utils/socket';
 
 const useVendorStore = create((set, get) => ({
-  vendor: {
-    name:          'Nithin Hegde',
-    shopName:      'Hegde Traders',
-    walletBalance: 24500,
-    monthEarnings: 68200,
-    growth:        '+12%',
+  // ── Auth ─────────────────────────────────────────────────────────────────
+  seller:      null,
+  authLoading: false,
+  authError:   null,
+
+  setSeller: (seller) => {
+    set({ seller });
+    if (seller) connectSocket(seller._id);
   },
 
-  materialOrders: DUMMY_MATERIAL_ORDERS,
-  rentalOrders:   DUMMY_RENTAL_ORDERS,
-  inventory:      DUMMY_INVENTORY,
-  chartData:      DUMMY_CHART,
+  clearSeller: () => {
+    set({ seller: null });
+    socket.disconnect();
+  },
+
+  // ── Vendor alias (kept for backwards-compat with existing UI) ────────────
+  get vendor() {
+    const s = get().seller;
+    return {
+      name:          s?.name          || '',
+      shopName:      s?.shopName      || '',
+      walletBalance: s?.walletBalance || 0,
+      monthEarnings: get().dashData?.vendor?.monthEarnings || 0,
+      growth:        get().dashData?.vendor?.growth        || '+0%',
+    };
+  },
+
+  // ── Dashboard ────────────────────────────────────────────────────────────
+  dashData:    null,
+  dashLoading: false,
 
   kpi: {
-    newOrders:       12,
-    pendingDelivery:  4,
-    activeListings:  18,
-    lowStockItems:    3,
+    newOrders:       0,
+    pendingDelivery: 0,
+    activeListings:  0,
+    lowStockItems:   0,
   },
 
-  earningsFilter: 'week',
-  setEarningsFilter: (filter) => set({ earningsFilter: filter }),
+  chartData: { day: [0,0,0,0,0,0,0], week: [0,0,0,0,0,0,0], month: [0,0,0,0,0,0,0] },
+
+  fetchDashboard: async () => {
+    set({ dashLoading: true });
+    try {
+      const data = await api.get('/dashboard');
+      const chart = data.chartData || [];
+
+      // Build a 7-slot array from the returned chart data
+      const dayTotals = Array(7).fill(0);
+      chart.forEach((entry, i) => {
+        if (i < 7) {
+          dayTotals[i] = (entry && typeof entry === 'object' && 'total' in entry) ? entry.total : (entry || 0);
+        }
+      });
+
+      set({
+        dashData: data,
+        kpi: {
+          newOrders:       data.kpi?.newOrders      || 0,
+          pendingDelivery: data.kpi?.activeRentals  || 0,
+          activeListings:  data.kpi?.totalProducts  || 0,
+          lowStockItems:   data.kpi?.lowStockItems  || 0,
+        },
+        chartData: { day: dayTotals, week: dayTotals, month: dayTotals },
+      });
+    } catch (err) {
+      console.warn('[Dashboard] fetch error:', err.message);
+    } finally {
+      set({ dashLoading: false });
+    }
+  },
+
+  // ── Orders ───────────────────────────────────────────────────────────────
+  materialOrders: [],
+  rentalOrders:   [],
+  ordersLoading:  false,
+  ordersError:    null,
+
+  fetchOrders: async (mode) => {
+    const type = mode === 'materials' ? 'material' : 'rental';
+    set({ ordersLoading: true, ordersError: null });
+    try {
+      const data = await api.get(`/orders?type=${type}&limit=50`);
+      const normalized = (data.orders || []).map(normalizeOrder);
+      if (type === 'material') set({ materialOrders: normalized });
+      else                     set({ rentalOrders:   normalized });
+    } catch (err) {
+      set({ ordersError: err.message });
+    } finally {
+      set({ ordersLoading: false });
+    }
+  },
+
+  updateOrderStatus: async (orderId, status) => {
+    try {
+      const data = await api.patch(`/orders/${orderId}/status`, { status });
+      const updated = normalizeOrder(data.order);
+      set((state) => ({
+        materialOrders: state.materialOrders.map((o) => o.id === orderId ? updated : o),
+        rentalOrders:   state.rentalOrders.map((o)   => o.id === orderId ? updated : o),
+      }));
+    } catch (err) {
+      throw err;
+    }
+  },
 
   getFilteredOrders: (mode) => {
-    return mode === 'materials'
-      ? get().materialOrders
-      : get().rentalOrders;
+    return mode === 'materials' ? get().materialOrders : get().rentalOrders;
+  },
+
+  // ── Inventory ─────────────────────────────────────────────────────────────
+  inventory:        [],
+  inventoryLoading: false,
+  inventoryError:   null,
+  inventoryPage:    1,
+  inventoryPages:   1,
+
+  fetchInventory: async (mode, page = 1) => {
+    const type = mode === 'materials' ? 'material' : 'rental';
+    set({ inventoryLoading: true, inventoryError: null });
+    try {
+      const data = await api.get(`/products?type=${type}&page=${page}&limit=20`);
+      const normalized = (data.products || []).map(normalizeProduct);
+      set({
+        inventory:        page === 1 ? normalized : [...get().inventory, ...normalized],
+        inventoryPage:    data.page,
+        inventoryPages:   data.pages,
+      });
+    } catch (err) {
+      set({ inventoryError: err.message });
+    } finally {
+      set({ inventoryLoading: false });
+    }
+  },
+
+  addProduct: async (payload) => {
+    const data = await api.post('/products', payload);
+    const product = normalizeProduct(data.product);
+    set((s) => ({ inventory: [product, ...s.inventory] }));
+    return product;
+  },
+
+  updateProduct: async (productId, payload) => {
+    const data = await api.put(`/products/${productId}`, payload);
+    const updated = normalizeProduct(data.product);
+    set((s) => ({
+      inventory: s.inventory.map((p) => (p.id === productId ? updated : p)),
+    }));
+    return updated;
+  },
+
+  deleteProduct: async (productId) => {
+    await api.delete(`/products/${productId}`);
+    set((s) => ({ inventory: s.inventory.filter((p) => p.id !== productId) }));
+  },
+
+  toggleProductAvailability: async (productId) => {
+    const data = await api.patch(`/products/${productId}/availability`, {});
+    set((s) => ({
+      inventory: s.inventory.map((p) =>
+        p.id === productId ? { ...p, active: data.isAvailable } : p
+      ),
+    }));
   },
 
   getFilteredInventory: (mode) => {
     const type = mode === 'materials' ? 'material' : 'rental';
     return get().inventory.filter((i) => i.type === type);
   },
+
+  // ── Socket listeners ──────────────────────────────────────────────────────
+  initSocketListeners: () => {
+    socket.off('new_order');
+    socket.off('order_updated');
+    socket.off('order_change');
+    socket.off('product_change');
+
+    const refreshAll = () => {
+      get().fetchOrders('materials');
+      get().fetchOrders('rental');
+      get().fetchDashboard();
+    };
+
+    socket.on('new_order', ({ orderId, orderType, customerName, total }) => {
+      const mode = orderType === 'material' ? 'materials' : 'rental';
+      get().fetchOrders(mode);
+      get().fetchDashboard();
+    });
+
+    socket.on('order_updated', ({ orderId, status }) => {
+      refreshAll();
+    });
+
+    socket.on('order_change', ({ operationType, orderId, status }) => {
+      refreshAll();
+    });
+
+    socket.on('product_change', () => {
+      get().fetchInventory('materials');
+      get().fetchInventory('rental');
+    });
+  },
+
+  // ── Earnings filter ──────────────────────────────────────────────────────
+  earningsFilter:    'week',
+  setEarningsFilter: (filter) => set({ earningsFilter: filter }),
 }));
+
+// ── Normalizers ──────────────────────────────────────────────────────────────
+const normalizeOrder = (o) => ({
+  id:              o._id?.toString() || o.id,
+  customerName:    o.customerName    || '',
+  customerPhone:   o.customerPhone   || '',
+  customerAddress: o.customerAddress || '',
+  city:            o.city            || '',
+  pincode:         o.pincode         || '',
+  date:   o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+  time:   o.createdAt ? new Date(o.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '',
+  status:          o.status          || 'new',
+  paymentStatus:   o.paymentStatus   || 'pending',
+  paymentMethod:   o.paymentMethod?.toUpperCase() || 'COD',
+  type:            o.orderType       || 'material',
+  subtotal:        o.subtotal        || 0,
+  deliveryCharge:  o.deliveryCharge  || 0,
+  total:           o.total           || 0,
+  depositAmount:   o.depositAmount   || 0,
+  depositStatus:   o.depositStatus   || 'pending',
+  startDate:       o.startDate       || null,
+  endDate:         o.endDate         || null,
+  durationDays:    o.durationDays    || null,
+  items:  (o.items || []).map((i) => ({
+    id:       i._id || i.product,
+    name:     i.title,
+    qty:      i.qty,
+    price:    i.price,
+    unit:     i.unit,
+    days:     i.days,
+    deposit:  i.deposit || 0,
+    pricePerDay: i.price,
+  })),
+});
+
+const normalizeProduct = (p) => ({
+  id:          p._id?.toString() || p.id,
+  name:        p.title,
+  brand:       p.brand          || '',
+  image:       p.images?.[0]    || null,
+  images:      p.images         || [],
+  price:       p.price,
+  unit:        p.unit,
+  stock:       p.stock,
+  sold:        p.sold           || 0,
+  sku:         p.sku            || '',
+  category:    p.category,
+  type:        p.type,
+  active:      p.isAvailable,
+  lowStock:    p.stock <= (p.lowStockAt || 5),
+  description: p.description    || '',
+  deposit:     p.deposit        || 0,
+  minRentalDays: p.minRentalDays || 1,
+  rentalPrice: p.rentalPrice    || p.price,
+});
 
 export default useVendorStore;
