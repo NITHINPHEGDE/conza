@@ -81,8 +81,12 @@ const MaterialCard = React.memo(({
         </View>
 
         <View style={styles.priceRow}>
-          <Text style={styles.price}>₹{Number(price) || 0}</Text>
-          <Text style={styles.unit}>{unit}</Text>
+          <Text style={styles.price}>
+            ₹{((Number(price) || 0) * (Number(quantity) > 0 ? Number(quantity) : 1)).toLocaleString('en-IN')}
+          </Text>
+          <Text style={styles.unit}>
+            {Number(quantity) > 0 ? `${quantity} ${unit.replace('per ', '')}` : unit}
+          </Text>
 
           {(Number(quantity) || 0) > 0 ? (
             <View style={styles.qtyWrapper}>

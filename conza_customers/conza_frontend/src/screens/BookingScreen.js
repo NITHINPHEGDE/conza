@@ -208,13 +208,23 @@ const MaterialView = React.memo(() => {
   const cart            = useAppStore((s) => s.cart);
   const addToCart       = useAppStore((s) => s.addToCart);
   const getCartItems    = useAppStore((s) => s.getCartItems);
-  const getCartTotal    = useAppStore((s) => s.getCartTotal);
   const getCartItemCount = useAppStore((s) => s.getCartItemCount);
 
   const [query, setQuery] = useState('');
-  const filtered          = useMemo(() => searchMaterials(query), [materials, searchMaterials, query]);
-  const totalItems        = useMemo(() => getCartItemCount(), [getCartItemCount, cart]);
-  const totalPrice        = useMemo(() => getCartTotal(), [getCartTotal, cart]);
+  const filtered     = useMemo(() => searchMaterials(query), [materials, searchMaterials, query]);
+  const totalItems   = useMemo(
+    () => Object.values(cart).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0),
+    [cart]
+  );
+  // Compute total inline using subscribed `materials` + `cart` so it
+  // reacts to both changing (fixes stale ₹0 bug when API loads after cart is populated)
+  const totalPrice   = useMemo(
+    () =>
+      materials
+        .filter((m) => (Number(cart[m.id]) || 0) > 0)
+        .reduce((sum, m) => sum + (Number(m.price) || 0) * (Number(cart[m.id]) || 0), 0),
+    [materials, cart]
+  );
 
   const handleUpdateQuantity = useCallback((id, newQty) => {
     addToCart({ id, _setQty: newQty });
