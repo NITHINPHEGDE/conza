@@ -175,15 +175,16 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
 
   const handlePlaceOrder = useCallback(async () => {
     const ok = await submitBooking({
-      items: cartItems.map(item => ({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: cart[item.id] ?? item.quantity ?? 1,
-        image: item.image,
-        seller: item.seller,
-        unit: item.unit
-      })),
+     items: cartItems.map(item => ({
+  id:       item.id,
+  name:     item.name,
+  price:    item.price,
+  quantity: cart[item.id] ?? item.quantity ?? 1,
+  image:    item.image,
+  seller:   item.seller,
+  sellerId: item.sellerId,
+  unit:     item.unit,
+})),
       subtotal,
       platformFee,
       total,

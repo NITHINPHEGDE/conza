@@ -442,6 +442,26 @@ cancelActiveBooking: async () => {
   getCartItemCount: () =>
     Object.values(get().cart).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0),
 
+  // ── Seller Orders (material + rental) ───────────────────────────────────
+  sellerOrders:        [],
+  sellerOrdersLoading: false,
+
+  addSellerOrder: (order) => {
+    set((s) => ({ sellerOrders: [order, ...s.sellerOrders] }));
+  },
+
+  fetchMySellerOrders: async () => {
+    try {
+      set({ sellerOrdersLoading: true });
+      const data = await bookingAPI.getMySellerOrders();
+      set({ sellerOrders: data.orders || [] });
+    } catch (err) {
+      console.error('fetchMySellerOrders:', err.message);
+    } finally {
+      set({ sellerOrdersLoading: false });
+    }
+  },
+
   initSocketHandlers: () => {
     socket.off('booking_updated');
     socket.off('booking_status_changed');
@@ -469,6 +489,15 @@ cancelActiveBooking: async () => {
       if (data.fullDocument?.category) {
         get().fetchWorkersByCategory(data.fullDocument.category);
       }
+    });
+    socket.on('seller_order_status_changed', ({ orderId, status }) => {
+      set((s) => ({
+        sellerOrders: s.sellerOrders.map((o) =>
+          o._id === orderId || o._id?.toString() === orderId
+            ? { ...o, status }
+            : o
+        ),
+      }));
     });
   },
 }));

@@ -24,7 +24,8 @@ const getDashboard = async (req, res) => {
       monthRevenueAgg,
       lastMonthRevenueAgg,
       totalRevenueAgg,
-      recentOrders,
+      recentMaterialOrders,
+      recentRentalOrders,
       chartAgg,
     ] = await Promise.all([
 
@@ -77,7 +78,8 @@ const getDashboard = async (req, res) => {
       ]),
 
       // 5 most recent orders
-      SellerOrder.find({ seller: sellerId }).sort({ createdAt: -1 }).limit(5),
+      SellerOrder.find({ seller: sellerId, orderType: 'material' }).sort({ createdAt: -1 }).limit(5),
+      SellerOrder.find({ seller: sellerId, orderType: 'rental'   }).sort({ createdAt: -1 }).limit(5),
 
       // 7-day daily revenue chart
       SellerOrder.aggregate([
@@ -132,8 +134,9 @@ const getDashboard = async (req, res) => {
         totalProducts,
         lowStockItems: lowStockCount,
       },
-      recentOrders,
-      chartData,   // [n0, n1, n2, n3, n4, n5, n6]  — last 7 days
+      recentMaterialOrders,
+      recentRentalOrders,
+      chartData,    // [n0, n1, n2, n3, n4, n5, n6]  — last 7 days
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

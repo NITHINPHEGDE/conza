@@ -20,7 +20,7 @@ const HomeScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { mode, loadMode } = useModeStore();
   const {
-    vendor, kpi, chartData, dashLoading,
+    vendor, kpi, chartData, dashLoading, dashData,
     fetchDashboard, getFilteredOrders, fetchOrders,
   } = useVendorStore();
   const materialOrders = useVendorStore((s) => s.materialOrders);
@@ -119,7 +119,14 @@ const HomeScreen = ({ navigation }) => {
         <SalesChart chartData={chartData} />
 
         {/* Recent Orders */}
-        <RecentOrders orders={orders} />
+        {/* Recent Orders */}
+        <RecentOrders
+          orders={
+            mode === 'materials'
+              ? (dashData?.recentMaterialOrders || [])
+              : (dashData?.recentRentalOrders   || [])
+          }
+        />
 
       </ScrollView>
     </View>

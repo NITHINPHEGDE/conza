@@ -186,7 +186,8 @@ const getDashboard = async (req, res) => {
       revenueAgg,
       monthRevenueAgg,
       lastMonthRevenueAgg,
-      recentOrders,
+      recentMaterialOrders,
+      recentRentalOrders,
       chartData,
     ] = await Promise.all([
       Product.countDocuments({ seller: sellerId }),
@@ -215,7 +216,8 @@ const getDashboard = async (req, res) => {
         },
         { $group: { _id: null, total: { $sum: '$total' } } },
       ]),
-      SellerOrder.find({ seller: sellerId }).sort({ createdAt: -1 }).limit(5),
+      SellerOrder.find({ seller: sellerId, orderType: 'material' }).sort({ createdAt: -1 }).limit(5),
+      SellerOrder.find({ seller: sellerId, orderType: 'rental'   }).sort({ createdAt: -1 }).limit(5),
       // 7-day revenue chart
       SellerOrder.aggregate([
         {
@@ -258,8 +260,9 @@ const getDashboard = async (req, res) => {
         growth,
       },
       totalRevenue: revenue,
-      recentOrders,
-      chartData,   // [{ _id: 'YYYY-MM-DD', total: number }]
+      recentMaterialOrders,
+      recentRentalOrders,
+      chartData,   // [{ _id: 'YYYY-MM-DD', total: number }]   // [{ _id: 'YYYY-MM-DD', total: number }]
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

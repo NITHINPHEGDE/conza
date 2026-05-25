@@ -7,11 +7,12 @@ export const useBooking = (type) => {
   const [error,   setError]   = useState(null);
   const [success, setSuccess] = useState(false);
 
-  const clearCart  = useAppStore((s) => s.clearCart);
-  const userLat    = useAppStore((s) => s.userLat);
-  const userLng    = useAppStore((s) => s.userLng);
-  const userProfile = useAppStore((s) => s.userProfile);
+  const clearCart          = useAppStore((s) => s.clearCart);
+  const userLat            = useAppStore((s) => s.userLat);
+  const userLng            = useAppStore((s) => s.userLng);
+  const userProfile        = useAppStore((s) => s.userProfile);
   const setActiveBookingId = useAppStore((s) => s.setActiveBookingId);
+  const addSellerOrder     = useAppStore((s) => s.addSellerOrder);
 
   const submitBooking = useCallback(async (bookingData) => {
     try {
@@ -19,67 +20,149 @@ export const useBooking = (type) => {
       setError(null);
       setSuccess(false);
 
-      const { houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, isImmediate, scheduledDate, latitude, longitude } = bookingData;
+      const {
+        houseNumber, houseName, street, area, city, district,
+        state, pincode, paymentMethod, description,
+        isImmediate, scheduledDate, latitude, longitude,
+      } = bookingData;
 
       if (!city || !pincode) {
         throw new Error('Please provide at least city and pincode');
       }
 
-      // Build payload based on type
-      let payload = {
-        bookingType:   type,
-        houseNumber:   houseNumber || '',
-        houseName:     houseName   || '',
-        street:        street      || '',
-        address:       bookingData.address || street || '',
-        area:          area        || '',
-        city,
-        district:      district    || '',
-        state:         state       || '',
-        pincode,
-        description:   description || '',
-        isImmediate:   isImmediate !== undefined ? isImmediate : true,
-        scheduledDate: scheduledDate || null,
-        latitude:      latitude  || userLat,
-        longitude:     longitude || userLng,
-        paymentMethod: paymentMethod || 'cod',
-      };
-
+      // ── Labour booking → unchanged path ─────────────────────────────────
       if (type === 'labour') {
-        const { selectedWorkers, category } = bookingData;
-        const subtotal    = (selectedWorkers || []).reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0);
-        const platformFee = Math.round(subtotal * 0.05);
-        payload = {
-          ...payload,
+        const { selectedWorkers, category, subtotal, platformFee, total } = bookingData;
+        const sub = (selectedWorkers || []).reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0);
+        const fee = Math.round(sub * 0.05);
+        const payload = {
+          bookingType:   'labour',
           category,
           workers:        (selectedWorkers || []).map((w) => w._id || w.id),
           workerSnapshot: selectedWorkers || [],
-          subtotal,
-          platformFee,
-          total: subtotal + platformFee,
+          subtotal:       sub,
+          platformFee:    fee,
+          total:          sub + fee,
+          houseNumber:    houseNumber || '',
+          houseName:      houseName   || '',
+          street:         street      || '',
+          address:        street      || '',
+          area:           area        || '',
+          city,
+          district:       district    || '',
+          state:          state       || '',
+          pincode,
+          latitude:       latitude  || userLat,
+          longitude:      longitude || userLng,
+          paymentMethod:  paymentMethod || 'cod',
+          description:    description   || '',
+          isImmediate:    isImmediate !== undefined ? isImmediate : true,
+          scheduledDate:  scheduledDate || null,
         };
+        const result = await bookingAPI.createBooking(payload);
+        if (result.success && result.booking?._id) {
+          await setActiveBookingId(result.booking._id);
+        }
+        setSuccess(true);
+        return true;
       }
 
+      // ── Material order → seller order API ───────────────────────────────
       if (type === 'material') {
         const { items, subtotal, platformFee, total } = bookingData;
-        payload = { ...payload, items, subtotal, platformFee, total };
+
+        // Group items by sellerId — each seller gets a separate order
+        const bySellerMap = {};
+        (items || []).forEach((item) => {
+          const sid = item.sellerId || item.seller;
+          if (!sid) return;
+          if (!bySellerMap[sid]) bySellerMap[sid] = [];
+          bySellerMap[sid].push(item);
+        });
+
+        const sellerIds = Object.keys(bySellerMap);
+        if (!sellerIds.length) throw new Error('No seller information on cart items');
+
+        let lastOrderId = null;
+        for (const sellerId of sellerIds) {
+          const sellerItems = bySellerMap[sellerId];
+          const sellerSubtotal = sellerItems.reduce(
+            (sum, i) => sum + (Number(i.price) * (Number(i.quantity) || 1)), 0
+          );
+          const sellerTotal = Math.round(sellerSubtotal * 1.05) + 99; // platform fee + delivery
+
+          const payload = {
+            sellerId,
+            orderType:       'material',
+            items:           sellerItems.map((i) => ({
+              productId: i.id,
+              qty:       Number(i.quantity) || 1,
+              subtotal:  Number(i.price) * (Number(i.quantity) || 1),
+            })),
+            customerAddress: `${houseNumber || ''} ${houseName || ''} ${street || ''}`.trim(),
+            city,
+            pincode,
+            latitude:        latitude  || userLat,
+            longitude:       longitude || userLng,
+            subtotal:        sellerSubtotal,
+            deliveryCharge:  99,
+            total:           sellerTotal,
+            paymentMethod:   paymentMethod || 'cod',
+            notes:           description   || '',
+          };
+
+          const result = await bookingAPI.placeSellerOrder(payload);
+          if (result.success) {
+            lastOrderId = result.order._id;
+            addSellerOrder(result.order);
+          }
+        }
+
+        if (lastOrderId) await setActiveBookingId(lastOrderId);
+        clearCart();
+        setSuccess(true);
+        return true;
       }
 
+      // ── Rental order → seller order API ─────────────────────────────────
       if (type === 'rental') {
-        const { items, subtotal, platformFee, total, scheduledDate, notes } = bookingData;
-        payload = { ...payload, items, subtotal, platformFee, total, scheduledDate, notes };
+        const { item, quantity, subtotal, platformFee, total } = bookingData;
+        const sellerId = item?.sellerId;
+        if (!sellerId) throw new Error('No seller information on rental item');
+
+        const rentalSubtotal = Number(item.pricePerDay) * (Number(quantity) || 1);
+        const rentalTotal    = Math.round(rentalSubtotal * 1.05) + 149;
+
+        const payload = {
+          sellerId,
+          orderType:    'rental',
+          items: [{
+            productId: item.id,
+            qty:       Number(quantity) || 1,
+            days:      null,
+            subtotal:  rentalSubtotal,
+          }],
+          customerAddress: `${houseNumber || ''} ${houseName || ''} ${street || ''}`.trim(),
+          city,
+          pincode,
+          latitude:       latitude  || userLat,
+          longitude:      longitude || userLng,
+          subtotal:       rentalSubtotal,
+          deliveryCharge: 149,
+          total:          rentalTotal,
+          depositAmount:  item.deposit || 0,
+          paymentMethod:  paymentMethod || 'cod',
+          notes:          description   || '',
+        };
+
+        const result = await bookingAPI.placeSellerOrder(payload);
+        if (result.success) {
+          addSellerOrder(result.order);
+          await setActiveBookingId(result.order._id);
+        }
+        setSuccess(true);
+        return true;
       }
-
-      const result = await bookingAPI.createBooking(payload);
-
-      if (result.success && result.booking?._id) {
-        await setActiveBookingId(result.booking._id);
-      }
-
-      if (type === 'material') clearCart();
-
-      setSuccess(true);
-      return true;
 
     } catch (err) {
       setError(err.message || 'Something went wrong while booking');
@@ -87,7 +170,7 @@ export const useBooking = (type) => {
     } finally {
       setLoading(false);
     }
-  }, [type, clearCart, userLat, userLng]);
+  }, [type, clearCart, userLat, userLng, userProfile]);
 
   return { submitBooking, loading, error, success };
 };
