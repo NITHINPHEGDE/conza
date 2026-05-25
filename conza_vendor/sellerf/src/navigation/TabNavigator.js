@@ -9,6 +9,8 @@ import OrderDetailScreen from '../screens/OrderDetailScreen';
 import InventoryScreen from '../screens/InventoryScreen';
 import AddProductScreen from '../screens/AddProductScreen';
 import AddEquipmentScreen from '../screens/AddEquipmentScreen';
+import EditProductScreen from '../screens/EditProductScreen';
+import EditEquipmentScreen from '../screens/EditEquipmentScreen';
 import EarningsScreen from '../screens/EarningsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import { colors } from '../theme/colors';
@@ -51,6 +53,8 @@ const InventoryStack = () => (
     <Stack.Screen name="InventoryList" component={InventoryScreen} />
     <Stack.Screen name="AddProduct" component={AddProductScreen} />
     <Stack.Screen name="AddEquipment" component={AddEquipmentScreen} />
+    <Stack.Screen name="EditProduct" component={EditProductScreen} />
+    <Stack.Screen name="EditEquipment" component={EditEquipmentScreen} />
   </Stack.Navigator>
 );
 

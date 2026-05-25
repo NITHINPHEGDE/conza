@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect,useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, Image, Switch, ScrollView, Alert,
+  TextInput, Image, Switch, ScrollView, Alert, Platform, Modal, Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -44,7 +44,7 @@ const MAT_TABS = ['All', 'Active', 'Inactive', 'Low Stock'];
 const RENTAL_TABS = ['All', 'Active', 'Inactive', 'Available', 'Rented Out'];
 
 // ── Material Product Card ─────────────────────────────────────────────────────
-const MaterialCard = ({ item, onToggleStatus, onDelete }) => {
+const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
   const stockColor = item.stock === 0 ? colors.red : item.lowStock ? colors.orange : colors.green;
   const stockBg = item.stock === 0 ? colors.redSoft : item.lowStock ? colors.orangeSoft : colors.greenSoft;
   const stockLabel = item.stock === 0 ? 'Out of Stock' : item.lowStock ? 'Low Stock' : 'In Stock';
@@ -120,13 +120,13 @@ const MaterialCard = ({ item, onToggleStatus, onDelete }) => {
         <View style={styles.divider} />
 
         <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.editBtn} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.editBtn} onPress={() => onEdit(item)} activeOpacity={0.8}>
             <Text style={styles.editBtnText}>✏️  Edit</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.deleteBtn} onPress={() => onDelete(item.id)} activeOpacity={0.8}>
             <Text style={styles.deleteBtnText}>🗑️  Delete</Text>
           </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => onView(item)} activeOpacity={0.8} style={{ flex: 1 }}>
             <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.viewBtn}>
               <Text style={styles.viewBtnText}>👁️  View</Text>
             </LinearGradient>
@@ -138,8 +138,10 @@ const MaterialCard = ({ item, onToggleStatus, onDelete }) => {
 };
 
 // ── Rental Equipment Card ─────────────────────────────────────────────────────
-const RentalCard = ({ item, onToggleStatus, onDelete }) => {
-  const available = item.totalUnits - item.rentedOut;
+const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
+  const totalUnits = item.stock ?? 0;
+  const rentedOut = item.rentedOut ?? 0;
+  const available = totalUnits - rentedOut;
   const allRented = available === 0;
   const catStyle = RENTAL_CATEGORY_COLORS[item.category] || { bg: colors.surfaceElevated, color: colors.textMuted };
   const catEmoji = RENTAL_CATEGORY_EMOJI[item.category] || '📦';
@@ -204,7 +206,7 @@ const RentalCard = ({ item, onToggleStatus, onDelete }) => {
           <View>
             <Text style={styles.priceLabel}>Rental Rate</Text>
             <Text style={styles.priceText}>
-              ₹{item.pricePerDay.toLocaleString('en-IN')}
+              ₹{(item.rentalPrice || item.price || 0).toLocaleString('en-IN')}
               <Text style={styles.unitText}> /day</Text>
             </Text>
             <Text style={styles.depositText}>Deposit: ₹{item.deposit.toLocaleString('en-IN')}</Text>
@@ -221,12 +223,12 @@ const RentalCard = ({ item, onToggleStatus, onDelete }) => {
         {/* Fleet strip */}
         <View style={styles.fleetStrip}>
           <View style={styles.fleetCell}>
-            <Text style={styles.fleetValue}>{item.totalUnits}</Text>
+            <Text style={styles.fleetValue}>{totalUnits}</Text>
             <Text style={styles.fleetLabel}>Total Fleet</Text>
           </View>
           <View style={styles.fleetDivider} />
           <View style={styles.fleetCell}>
-            <Text style={[styles.fleetValue, { color: colors.orange }]}>{item.rentedOut}</Text>
+            <Text style={[styles.fleetValue, { color: colors.orange }]}>{rentedOut}</Text>
             <Text style={styles.fleetLabel}>Rented Out</Text>
           </View>
           <View style={styles.fleetDivider} />
@@ -237,7 +239,7 @@ const RentalCard = ({ item, onToggleStatus, onDelete }) => {
           <View style={styles.fleetDivider} />
           <View style={styles.fleetCell}>
             <Text style={[styles.fleetValue, { color: colors.indigo }]}>
-              {item.minDays}–{item.maxDays}d
+              {item.minRentalDays ?? '?'}–{'?'}d
             </Text>
             <Text style={styles.fleetLabel}>Duration</Text>
           </View>
@@ -248,13 +250,13 @@ const RentalCard = ({ item, onToggleStatus, onDelete }) => {
           <View style={styles.utilHeader}>
             <Text style={styles.utilLabel}>Utilisation</Text>
             <Text style={[styles.utilPct, { color: availColor }]}>
-              {Math.round((item.rentedOut / item.totalUnits) * 100)}%
+              {totalUnits > 0 ? Math.round((rentedOut / totalUnits) * 100) : 0}%
             </Text>
           </View>
           <View style={styles.utilTrack}>
             <View
               style={[styles.utilFill, {
-                width: `${(item.rentedOut / item.totalUnits) * 100}%`,
+                width: `${totalUnits > 0 ? (rentedOut / totalUnits) * 100 : 0}%`,
                 backgroundColor: availColor,
               }]}
             />
@@ -265,13 +267,13 @@ const RentalCard = ({ item, onToggleStatus, onDelete }) => {
         <View style={styles.divider} />
 
         <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.editBtn} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.editBtn} onPress={() => onEdit(item)} activeOpacity={0.8}>
             <Text style={styles.editBtnText}>✏️  Edit</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.deleteBtn} onPress={() => onDelete(item.id)} activeOpacity={0.8}>
             <Text style={styles.deleteBtnText}>🗑️  Delete</Text>
           </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => onView(item)} activeOpacity={0.8} style={{ flex: 1 }}>
             <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.viewBtn}>
               <Text style={styles.viewBtnText}>👁️  View</Text>
             </LinearGradient>
@@ -293,15 +295,27 @@ const InventoryScreen = ({ navigation }) => {
     toggleProductAvailability, deleteProduct,
   } = useVendorStore();
   const inventory = useVendorStore((s) => s.inventory);
+  const flatListRef = useRef(null);
+
+
+   useEffect(() => {
+    fetchInventory(mode);
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [mode]);
 
   useEffect(() => {
-    fetchInventory(mode);
-  }, [mode]);
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchInventory(mode);
+    });
+    return unsubscribe;
+  }, [navigation, mode]);
 
   const isRental = mode === 'rental';
   const [matTab, setMatTab] = useState('All');
   const [rentTab, setRentTab] = useState('All');
   const [search, setSearch] = useState('');
+  const [viewProduct, setViewProduct] = useState(null);
+  const [deleteProductItem, setDeleteProductItem] = useState(null);
 
   const items = useMemo(() => {
     return getFilteredInventory(mode);
@@ -318,21 +332,23 @@ const InventoryScreen = ({ navigation }) => {
     }
   };
 
+  const handleEdit = (item) => {
+    if (isRental) {
+      navigation.navigate('EditEquipment', { item });
+    } else {
+      navigation.navigate('EditProduct', { item });
+    }
+  };
+
+  const handleView = (item) => {
+    setViewProduct(item);
+  };
+
   const handleDelete = (id) => {
-    Alert.alert('Delete Product', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteProduct(id);
-          } catch (e) {
-            Alert.alert('Error', e.message);
-          }
-        },
-      },
-    ]);
+    const product = inventory.find((p) => p.id === id);
+    if (product) {
+      setDeleteProductItem(product);
+    }
   };
 
   const tabCounts = useMemo(() => {
@@ -444,6 +460,7 @@ const InventoryScreen = ({ navigation }) => {
 
       {/* List */}
       <FlatList
+        ref={flatListRef}
         data={filtered}
         keyExtractor={(i) => i.id}
         contentContainerStyle={styles.list}
@@ -456,12 +473,174 @@ const InventoryScreen = ({ navigation }) => {
         }
         renderItem={({ item }) =>
           isRental ? (
-            <RentalCard item={item} onToggleStatus={handleToggle} onDelete={handleDelete} />
+            <RentalCard item={item} onToggleStatus={handleToggle} onDelete={handleDelete} onEdit={handleEdit} onView={handleView} />
           ) : (
-            <MaterialCard item={item} onToggleStatus={handleToggle} onDelete={handleDelete} />
+            <MaterialCard item={item} onToggleStatus={handleToggle} onDelete={handleDelete} onEdit={handleEdit} onView={handleView} />
           )
         }
       />
+
+      {/* View Details Modal */}
+      {viewProduct && (
+        <Modal
+          visible={!!viewProduct}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setViewProduct(null)}
+        >
+          <Pressable 
+            style={styles.modalOverlay} 
+            onPress={() => setViewProduct(null)}
+          >
+            <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+              {/* Header / Image Section */}
+              <View style={styles.modalHeader}>
+                {viewProduct.image ? (
+                  <Image source={{ uri: viewProduct.image }} style={styles.modalImage} resizeMode="cover" />
+                ) : (
+                  <View style={styles.modalPlaceholderBg}>
+                    <Text style={styles.modalPlaceholderEmoji}>
+                      {viewProduct.type === 'rental' ? '🏗️' : '📦'}
+                    </Text>
+                  </View>
+                )}
+                <TouchableOpacity style={styles.modalCloseIconBtn} onPress={() => setViewProduct(null)}>
+                  <Text style={styles.modalCloseIconText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView contentContainerStyle={styles.modalScrollBody} showsVerticalScrollIndicator={false}>
+                {/* Product Title and Brand */}
+                <Text style={styles.modalTitle}>{viewProduct.name}</Text>
+                {viewProduct.brand ? (
+                  <Text style={styles.modalBrand}>Brand: {viewProduct.brand}</Text>
+                ) : null}
+
+                {/* Category & Status tags */}
+                <View style={styles.modalBadgeRow}>
+                  <View style={styles.modalCategoryBadge}>
+                    <Text style={styles.modalCategoryText}>
+                      {viewProduct.category}
+                    </Text>
+                  </View>
+                  <View style={[styles.modalStatusBadge, { backgroundColor: viewProduct.active ? colors.greenSoft : colors.redSoft }]}>
+                    <Text style={[styles.modalStatusText, { color: viewProduct.active ? colors.green : colors.red }]}>
+                      {viewProduct.active ? 'Active' : 'Inactive'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.modalDivider} />
+
+                {/* Grid Specifications */}
+                <View style={styles.modalGrid}>
+                  {viewProduct.type === 'rental' ? (
+                    <>
+                      <View style={styles.modalGridCell}>
+                        <Text style={styles.modalCellLabel}>Rental Rate</Text>
+                        <Text style={styles.modalCellValue}>₹{(viewProduct.rentalPrice || viewProduct.price || 0).toLocaleString('en-IN')}/day</Text>
+                      </View>
+                      <View style={styles.modalGridCell}>
+                        <Text style={styles.modalCellLabel}>Security Deposit</Text>
+                        <Text style={styles.modalCellValue}>₹{(viewProduct.deposit || 0).toLocaleString('en-IN')}</Text>
+                      </View>
+                      <View style={styles.modalGridCell}>
+                        <Text style={styles.modalCellLabel}>Min Rental Days</Text>
+                        <Text style={styles.modalCellValue}>{viewProduct.minRentalDays || 1} days</Text>
+                      </View>
+                      <View style={styles.modalGridCell}>
+                        <Text style={styles.modalCellLabel}>Total Fleet</Text>
+                        <Text style={styles.modalCellValue}>{viewProduct.stock} units</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.modalGridCell}>
+                        <Text style={styles.modalCellLabel}>Price</Text>
+                        <Text style={styles.modalCellValue}>₹{(viewProduct.price || 0).toLocaleString('en-IN')}</Text>
+                      </View>
+                      <View style={styles.modalGridCell}>
+                        <Text style={styles.modalCellLabel}>Unit</Text>
+                        <Text style={styles.modalCellValue}>{viewProduct.unit || 'piece'}</Text>
+                      </View>
+                      <View style={styles.modalGridCell}>
+                        <Text style={styles.modalCellLabel}>Stock Status</Text>
+                        <Text style={styles.modalCellValue}>{viewProduct.stock} in stock</Text>
+                      </View>
+                      <View style={styles.modalGridCell}>
+                        <Text style={styles.modalCellLabel}>SKU</Text>
+                        <Text style={styles.modalCellValue}>{viewProduct.sku || '—'}</Text>
+                      </View>
+                    </>
+                  )}
+                </View>
+
+                {/* Description */}
+                <Text style={styles.modalSectionTitle}>Description</Text>
+                <Text style={styles.modalDescText}>
+                  {viewProduct.description || 'No description provided for this listing.'}
+                </Text>
+              </ScrollView>
+
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setViewProduct(null)}>
+                <Text style={styles.modalCloseBtnText}>Close Details</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteProductItem && (
+        <Modal
+          visible={!!deleteProductItem}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDeleteProductItem(null)}
+        >
+          <Pressable 
+            style={styles.modalOverlay} 
+            onPress={() => setDeleteProductItem(null)}
+          >
+            <View style={styles.confirmContent} onStartShouldSetResponder={() => true}>
+              <View style={styles.warningIconBg}>
+                <Text style={styles.warningIconText}>⚠️</Text>
+              </View>
+              <Text style={styles.confirmTitle}>Delete Listing?</Text>
+              <Text style={styles.confirmMessage}>
+                Are you sure you want to permanently delete <Text style={styles.confirmBoldText}>"{deleteProductItem.name}"</Text>? This action cannot be undone and will remove the listing from the store.
+              </Text>
+
+              <View style={styles.confirmActions}>
+                <TouchableOpacity 
+                  style={styles.confirmCancelBtn} 
+                  onPress={() => setDeleteProductItem(null)}
+                >
+                  <Text style={styles.confirmCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.confirmDeleteBtn} 
+                  onPress={async () => {
+                    const productId = deleteProductItem.id;
+                    setDeleteProductItem(null); // Close the modal instantly
+                    try {
+                      await deleteProduct(productId);
+                    } catch (e) {
+                      if (Platform.OS === 'web') {
+                        alert(`Failed to delete listing: ${e.message}`);
+                      } else {
+                        Alert.alert('Error', `Failed to delete listing: ${e.message}`);
+                      }
+                    }
+                  }}
+                >
+                  <Text style={styles.confirmDeleteText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -495,7 +674,7 @@ const styles = StyleSheet.create({
   list: { padding: 16, paddingBottom: 40 },
 
   // ── Card ──────────────────────────────────────────────────────────────────
-  card: { backgroundColor: colors.surface, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: colors.border, elevation: 4, shadowColor: colors.cardShadow, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.09, shadowRadius: 10, overflow: 'hidden' },
+  card: { backgroundColor: colors.surface, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: colors.border, elevation: 4, shadowColor: colors.cardShadow, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.09, shadowRadius: 10 },
   cardInactive: { opacity: 0.55 },
 
   imageBox: { width: '100%', height: 160, backgroundColor: colors.surfaceElevated, position: 'relative' },
@@ -560,11 +739,51 @@ const styles = StyleSheet.create({
   editBtnText: { fontSize: 11, fontWeight: '700', color: colors.textSecondary },
   deleteBtn: { flex: 1, backgroundColor: colors.redSoft, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
   deleteBtnText: { fontSize: 11, fontWeight: '700', color: colors.red },
-  viewBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
+  viewBtn: { paddingVertical: 10, borderRadius: 12, alignItems: 'center', width: '100%' },
   viewBtnText: { fontSize: 11, fontWeight: '700', color: colors.white },
 
   empty: { alignItems: 'center', paddingTop: 80 },
   emptyText: { fontSize: 15, color: colors.textMuted, fontWeight: '600', marginTop: 12 },
+
+  // Modals Styles
+  modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { backgroundColor: colors.surface, width: '100%', maxWidth: 500, borderRadius: 24, paddingBottom: 20, overflow: 'hidden', elevation: 10, shadowColor: colors.black, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, maxHeight: '85%' },
+  modalHeader: { height: 200, width: '100%', position: 'relative', backgroundColor: colors.surfaceElevated },
+  modalImage: { width: '100%', height: '100%' },
+  modalPlaceholderBg: { flex: 1, backgroundColor: colors.accentAmberSoft, justifyContent: 'center', alignItems: 'center' },
+  modalPlaceholderEmoji: { fontSize: 72 },
+  modalCloseIconBtn: { position: 'absolute', top: 16, right: 16, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  modalCloseIconText: { fontSize: 16, color: colors.white, fontWeight: '700' },
+  modalScrollBody: { padding: 20 },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
+  modalBrand: { fontSize: 14, color: colors.textSecondary, fontWeight: '600', marginBottom: 12 },
+  modalBadgeRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  modalCategoryBadge: { backgroundColor: colors.surfaceElevated, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: colors.border },
+  modalCategoryText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
+  modalStatusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  modalStatusText: { fontSize: 12, fontWeight: '700' },
+  modalDivider: { height: 1, backgroundColor: colors.borderLight, marginBottom: 16 },
+  modalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 },
+  modalGridCell: { width: '47%', backgroundColor: colors.surfaceElevated, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+  modalCellLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  modalCellValue: { fontSize: 14, fontWeight: '800', color: colors.textPrimary },
+  modalSectionTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, marginBottom: 8 },
+  modalDescText: { fontSize: 13, color: colors.textSecondary, lineHeight: 20, marginBottom: 20 },
+  modalCloseBtn: { marginHorizontal: 20, backgroundColor: colors.textPrimary, paddingVertical: 14, borderRadius: 16, alignItems: 'center' },
+  modalCloseBtnText: { fontSize: 14, fontWeight: '700', color: colors.white },
+
+  // Confirm / Destructive Modal
+  confirmContent: { backgroundColor: colors.surface, width: '90%', maxWidth: 400, borderRadius: 24, padding: 24, alignItems: 'center', elevation: 10, shadowColor: colors.black, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20 },
+  warningIconBg: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.redSoft, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  warningIconText: { fontSize: 32 },
+  confirmTitle: { fontSize: 18, fontWeight: '800', color: colors.textPrimary, marginBottom: 8 },
+  confirmMessage: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  confirmBoldText: { fontWeight: '700', color: colors.textPrimary },
+  confirmActions: { flexDirection: 'row', width: '100%', gap: 12 },
+  confirmCancelBtn: { flex: 1, borderWidth: 1, borderColor: colors.border, paddingVertical: 12, borderRadius: 14, alignItems: 'center', backgroundColor: colors.surfaceElevated },
+  confirmCancelText: { fontSize: 14, fontWeight: '700', color: colors.textSecondary },
+  confirmDeleteBtn: { flex: 1, backgroundColor: colors.red, paddingVertical: 12, borderRadius: 14, alignItems: 'center' },
+  confirmDeleteText: { fontSize: 14, fontWeight: '700', color: colors.white },
 });
 
 export default InventoryScreen;

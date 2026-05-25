@@ -117,9 +117,7 @@ const AddProductScreen = ({ navigation }) => {
         images:        imageUrls,   // ← clean Cloudinary URLs, no base64
       });
 
-      Alert.alert('Product Added', `${name} is now listed in your inventory.`, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+navigation.navigate('InventoryList');
     } catch (err) {
       Alert.alert('Error', err.message);
     } finally {

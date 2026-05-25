@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     TextInput, Image, Alert, KeyboardAvoidingView, Platform,
+    ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import useVendorStore from '../store/useVendorStore';
 import { colors } from '../theme/colors';
+import { uploadImagesToCloudinary } from '../utils/cloudinary';
 
 const CATEGORIES = [
     'Concrete Equipment', 'Scaffolding', 'Earthmoving',
@@ -28,7 +31,6 @@ const CATEGORY_EMOJI = {
 };
 
 const UNITS = ['unit', 'set', 'pair', 'piece'];
-
 const MAX_IMAGES = 5;
 
 const Field = ({ label, children }) => (
@@ -40,6 +42,10 @@ const Field = ({ label, children }) => (
 
 const AddEquipmentScreen = ({ navigation }) => {
     const insets = useSafeAreaInsets();
+    const { addProduct } = useVendorStore();
+
+    const [loading, setLoading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState('');
 
     const [images, setImages] = useState([]);
     const [name, setName] = useState('');
@@ -52,7 +58,6 @@ const AddEquipmentScreen = ({ navigation }) => {
     const [sku, setSku] = useState('');
     const [description, setDescription] = useState('');
     const [minDays, setMinDays] = useState('');
-    const [maxDays, setMaxDays] = useState('');
     const [weight, setWeight] = useState('');
     const [dimensions, setDimensions] = useState('');
 
@@ -82,14 +87,52 @@ const AddEquipmentScreen = ({ navigation }) => {
         setImages((prev) => prev.filter((_, i) => i !== index));
     };
 
-    const handleAdd = () => {
-        if (!name.trim()) { Alert.alert('Missing Field', 'Please enter equipment name.'); return; }
-        if (!category) { Alert.alert('Missing Field', 'Please select a category.'); return; }
+    // ── Save to backend ──────────────────────────────────────────────────────
+    const handleAdd = async () => {
+        if (!name.trim())        { Alert.alert('Missing Field', 'Please enter equipment name.'); return; }
+        if (!category)           { Alert.alert('Missing Field', 'Please select a category.'); return; }
         if (!pricePerDay.trim()) { Alert.alert('Missing Field', 'Please enter price per day.'); return; }
-        if (!totalUnits.trim()) { Alert.alert('Missing Field', 'Please enter total units.'); return; }
-        Alert.alert('Success', 'Equipment added successfully! (Demo)', [
-            { text: 'OK', onPress: () => navigation.goBack() },
-        ]);
+        if (!totalUnits.trim())  { Alert.alert('Missing Field', 'Please enter total units.'); return; }
+
+        setLoading(true);
+        try {
+            let imageUrls = [];
+            if (images.length > 0) {
+                setUploadProgress('Uploading images...');
+                imageUrls = await uploadImagesToCloudinary(
+                    images,
+                    (done, total) => setUploadProgress(`Uploading image ${done} of ${total}...`)
+                );
+            }
+
+            setUploadProgress('Saving equipment...');
+
+            await addProduct({
+                title:         name,
+                brand,
+                category,
+                unit,
+                type:          'rental',
+                price:         parseFloat(pricePerDay),
+                rentalPrice:   parseFloat(pricePerDay),
+                deposit:       deposit ? parseFloat(deposit) : 0,
+                minRentalDays: minDays ? parseInt(minDays) : 1,
+                stock:         parseInt(totalUnits),
+                sku,
+                description,
+                weight,
+                images:        imageUrls,
+            });
+
+            // Go straight to Inventory — new item is already in the store
+            navigation.navigate('InventoryList');
+        } catch (err) {
+            console.log('AddEquipment error:', err.message);
+            Alert.alert('Error', err.message);
+        } finally {
+            setLoading(false);
+            setUploadProgress('');
+        }
     };
 
     return (
@@ -104,6 +147,13 @@ const AddEquipmentScreen = ({ navigation }) => {
                 <Text style={styles.headerTitle}>Add Equipment</Text>
                 <View style={{ width: 36 }} />
             </View>
+
+            {loading && (
+                <View style={styles.loadingOverlay}>
+                    <ActivityIndicator size="large" color={colors.accentAmber} />
+                    {uploadProgress ? <Text style={styles.loadingText}>{uploadProgress}</Text> : null}
+                </View>
+            )}
 
             <ScrollView
                 contentContainerStyle={styles.scroll}
@@ -161,33 +211,31 @@ const AddEquipmentScreen = ({ navigation }) => {
                     <Field label="Brand / Manufacturer">
                         <TextInput
                             style={styles.input}
-                            placeholder="e.g. Ajax, Schwing"
+                            placeholder="e.g. Schwing Stetter"
                             placeholderTextColor={colors.textMuted}
                             value={brand}
                             onChangeText={setBrand}
                         />
                     </Field>
 
-                    <Field label="SKU / Equipment Code">
+                    <Field label="SKU / Model Number">
                         <TextInput
                             style={styles.input}
-                            placeholder="e.g. MXR-001"
+                            placeholder="e.g. CM-500-2024"
                             placeholderTextColor={colors.textMuted}
                             value={sku}
                             onChangeText={setSku}
-                            autoCapitalize="characters"
                         />
                     </Field>
 
                     <Field label="Description">
                         <TextInput
                             style={[styles.input, styles.textArea]}
-                            placeholder="Describe the equipment, capacity, features..."
+                            placeholder="Describe the equipment, condition, features..."
                             placeholderTextColor={colors.textMuted}
                             value={description}
                             onChangeText={setDescription}
                             multiline
-                            numberOfLines={4}
                             textAlignVertical="top"
                         />
                     </Field>
@@ -202,12 +250,10 @@ const AddEquipmentScreen = ({ navigation }) => {
                                 key={cat}
                                 style={[styles.chip, category === cat && styles.chipActive]}
                                 onPress={() => setCategory(cat)}
-                                activeOpacity={0.8}
+                                activeOpacity={0.7}
                             >
                                 <Text style={styles.chipEmoji}>{CATEGORY_EMOJI[cat]}</Text>
-                                <Text style={[styles.chipText, category === cat && styles.chipTextActive]}>
-                                    {cat}
-                                </Text>
+                                <Text style={[styles.chipText, category === cat && styles.chipTextActive]}>{cat}</Text>
                             </TouchableOpacity>
                         ))}
                     </View>
@@ -216,111 +262,97 @@ const AddEquipmentScreen = ({ navigation }) => {
                 {/* ── Rental Pricing ── */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Rental Pricing</Text>
-
                     <View style={styles.rowInputs}>
                         <View style={styles.halfField}>
-                            <Text style={styles.fieldLabel}>Price per Day (₹) *</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="0.00"
-                                placeholderTextColor={colors.textMuted}
-                                value={pricePerDay}
-                                onChangeText={setPricePerDay}
-                                keyboardType="numeric"
-                            />
+                            <Field label="Price Per Day (₹) *">
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="0"
+                                    placeholderTextColor={colors.textMuted}
+                                    keyboardType="numeric"
+                                    value={pricePerDay}
+                                    onChangeText={setPricePerDay}
+                                />
+                            </Field>
                         </View>
                         <View style={styles.halfField}>
-                            <Text style={styles.fieldLabel}>Security Deposit (₹)</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="0.00"
-                                placeholderTextColor={colors.textMuted}
-                                value={deposit}
-                                onChangeText={setDeposit}
-                                keyboardType="numeric"
-                            />
+                            <Field label="Security Deposit (₹)">
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="0"
+                                    placeholderTextColor={colors.textMuted}
+                                    keyboardType="numeric"
+                                    value={deposit}
+                                    onChangeText={setDeposit}
+                                />
+                            </Field>
                         </View>
                     </View>
-
-                    <View style={styles.rowInputs}>
-                        <View style={styles.halfField}>
-                            <Text style={styles.fieldLabel}>Min Rental Days</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="1"
-                                placeholderTextColor={colors.textMuted}
-                                value={minDays}
-                                onChangeText={setMinDays}
-                                keyboardType="numeric"
-                            />
-                        </View>
-                        <View style={styles.halfField}>
-                            <Text style={styles.fieldLabel}>Max Rental Days</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="30"
-                                placeholderTextColor={colors.textMuted}
-                                value={maxDays}
-                                onChangeText={setMaxDays}
-                                keyboardType="numeric"
-                            />
-                        </View>
-                    </View>
+                    <Field label="Minimum Rental Days">
+                        <TextInput
+                            style={styles.input}
+                            placeholder="1"
+                            placeholderTextColor={colors.textMuted}
+                            keyboardType="numeric"
+                            value={minDays}
+                            onChangeText={setMinDays}
+                        />
+                    </Field>
                 </View>
 
-                {/* ── Fleet ── */}
+                {/* ── Stock & Unit ── */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Fleet & Unit</Text>
-
+                    <Text style={styles.sectionTitle}>Stock & Unit</Text>
                     <Field label="Total Units Available *">
                         <TextInput
                             style={styles.input}
                             placeholder="e.g. 3"
                             placeholderTextColor={colors.textMuted}
+                            keyboardType="numeric"
                             value={totalUnits}
                             onChangeText={setTotalUnits}
-                            keyboardType="numeric"
                         />
                     </Field>
-
-                    <Text style={[styles.fieldLabel, { marginBottom: 8 }]}>Unit Type</Text>
-                    <View style={styles.unitRow}>
-                        {UNITS.map((u) => (
-                            <TouchableOpacity
-                                key={u}
-                                style={[styles.unitChip, unit === u && styles.unitChipActive]}
-                                onPress={() => setUnit(u)}
-                                activeOpacity={0.8}
-                            >
-                                <Text style={[styles.chipText, unit === u && styles.chipTextActive]}>{u}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                    <Field label="Unit Type">
+                        <View style={styles.unitRow}>
+                            {UNITS.map((u) => (
+                                <TouchableOpacity
+                                    key={u}
+                                    style={[styles.unitChip, unit === u && styles.unitChipActive]}
+                                    onPress={() => setUnit(u)}
+                                >
+                                    <Text style={[styles.chipText, unit === u && styles.chipTextActive]}>{u}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </Field>
                 </View>
 
-                {/* ── Specs ── */}
+                {/* ── Physical Details ── */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Specifications</Text>
+                    <Text style={styles.sectionTitle}>Physical Details</Text>
                     <View style={styles.rowInputs}>
                         <View style={styles.halfField}>
-                            <Text style={styles.fieldLabel}>Weight</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="e.g. 250 kg"
-                                placeholderTextColor={colors.textMuted}
-                                value={weight}
-                                onChangeText={setWeight}
-                            />
+                            <Field label="Weight">
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="e.g. 250 kg"
+                                    placeholderTextColor={colors.textMuted}
+                                    value={weight}
+                                    onChangeText={setWeight}
+                                />
+                            </Field>
                         </View>
                         <View style={styles.halfField}>
-                            <Text style={styles.fieldLabel}>Dimensions</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="e.g. 1.2m × 0.8m"
-                                placeholderTextColor={colors.textMuted}
-                                value={dimensions}
-                                onChangeText={setDimensions}
-                            />
+                            <Field label="Dimensions">
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="e.g. 1.2m × 0.8m"
+                                    placeholderTextColor={colors.textMuted}
+                                    value={dimensions}
+                                    onChangeText={setDimensions}
+                                />
+                            </Field>
                         </View>
                     </View>
                 </View>
@@ -330,13 +362,16 @@ const AddEquipmentScreen = ({ navigation }) => {
                     <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
                         <Text style={styles.cancelBtnText}>Cancel</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.addBtnWrap} onPress={handleAdd} activeOpacity={0.85}>
+                    <TouchableOpacity style={styles.addBtnWrap} onPress={handleAdd} activeOpacity={0.85} disabled={loading}>
                         <LinearGradient
                             colors={[colors.gradientStart, colors.gradientEnd]}
                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                             style={styles.addBtn}
                         >
-                            <Text style={styles.addBtnText}>+ Add Equipment</Text>
+                            {loading
+                                ? <ActivityIndicator size="small" color={colors.white} />
+                                : <Text style={styles.addBtnText}>+ Add Equipment</Text>
+                            }
                         </LinearGradient>
                     </TouchableOpacity>
                 </View>
@@ -357,6 +392,9 @@ const styles = StyleSheet.create({
     backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
     backIcon: { fontSize: 24, color: colors.textPrimary, fontWeight: '300', lineHeight: 28 },
     headerTitle: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
+
+    loadingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 99, alignItems: 'center', justifyContent: 'center', gap: 12 },
+    loadingText: { fontSize: 14, color: colors.white, fontWeight: '600' },
 
     scroll: { padding: 16, paddingBottom: 50 },
 
@@ -390,9 +428,9 @@ const styles = StyleSheet.create({
         fontSize: 13, color: colors.textPrimary, fontWeight: '500',
         borderWidth: 1, borderColor: colors.border,
     },
-    textArea: { minHeight: 90, paddingTop: 12 },
+    textArea: { minHeight: 90, paddingTop: 12, textAlignVertical: 'top' },
 
-    rowInputs: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+    rowInputs: { flexDirection: 'row', gap: 10 },
     halfField: { flex: 1 },
 
     chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -402,7 +440,7 @@ const styles = StyleSheet.create({
     chipText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
     chipTextActive: { color: colors.accentAmber, fontWeight: '800' },
 
-    unitRow: { flexDirection: 'row', gap: 8 },
+    unitRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
     unitChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border },
     unitChipActive: { backgroundColor: colors.accentAmberSoft, borderColor: colors.accentAmber },
 

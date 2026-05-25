@@ -223,7 +223,7 @@ const RentalDetail = ({ order, onAccept, onReject, onStatusChange }) => {
               <Text style={styles.itemUnit}>{item.days} days · per {item.unit}</Text>
             </View>
             <Text style={[styles.itemQty,   { flex: 1, textAlign: 'center' }]}>{item.qty}</Text>
-            <Text style={[styles.itemPrice, { flex: 2, textAlign: 'right'  }]}>₹{item.pricePerDay.toLocaleString('en-IN')}</Text>
+            <Text style={[styles.itemPrice, { flex: 2, textAlign: 'right'  }]}>₹{(item.rentalPrice || item.price || 0).toLocaleString('en-IN')}</Text>
             <Text style={[styles.itemTotal, { flex: 2, textAlign: 'right'  }]}>₹{((item.qty || 0) * (item.pricePerDay || 0) * (item.days || 0)).toLocaleString('en-IN')}</Text>
           </View>
         ))}

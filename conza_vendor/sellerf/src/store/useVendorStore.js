@@ -156,17 +156,43 @@ const useVendorStore = create((set, get) => ({
   },
 
   deleteProduct: async (productId) => {
-    await api.delete(`/products/${productId}`);
+    const originalInventory = get().inventory;
+    // Optimistically update the state instantly
     set((s) => ({ inventory: s.inventory.filter((p) => p.id !== productId) }));
+
+    try {
+      await api.delete(`/products/${productId}`);
+    } catch (err) {
+      // Rollback to original state if API call fails
+      set({ inventory: originalInventory });
+      throw err;
+    }
   },
 
   toggleProductAvailability: async (productId) => {
-    const data = await api.patch(`/products/${productId}/availability`, {});
+    // Optimistic update — flip immediately so UI responds instantly
     set((s) => ({
       inventory: s.inventory.map((p) =>
-        p.id === productId ? { ...p, active: data.isAvailable } : p
+        p.id === productId ? { ...p, active: !p.active } : p
       ),
     }));
+    try {
+      const data = await api.patch(`/products/${productId}/availability`, {});
+      // Sync with server truth in case it differs
+      set((s) => ({
+        inventory: s.inventory.map((p) =>
+          p.id === productId ? { ...p, active: data.isAvailable } : p
+        ),
+      }));
+    } catch (err) {
+      // Rollback on failure
+      set((s) => ({
+        inventory: s.inventory.map((p) =>
+          p.id === productId ? { ...p, active: !p.active } : p
+        ),
+      }));
+      throw err;
+    }
   },
 
   getFilteredInventory: (mode) => {
