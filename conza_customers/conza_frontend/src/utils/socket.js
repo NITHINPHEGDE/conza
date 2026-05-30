@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = 'http://10.44.176.155:5000'; // Match your backend port
+const SOCKET_URL = 'http://10.239.242.155:5000'; // Match your backend port
 
 export const socket = io(SOCKET_URL, {
   autoConnect: false, // Connect manually when app starts

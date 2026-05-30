@@ -1,15 +1,18 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors } from '../theme/colors';
 
-const KPICard = ({ label, value, icon, accent }) => (
-  <View style={[styles.card, { borderTopColor: accent, borderTopWidth: 3 }]}>
+const KPICard = ({ label, value, icon, accent, onPress }) => (
+  <TouchableOpacity
+    style={[styles.card, { borderTopColor: accent, borderTopWidth: 3 }]}
+    onPress={onPress}
+    activeOpacity={0.75}
+  >
     <Text style={styles.icon}>{icon}</Text>
     <Text style={[styles.value, { color: accent }]}>{value}</Text>
     <Text style={styles.label}>{label}</Text>
-  </View>
+  </TouchableOpacity>
 );
-
 const styles = StyleSheet.create({
   card: {
     flex:            1,

@@ -92,7 +92,7 @@ const getCategories = async (req, res) => {
     const parsedLng = parseFloat(lng);
 
     if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
-      const RADIUS = 10000; // 10 km for category counts
+      const RADIUS = 50000; // 50 km for category counts
       const pipeline = [
         {
           $geoNear: {
@@ -140,7 +140,7 @@ const getCategories = async (req, res) => {
 // ── GET /api/workers/search?q=pipe fitting&lat=12.9&lng=77.6 ─────────────────
 const searchWorkers = async (req, res) => {
   try {
-    const { q, lat, lng, radius = 10000 } = req.query;
+    const { q, lat, lng, radius = 50000 } = req.query;
     if (!q) return res.json({ success: true, workers: [] });
 
     const regex = new RegExp(q, 'i');

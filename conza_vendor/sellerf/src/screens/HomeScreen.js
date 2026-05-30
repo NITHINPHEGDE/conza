@@ -44,18 +44,18 @@ const HomeScreen = ({ navigation }) => {
     return getFilteredOrders(mode);
   }, [materialOrders, rentalOrders, mode]);
 
-  const kpiConfig = mode === 'materials'
+ const kpiConfig = mode === 'materials'
     ? [
-        { label: 'New Orders',       value: kpi.newOrders,       icon: '📦', accent: colors.indigo  },
-        { label: 'Pending Delivery', value: kpi.pendingDelivery, icon: '🚚', accent: colors.orange  },
-        { label: 'Active Listings',  value: kpi.activeListings,  icon: '🏷️', accent: colors.green   },
-        { label: 'Low Stock',        value: kpi.lowStockItems,   icon: '⚠️', accent: colors.red     },
+        { label: 'New Orders',       value: kpi.newOrders,       icon: '📦', accent: colors.indigo,  nav: () => navigation.navigate('Orders') },
+        { label: 'Pending Delivery', value: kpi.pendingDelivery, icon: '🚚', accent: colors.orange,  nav: () => navigation.navigate('Orders') },
+        { label: 'Active Listings',  value: kpi.activeListings,  icon: '🏷️', accent: colors.green,   nav: () => navigation.navigate('Inventory') },
+        { label: 'Low Stock',        value: kpi.lowStockItems,   icon: '⚠️', accent: colors.red,     nav: () => navigation.navigate('Inventory') },
       ]
     : [
-        { label: 'New Requests',     value: kpi.newOrders,       icon: '📋', accent: colors.indigo  },
-        { label: 'Active Rentals',   value: kpi.pendingDelivery, icon: '🔧', accent: colors.orange  },
-        { label: 'Equipment Listed', value: kpi.activeListings,  icon: '🏗️', accent: colors.green   },
-        { label: 'Returns Due',      value: kpi.lowStockItems,   icon: '📅', accent: colors.red     },
+        { label: 'New Requests',     value: kpi.newOrders,       icon: '📋', accent: colors.indigo,  nav: () => navigation.navigate('Orders') },
+        { label: 'Active Rentals',   value: kpi.pendingDelivery, icon: '🔧', accent: colors.orange,  nav: () => navigation.navigate('Orders') },
+        { label: 'Equipment Listed', value: kpi.activeListings,  icon: '🏗️', accent: colors.green,   nav: () => navigation.navigate('Inventory') },
+        { label: 'Returns Due',      value: kpi.lowStockItems,   icon: '📅', accent: colors.red,     nav: () => navigation.navigate('Orders') },
       ];
 
   return (
@@ -105,12 +105,16 @@ const HomeScreen = ({ navigation }) => {
         </LinearGradient>
 
         {/* KPI Cards */}
+        {/* KPI Cards */}
         <View style={styles.kpiRow}>
           {kpiConfig.map((k) => (
             <KPICard
               key={k.label}
-              {...k}
-              onPress={() => navigation.navigate('Orders')}
+              label={k.label}
+              value={k.value}
+              icon={k.icon}
+              accent={k.accent}
+              onPress={k.nav}
             />
           ))}
         </View>
@@ -120,12 +124,15 @@ const HomeScreen = ({ navigation }) => {
 
         {/* Recent Orders */}
         {/* Recent Orders */}
+        {/* Recent Orders */}
         <RecentOrders
           orders={
             mode === 'materials'
               ? (dashData?.recentMaterialOrders || [])
               : (dashData?.recentRentalOrders   || [])
           }
+          navigation={navigation}
+          mode={mode}
         />
 
       </ScrollView>

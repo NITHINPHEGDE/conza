@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ScrollView, Alert,
+  TouchableOpacity, ScrollView, Alert, Modal, Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -55,12 +55,50 @@ const InfoRow = ({ icon, text, bold }) => (
 
 const Divider = () => <View style={styles.divider} />;
 
+// ── Status Change Modal ───────────────────────────────────────────────────────
+const StatusChangeModal = ({ visible, order, targetStatus, statusConfig, onConfirm, onCancel }) => {
+  if (!order || !targetStatus) return null;
+  const cfg = statusConfig[targetStatus] || { label: targetStatus, icon: '🔄', color: colors.textPrimary, bg: colors.surfaceElevated };
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <Pressable style={styles.modalOverlay} onPress={onCancel}>
+        <View style={styles.confirmModal} onStartShouldSetResponder={() => true}>
+          <Text style={styles.confirmTitle}>Update Order Status</Text>
+          <Text style={styles.confirmBody}>
+            Are you sure you want to mark order{'\n'}
+            <Text style={styles.confirmOrderId}>#{order.id}</Text>
+            {'\n'}as{' '}
+            <Text style={[styles.confirmStatus, { color: cfg.color }]}>{cfg.icon} {cfg.label}</Text>?
+          </Text>
+          <View style={styles.confirmActions}>
+            <TouchableOpacity style={styles.confirmCancel} onPress={onCancel} activeOpacity={0.8}>
+              <Text style={styles.confirmCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.confirmOk, { backgroundColor: cfg.color }]} onPress={onConfirm} activeOpacity={0.85}>
+              <Text style={styles.confirmOkText}>Confirm</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+};
+
 // ── Material Order Card ───────────────────────────────────────────────────────
-const MaterialOrderCard = ({ order, onViewDetails, onAccept, onReject }) => {
+const MaterialOrderCard = ({ order, onViewDetails, onAccept, onReject, onStatusChange }) => {
   const s         = MATERIAL_STATUS_CONFIG[order.status] || MATERIAL_STATUS_CONFIG.new;
   const itemNames = (order.items || []).map((i) => i.name).join(', ');
   const totalQty  = (order.items || []).reduce((sum, i) => sum + (i.qty || 0), 0);
   const total     = order.total || 0;
+
+  const NEXT_STATUSES = {
+    new:              ['accepted', 'cancelled'],
+    accepted:         ['out_for_delivery', 'cancelled'],
+    out_for_delivery: ['delivered', 'cancelled'],
+    delivered:        [],
+    cancelled:        [],
+  };
+  const nextStatuses = NEXT_STATUSES[order.status] || [];
 
   return (
     <View style={styles.card}>
@@ -122,6 +160,31 @@ const MaterialOrderCard = ({ order, onViewDetails, onAccept, onReject }) => {
 
       <Divider />
 
+      {/* ── Status update buttons ── */}
+      {nextStatuses.length > 0 && (
+        <>
+          <View style={styles.statusUpdateRow}>
+            <Text style={styles.statusUpdateLabel}>Update Status:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusBtnScroll}>
+              {nextStatuses.map((st) => {
+                const sc = MATERIAL_STATUS_CONFIG[st] || {};
+                return (
+                  <TouchableOpacity
+                    key={st}
+                    style={[styles.statusUpdateBtn, { backgroundColor: sc.bg, borderColor: sc.color }]}
+                    onPress={() => onStatusChange(order, st)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.statusUpdateBtnText, { color: sc.color }]}>{sc.icon} {sc.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+          <Divider />
+        </>
+      )}
+
       {/* ── Actions ── */}
       <View style={styles.actionsRow}>
         <TouchableOpacity
@@ -163,12 +226,22 @@ const MaterialOrderCard = ({ order, onViewDetails, onAccept, onReject }) => {
 };
 
 // ── Rental Order Card ─────────────────────────────────────────────────────────
-const RentalOrderCard = ({ order, onViewDetails, onAccept, onReject }) => {
+// ── Rental Order Card ─────────────────────────────────────────────────────────
+const RentalOrderCard = ({ order, onViewDetails, onAccept, onReject, onStatusChange }) => {
   const s         = RENTAL_STATUS_CONFIG[order.status] || RENTAL_STATUS_CONFIG.new;
   const isOverdue = order.status === 'overdue';
   const itemNames = (order.items || []).map((i) => i.name).join(', ');
   const total     = order.total || 0;
   const deposit   = order.depositAmount || 0;
+
+  const NEXT_STATUSES = {
+    new:       ['active', 'cancelled'],
+    active:    ['returned', 'overdue', 'cancelled'],
+    overdue:   ['returned', 'cancelled'],
+    returned:  [],
+    cancelled: [],
+  };
+  const nextStatuses = NEXT_STATUSES[order.status] || [];
 
   return (
     <View style={[styles.card, isOverdue && styles.cardOverdue]}>
@@ -256,6 +329,31 @@ const RentalOrderCard = ({ order, onViewDetails, onAccept, onReject }) => {
 
       <Divider />
 
+      {/* ── Status update buttons ── */}
+      {nextStatuses.length > 0 && (
+        <>
+          <View style={styles.statusUpdateRow}>
+            <Text style={styles.statusUpdateLabel}>Update Status:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusBtnScroll}>
+              {nextStatuses.map((st) => {
+                const sc = RENTAL_STATUS_CONFIG[st] || {};
+                return (
+                  <TouchableOpacity
+                    key={st}
+                    style={[styles.statusUpdateBtn, { backgroundColor: sc.bg, borderColor: sc.color }]}
+                    onPress={() => onStatusChange(order, st)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.statusUpdateBtnText, { color: sc.color }]}>{sc.icon} {sc.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+          <Divider />
+        </>
+      )}
+
       {/* ── Actions ── */}
       <View style={styles.actionsRow}>
         <TouchableOpacity
@@ -303,6 +401,7 @@ const RentalOrderCard = ({ order, onViewDetails, onAccept, onReject }) => {
 };
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
+// ── Main Screen ───────────────────────────────────────────────────────────────
 const OrdersScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { mode } = useModeStore();
@@ -310,24 +409,52 @@ const OrdersScreen = ({ navigation }) => {
   const materialOrders = useVendorStore((s) => s.materialOrders);
   const rentalOrders   = useVendorStore((s) => s.rentalOrders);
 
+  const [matTab,  setMatTab]  = useState('all');
+  const [rentTab, setRentTab] = useState('all');
+
+  // Confirmation modal state
+  const [confirmVisible,  setConfirmVisible]  = useState(false);
+  const [pendingOrder,    setPendingOrder]    = useState(null);
+  const [pendingStatus,   setPendingStatus]   = useState(null);
+
   useEffect(() => {
     fetchOrders(mode);
   }, [mode]);
-
-  const [matTab,     setMatTab]     = useState('all');
-  const [rentTab,    setRentTab]    = useState('all');
 
   const isMaterials = mode === 'materials';
   const tabs        = isMaterials ? MATERIAL_TABS : RENTAL_TABS;
   const activeTab   = isMaterials ? matTab        : rentTab;
   const setTab      = isMaterials ? setMatTab     : setRentTab;
-  const orders      = useMemo(() => {
-    return getFilteredOrders(mode);
-  }, [materialOrders, rentalOrders, mode]);
+  const orders      = useMemo(() => getFilteredOrders(mode), [materialOrders, rentalOrders, mode]);
 
   const handleViewDetails = (order) => {
     navigation.navigate('OrderDetail', { order, mode });
   };
+
+  const handleStatusChange = useCallback((order, targetStatus) => {
+    setPendingOrder(order);
+    setPendingStatus(targetStatus);
+    setConfirmVisible(true);
+  }, []);
+
+  const handleConfirmStatus = useCallback(async () => {
+    if (!pendingOrder || !pendingStatus) return;
+    setConfirmVisible(false);
+    try {
+      await updateOrderStatus(pendingOrder.id, pendingStatus);
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setPendingOrder(null);
+      setPendingStatus(null);
+    }
+  }, [pendingOrder, pendingStatus, updateOrderStatus]);
+
+  const handleCancelConfirm = useCallback(() => {
+    setConfirmVisible(false);
+    setPendingOrder(null);
+    setPendingStatus(null);
+  }, []);
 
   const tabCounts = useMemo(() => {
     const counts = { all: orders.length };
@@ -342,8 +469,20 @@ const OrdersScreen = ({ navigation }) => {
     return orders.filter((o) => o.status === activeTab);
   }, [orders, activeTab]);
 
+  const activeStatusConfig = isMaterials ? MATERIAL_STATUS_CONFIG : RENTAL_STATUS_CONFIG;
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
+
+      {/* Confirmation Modal */}
+      <StatusChangeModal
+        visible={confirmVisible}
+        order={pendingOrder}
+        targetStatus={pendingStatus}
+        statusConfig={activeStatusConfig}
+        onConfirm={handleConfirmStatus}
+        onCancel={handleCancelConfirm}
+      />
 
       {/* Header */}
       <View style={styles.header}>
@@ -397,31 +536,17 @@ const OrdersScreen = ({ navigation }) => {
             <MaterialOrderCard
               order={order}
               onViewDetails={handleViewDetails}
-              onAccept={async () => {
-                try {
-                  await updateOrderStatus(order.id, order.type === 'rental' ? 'active' : 'accepted');
-                } catch (e) { Alert.alert('Error', e.message); }
-              }}
-              onReject={async () => {
-                try {
-                  await updateOrderStatus(order.id, 'cancelled');
-                } catch (e) { Alert.alert('Error', e.message); }
-              }}
+              onStatusChange={handleStatusChange}
+              onAccept={() => handleStatusChange(order, 'accepted')}
+              onReject={() => handleStatusChange(order, 'cancelled')}
             />
           ) : (
             <RentalOrderCard
               order={order}
               onViewDetails={handleViewDetails}
-              onAccept={async () => {
-                try {
-                  await updateOrderStatus(order.id, order.type === 'rental' ? 'active' : 'accepted');
-                } catch (e) { Alert.alert('Error', e.message); }
-              }}
-              onReject={async () => {
-                try {
-                  await updateOrderStatus(order.id, 'cancelled');
-                } catch (e) { Alert.alert('Error', e.message); }
-              }}
+              onStatusChange={handleStatusChange}
+              onAccept={() => handleStatusChange(order, 'active')}
+              onReject={() => handleStatusChange(order, 'cancelled')}
             />
           )
         }
@@ -516,8 +641,29 @@ const styles = StyleSheet.create({
   callBtnText:   { fontSize: 11, fontWeight: '700', color: colors.red },
 
   // Empty
+  // Empty
   empty:     { alignItems: 'center', paddingTop: 80 },
   emptyText: { fontSize: 15, color: colors.textMuted, fontWeight: '600', marginTop: 12 },
+
+  // Status update row
+  statusUpdateRow:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, gap: 8 },
+  statusUpdateLabel:  { fontSize: 10, color: colors.textMuted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, flexShrink: 0 },
+  statusBtnScroll:    { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  statusUpdateBtn:    { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
+  statusUpdateBtnText:{ fontSize: 11, fontWeight: '700' },
+
+  // Confirm modal
+  modalOverlay:   { flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  confirmModal:   { backgroundColor: colors.surface, borderRadius: 20, padding: 24, width: '100%', maxWidth: 340, elevation: 10, shadowColor: colors.cardShadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
+  confirmTitle:   { fontSize: 17, fontWeight: '800', color: colors.textPrimary, marginBottom: 12, textAlign: 'center' },
+  confirmBody:    { fontSize: 14, color: colors.textSecondary, fontWeight: '500', textAlign: 'center', lineHeight: 22, marginBottom: 20 },
+  confirmOrderId: { fontWeight: '800', color: colors.textPrimary },
+  confirmStatus:  { fontWeight: '800' },
+  confirmActions: { flexDirection: 'row', gap: 10 },
+  confirmCancel:  { flex: 1, backgroundColor: colors.surfaceElevated, paddingVertical: 12, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  confirmCancelText:{ fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+  confirmOk:      { flex: 1, paddingVertical: 12, borderRadius: 14, alignItems: 'center' },
+  confirmOkText:  { fontSize: 13, fontWeight: '800', color: colors.white },
 });
 
 export default OrdersScreen;

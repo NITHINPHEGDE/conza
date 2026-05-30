@@ -201,29 +201,34 @@ const useVendorStore = create((set, get) => ({
   },
 
   // ── Socket listeners ──────────────────────────────────────────────────────
+  // ── Socket listeners ──────────────────────────────────────────────────────
   initSocketListeners: () => {
     socket.off('new_order');
     socket.off('order_updated');
     socket.off('order_change');
     socket.off('product_change');
 
-    const refreshAll = () => {
+    const refreshOrders = () => {
       get().fetchOrders('materials');
       get().fetchOrders('rental');
+    };
+
+    const refreshAll = () => {
+      refreshOrders();
       get().fetchDashboard();
     };
 
-    socket.on('new_order', ({ orderId, orderType, customerName, total }) => {
+    socket.on('new_order', ({ orderId, orderType }) => {
       const mode = orderType === 'material' ? 'materials' : 'rental';
       get().fetchOrders(mode);
       get().fetchDashboard();
     });
 
-    socket.on('order_updated', ({ orderId, status }) => {
+    socket.on('order_updated', () => {
       refreshAll();
     });
 
-    socket.on('order_change', ({ operationType, orderId, status }) => {
+    socket.on('order_change', () => {
       refreshAll();
     });
 

@@ -23,9 +23,9 @@ const PLATFORM_FEE_RATE = 0.05;
 const DELIVERY_FEE = 99;
 
 const PAYMENT_METHODS = [
-  { id: 'cod',  label: 'Cash on Delivery',    sub: 'Pay on delivery',              icon: '💵' },
-  { id: 'upi',  label: 'UPI / Digital Wallet', sub: 'PhonePe, Google Pay, Paytm',  icon: '📲' },
-  { id: 'card', label: 'Credit / Debit Card',  sub: 'All major cards accepted',     icon: '💳' },
+  { id: 'cod',    label: 'Cash on Delivery',    sub: 'Pay on delivery',              icon: '💵' },
+  { id: 'upi',    label: 'UPI / Digital Wallet', sub: 'PhonePe, Google Pay, Paytm',  icon: '📲' },
+  { id: 'online', label: 'Credit / Debit Card',  sub: 'All major cards accepted',     icon: '💳' },
 ];
 
 // ─── Material Item Row ────────────────────────────────────────────────────────

@@ -32,11 +32,25 @@ const placeOrder = async (req, res) => {
 
     const user = req.user;
 
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(sellerId)) {
+      return res.status(400).json({ success: false, message: `Invalid sellerId: ${sellerId}` });
+    }
+
+    // Validate all productIds are present before hitting the DB
+    for (const item of items) {
+      if (!item.productId || !mongoose.Types.ObjectId.isValid(item.productId)) {
+        return res.status(400).json({ success: false, message: `Invalid or missing productId: ${item.productId}` });
+      }
+    }
+
     // Build item snapshots & decrement stock
     const snapshotItems = await Promise.all(
       items.map(async (item) => {
         const product = await Product.findById(item.productId);
-        if (!product) throw new Error(`Product ${item.productId} not found`);
+        if (!product) {
+          throw new Error(`Product not found: ${item.productId}`);
+        }
         if (orderType === 'material' && product.stock < item.qty) {
           throw new Error(`Insufficient stock for ${product.title}`);
         }
@@ -81,26 +95,36 @@ const placeOrder = async (req, res) => {
 
     await order.populate('seller', 'pushToken shopName');
 
-    // Real-time: notify seller room
-    const io = getIO();
-    io.to(`seller_${sellerId}`).emit('new_seller_order', {
-      orderId: order._id,
-      orderType,
-      customerName: user.fullName,
-      total,
-    });
+    // Real-time: notify seller room (non-fatal — socket may not be connected)
+    try {
+      const io = getIO();
+      io.to(`seller_${sellerId}`).emit('new_seller_order', {
+        orderId: order._id,
+        orderType,
+        customerName: user.fullName,
+        total,
+      });
+    } catch (_) {}
 
-    // Push notification to seller
-    await sendSellerPush(
+    // Push notification to seller (non-fatal)
+    sendSellerPush(
       order.seller.pushToken,
       '🛒 New Order Received',
       `${user.fullName} placed an order · ₹${total}`,
       { orderId: order._id.toString() }
-    );
+    ).catch(() => {});
 
     res.status(201).json({ success: true, order });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    const fs = require('fs');
+    fs.appendFileSync('error.log', `${new Date().toISOString()} - ${err.message}\n${err.stack}\n\n`);
+    // Stock/validation/cast errors → 400, unexpected errors → 500
+    const isClientError = 
+      err.name === 'ValidationError' || 
+      err.name === 'CastError' || 
+      err.message?.includes('not found') || 
+      err.message?.includes('Insufficient stock');
+    res.status(isClientError ? 400 : 500).json({ success: false, message: err.message });
   }
 };
 

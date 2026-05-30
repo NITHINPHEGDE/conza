@@ -1,8 +1,11 @@
-import React, { useState, useMemo, useEffect,useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, Image, Switch, ScrollView, Alert, Platform, Modal, Pressable,
+  Dimensions,
 } from 'react-native';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import useModeStore from '../store/useModeStore';
@@ -40,6 +43,73 @@ const RENTAL_CATEGORY_EMOJI = {
   'Lighting': '💡', 'Formwork': '🪵', 'Safety Equipment': '🦺', 'Other': '📦',
 };
 
+// ── Image Carousel ────────────────────────────────────────────────────────────
+const ImageCarousel = ({ images, height = 160, placeholderBg, placeholderEmoji, placeholderLabel, placeholderColor }) => {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const scrollRef = useRef(null);
+  const validImages = (images || []).filter(Boolean);
+
+  if (validImages.length === 0) {
+    return (
+      <View style={[carouselStyles.placeholder, { height, backgroundColor: placeholderBg }]}>
+        <Text style={carouselStyles.placeholderEmoji}>{placeholderEmoji}</Text>
+        <Text style={[carouselStyles.placeholderLabel, { color: placeholderColor }]}>{placeholderLabel}</Text>
+      </View>
+    );
+  }
+
+  if (validImages.length === 1) {
+    return <Image source={{ uri: validImages[0] }} style={{ width: '100%', height }} resizeMode="cover" />;
+  }
+
+  const onScroll = (e) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / e.nativeEvent.layoutMeasurement.width);
+    setActiveIdx(idx);
+  };
+
+  return (
+    <View style={{ width: '100%', height }}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        style={{ width: '100%', height }}
+      >
+        {validImages.map((uri, i) => (
+          <Image key={i} source={{ uri }} style={{ width: SCREEN_WIDTH - 32, height }} resizeMode="cover" />
+        ))}
+      </ScrollView>
+      {/* Dots */}
+      <View style={carouselStyles.dots}>
+        {validImages.map((_, i) => (
+          <View
+            key={i}
+            style={[carouselStyles.dot, i === activeIdx && carouselStyles.dotActive]}
+          />
+        ))}
+      </View>
+      {/* Image counter */}
+      <View style={carouselStyles.counter}>
+        <Text style={carouselStyles.counterText}>{activeIdx + 1}/{validImages.length}</Text>
+      </View>
+    </View>
+  );
+};
+
+const carouselStyles = StyleSheet.create({
+  placeholder:      { alignItems: 'center', justifyContent: 'center', gap: 6 },
+  placeholderEmoji: { fontSize: 44 },
+  placeholderLabel: { fontSize: 12, fontWeight: '700' },
+  dots:             { position: 'absolute', bottom: 8, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 4 },
+  dot:              { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.5)' },
+  dotActive:        { width: 14, backgroundColor: '#FFF' },
+  counter:          { position: 'absolute', bottom: 8, right: 10, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
+  counterText:      { fontSize: 10, color: '#FFF', fontWeight: '700' },
+});
+
 const MAT_TABS = ['All', 'Active', 'Inactive', 'Low Stock'];
 const RENTAL_TABS = ['All', 'Active', 'Inactive', 'Available', 'Rented Out'];
 
@@ -55,14 +125,14 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
   return (
     <View style={[styles.card, !item.active && styles.cardInactive]}>
       <View style={styles.imageBox}>
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.image} resizeMode="cover" />
-        ) : (
-          <View style={[styles.imagePlaceholder, { backgroundColor: catStyle.bg }]}>
-            <Text style={styles.placeholderEmoji}>{catEmoji}</Text>
-            <Text style={[styles.placeholderCategory, { color: catStyle.color }]}>{item.category}</Text>
-          </View>
-        )}
+        <ImageCarousel
+          images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}
+          height={160}
+          placeholderBg={catStyle.bg}
+          placeholderEmoji={catEmoji}
+          placeholderLabel={item.category}
+          placeholderColor={catStyle.color}
+        />
         <View style={[styles.statusPill, { backgroundColor: item.active ? colors.greenSoft : colors.redSoft }]}>
           <View style={[styles.statusDot, { backgroundColor: item.active ? colors.green : colors.red }]} />
           <Text style={[styles.statusPillText, { color: item.active ? colors.green : colors.red }]}>
@@ -155,15 +225,16 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
     <View style={[styles.card, !item.active && styles.cardInactive]}>
 
       {/* Image area */}
+      {/* Image area */}
       <View style={styles.imageBox}>
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.image} resizeMode="cover" />
-        ) : (
-          <View style={[styles.imagePlaceholder, { backgroundColor: catStyle.bg }]}>
-            <Text style={styles.placeholderEmoji}>{catEmoji}</Text>
-            <Text style={[styles.placeholderCategory, { color: catStyle.color }]}>{item.category}</Text>
-          </View>
-        )}
+        <ImageCarousel
+          images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}
+          height={160}
+          placeholderBg={catStyle.bg}
+          placeholderEmoji={catEmoji}
+          placeholderLabel={item.category}
+          placeholderColor={catStyle.color}
+        />
 
         <View style={[styles.statusPill, { backgroundColor: item.active ? colors.greenSoft : colors.redSoft }]}>
           <View style={[styles.statusDot, { backgroundColor: item.active ? colors.green : colors.red }]} />
@@ -494,16 +565,16 @@ const InventoryScreen = ({ navigation }) => {
           >
             <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
               {/* Header / Image Section */}
+             {/* Header / Image Section */}
               <View style={styles.modalHeader}>
-                {viewProduct.image ? (
-                  <Image source={{ uri: viewProduct.image }} style={styles.modalImage} resizeMode="cover" />
-                ) : (
-                  <View style={styles.modalPlaceholderBg}>
-                    <Text style={styles.modalPlaceholderEmoji}>
-                      {viewProduct.type === 'rental' ? '🏗️' : '📦'}
-                    </Text>
-                  </View>
-                )}
+                <ImageCarousel
+                  images={viewProduct.images && viewProduct.images.length > 0 ? viewProduct.images : (viewProduct.image ? [viewProduct.image] : [])}
+                  height={220}
+                  placeholderBg={colors.surfaceElevated}
+                  placeholderEmoji={viewProduct.type === 'rental' ? '🏗️' : '📦'}
+                  placeholderLabel={viewProduct.category || ''}
+                  placeholderColor={colors.textMuted}
+                />
                 <TouchableOpacity style={styles.modalCloseIconBtn} onPress={() => setViewProduct(null)}>
                   <Text style={styles.modalCloseIconText}>✕</Text>
                 </TouchableOpacity>

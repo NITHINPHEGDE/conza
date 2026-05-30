@@ -27,6 +27,8 @@ const getDashboard = async (req, res) => {
       recentMaterialOrders,
       recentRentalOrders,
       chartAgg,
+      completedOrdersAgg,
+      pendingOrdersAgg,
     ] = await Promise.all([
 
       Product.countDocuments({ seller: sellerId }),
@@ -51,7 +53,7 @@ const getDashboard = async (req, res) => {
             createdAt: { $gte: startOfMonth },
           },
         },
-        { $group: { _id: null, total: { $sum: '$total' } } },
+        { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } },
       ]),
 
       // Last month revenue (for growth %)
@@ -74,7 +76,7 @@ const getDashboard = async (req, res) => {
             status: { $in: ['delivered', 'returned'] },
           },
         },
-        { $group: { _id: null, total: { $sum: '$total' } } },
+        { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 }, avgOrder: { $avg: '$total' } } },
       ]),
 
       // 5 most recent orders
@@ -98,11 +100,36 @@ const getDashboard = async (req, res) => {
         },
         { $sort: { _id: 1 } },
       ]),
+
+      // Completed orders count + total
+      SellerOrder.aggregate([
+        {
+          $match: { seller: sellerId, status: { $in: ['delivered', 'returned'] } },
+        },
+        { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } },
+      ]),
+
+      // Pending payout orders (active / accepted / out_for_delivery)
+      SellerOrder.aggregate([
+        {
+          $match: {
+            seller: sellerId,
+            status: { $in: ['new', 'accepted', 'out_for_delivery', 'active'] },
+          },
+        },
+        { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } },
+      ]),
     ]);
 
-    const monthRevenue = monthRevenueAgg[0]?.total  || 0;
-    const lastMonth    = lastMonthRevenueAgg[0]?.total || 0;
-    const totalRevenue = totalRevenueAgg[0]?.total   || 0;
+    const monthRevenue      = monthRevenueAgg[0]?.total     || 0;
+    const lastMonth         = lastMonthRevenueAgg[0]?.total || 0;
+    const totalRevenue      = totalRevenueAgg[0]?.total     || 0;
+    const totalOrderCount   = totalRevenueAgg[0]?.count     || 0;
+    const avgOrderValue     = totalRevenueAgg[0]?.avgOrder  || 0;
+    const completedTotal    = completedOrdersAgg[0]?.total  || 0;
+    const completedCount    = completedOrdersAgg[0]?.count  || 0;
+    const pendingPayoutAmt  = pendingOrdersAgg[0]?.total    || 0;
+    const pendingPayoutCnt  = pendingOrdersAgg[0]?.count    || 0;
 
     const growth = lastMonth > 0
       ? `${monthRevenue >= lastMonth ? '+' : ''}${Math.round(((monthRevenue - lastMonth) / lastMonth) * 100)}%`
@@ -133,6 +160,17 @@ const getDashboard = async (req, res) => {
         activeRentals,
         totalProducts,
         lowStockItems: lowStockCount,
+      },
+      earnings: {
+        monthRevenue,
+        totalRevenue,
+        totalOrderCount,
+        avgOrderValue:    Math.round(avgOrderValue),
+        completedTotal,
+        completedCount,
+        pendingPayoutAmt,
+        pendingPayoutCnt,
+        growth,
       },
       recentMaterialOrders,
       recentRentalOrders,

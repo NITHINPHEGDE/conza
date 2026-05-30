@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Seller backend runs on port 5001
 // Change IP to your machine's LAN IP for physical device testing
 export const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || 'http://10.44.176.155:5001/api';
+  process.env.EXPO_PUBLIC_API_URL || 'http://10.239.242.155:5001/api';
 
 const getToken = () => AsyncStorage.getItem('vendor_token');
 
