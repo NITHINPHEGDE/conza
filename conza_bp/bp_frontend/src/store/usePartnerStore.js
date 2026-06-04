@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { toggleOnlineAPI } from '../services/workerService';
-import { startLocationTracking, stopLocationTracking } from '../services/locationService';
+import {
+  startLocationTracking,
+  stopLocationTracking,
+  setTrackingMode,
+  TRACKING_MODE,
+} from '../services/locationService';
 import { socket, connectSocket } from '../utils/socket';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -195,9 +200,11 @@ const usePartnerStore = create((set, get) => ({
 
       if (status === 'accepted') {
         await get().setActiveJobId(requestId);
+        setTrackingMode(TRACKING_MODE.ACTIVE);   // worker is now en-route
       }
       if (status === 'cancelled' && get().activeJobId === requestId) {
         await get().setActiveJobId(null);
+        setTrackingMode(TRACKING_MODE.IDLE);     // back to waiting
       }
 
       await get().fetchRequests();
@@ -267,6 +274,7 @@ const usePartnerStore = create((set, get) => ({
     await updateRequestStatus(activeJob.id, 'arrived');
     const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     set({ jobStatus: 'arrived', checkInTime: timeStr });
+    setTrackingMode(TRACKING_MODE.ACTIVE);  // still on-site, keep high-frequency
   },
 
   startWork: async () => {
@@ -274,6 +282,7 @@ const usePartnerStore = create((set, get) => ({
     if (!activeJob) return;
     await updateRequestStatus(activeJob.id, 'in_progress');
     set({ jobStatus: 'in_progress' });
+    setTrackingMode(TRACKING_MODE.ACTIVE);  // work started, stay high-frequency
   },
 
   completeJob: async (paymentMethod = 'cod') => {
@@ -312,6 +321,7 @@ const usePartnerStore = create((set, get) => ({
 
     await AsyncStorage.removeItem('activeJobId');
     set({ activeJobId: null });
+    setTrackingMode(TRACKING_MODE.IDLE);  // job done, back to waiting for next job
   },
 
 lastPaymentMethod: null,
@@ -328,6 +338,7 @@ lastPaymentMethod: null,
       lastPaymentMethod: null,
     });
     AsyncStorage.removeItem('activeJobId');
+    setTrackingMode(TRACKING_MODE.IDLE);  // guard: ensure mode resets on any job reset
   },
 
   activeJobId: null,

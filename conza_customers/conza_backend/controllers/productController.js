@@ -1,5 +1,6 @@
 // conzacsb/controllers/productController.js
 const Product = require('../models/Product');
+const { withCache, invalidateCache } = require('../utils/cacheHelpers');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../middleware/cloudinaryUpload');
 
 // GET /api/seller/products  (seller's own products)
@@ -29,26 +30,33 @@ const getMyProducts = async (req, res) => {
 const getPublicProducts = async (req, res) => {
   try {
     const { type, search, category, page = 1, limit = 20 } = req.query;
+    const cacheKey = `products:catalog:${type||'all'}:${category||'all'}:${page}:${limit}:${search||''}`;
+    const TTL      = search ? 0 : 360; // don't cache search results
 
-    const query = { isAvailable: true };
-    if (type)     query.type     = type;
-    if (category) query.category = category;
-    if (search)   query.$text    = { $search: search };
-    // For material type: hide out-of-stock items
-    if (type === 'material') query.stock = { $gt: 0 };
+    const fetch = async () => {
+      const query = { isAvailable: true };
+      if (type)     query.type     = type;
+      if (category) query.category = category;
+      if (search)   query.$text    = { $search: search };
+      if (type === 'material') query.stock = { $gt: 0 };
 
-    const skip = (Number(page) - 1) * Number(limit);
+      const skip = (Number(page) - 1) * Number(limit);
+      const [products, total] = await Promise.all([
+        Product.find(query)
+          .populate('seller', 'name shopName phone city profileImage')
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(Number(limit)),
+        Product.countDocuments(query),
+      ]);
+      return { products, total, page: Number(page), pages: Math.ceil(total / limit) };
+    };
 
-    const [products, total] = await Promise.all([
-      Product.find(query)
-        .populate('seller', 'name shopName phone city profileImage')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(Number(limit)),
-      Product.countDocuments(query),
-    ]);
+    const data = TTL > 0
+      ? await withCache(cacheKey, TTL, fetch)
+      : await fetch();
 
-    res.json({ success: true, products, total, page: Number(page), pages: Math.ceil(total / limit) });
+    res.json({ success: true, ...data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -57,8 +65,14 @@ const getPublicProducts = async (req, res) => {
 // GET /api/products/:id
 const getProductById = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id)
-      .populate('seller', 'name shopName phone city profileImage address');
+    const cacheKey = `products:detail:${req.params.id}`;
+    const TTL      = 360;
+
+    const product = await withCache(cacheKey, TTL, async () => {
+      return Product.findById(req.params.id)
+        .populate('seller', 'name shopName phone city profileImage address');
+    });
+
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
     res.json({ success: true, product });
   } catch (err) {
@@ -142,6 +156,10 @@ const updateProduct = async (req, res) => {
     if (lowStockAt !== undefined)    product.lowStockAt    = Number(lowStockAt);
 
     await product.save();
+    await invalidateCache(
+      `products:detail:${product._id}`,
+      'products:catalog:*'
+    );
     res.json({ success: true, product });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -166,6 +184,10 @@ const deleteProduct = async (req, res) => {
     }
 
     await product.deleteOne();
+    await invalidateCache(
+      `products:detail:${product._id}`,
+      'products:catalog:*'
+    );
     res.json({ success: true, message: 'Product deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -179,6 +201,10 @@ const toggleAvailability = async (req, res) => {
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
     product.isAvailable = !product.isAvailable;
     await product.save();
+    await invalidateCache(
+      `products:detail:${product._id}`,
+      'products:catalog:*'
+    );
     res.json({ success: true, isAvailable: product.isAvailable });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

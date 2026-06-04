@@ -18,23 +18,49 @@ const GRAD_START = { x: 0, y: 0 };
 const GRAD_END   = { x: 1, y: 0 };
 
 // ── Map with WebView + Navigate button ───────────────────────────────────────
+const buildLeafletHTML = (lat, lng, label) => `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #map { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map', { zoomControl: false, attributionControl: false })
+               .setView([${lat}, ${lng}], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    L.marker([${lat}, ${lng}]).addTo(map).bindPopup('${label || 'Job Location'}').openPopup();
+  </script>
+</body>
+</html>
+`;
+
 const MapPlaceholder = React.memo(({ onNavigate, address, latitude, longitude }) => {
   const hasCoords = latitude && longitude;
-
-  const mapUrl = hasCoords
-    ? `https://maps.google.com/maps?q=${latitude},${longitude}&z=15&output=embed`
-    : address
-    ? `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=15&output=embed`
+  const leafletHtml = hasCoords
+    ? buildLeafletHTML(latitude, longitude, address || 'Job Location')
     : null;
 
   return (
     <View style={styles.mapPlaceholder}>
-      {mapUrl ? (
+      {leafletHtml ? (
         <WebView
-          source={{ uri: mapUrl }}
+          source={{ html: leafletHtml }}
           style={styles.webview}
           scrollEnabled={false}
           pointerEvents="none"
+          javaScriptEnabled
+          domStorageEnabled
+          startInLoadingState
+          originWhitelist={['*']}
         />
       ) : (
         <View style={styles.mapFallback}>
@@ -337,8 +363,8 @@ const styles = StyleSheet.create({
   liveDot:          { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.danger },
   liveText:         { fontSize: 10, fontWeight: '800', color: colors.danger, letterSpacing: 0.8 },
   content:          { paddingBottom: 40 },
-  mapPlaceholder:   { height: 200, backgroundColor: '#E8EDF5', margin: 20, borderRadius: 18, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, position: 'relative' },
-  webview:          { flex: 1, width: '100%', height: '100%' },
+  mapPlaceholder:   { height: 200, backgroundColor: '#E8EDF5', margin: 20, borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, position: 'relative' },
+  webview:          { width: '100%', height: 200 },
   mapFallback:      { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
   mapFallbackText:  { fontSize: 13, color: colors.textMuted, fontWeight: '500' },
   navigateBtn:      { position: 'absolute', bottom: 14, right: 14 },

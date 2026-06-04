@@ -11,7 +11,11 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": ["audio", "fetch", "remote-notification"]
+        "UIBackgroundModes": [
+          "audio",
+          "fetch",
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -54,7 +58,9 @@
         {
           "icon": "./assets/images/icon.png",
           "color": "#F0A500",
-          "sounds": ["./assets/alert.mp3"]
+          "sounds": [
+            "./assets/alert.mp3"
+          ]
         }
       ],
       [
@@ -76,7 +82,8 @@
           "locationWhenInUsePermission": "Allow Conza Partner to use your location while you are online."
         }
       ],
-      "expo-background-task"
+      "expo-background-task",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {

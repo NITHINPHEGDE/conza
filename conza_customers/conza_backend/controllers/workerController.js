@@ -1,6 +1,11 @@
-const Worker = require('../models/Worker');
+// conza_backend/controllers/workerController.js
+const Worker             = require('../models/Worker');
+const { withCache }      = require('../utils/cacheHelpers');
 
-// ── GET /api/workers/nearby?category=Plumber&lat=12.9&lng=77.6&radius=5000 ───
+// ── Coordinate rounding helper (groups nearby users into same bucket) ─────────
+const round3 = (n) => Math.round(parseFloat(n) * 1000) / 1000;
+
+// ── GET /api/workers/nearby ────────────────────────────────────────────────────
 const getNearbyWorkers = async (req, res) => {
   try {
     const { category, lat, lng, radius = 50000 } = req.query;
@@ -9,63 +14,69 @@ const getNearbyWorkers = async (req, res) => {
       return res.status(400).json({ success: false, message: 'lat and lng are required' });
     }
 
-    const query = {
-      location: {
-        $near: {
-          $geometry:    { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] },
-          $maxDistance: parseInt(radius),   // metres; 5000 = 5 km
+    const rLat = round3(lat);
+    const rLng = round3(lng);
+    const cat  = category || 'all';
+    const cacheKey = `workers:nearby:${cat}:${rLat}:${rLng}:${radius}`;
+    const TTL      = 8; // seconds — short so availability stays fresh
+
+    const workersWithDistance = await withCache(cacheKey, TTL, async () => {
+      const query = {
+        location: {
+          $near: {
+            $geometry:    { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] },
+            $maxDistance: parseInt(radius),
+          },
         },
-      },
-      isAvailable: { $ne: false }
-    };
-
-    if (category) query.category = category;
-
-    const workers = await Worker.find(query).select(
-      'fullName username profileImage category skills minCharge locationText experience bio isOnline rating totalJobs memberSince location'
-    );
-
-    // Calculate distance for each worker (straight-line km)
-    const userLat = parseFloat(lat);
-    const userLng = parseFloat(lng);
-
-    const workersWithDistance = workers.map((w) => {
-      const [wLng, wLat] = w.location.coordinates;
-      const R = 6371; // Earth radius km
-      const dLat = ((wLat - userLat) * Math.PI) / 180;
-      const dLng = ((wLng - userLng) * Math.PI) / 180;
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos((userLat * Math.PI) / 180) *
-          Math.cos((wLat * Math.PI) / 180) *
-          Math.sin(dLng / 2) ** 2;
-      const distKm = (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1);
-
-      return {
-        id:           w._id,
-        _id:          w._id,
-        name:         w.fullName,
-        initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
-        category:     w.category,
-        skills:       w.skills,
-        pricePerDay:  w.minCharge || 0,
-        minCharge:    w.minCharge,
-        rating:       w.rating,
-        totalJobs:    w.totalJobs,
-        distance:     `${distKm} km away`,
-        distanceKm:   parseFloat(distKm),
-        available:    w.isOnline,
-        isOnline:     w.isOnline,
-        bio:          w.bio,
-        experience:   w.experience,
-        locationText: w.locationText,
-        memberSince:  w.memberSince,
-        profileImage: w.profileImage,
+        isAvailable: { $ne: false },
       };
-    });
+      if (category) query.category = category;
 
-    // Sort nearest first
-    workersWithDistance.sort((a, b) => a.distanceKm - b.distanceKm);
+      const workers = await Worker.find(query).select(
+        'fullName username profileImage category skills minCharge locationText experience bio isOnline rating totalJobs memberSince location'
+      );
+
+      const userLat = parseFloat(lat);
+      const userLng = parseFloat(lng);
+
+      const mapped = workers.map((w) => {
+        const [wLng, wLat] = w.location.coordinates;
+        const R    = 6371;
+        const dLat = ((wLat - userLat) * Math.PI) / 180;
+        const dLng = ((wLng - userLng) * Math.PI) / 180;
+        const a    =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos((userLat * Math.PI) / 180) *
+            Math.cos((wLat * Math.PI) / 180) *
+            Math.sin(dLng / 2) ** 2;
+        const distKm = (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1);
+
+        return {
+          id:           w._id,
+          _id:          w._id,
+          name:         w.fullName,
+          initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+          category:     w.category,
+          skills:       w.skills,
+          pricePerDay:  w.minCharge || 0,
+          minCharge:    w.minCharge,
+          rating:       w.rating,
+          totalJobs:    w.totalJobs,
+          distance:     `${distKm} km away`,
+          distanceKm:   parseFloat(distKm),
+          available:    w.isOnline,
+          isOnline:     w.isOnline,
+          bio:          w.bio,
+          experience:   w.experience,
+          locationText: w.locationText,
+          memberSince:  w.memberSince,
+          profileImage: w.profileImage,
+        };
+      });
+
+      mapped.sort((a, b) => a.distanceKm - b.distanceKm);
+      return mapped;
+    });
 
     res.json({ success: true, count: workersWithDistance.length, workers: workersWithDistance });
   } catch (err) {
@@ -73,12 +84,11 @@ const getNearbyWorkers = async (req, res) => {
   }
 };
 
-// ── GET /api/workers/categories — return category list with counts ─────────────
+// ── GET /api/workers/categories ───────────────────────────────────────────────
 const getCategories = async (req, res) => {
   try {
     const { lat, lng } = req.query;
 
-    // Static emoji map
     const emojiMap = {
       Plumber:     '🔧',
       Carpenter:   '🪚',
@@ -88,48 +98,54 @@ const getCategories = async (req, res) => {
       Builder:     '🏗️',
     };
 
-    // If user location provided, count nearby workers per category
     const parsedLat = parseFloat(lat);
     const parsedLng = parseFloat(lng);
 
     if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
-      const RADIUS = 50000; // 50 km for category counts
-      const pipeline = [
-        {
-          $geoNear: {
-            near:          { type: 'Point', coordinates: [parsedLng, parsedLat] },
-            distanceField: 'dist',
-            maxDistance:   RADIUS,
-            spherical:     true,
+      const rLat     = round3(parsedLat);
+      const rLng     = round3(parsedLng);
+      const cacheKey = `workers:categories:${rLat}:${rLng}`;
+      const TTL      = 10;
+
+      const categories = await withCache(cacheKey, TTL, async () => {
+        const RADIUS   = 50000;
+        const pipeline = [
+          {
+            $geoNear: {
+              near:          { type: 'Point', coordinates: [parsedLng, parsedLat] },
+              distanceField: 'dist',
+              maxDistance:   RADIUS,
+              spherical:     true,
+            },
           },
-        },
-        { $match: { isOnline: true, isAvailable: { $ne: false } } },
-        { $group: { _id: '$category', count: { $sum: 1 }, avgRating: { $avg: '$rating' } } },
-      ];
+          { $match: { isOnline: true, isAvailable: { $ne: false } } },
+          { $group: { _id: '$category', count: { $sum: 1 }, avgRating: { $avg: '$rating' } } },
+        ];
 
-      const results = await Worker.aggregate(pipeline);
+        const results = await Worker.aggregate(pipeline);
 
-      const categories = Object.keys(emojiMap).map((label) => {
-        const found = results.find((r) => r._id === label);
-        return {
-          id:        label.toLowerCase(),
-          label,
-          emoji:     emojiMap[label],
-          available: found ? found.count : 0,
-          rating:    found ? parseFloat(found.avgRating.toFixed(1)) : 0,
-        };
+        return Object.keys(emojiMap).map((label) => {
+          const found = results.find((r) => r._id === label);
+          return {
+            id:        label.toLowerCase(),
+            label,
+            emoji:     emojiMap[label],
+            available: found ? found.count : 0,
+            rating:    found ? parseFloat(found.avgRating.toFixed(1)) : 0,
+          };
+        });
       });
 
       return res.json({ success: true, categories });
     }
 
-    // No location: return static list
+    // No location — static fallback
     const categories = Object.keys(emojiMap).map((label, i) => ({
-      id:    String(i + 1),
+      id:        String(i + 1),
       label,
-      emoji: emojiMap[label],
+      emoji:     emojiMap[label],
       available: 0,
-      rating: 0,
+      rating:    0,
     }));
 
     res.json({ success: true, categories });
@@ -138,13 +154,14 @@ const getCategories = async (req, res) => {
   }
 };
 
-// ── GET /api/workers/search?q=pipe fitting&lat=12.9&lng=77.6 ─────────────────
+// ── GET /api/workers/search ───────────────────────────────────────────────────
+// Search is intentionally NOT cached — results vary too widely per query string
 const searchWorkers = async (req, res) => {
   try {
     const { q, lat, lng, radius = 50000 } = req.query;
     if (!q) return res.json({ success: true, workers: [] });
 
-    const regex = new RegExp(q, 'i');
+    const regex  = new RegExp(q, 'i');
     const filter = {
       $or: [
         { fullName: regex },
@@ -152,7 +169,7 @@ const searchWorkers = async (req, res) => {
         { skills:   regex },
         { bio:      regex },
       ],
-      isAvailable: { $ne: false }
+      isAvailable: { $ne: false },
     };
 
     if (lat && lng) {
@@ -175,10 +192,10 @@ const searchWorkers = async (req, res) => {
       let distanceKm = null;
       if (userLat && userLng) {
         const [wLng, wLat] = w.location.coordinates;
-        const R = 6371;
+        const R    = 6371;
         const dLat = ((wLat - userLat) * Math.PI) / 180;
         const dLng = ((wLng - userLng) * Math.PI) / 180;
-        const a =
+        const a    =
           Math.sin(dLat / 2) ** 2 +
           Math.cos((userLat * Math.PI) / 180) *
             Math.cos((wLat * Math.PI) / 180) *
@@ -186,21 +203,21 @@ const searchWorkers = async (req, res) => {
         distanceKm = parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1));
       }
       return {
-        id:          w._id,
-        _id:         w._id,
-        name:        w.fullName,
-        initials:    w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
-        category:    w.category,
-        skills:      w.skills,
-        pricePerDay: w.minCharge || 0,
-        rating:      w.rating,
-        totalJobs:   w.totalJobs,
-        distance:    distanceKm ? `${distanceKm} km away` : '',
+        id:           w._id,
+        _id:          w._id,
+        name:         w.fullName,
+        initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+        category:     w.category,
+        skills:       w.skills,
+        pricePerDay:  w.minCharge || 0,
+        rating:       w.rating,
+        totalJobs:    w.totalJobs,
+        distance:     distanceKm ? `${distanceKm} km away` : '',
         distanceKm,
-        available:   w.isOnline,
-        isOnline:    w.isOnline,
+        available:    w.isOnline,
+        isOnline:     w.isOnline,
         locationText: w.locationText,
-        memberSince: w.memberSince,
+        memberSince:  w.memberSince,
         profileImage: w.profileImage,
       };
     });

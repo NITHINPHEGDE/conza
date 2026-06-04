@@ -15,11 +15,14 @@ const sellerAuthRoutes     = require('./routes/sellerAuthRoutes');
 const productRoutes        = require('./routes/productRoutes');
 const sellerOrderRoutes    = require('./routes/sellerOrderRoutes');
 const { errorHandler }     = require('./middleware/errorMiddleware');
+const { authLimiter, apiLimiter } = require('./middleware/rateLimiter');
 
 const http = require('http');
 const { initSocket } = require('./services/socketService');
 
 connectDB();
+// Warm up Redis connection (non-blocking)
+require('./config/redis').getRedis().connect().catch(() => {});
 
 const app    = express();
 const server = http.createServer(app);
@@ -32,12 +35,12 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '20mb' }));  // large base64 images
 
 // ── Customer routes ──
-app.use('/api/auth',     authRoutes);
-app.use('/api/workers',  workerRoutes);
-app.use('/api/bookings', bookingRoutes);
+app.use('/api/auth',     authLimiter, authRoutes);
+app.use('/api/workers',  apiLimiter,  workerRoutes);
+app.use('/api/bookings', apiLimiter,  bookingRoutes);
 
 // ── Seller routes ──
-app.use('/api/seller/auth',     sellerAuthRoutes);
+app.use('/api/seller/auth',     authLimiter, sellerAuthRoutes);
 app.use('/api/seller/products', productRoutes);
 app.use('/api/seller/orders',   sellerOrderRoutes);
 

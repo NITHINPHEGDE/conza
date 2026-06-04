@@ -78,7 +78,11 @@ const LabourHomeScreen = ({ navigation }) => {
       </View>
 
       {!isOnline && (
-        <View style={styles.offlineBanner}>
+        <TouchableOpacity 
+          style={styles.offlineBanner}
+          activeOpacity={0.8}
+          onPress={toggleOnline}
+        >
           <Text style={styles.offlineBannerIcon}>🔕</Text>
           <View>
             <Text style={styles.offlineBannerTitle}>You're Offline</Text>
@@ -86,7 +90,7 @@ const LabourHomeScreen = ({ navigation }) => {
               New requests are paused. Tap Online to resume.
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
       )}
 
       <View style={styles.statsRow}>

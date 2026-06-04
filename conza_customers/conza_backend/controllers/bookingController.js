@@ -1,3 +1,19 @@
+const Redlock          = require('redlock');
+const { getRedis }     = require('../config/redis');
+
+let _redlock;
+const getRedlock = () => {
+  if (!_redlock) {
+    _redlock = new Redlock([getRedis()], {
+      retryCount:   5,
+      retryDelay:   200,   // ms
+      retryJitter:  100,
+    });
+    _redlock.on('error', (err) => console.warn('[Redlock] error (non-fatal):', err.message));
+  }
+  return _redlock;
+};
+
 const Booking = require('../models/Booking');
 const Worker  = require('../models/Worker');
 
@@ -46,33 +62,58 @@ const createBooking = async (req, res) => {
 
     console.log('📝 Creating booking for workers:', workerIds);
 
-    const booking = await Booking.create({
-      user:           req.user._id,
-      bookingType,
-      workers:        workerIds       || [],
-      workerSnapshot: workerSnapshot  || [],
-      category:       category        || '',
-      items:          items           || [],
-      houseNumber:    houseNumber     || '',
-      houseName:      houseName       || '',
-      street:         street          || '',
-      address:        address || street || '',
-      area:           area            || '',
-      city,
-      district:       district        || '',
-      state:          state           || '',
-      pincode,
-      latitude:       latitude        || null,
-      longitude:      longitude       || null,
-      subtotal:       subtotal        || 0,
-      platformFee:    platformFee     || 0,
-      total,
-      paymentMethod:  paymentMethod   || 'cod',
-      scheduledDate:  scheduledDate   || null,
-      isImmediate:    isImmediate !== undefined ? isImmediate : true,
-      notes:          notes           || '',
-      description:    description     || '',
-    });
+    // ── Distributed lock: prevents double-booking the same worker(s) ─────────
+    const lockKeys = (workerIds && workerIds.length > 0)
+      ? workerIds.map((id) => `lock:worker:${id}`)
+      : [`lock:booking:user:${req.user._id}`];
+
+    let booking;
+    let locks = [];
+
+    try {
+      // Acquire locks for all targeted workers
+      locks = await Promise.all(
+        lockKeys.map((k) =>
+          getRedlock().acquire([k], parseInt(process.env.REDIS_LOCK_TTL) || 5000)
+        )
+      );
+    } catch (lockErr) {
+      console.warn('[Booking] Could not acquire lock, proceeding without (Redis may be down):', lockErr.message);
+      // Graceful degradation: continue without lock if Redis is unavailable
+    }
+
+    try {
+      booking = await Booking.create({
+        user:           req.user._id,
+        bookingType,
+        workers:        workerIds       || [],
+        workerSnapshot: workerSnapshot  || [],
+        category:       category        || '',
+        items:          items           || [],
+        houseNumber:    houseNumber     || '',
+        houseName:      houseName       || '',
+        street:         street          || '',
+        address:        address || street || '',
+        area:           area            || '',
+        city,
+        district:       district        || '',
+        state:          state           || '',
+        pincode,
+        latitude:       latitude        || null,
+        longitude:      longitude       || null,
+        subtotal:       subtotal        || 0,
+        platformFee:    platformFee     || 0,
+        total,
+        paymentMethod:  paymentMethod   || 'cod',
+        scheduledDate:  scheduledDate   || null,
+        isImmediate:    isImmediate !== undefined ? isImmediate : true,
+        notes:          notes           || '',
+        description:    description     || '',
+      });
+    } finally {
+      // Always release locks
+      await Promise.allSettled(locks.map((lock) => lock.release()));
+    }
 
     console.log('✅ Booking created:', booking._id, 'Workers:', booking.workers);
 

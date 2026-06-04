@@ -1,15 +1,26 @@
-const { Server } = require('socket.io');
-const mongoose   = require('mongoose');
+// bp_backend/services/socketService.js
+const { Server }                  = require('socket.io');
+const { createAdapter }           = require('@socket.io/redis-adapter');
+const mongoose                    = require('mongoose');
+const { getRedis, getSubscriber } = require('../config/redis');
 
 let io;
 
 const initSocket = (server) => {
   io = new Server(server, {
-    cors: {
-      origin: '*',
-      methods: ['GET', 'POST'],
-    },
+    cors: { origin: '*', methods: ['GET', 'POST'] },
   });
+
+  // ── Redis Pub/Sub adapter for horizontal scaling ────────────────────────
+  try {
+    const pubClient = getRedis();
+    const subClient = getSubscriber();
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log('✅ [BP] Socket.io Redis adapter attached');
+  } catch (err) {
+    console.warn('⚠️  [BP] Socket.io Redis adapter failed (running in-memory):', err.message);
+    // Single-instance still works fine without it
+  }
 
   io.on('connection', (socket) => {
     console.log(`🔌 [BP] Client connected: ${socket.id}`);
@@ -25,7 +36,6 @@ const initSocket = (server) => {
   });
 
   watchChanges();
-
   return io;
 };
 
@@ -58,7 +68,6 @@ const watchChanges = () => {
 
       bookingChangeStream.on('error', (err) => {
         console.error('❌ [BP] Booking change stream error:', err.message);
-        // Retry after 5 seconds
         setTimeout(startWatching, 5000);
       });
 
