@@ -1,4 +1,5 @@
 const Booking = require('../models/Booking');
+const Worker  = require('../models/Worker');
 require('../models/User'); // Register User model for population
 
 // @desc    Get all pending requests for the logged-in worker
@@ -78,6 +79,21 @@ const updateBookingStatus = async (req, res) => {
 
     booking.status = status;
     await booking.save();
+
+    // ── Toggle worker availability ────────────────────────────────────────
+    if (status === 'accepted') {
+      await Worker.updateMany(
+        { _id: { $in: booking.workers } },
+        { isAvailable: false }
+      );
+    }
+
+    if (status === 'completed' || status === 'cancelled') {
+      await Worker.updateMany(
+        { _id: { $in: booking.workers } },
+        { isAvailable: true }
+      );
+    }
 
     res.json({ success: true, booking });
   } catch (err) {

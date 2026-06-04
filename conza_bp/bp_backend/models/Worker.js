@@ -24,6 +24,7 @@ const workerSchema = new mongoose.Schema(
 
     // ── Online / Offline ───────────────────────────────────────────────────
     isOnline:         { type: Boolean, default: false },
+    isAvailable:      { type: Boolean, default: true },   // false while worker has an active job
     lastLocationAt:   { type: Date,    default: null },   // last GPS ping timestamp
 
     // ── GeoJSON location — updated in-place, no history ───────────────────

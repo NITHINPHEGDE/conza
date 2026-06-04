@@ -16,6 +16,7 @@ const getNearbyWorkers = async (req, res) => {
           $maxDistance: parseInt(radius),   // metres; 5000 = 5 km
         },
       },
+      isAvailable: { $ne: false }
     };
 
     if (category) query.category = category;
@@ -102,7 +103,7 @@ const getCategories = async (req, res) => {
             spherical:     true,
           },
         },
-        { $match: { isOnline: true } },
+        { $match: { isOnline: true, isAvailable: { $ne: false } } },
         { $group: { _id: '$category', count: { $sum: 1 }, avgRating: { $avg: '$rating' } } },
       ];
 
@@ -151,6 +152,7 @@ const searchWorkers = async (req, res) => {
         { skills:   regex },
         { bio:      regex },
       ],
+      isAvailable: { $ne: false }
     };
 
     if (lat && lng) {
