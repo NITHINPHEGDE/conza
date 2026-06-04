@@ -1,5 +1,6 @@
 // src/utils/cloudinary.js
 import { api } from '../services/apiClient';
+import { Platform } from 'react-native';
 
 export const uploadImageToCloudinary = async (imageUri) => {
   // Step 1 — get signature from our backend
@@ -7,12 +8,18 @@ export const uploadImageToCloudinary = async (imageUri) => {
     await api.get('/workers/upload-signature');
 
   // Step 2 — build multipart form
-  const filename = imageUri.split('/').pop();
+  const filename = imageUri.split('/').pop() || 'image.jpg';
   const match    = /\.(\w+)$/.exec(filename);
   const type     = match ? `image/${match[1]}` : 'image/jpeg';
 
   const formData = new FormData();
-  formData.append('file',      { uri: imageUri, name: filename, type });
+  if (Platform.OS === 'web') {
+    const blobResponse = await fetch(imageUri);
+    const blob = await blobResponse.blob();
+    formData.append('file', blob, filename);
+  } else {
+    formData.append('file', { uri: imageUri, name: filename, type });
+  }
   formData.append('timestamp', String(timestamp));
   formData.append('signature', signature);
   formData.append('api_key',   api_key);

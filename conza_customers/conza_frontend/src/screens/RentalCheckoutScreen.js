@@ -139,6 +139,10 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
       longitude: lng,
     });
     if (ok) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'BookingHome' }],
+      });
       navigation.navigate('Status');
     }
   }, [submitBooking, item, quantity, scheduledDate, scheduledTime, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, lat, lng, navigation]);

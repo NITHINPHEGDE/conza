@@ -175,7 +175,7 @@ const useAppStore = create((set, get) => ({
   fetchMaterials: async () => {
     try {
       set({ materialsLoading: true, materialsError: null });
-      const BASE_URL = 'http://10.239.242.155:5000/api';
+      const BASE_URL = 'http://10.252.183.155:5000/api';
       const res = await fetch(`${BASE_URL}/products/public?type=material&limit=100`);
       const data = await res.json();
 
@@ -235,7 +235,7 @@ const useAppStore = create((set, get) => ({
   fetchRentalData: async () => {
     try {
       set({ rentalLoading: true, rentalError: null });
-      const BASE_URL = 'http://10.239.242.155:5000/api';
+      const BASE_URL = 'http://10.252.183.155:5000/api';
       const res = await fetch(`${BASE_URL}/products/public?type=rental&limit=100`);
       const data = await res.json();
 

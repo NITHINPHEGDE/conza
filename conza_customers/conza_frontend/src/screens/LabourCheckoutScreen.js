@@ -196,6 +196,10 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       longitude: lng,
     });
     if (ok) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'BookingHome' }],
+      });
       navigation.navigate('Status');
     }
   }, [submitBooking, selectedWorkers, category, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, lat, lng, navigation]);
