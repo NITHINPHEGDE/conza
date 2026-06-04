@@ -18,48 +18,52 @@ const GRAD_START = { x: 0, y: 0 };
 const GRAD_END   = { x: 1, y: 0 };
 
 // ── Map with WebView + Navigate button ───────────────────────────────────────
-const buildLeafletHTML = (lat, lng, label) => `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body, #map { width: 100%; height: 100%; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <script>
-    var map = L.map('map', { zoomControl: false, attributionControl: false })
-               .setView([${lat}, ${lng}], 15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    L.marker([${lat}, ${lng}]).addTo(map).bindPopup('${label || 'Job Location'}').openPopup();
-  </script>
-</body>
-</html>
-`;
-
 const MapPlaceholder = React.memo(({ onNavigate, address, latitude, longitude }) => {
   const hasCoords = latitude && longitude;
-  const leafletHtml = hasCoords
-    ? buildLeafletHTML(latitude, longitude, address || 'Job Location')
-    : null;
+
+  const leafletHTML = hasCoords ? `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body, #map { width: 100%; height: 100%; }
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        const map = L.map('map', { zoomControl: false, attributionControl: false })
+          .setView([${latitude}, ${longitude}], 16);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        const icon = L.divIcon({
+          html: '<div style="background:#F0A500;width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
+          iconSize: [18, 18],
+          iconAnchor: [9, 9],
+          className: '',
+        });
+
+        L.marker([${latitude}, ${longitude}], { icon }).addTo(map);
+      </script>
+    </body>
+    </html>
+  ` : null;
 
   return (
     <View style={styles.mapPlaceholder}>
-      {leafletHtml ? (
+      {leafletHTML ? (
         <WebView
-          source={{ html: leafletHtml }}
+          source={{ html: leafletHTML }}
           style={styles.webview}
           scrollEnabled={false}
           pointerEvents="none"
           javaScriptEnabled
           domStorageEnabled
-          startInLoadingState
           originWhitelist={['*']}
         />
       ) : (
