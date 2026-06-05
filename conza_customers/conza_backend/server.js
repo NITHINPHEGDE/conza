@@ -30,8 +30,22 @@ const server = http.createServer(app);
 initSocket(server);
 
 app.use(helmet());
-app.use(cors({ origin: '*' }));
-app.use(morgan('dev'));
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['*'];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
+
+if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
 app.use(express.json({ limit: '20mb' }));  // large base64 images
 
 // ── Customer routes ──
