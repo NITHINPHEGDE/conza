@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, Modal } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
+import { BookingTrackingSkeleton } from '../components/Skeleton';
 
 const BookingTrackingScreen = ({ navigation }) => {
   const { activeBooking, activeBookingId, fetchActiveBooking, cancelActiveBooking, clearActiveBooking } = useAppStore();
@@ -54,9 +55,13 @@ const BookingTrackingScreen = ({ navigation }) => {
   // ── Loading ──────────────────────────────────────────────────────────────
   if (!activeBooking) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#6366F1" />
-        <Text style={styles.loadingText}>Loading booking status...</Text>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={{ width: 24 }} />
+          <Text style={styles.headerTitle}>Booking Status</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <BookingTrackingSkeleton />
       </View>
     );
   }

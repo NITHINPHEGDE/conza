@@ -93,8 +93,10 @@ const usePartnerStore = create((set, get) => ({
 
   // ── Requests ───────────────────────────────────────────────────────────
   requests: [],
+  requestsLoading: false,
 
   fetchRequests: async () => {
+    set({ requestsLoading: true });
     try {
       const { api } = require('../services/apiClient');
       const data = await api.get('/bookings/requests');
@@ -165,6 +167,8 @@ const usePartnerStore = create((set, get) => ({
       }
     } catch (err) {
       console.error('[Store] fetchRequests failed:', err.message);
+    } finally {
+      set({ requestsLoading: false });
     }
   },
 
@@ -404,6 +408,7 @@ export const selectTodaysJobs     = (s) => s.todaysJobs;
 export const selectTodaysEarnings = (s) => s.todaysEarnings;
 export const selectRating         = (s) => s.worker?.rating || 5.0;
 export const selectRequests       = (s) => s.requests;
+export const selectRequestsLoading = (s) => s.requestsLoading;
 export const selectHistory        = (s) => s.history;
 export const selectFetchHistory   = (s) => s.fetchHistory;
 export const selectActiveJob      = (s) => s.activeJob;

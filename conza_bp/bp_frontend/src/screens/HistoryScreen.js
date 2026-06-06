@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import usePartnerStore, { selectHistory, selectFetchHistory } from '../store/usePartnerStore';
 import { colors } from '../theme/colors';
 import { RefreshControl } from 'react-native';
+import { SkeletonList, HistoryCardSkeleton } from '../components/Skeleton';
 
 const TABS = ['All', 'Completed', 'Cancelled'];
 
@@ -78,9 +79,10 @@ const HistoryScreen = () => {
   const fetchHistory = usePartnerStore(selectFetchHistory);
   const [activeTab, setActiveTab] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   React.useEffect(() => {
-    fetchHistory();
+    fetchHistory().finally(() => setInitialLoading(false));
   }, [fetchHistory]);
 
   const onRefresh = useCallback(async () => {
@@ -107,6 +109,20 @@ const HistoryScreen = () => {
     () => [styles.screen, { paddingTop: insets.top + 10 }],
     [insets.top],
   );
+
+  if (initialLoading) {
+    return (
+      <View style={containerStyle}>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+        <View style={styles.pageHeader}>
+          <Text style={styles.pageTitle}>History</Text>
+        </View>
+        <View style={{ paddingTop: 8 }}>
+          <SkeletonList component={HistoryCardSkeleton} count={4} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={containerStyle}>

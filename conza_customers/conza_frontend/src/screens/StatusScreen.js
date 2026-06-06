@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, RefreshControl,
+  TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
+import { SkeletonList, BookingCardSkeleton } from '../components/Skeleton';
 
 // ── ORIGINAL labour status helper — unchanged ─────────────────────────────────
 const getStatusDisplay = (status) => {
@@ -182,9 +183,13 @@ const StatusScreen = ({ navigation }) => {
 
   if (isLoading && totalActive === 0) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#6366F1" />
-        <Text style={styles.loadingText}>Loading bookings...</Text>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Active Bookings</Text>
+        </View>
+        <View style={{ paddingTop: 8 }}>
+          <SkeletonList component={BookingCardSkeleton} count={3} />
+        </View>
       </View>
     );
   }

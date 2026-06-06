@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import useAppStore, { EMPTY_ARRAY } from '../store/useAppStore';
-import { SectionLoader, ErrorState, EmptyState } from '../components/LoadingState';
+import { WorkerListSkeleton, ErrorState, EmptyState } from '../components/LoadingState';
 import { colors } from '../theme/colors';
 
 // ─── Worker Card ──────────────────────────────────────────────────────────────
@@ -233,7 +233,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
   ), []);
 
   if (!category) return <ErrorState message="No category selected" onRetry={() => navigation.goBack()} />;
-  if (labourLoading && !refreshing) return <SectionLoader message="Finding workers nearby..." />;
+  if (labourLoading && !refreshing) return <WorkerListSkeleton />;
   if (labourError)   return <ErrorState message={labourError} onRetry={() => fetchWorkersByCategory(category)} />;
 
   return (

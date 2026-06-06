@@ -19,12 +19,7 @@ import MaterialCard       from '../components/MaterialCard';
 import SectionHeader      from '../components/SectionHeader';
 import SkillWorkerCard    from '../components/SkillWorkerCard';
 import RentalCard         from '../components/RentalCard';
-import {
-  SectionLoader,
-  ErrorState,
-  EmptyState,
-  SkeletonGrid,
-} from '../components/LoadingState';
+import { SectionLoader, ErrorState, EmptyState, WorkerListSkeleton, CategoryGridSkeleton, MaterialGridSkeleton, RentalGridSkeleton } from '../components/LoadingState';
 
 import useAppStore from '../store/useAppStore';
 import { colors } from '../theme/colors';
@@ -93,7 +88,7 @@ const SkillSearchView = React.memo(({ query, onClear }) => {
     />
   ), []);
 
-  if (labourLoading) return <SectionLoader message="Searching workers..." />;
+  if (labourLoading) return <WorkerListSkeleton />;
   if (labourError)   return <ErrorState message={labourError} onRetry={fetchLabour} />;
 
   return (
@@ -172,7 +167,7 @@ const LabourView = React.memo(() => {
     <View style={{ height: 20 }} />
   ), []);
 
-  if (labourLoading) return <SkeletonGrid />;
+  if (labourLoading) return <CategoryGridSkeleton />;
   if (labourError)   return <ErrorState message={labourError} onRetry={fetchLabour} />;
 
   return (
@@ -288,7 +283,7 @@ const MaterialView = React.memo(() => {
     totalItems > 0 && { paddingBottom: 100 },
   ], [totalItems]);
 
-  if (materialsLoading) return <SkeletonGrid />;
+  if (materialsLoading) return <MaterialGridSkeleton />;
   if (materialsError)   return <ErrorState message={materialsError} onRetry={fetchMaterials} />;
 
   return (
@@ -406,7 +401,7 @@ const RentalView = React.memo(() => {
     />
   ), []);
 
-  if (rentalLoading) return <SkeletonGrid />;
+  if (rentalLoading) return <RentalGridSkeleton />;
   if (rentalError)   return <ErrorState message={rentalError} onRetry={fetchRental} />;
 
   return (

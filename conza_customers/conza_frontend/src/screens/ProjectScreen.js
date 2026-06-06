@@ -7,7 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import SectionHeader from '../components/SectionHeader';
 import useAppStore from '../store/useAppStore';
-import { SectionLoader, ErrorState, EmptyState } from '../components/LoadingState';
+import { ErrorState, EmptyState } from '../components/LoadingState';
+import { SkeletonList, ProjectCardSkeleton } from '../components/Skeleton';
 import { colors } from '../theme/colors';
 
 const ProgressBar = React.memo(({ progress }) => {
@@ -116,7 +117,9 @@ const ProjectScreen = ({ navigation }) => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Projects</Text>
       </View>
-      <SectionLoader message="Loading your projects..." />
+      <View style={{ paddingTop: 8 }}>
+        <SkeletonList component={ProjectCardSkeleton} count={4} />
+      </View>
     </View>
   );
 

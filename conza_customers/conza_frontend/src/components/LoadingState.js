@@ -1,20 +1,18 @@
 import React from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { colors } from '../theme/colors';
+import {
+  WorkerCardSkeleton, CategoryCardSkeleton,
+  MaterialCardSkeleton, RentalCardSkeleton,
+  SkeletonList,
+} from './Skeleton';
 
-/**
- * Full-screen or Section-level Loader
- */
 export const SectionLoader = ({ message = 'Loading...' }) => (
   <View style={styles.center}>
-    <ActivityIndicator size="large" color={colors.accentAmber} />
     <Text style={styles.loaderText}>{message}</Text>
   </View>
 );
 
-/**
- * Error state with retry option
- */
 export const ErrorState = ({ message = 'Something went wrong', onRetry }) => (
   <View style={styles.center}>
     <Text style={styles.errorEmoji}>⚠️</Text>
@@ -28,9 +26,6 @@ export const ErrorState = ({ message = 'Something went wrong', onRetry }) => (
   </View>
 );
 
-/**
- * Empty state for lists
- */
 export const EmptyState = ({ emoji = '📦', title = 'No data found', subtitle }) => (
   <View style={styles.center}>
     <Text style={styles.emptyEmoji}>{emoji}</Text>
@@ -39,55 +34,46 @@ export const EmptyState = ({ emoji = '📦', title = 'No data found', subtitle }
   </View>
 );
 
-/**
- * Simple skeleton-like placeholder for grids
- */
-export const SkeletonGrid = () => (
-  <View style={styles.gridPlaceholder}>
-    <ActivityIndicator size="small" color={colors.border} />
-    <Text style={styles.placeholderText}>Loading grid items...</Text>
+// Workers list skeleton (replaces SectionLoader on WorkersNearbyScreen + BookingScreen workers tab)
+export const WorkerListSkeleton = () => (
+  <View style={{ paddingTop: 8 }}>
+    <SkeletonList component={WorkerCardSkeleton} count={4} />
   </View>
 );
 
+// Category pills skeleton (BookingScreen labour tab)
+export const CategoryGridSkeleton = () => (
+  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 8, gap: 10 }} scrollEnabled={false}>
+    <SkeletonList component={CategoryCardSkeleton} count={5} />
+  </ScrollView>
+);
+
+// Materials horizontal scroll skeleton
+export const MaterialGridSkeleton = () => (
+  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 8, gap: 0 }} scrollEnabled={false}>
+    <SkeletonList component={MaterialCardSkeleton} count={4} />
+  </ScrollView>
+);
+
+// Rental horizontal scroll skeleton
+export const RentalGridSkeleton = () => (
+  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 8 }} scrollEnabled={false}>
+    <SkeletonList component={RentalCardSkeleton} count={4} />
+  </ScrollView>
+);
+
+// Keep SkeletonGrid exported so existing imports don't break — now renders real skeletons
+export const SkeletonGrid = MaterialGridSkeleton;
+
 const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 30,
-    minHeight: 250,
-  },
-  loaderText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  errorEmoji: { fontSize: 44, marginBottom: 16 },
-  errorTitle: { fontSize: 18, fontWeight: '800', color: colors.textPrimary, marginBottom: 8 },
-  errorText: { fontSize: 14, color: colors.textMuted, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  retryBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: colors.accentYellowSoft,
-    borderWidth: 1.5,
-    borderColor: colors.accentYellow,
-  },
+  center:       { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30, minHeight: 250 },
+  loaderText:   { marginTop: 12, fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
+  errorEmoji:   { fontSize: 44, marginBottom: 16 },
+  errorTitle:   { fontSize: 18, fontWeight: '800', color: colors.textPrimary, marginBottom: 8 },
+  errorText:    { fontSize: 14, color: colors.textMuted, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  retryBtn:     { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.accentYellowSoft, borderWidth: 1.5, borderColor: colors.accentYellow },
   retryBtnText: { fontSize: 14, fontWeight: '700', color: colors.accentAmber },
-  emptyEmoji: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 6 },
-  emptySub: { fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingHorizontal: 20 },
-  gridPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  placeholderText: {
-    marginTop: 10,
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '500',
-  },
+  emptyEmoji:   { fontSize: 48, marginBottom: 16 },
+  emptyTitle:   { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 6 },
+  emptySub:     { fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingHorizontal: 20 },
 });

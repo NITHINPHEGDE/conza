@@ -8,11 +8,12 @@ import usePartnerStore, {
   selectProfile, selectIsOnline, selectToggleOnline,
   selectIsTogglingOnline, selectToggleDirection,
   selectTodaysJobs, selectTodaysEarnings, selectRating,
-  selectRequests,
+  selectRequests, selectRequestsLoading,
 } from '../store/usePartnerStore';
 import StatsCard     from '../components/StatsCard';
 import SectionHeader from '../components/SectionHeader';
 import RequestCard   from '../components/RequestCard';
+import { SkeletonList, RequestCardSkeleton } from '../components/Skeleton';
 import { colors }   from '../theme/colors';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -141,6 +142,7 @@ const LabourHomeScreen = ({ navigation }) => {
   const todaysEarnings   = usePartnerStore(selectTodaysEarnings);
   const rating           = usePartnerStore(selectRating);
   const requests         = usePartnerStore(selectRequests);
+  const requestsLoading  = usePartnerStore(selectRequestsLoading);
   const fetchRequests    = usePartnerStore((s) => s.fetchRequests);
 
   useEffect(() => {
@@ -230,7 +232,11 @@ const LabourHomeScreen = ({ navigation }) => {
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         ListHeaderComponent={ListHeader}
-        ListEmptyComponent={ListEmpty}
+        ListEmptyComponent={
+          isOnline && requestsLoading
+            ? () => <SkeletonList component={RequestCardSkeleton} count={3} />
+            : ListEmpty
+        }
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.list}
         removeClippedSubviews
