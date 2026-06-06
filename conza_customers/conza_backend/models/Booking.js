@@ -56,4 +56,8 @@ const bookingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+bookingSchema.index({ user: 1, createdAt: -1 });     // getMyBookings (most common query)
+bookingSchema.index({ user: 1, status: 1 });          // active bookings filter
+bookingSchema.index({ workers: 1, status: 1 });       // BP worker fetching their bookings
+
 module.exports = mongoose.model('Booking', bookingSchema);

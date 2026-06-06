@@ -16,6 +16,7 @@ import { socket, connectSocket } from '../utils/socket';
 
 export const EMPTY_ARRAY = [];
 const EMPTY_OBJ   = {};
+import api from '../api/axiosInstance';
 
 const useAppStore = create((set, get) => ({
 
@@ -175,9 +176,8 @@ const useAppStore = create((set, get) => ({
   fetchMaterials: async () => {
     try {
       set({ materialsLoading: true, materialsError: null });
-      const BASE_URL = 'http://conza-production-50d5.up.railway.app/api';
-      const res = await fetch(`${BASE_URL}/products/public?type=material&limit=100`);
-      const data = await res.json();
+      const res  = await api.get('/products/public?type=material&limit=100');
+      const data = res.data;
 
       if (data.success && data.products?.length) {
         const normalized = data.products.map((p) => ({
@@ -235,9 +235,9 @@ const useAppStore = create((set, get) => ({
   fetchRentalData: async () => {
     try {
       set({ rentalLoading: true, rentalError: null });
-      const BASE_URL = 'http://conza-production-50d5.up.railway.app:5000/api';
-      const res = await fetch(`${BASE_URL}/products/public?type=rental&limit=100`);
-      const data = await res.json();
+      const res  = await api.get('/products/public?type=rental&limit=100');
+const data = res.data;
+      
 
       if (data.success && data.products?.length) {
         const normalized = data.products.map((p) => ({

@@ -46,7 +46,8 @@ const getPublicProducts = async (req, res) => {
           .populate('seller', 'name shopName phone city profileImage')
           .sort({ createdAt: -1 })
           .skip(skip)
-          .limit(Number(limit)),
+          .limit(Number(limit))
+          .lean(),
         Product.countDocuments(query),
       ]);
       return { products, total, page: Number(page), pages: Math.ceil(total / limit) };
@@ -70,7 +71,8 @@ const getProductById = async (req, res) => {
 
     const product = await withCache(cacheKey, TTL, async () => {
       return Product.findById(req.params.id)
-        .populate('seller', 'name shopName phone city profileImage address');
+        .populate('seller', 'name shopName phone city profileImage address')
+        .lean();
     });
 
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });

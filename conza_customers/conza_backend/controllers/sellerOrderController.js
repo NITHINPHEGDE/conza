@@ -45,30 +45,37 @@ const placeOrder = async (req, res) => {
     }
 
     // Build item snapshots & decrement stock
-    const snapshotItems = await Promise.all(
-      items.map(async (item) => {
-        const product = await Product.findById(item.productId);
-        if (!product) {
-          throw new Error(`Product not found: ${item.productId}`);
-        }
-        if (orderType === 'material' && product.stock < item.qty) {
-          throw new Error(`Insufficient stock for ${product.title}`);
-        }
-        if (orderType === 'material') {
-          await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -item.qty, sold: item.qty } });
-        }
-        return {
-          product:  product._id,
-          title:    product.title,
-          image:    product.images?.[0] || null,
-          price:    product.price,
-          unit:     product.unit,
-          qty:      item.qty,
-          days:     item.days || null,
-          subtotal: item.subtotal,
-        };
-      })
-    );
+    const productIds = items.map((i) => i.productId);
+    const products   = await Product.find({ _id: { $in: productIds } }).lean();
+    const productMap = Object.fromEntries(products.map((p) => [p._id.toString(), p]));
+
+    const snapshotItems = [];
+    for (const item of items) {
+      const product = productMap[item.productId.toString()];
+      if (!product) throw new Error(`Product not found: ${item.productId}`);
+      if (orderType === 'material' && product.stock < item.qty) {
+        throw new Error(`Insufficient stock for ${product.title}`);
+      }
+      snapshotItems.push({
+        product:  product._id,
+        title:    product.title,
+        image:    product.images?.[0] || null,
+        price:    product.price,
+        unit:     product.unit,
+        qty:      item.qty,
+        days:     item.days || null,
+        subtotal: item.subtotal,
+      });
+    }
+
+    // Still do stock decrement in parallel (after building snapshot)
+    if (orderType === 'material') {
+      await Promise.all(
+        items.map((item) =>
+          Product.findByIdAndUpdate(item.productId, { $inc: { stock: -item.qty, sold: item.qty } })
+        )
+      );
+    }
 
     const order = await SellerOrder.create({
       seller:          sellerId,

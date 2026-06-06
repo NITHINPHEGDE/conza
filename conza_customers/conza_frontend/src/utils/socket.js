@@ -1,20 +1,22 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = 'http://conza-production-50d5.up.railway.app:5000'; // Match your backend port
+// Use HTTPS — Railway does not expose raw port 5000 publicly
+const SOCKET_URL =
+  process.env.EXPO_PUBLIC_SOCKET_URL ||
+  'https://conza-production-50d5.up.railway.app';
 
 export const socket = io(SOCKET_URL, {
-  autoConnect: false, // Connect manually when app starts
-  transports: ['websocket'], // Faster and more reliable in React Native
+  autoConnect: false,
+  transports: ['websocket'],
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  timeout: 10000,
 });
 
 export const connectSocket = () => {
-  if (!socket.connected) {
-    socket.connect();
-  }
+  if (!socket.connected) socket.connect();
 };
 
 export const disconnectSocket = () => {
-  if (socket.connected) {
-    socket.disconnect();
-  }
+  if (socket.connected) socket.disconnect();
 };

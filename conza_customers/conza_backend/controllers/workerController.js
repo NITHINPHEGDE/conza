@@ -34,7 +34,7 @@ const getNearbyWorkers = async (req, res) => {
 
       const workers = await Worker.find(query).select(
         'fullName username profileImage category skills minCharge locationText experience bio isOnline rating totalJobs memberSince location'
-      );
+      ).lean();
 
       const userLat = parseFloat(lat);
       const userLng = parseFloat(lng);
@@ -183,7 +183,7 @@ const searchWorkers = async (req, res) => {
 
     const workers = await Worker.find(filter).limit(20).select(
       'fullName username profileImage category skills minCharge locationText isOnline rating totalJobs memberSince location'
-    );
+    ).lean();
 
     const userLat = lat ? parseFloat(lat) : null;
     const userLng = lng ? parseFloat(lng) : null;

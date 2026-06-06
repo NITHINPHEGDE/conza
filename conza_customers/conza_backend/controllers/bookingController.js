@@ -128,33 +128,35 @@ const createBooking = async (req, res) => {
       });
     } catch (_) {}
 
-    // Send push notification to each worker
-    if (bookingType === 'labour' && workerIds && workerIds.length > 0) {
-      const workers = await Worker.find({ _id: { $in: workerIds } }).select('pushToken fullName');
-      for (const worker of workers) {
-        console.log(`[Push] Worker ${worker.fullName} token: ${worker.pushToken}`);
-        if (worker.pushToken) {
-          await sendPushNotification(
-            worker.pushToken,
-            '🔧 New Job Request!',
-            `New ${category || 'labour'} job in ${city}. ₹${total}`,
-            { bookingId: booking._id.toString(), type: 'new_request' }
-          );
-        } else {
-          console.warn(`[Push] Worker ${worker.fullName} has no push token`);
-        }
-      }
-    }
+    res.status(201).json({ success: true, booking });
 
-    // Bump totalJobs on each worker
+    // Fire-and-forget push + totalJobs update (after response is sent)
     if (bookingType === 'labour' && workerIds && workerIds.length > 0) {
-      await Worker.updateMany(
+      Worker.find({ _id: { $in: workerIds } }).select('pushToken fullName').lean()
+        .then((workers) => {
+          const pushPromises = workers
+            .filter((w) => {
+              if (!w.pushToken) console.warn(`[Push] Worker ${w.fullName} has no push token`);
+              else console.log(`[Push] Worker ${w.fullName} token: ${w.pushToken}`);
+              return w.pushToken;
+            })
+            .map((w) =>
+              sendPushNotification(
+                w.pushToken,
+                '🔧 New Job Request!',
+                `New ${category || 'labour'} job in ${city}. ₹${total}`,
+                { bookingId: booking._id.toString(), type: 'new_request' }
+              )
+            );
+          return Promise.allSettled(pushPromises);
+        })
+        .catch(() => {});
+
+      Worker.updateMany(
         { _id: { $in: workerIds } },
         { $inc: { totalJobs: 1 } }
-      );
+      ).catch(() => {});
     }
-
-    res.status(201).json({ success: true, booking });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -165,7 +167,8 @@ const getMyBookings = async (req, res) => {
   try {
     const bookings = await Booking.find({ user: req.user._id })
       .sort({ createdAt: -1 })
-      .populate('workers', 'fullName category profileImage');
+      .populate('workers', 'fullName category profileImage')
+      .lean();
     res.json({ success: true, bookings });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -176,7 +179,8 @@ const getMyBookings = async (req, res) => {
 const getBookingById = async (req, res) => {
   try {
     const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id })
-      .populate('workers', 'fullName category profileImage rating phone bio');
+      .populate('workers', 'fullName category profileImage rating phone bio')
+      .lean();
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
     res.json({ success: true, booking });
   } catch (err) {
