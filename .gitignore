@@ -68,7 +68,6 @@ ios/
 .env.production
 
 # Firebase - NEVER commit this
-android/app/google-services.json
 ios/GoogleService-Info.plist
 
 # Build outputs
@@ -87,5 +86,4 @@ Thumbs.db
 
 # Local properties
 android/local.properties
-
-google-services.json
+

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "63951278496",
+    "project_id": "conza-230a9",
+    "storage_bucket": "conza-230a9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:63951278496:android:286204b40420a7bd8d94c5",
+        "android_client_info": {
+          "package_name": "com.conza.businesspartner"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAtjKt_6yxJiR27Xv9tL6Nk4_29bMAU_hQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
