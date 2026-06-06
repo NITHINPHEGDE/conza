@@ -2,7 +2,9 @@
 import { io } from 'socket.io-client';
 import { BASE_URL } from '../services/apiClient';
 
-const SOCKET_URL = BASE_URL.replace('/api', '');
+const SOCKET_URL =
+  process.env.EXPO_PUBLIC_SOCKET_URL ||
+  BASE_URL.replace('/api', '');
 
 export const socket = io(SOCKET_URL, { autoConnect: false, transports: ['websocket'] });
 

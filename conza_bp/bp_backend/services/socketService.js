@@ -9,6 +9,9 @@ let io;
 const initSocket = (server) => {
   io = new Server(server, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
+    transports: ['websocket', 'polling'],  // allow polling fallback
+    pingTimeout: 60000,
+    pingInterval: 25000,
   });
 
   // ── Redis Pub/Sub adapter for horizontal scaling ────────────────────────
