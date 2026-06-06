@@ -1,19 +1,124 @@
-import React, { useEffect, useCallback, useMemo } from 'react';
+import React, { useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, StatusBar,
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
+  StatusBar, Animated, Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import usePartnerStore, {
   selectProfile, selectIsOnline, selectToggleOnline,
+  selectIsTogglingOnline, selectToggleDirection,
   selectTodaysJobs, selectTodaysEarnings, selectRating,
   selectRequests,
 } from '../store/usePartnerStore';
-import StatsCard    from '../components/StatsCard';
+import StatsCard     from '../components/StatsCard';
 import SectionHeader from '../components/SectionHeader';
-import RequestCard  from '../components/RequestCard';
-import { colors }  from '../theme/colors';
+import RequestCard   from '../components/RequestCard';
+import { colors }   from '../theme/colors';
 
-// ── Static empty component — defined outside, never recreated ─────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// OnlineToggle — animated pill with spinner, pulse ring, and slide transition
+// ─────────────────────────────────────────────────────────────────────────────
+const OnlineToggle = ({ isOnline, isToggling, toggleDirection, onPress }) => {
+  const spinAnim     = useRef(new Animated.Value(0)).current;
+  const pulseScale   = useRef(new Animated.Value(1)).current;
+  const pulseOpacity = useRef(new Animated.Value(0.6)).current;
+
+  useEffect(() => {
+    if (isToggling) {
+      Animated.loop(
+        Animated.timing(spinAnim, {
+          toValue: 1, duration: 700, easing: Easing.linear, useNativeDriver: true,
+        })
+      ).start();
+    } else {
+      spinAnim.stopAnimation();
+      spinAnim.setValue(0);
+    }
+  }, [isToggling]);
+
+  useEffect(() => {
+    let loop;
+    if (isOnline && !isToggling) {
+      loop = Animated.loop(
+        Animated.sequence([
+          Animated.parallel([
+            Animated.timing(pulseScale,   { toValue: 1.9, duration: 900, useNativeDriver: true }),
+            Animated.timing(pulseOpacity, { toValue: 0,   duration: 900, useNativeDriver: true }),
+          ]),
+          Animated.parallel([
+            Animated.timing(pulseScale,   { toValue: 1,   duration: 0,   useNativeDriver: true }),
+            Animated.timing(pulseOpacity, { toValue: 0.6, duration: 0,   useNativeDriver: true }),
+          ]),
+        ])
+      );
+      loop.start();
+    } else {
+      pulseScale.setValue(1);
+      pulseOpacity.setValue(0);
+    }
+    return () => loop?.stop();
+  }, [isOnline, isToggling]);
+
+  const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+  // All colors are plain JS — no Animated.Value for colors, avoids mixed-driver crash
+  const isGreen     = isOnline && !isToggling;
+  const dotColor    = isGreen  ? colors.statusGreen : colors.statusGray;
+  const spinColor   = isOnline ? colors.statusGreen : colors.statusGray;
+  const badgeBg     = isGreen  ? 'rgba(46,139,87,0.12)'    : 'rgba(156,163,175,0.15)';
+  const badgeBorder = isGreen  ? colors.statusGreen         : colors.statusGray;
+  const labelColor  = isGreen  ? colors.statusGreen         : colors.statusGray;
+  const label       = isToggling
+    ? (toggleDirection === 'going_online' ? 'Going online…' : 'Going offline…')
+    : (isOnline ? 'Online' : 'Offline');
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.75}
+      disabled={isToggling}
+      style={toggleStyles.hitArea}
+    >
+      <View style={[toggleStyles.badge, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>
+        <View style={toggleStyles.dotWrap}>
+          {isToggling ? (
+            <Animated.View style={[toggleStyles.spinner, { transform: [{ rotate: spin }] }]}>
+              <View style={[toggleStyles.spinnerArc, { borderColor: spinColor }]} />
+            </Animated.View>
+          ) : (
+            <View style={toggleStyles.dotContainer}>
+              {isOnline && (
+                <Animated.View style={[
+                  toggleStyles.pulseRing,
+                  { borderColor: dotColor },
+                  { transform: [{ scale: pulseScale }], opacity: pulseOpacity },
+                ]} />
+              )}
+              <View style={[toggleStyles.dot, { backgroundColor: dotColor }]} />
+            </View>
+          )}
+        </View>
+        <Text style={[toggleStyles.label, { color: labelColor }]}>{label}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const toggleStyles = StyleSheet.create({
+  hitArea:       { padding: 2 },
+  badge:         { flexDirection: 'row', alignItems: 'center', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, gap: 7, borderWidth: 1.5 },
+  dotWrap:       { width: 14, height: 14, alignItems: 'center', justifyContent: 'center' },
+  dotContainer:  { width: 14, height: 14, alignItems: 'center', justifyContent: 'center' },
+  dot:           { width: 8, height: 8, borderRadius: 4 },
+  pulseRing:     { position: 'absolute', width: 14, height: 14, borderRadius: 7, borderWidth: 1.5 },
+  spinner:       { width: 13, height: 13 },
+  spinnerArc:    { width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderTopColor: 'transparent', borderRightColor: 'transparent' },
+  label:         { fontSize: 12, fontWeight: '700', letterSpacing: 0.1 },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Static empty component
+// ─────────────────────────────────────────────────────────────────────────────
 const ListEmpty = () => (
   <View style={styles.emptyState}>
     <Text style={styles.emptyIcon}>📭</Text>
@@ -22,38 +127,35 @@ const ListEmpty = () => (
   </View>
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Main screen
+// ─────────────────────────────────────────────────────────────────────────────
 const LabourHomeScreen = ({ navigation }) => {
-  const insets         = useSafeAreaInsets();
-  const profile        = usePartnerStore(selectProfile);
-  const isOnline       = usePartnerStore(selectIsOnline);
-  const toggleOnline   = usePartnerStore(selectToggleOnline);
-  const todaysJobs     = usePartnerStore(selectTodaysJobs);
-  const todaysEarnings = usePartnerStore(selectTodaysEarnings);
-  const rating         = usePartnerStore(selectRating);
-  const requests       = usePartnerStore(selectRequests);
-  const fetchRequests  = usePartnerStore((s) => s.fetchRequests);
+  const insets           = useSafeAreaInsets();
+  const profile          = usePartnerStore(selectProfile);
+  const isOnline         = usePartnerStore(selectIsOnline);
+  const isToggling       = usePartnerStore(selectIsTogglingOnline);
+  const toggleDirection  = usePartnerStore(selectToggleDirection);
+  const toggleOnline     = usePartnerStore(selectToggleOnline);
+  const todaysJobs       = usePartnerStore(selectTodaysJobs);
+  const todaysEarnings   = usePartnerStore(selectTodaysEarnings);
+  const rating           = usePartnerStore(selectRating);
+  const requests         = usePartnerStore(selectRequests);
+  const fetchRequests    = usePartnerStore((s) => s.fetchRequests);
 
-  // Poll for requests when online
   useEffect(() => {
-    fetchRequests(); // initial fetch
-
+    fetchRequests();
     let intervalId = null;
     if (isOnline) {
-      intervalId = setInterval(() => {
-        fetchRequests();
-      }, 10000); // Poll every 10 seconds
+      intervalId = setInterval(fetchRequests, 10000);
     }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
+    return () => { if (intervalId) clearInterval(intervalId); };
   }, [isOnline, fetchRequests]);
 
   const handleViewDetails = useCallback((request) => {
     navigation.navigate('RequestDetails', { request });
   }, [navigation]);
 
-  // Memoize header so FlatList doesn't remount it on every render
   const ListHeader = useMemo(() => (
     <>
       <View style={styles.greetingRow}>
@@ -65,20 +167,17 @@ const LabourHomeScreen = ({ navigation }) => {
             {profile.category || ''} · {profile.locationText || profile.location || ''}
           </Text>
         </View>
-        <TouchableOpacity
+
+        <OnlineToggle
+          isOnline={isOnline}
+          isToggling={isToggling}
+          toggleDirection={toggleDirection}
           onPress={toggleOnline}
-          activeOpacity={0.8}
-          style={isOnline ? styles.onlineBadge : styles.offlineBadge}
-        >
-          <View style={isOnline ? styles.onlineDot : styles.offlineDot} />
-          <Text style={isOnline ? styles.onlineText : styles.offlineText}>
-            {isOnline ? 'Online' : 'Offline'}
-          </Text>
-        </TouchableOpacity>
+        />
       </View>
 
-      {!isOnline && (
-        <TouchableOpacity 
+      {!isOnline && !isToggling && (
+        <TouchableOpacity
           style={styles.offlineBanner}
           activeOpacity={0.8}
           onPress={toggleOnline}
@@ -94,11 +193,11 @@ const LabourHomeScreen = ({ navigation }) => {
       )}
 
       <View style={styles.statsRow}>
-        <StatsCard emoji="🏠" value={String(todaysJobs)}     label="Today's Jobs" />
+        <StatsCard emoji="🏠" value={String(todaysJobs)}    label="Today's Jobs" />
         <View style={styles.statSpacer} />
-        <StatsCard emoji="💰" value={`₹${todaysEarnings}`}  label="Today's Earn" />
+        <StatsCard emoji="💰" value={`₹${todaysEarnings}`} label="Today's Earn" />
         <View style={styles.statSpacer} />
-        <StatsCard emoji="⭐" value={String(rating)}         label="Rating" />
+        <StatsCard emoji="⭐" value={String(rating)}        label="Rating" />
       </View>
 
       <SectionHeader
@@ -106,22 +205,22 @@ const LabourHomeScreen = ({ navigation }) => {
       />
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [isOnline, todaysJobs, todaysEarnings, rating, requests.length,
-      profile.name, profile.category, profile.location, toggleOnline]);
+  ), [isOnline, isToggling, toggleDirection, todaysJobs, todaysEarnings, rating, requests.length,
+      profile.name, profile.fullName, profile.category, profile.location, profile.locationText,
+      toggleOnline]);
 
-  const renderItem = useCallback(({ item }) => (
+  const renderItem    = useCallback(({ item }) => (
     <RequestCard request={item} onViewDetails={handleViewDetails} />
   ), [handleViewDetails]);
 
-  const keyExtractor = useCallback((item) => item.id, []);
+  const keyExtractor  = useCallback((item) => item.id, []);
+  const listData      = isOnline ? requests : EMPTY_ARRAY;
 
-  const listData = isOnline ? requests : EMPTY_ARRAY;
-
-  const screenStyle = useMemo(() => [
+  const screenStyle   = useMemo(() => [
     styles.screen,
-    !isOnline && styles.screenOffline,
+    !isOnline && !isToggling && styles.screenOffline,
     { paddingTop: insets.top + 10 },
-  ], [isOnline, insets.top]);
+  ], [isOnline, isToggling, insets.top]);
 
   return (
     <View style={screenStyle}>
@@ -143,7 +242,6 @@ const LabourHomeScreen = ({ navigation }) => {
   );
 };
 
-// Stable empty array reference — avoids new array allocation each render
 const EMPTY_ARRAY = [];
 
 const styles = StyleSheet.create({
@@ -175,42 +273,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: colors.textSecondary,
-  },
-  onlineBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.statusGreenSoft,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: colors.statusGreen,
-  },
-  offlineBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(156,163,175,0.15)',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: colors.statusGray,
-  },
-  onlineDot: {
-    width: 7, height: 7, borderRadius: 4,
-    backgroundColor: colors.statusGreen,
-  },
-  offlineDot: {
-    width: 7, height: 7, borderRadius: 4,
-    backgroundColor: colors.statusGray,
-  },
-  onlineText: {
-    fontSize: 12, fontWeight: '700', color: colors.statusGreen,
-  },
-  offlineText: {
-    fontSize: 12, fontWeight: '700', color: colors.statusGray,
   },
   statsRow: {
     flexDirection: 'row',

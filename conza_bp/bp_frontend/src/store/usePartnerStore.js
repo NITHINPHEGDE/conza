@@ -57,8 +57,12 @@ const usePartnerStore = create((set, get) => ({
 
   // ── Availability ───────────────────────────────────────────────────────
   isOnline: false,
+  isTogglingOnline: false,
+  toggleDirection: null, // 'going_online' | 'going_offline'
 
   toggleOnline: async () => {
+    if (get().isTogglingOnline) return; // debounce double-taps
+    set({ isTogglingOnline: true, toggleDirection: get().isOnline ? 'going_offline' : 'going_online' });
     try {
       const data = await toggleOnlineAPI();
       set({ isOnline: data.isOnline });
@@ -73,6 +77,8 @@ const usePartnerStore = create((set, get) => ({
     } catch (err) {
       console.error('[Store] toggleOnline failed:', err.message);
       throw err;
+    } finally {
+      set({ isTogglingOnline: false, toggleDirection: null });
     }
   },
 
@@ -391,6 +397,8 @@ const EMPTY_OBJ = {};
 export const selectWorker         = (s) => s.worker;
 export const selectProfile        = (s) => s.worker || EMPTY_OBJ;
 export const selectIsOnline       = (s) => s.isOnline;
+export const selectIsTogglingOnline = (s) => s.isTogglingOnline;
+export const selectToggleDirection  = (s) => s.toggleDirection;
 export const selectToggleOnline   = (s) => s.toggleOnline;
 export const selectTodaysJobs     = (s) => s.todaysJobs;
 export const selectTodaysEarnings = (s) => s.todaysEarnings;
