@@ -116,7 +116,7 @@ const createBooking = async (req, res) => {
     logger.info({ bookingId: booking._id, workers: booking.workers }, 'Booking created');
 
     // Invalidate the user's booking list cache
-    await invalidateCache(`bookings:user:${req.user._id}`).catch(() => {});
+    await invalidateCache(`bookings:user:${req.user._id}:*`).catch(() => {});
 
     try {
       const { getIO } = require('../services/socketService');
@@ -164,17 +164,31 @@ const createBooking = async (req, res) => {
 const getMyBookings = async (req, res) => {
   try {
     const userId   = req.user._id.toString();
-    const cacheKey = `bookings:user:${userId}`;
-    const TTL      = 20; // seconds — short so status changes reflect quickly
+    const { page = 1, limit = 20 } = req.query;
+    const skip     = (Number(page) - 1) * Number(limit);
+    const cacheKey = `bookings:user:${userId}:${page}:${limit}`;
+    const TTL      = 20;
 
-    const bookings = await withCache(cacheKey, TTL, () =>
-      Booking.find({ user: userId })
-        .sort({ createdAt: -1 })
-        .populate('workers', 'fullName category profileImage')
-        .lean()
-    );
+    const result = await withCache(cacheKey, TTL, async () => {
+      const [bookings, total] = await Promise.all([
+        Booking.find({ user: userId })
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(Number(limit))
+          .populate('workers', 'fullName category profileImage')
+          .lean(),
+        Booking.countDocuments({ user: userId }),
+      ]);
+      return { bookings, total };
+    });
 
-    res.json({ success: true, bookings });
+    res.json({
+      success: true,
+      total:   result.total,
+      page:    Number(page),
+      pages:   Math.ceil(result.total / Number(limit)),
+      bookings: result.bookings,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -219,7 +233,7 @@ const cancelBooking = async (req, res) => {
     // Invalidate caches for this booking and the user's list
     await invalidateCache(
       `bookings:detail:${booking._id}`,
-      `bookings:user:${req.user._id}`
+      `bookings:user:${req.user._id}:*`
     );
 
     try {

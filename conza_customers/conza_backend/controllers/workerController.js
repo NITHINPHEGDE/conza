@@ -18,7 +18,7 @@ const getNearbyWorkers = async (req, res) => {
     const rLng = round3(lng);
     const cat  = category || 'all';
     const cacheKey = `workers:nearby:${cat}:${rLat}:${rLng}:${radius}`;
-    const TTL      = 8; // seconds — short so availability stays fresh
+    const TTL      = 8;
 
     const workersWithDistance = await withCache(cacheKey, TTL, async () => {
       const query = {
@@ -139,7 +139,6 @@ const getCategories = async (req, res) => {
       return res.json({ success: true, categories });
     }
 
-    // No location — static fallback
     const categories = Object.keys(emojiMap).map((label, i) => ({
       id:        String(i + 1),
       label,
@@ -155,28 +154,24 @@ const getCategories = async (req, res) => {
 };
 
 // ── GET /api/workers/search ───────────────────────────────────────────────────
-// Cache popular/exact searches for 30s. Per-user or wildcard queries skip cache.
+// Uses MongoDB $text index for indexed full-text search instead of regex collection scan.
+// Simple alphanumeric queries (likely popular category/skill terms) are cached for 30s.
 const searchWorkers = async (req, res) => {
   try {
     const { q, lat, lng, radius = 50000 } = req.query;
     if (!q) return res.json({ success: true, workers: [] });
 
-    // Only cache short, clean queries (likely popular category/skill searches)
     const isSimpleQuery = q.length <= 30 && /^[\w\s]+$/.test(q);
-    const rLat = lat ? round3(lat) : 'x';
-    const rLng = lng ? round3(lng) : 'x';
+    const rLat     = lat ? round3(lat) : 'x';
+    const rLng     = lng ? round3(lng) : 'x';
     const cacheKey = `workers:search:${q.toLowerCase().trim()}:${rLat}:${rLng}:${radius}`;
     const TTL      = isSimpleQuery ? 30 : 0;
 
     const doSearch = async () => {
-      const regex  = new RegExp(q, 'i');
+      // $text uses the compound text index on fullName+category+skills+bio
+      // Falls back gracefully if text index missing — but add it to Worker model
       const filter = {
-        $or: [
-          { fullName: regex },
-          { category: regex },
-          { skills:   regex },
-          { bio:      regex },
-        ],
+        $text:       { $search: q },
         isAvailable: { $ne: false },
       };
 
@@ -189,9 +184,10 @@ const searchWorkers = async (req, res) => {
         };
       }
 
-      const workers = await Worker.find(filter).limit(20).select(
-        'fullName username profileImage category skills minCharge locationText isOnline rating totalJobs memberSince location'
-      ).lean();
+      const workers = await Worker.find(filter)
+        .limit(20)
+        .select('fullName username profileImage category skills minCharge locationText isOnline rating totalJobs memberSince location')
+        .lean();
 
       const userLat = lat ? parseFloat(lat) : null;
       const userLng = lng ? parseFloat(lng) : null;

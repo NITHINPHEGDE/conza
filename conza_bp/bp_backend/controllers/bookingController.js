@@ -4,27 +4,44 @@ const logger  = require('../utils/logger');
 const { withCache, invalidateCache } = require('../utils/cacheHelpers');
 require('../models/User');
 
+// ── GET /api/bookings/requests ────────────────────────────────────────────
 const getWorkerRequests = async (req, res) => {
   try {
     const workerId = req.worker._id.toString();
-    const cacheKey = `bp:worker:${workerId}:requests:pending`;
-    const TTL      = 15; // seconds — short so new bookings appear fast
+    const { page = 1, limit = 20 } = req.query;
+    const skip     = (Number(page) - 1) * Number(limit);
+    const cacheKey = `bp:worker:${workerId}:requests:pending:${page}:${limit}`;
+    const TTL      = 15;
 
-    const requests = await withCache(cacheKey, TTL, () =>
-      Booking.find({ workers: workerId, status: 'pending' })
-        .populate('user', 'fullName phone profileImage')
-        .sort({ createdAt: -1 })
-        .lean()
-    );
+    const result = await withCache(cacheKey, TTL, async () => {
+      const [requests, total] = await Promise.all([
+        Booking.find({ workers: workerId, status: 'pending' })
+          .populate('user', 'fullName phone profileImage')
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(Number(limit))
+          .lean(),
+        Booking.countDocuments({ workers: workerId, status: 'pending' }),
+      ]);
+      return { requests, total };
+    });
 
-    logger.info({ workerId, count: requests.length }, 'Fetched worker requests');
-    res.json({ success: true, count: requests.length, requests });
+    logger.info({ workerId, count: result.requests.length }, 'Fetched worker requests');
+    res.json({
+      success: true,
+      count:   result.requests.length,
+      total:   result.total,
+      page:    Number(page),
+      pages:   Math.ceil(result.total / Number(limit)),
+      requests: result.requests,
+    });
   } catch (err) {
     logger.error({ err }, 'getWorkerRequests failed');
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
+// ── PATCH /api/bookings/:id/status ───────────────────────────────────────
 const updateBookingStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -58,12 +75,12 @@ const updateBookingStatus = async (req, res) => {
       await Worker.updateMany({ _id: { $in: booking.workers } }, { isAvailable: true });
     }
 
-    // Invalidate affected worker caches
+    // Invalidate all paginated request/history cache pages for affected workers
     await Promise.allSettled(
       booking.workers.map((wId) =>
         invalidateCache(
-          `bp:worker:${wId}:requests:pending`,
-          `bp:worker:${wId}:history`,
+          `bp:worker:${wId}:requests:pending:*`,
+          `bp:worker:${wId}:history:*`,
           `bp:booking:${bookingId}`
         )
       )
@@ -77,26 +94,43 @@ const updateBookingStatus = async (req, res) => {
   }
 };
 
+// ── GET /api/bookings/history ─────────────────────────────────────────────
 const getWorkerHistory = async (req, res) => {
   try {
     const workerId = req.worker._id.toString();
-    const cacheKey = `bp:worker:${workerId}:history`;
-    const TTL      = 120; // 2 min — history doesn't change often
+    const { page = 1, limit = 20 } = req.query;
+    const skip     = (Number(page) - 1) * Number(limit);
+    const cacheKey = `bp:worker:${workerId}:history:${page}:${limit}`;
+    const TTL      = 120;
 
-    const history = await withCache(cacheKey, TTL, () =>
-      Booking.find({ workers: workerId, status: { $in: ['completed', 'cancelled'] } })
-        .populate('user', 'fullName phone profileImage')
-        .sort({ updatedAt: -1 })
-        .lean()
-    );
+    const result = await withCache(cacheKey, TTL, async () => {
+      const [history, total] = await Promise.all([
+        Booking.find({ workers: workerId, status: { $in: ['completed', 'cancelled'] } })
+          .populate('user', 'fullName phone profileImage')
+          .sort({ updatedAt: -1 })
+          .skip(skip)
+          .limit(Number(limit))
+          .lean(),
+        Booking.countDocuments({ workers: workerId, status: { $in: ['completed', 'cancelled'] } }),
+      ]);
+      return { history, total };
+    });
 
-    res.json({ success: true, count: history.length, history });
+    res.json({
+      success: true,
+      count:   result.history.length,
+      total:   result.total,
+      page:    Number(page),
+      pages:   Math.ceil(result.total / Number(limit)),
+      history: result.history,
+    });
   } catch (err) {
     logger.error({ err }, 'getWorkerHistory failed');
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
+// ── GET /api/bookings/:id ─────────────────────────────────────────────────
 const getBookingById = async (req, res) => {
   try {
     const bookingId = req.params.id;
