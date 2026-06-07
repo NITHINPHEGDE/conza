@@ -28,6 +28,13 @@ const initSocket = (server) => {
   io.on('connection', (socket) => {
     logger.info({ socketId: socket.id }, '[BP] Client connected');
 
+    // Worker joins their personal room to receive targeted events
+    socket.on('join_worker', (workerId) => {
+      socket.join(`worker_${workerId}`);
+      socket.join('workers_room'); // room all online BP workers share
+      logger.info({ workerId }, '[BP] Worker joined room');
+    });
+
     socket.on('join_booking', (bookingId) => {
       socket.join(`booking_${bookingId}`);
       logger.info({ bookingId }, '[BP] Client joined booking room');
@@ -52,21 +59,36 @@ const watchChanges = () => {
       const bookingChangeStream = db.collection('bookings').watch([], { fullDocument: 'updateLookup' });
 
       bookingChangeStream.on('change', (change) => {
-        logger.info({ operationType: change.operationType, status: change.fullDocument?.status }, '[BP] Booking change detected');
+        const bookingId = change.documentKey._id.toString();
+        const status    = change.fullDocument?.status;
+        const workers   = change.fullDocument?.workers || [];
 
-        io.emit('booking_updated', {
-          operationType: change.operationType,
-          bookingId:     change.documentKey._id.toString(),
-          status:        change.fullDocument?.status,
-        });
+        logger.info({ operationType: change.operationType, status }, '[BP] Booking change detected');
 
-        if (change.documentKey._id) {
-          io.to(`booking_${change.documentKey._id}`).emit('booking_status_changed', {
-            bookingId: change.documentKey._id.toString(),
-            status:    change.fullDocument?.status,
-            booking:   change.fullDocument,
+        if (change.operationType === 'insert') {
+          // New booking — notify all online workers so they can poll for new requests
+          io.to('workers_room').emit('booking_updated', {
+            operationType: 'insert',
+            bookingId,
+            status,
+          });
+        } else {
+          // Update — notify only workers assigned to this booking
+          workers.forEach((wId) => {
+            io.to(`worker_${wId}`).emit('booking_updated', {
+              operationType: change.operationType,
+              bookingId,
+              status,
+            });
           });
         }
+
+        // Always notify the specific booking room (customer tracking)
+        io.to(`booking_${bookingId}`).emit('booking_status_changed', {
+          bookingId,
+          status,
+          booking: change.fullDocument,
+        });
       });
 
       bookingChangeStream.on('error', (err) => {
@@ -81,11 +103,8 @@ const watchChanges = () => {
     }
   };
 
-  if (db.readyState === 1) {
-    startWatching();
-  } else {
-    db.once('open', startWatching);
-  }
+  if (db.readyState === 1) startWatching();
+  else db.once('open', startWatching);
 };
 
 const getIO = () => {

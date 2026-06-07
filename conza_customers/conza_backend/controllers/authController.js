@@ -14,11 +14,16 @@ const signup = async (req, res) => {
       return res.status(400).json({ success: false, message: 'fullName, username, phone, and password are required' });
     }
 
-    // Duplicate checks
-    const existingPhone    = await User.findOne({ phone }).lean();
-    const existingUsername = await User.findOne({ username: username.toLowerCase() }).lean();
-    if (existingPhone)    return res.status(400).json({ success: false, message: 'Phone number already registered' });
-    if (existingUsername) return res.status(400).json({ success: false, message: 'Username already taken' });
+    // Single query instead of two sequential findOne calls
+    const existing = await User.findOne({
+      $or: [{ phone }, { username: username.toLowerCase() }],
+    }).lean();
+
+    if (existing) {
+      if (existing.phone === phone)
+        return res.status(400).json({ success: false, message: 'Phone number already registered' });
+      return res.status(400).json({ success: false, message: 'Username already taken' });
+    }
 
     const coords = (latitude && longitude)
       ? [parseFloat(longitude), parseFloat(latitude)]
@@ -40,15 +45,15 @@ const signup = async (req, res) => {
       message: 'Account created successfully',
       token: generateToken(user._id),
       user: {
-        _id:         user._id,
-        fullName:    user.fullName,
-        username:    user.username,
-        phone:       user.phone,
-        email:       user.email,
+        _id:          user._id,
+        fullName:     user.fullName,
+        username:     user.username,
+        phone:        user.phone,
+        email:        user.email,
         locationText: user.locationText,
-        memberSince: user.memberSince,
+        memberSince:  user.memberSince,
         profileImage: user.profileImage,
-        location:    user.location,
+        location:     user.location,
       },
     });
   } catch (err) {
