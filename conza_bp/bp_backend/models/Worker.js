@@ -55,6 +55,7 @@ const workerSchema = new mongoose.Schema(
 
 // ── 2dsphere index for geospatial queries ──────────────────────────────────
 workerSchema.index({ location: '2dsphere' });
+workerSchema.index({ category: 1, isAvailable: 1 });
 
 // ── Hash password before save ──────────────────────────────────────────────
 workerSchema.pre('save', async function (next) {

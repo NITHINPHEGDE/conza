@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -46,24 +46,23 @@ const ProfileScreen = () => {
   const [editVisible, setEditVisible] = React.useState(false);
   const [form, setForm] = React.useState({ fullName: '', email: '', locationText: '' });
 
-  const openEdit = () => {
+  const openEdit = useCallback(() => {
     setForm({
       fullName:     userProfile.fullName || '',
       email:        userProfile.email || '',
       locationText: userProfile.locationText || '',
     });
     setEditVisible(true);
-  };
+  }, [userProfile]);
 
-  const handleUpdateProfile = async () => {
+  const handleUpdateProfile = useCallback(async () => {
     const res = await updateProfile(form);
     if (res.success) setEditVisible(false);
-  };
+  }, [updateProfile, form]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await logout();
-    // Navigation will auto-switch to Auth stack due to userProfile becoming null
-  };
+  }, [logout]);
 
   if (profileLoading || !userProfile) return (
     <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>

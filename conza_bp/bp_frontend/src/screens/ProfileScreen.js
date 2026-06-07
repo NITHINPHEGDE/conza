@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -49,6 +49,12 @@ const ProfileScreen = ({ navigation }) => {
 );
 
 const profileImage = profile.profileImage || null;
+
+  const handleLogout = useCallback(async () => {
+    stopLocationTracking();
+    await logout();
+    navigation.replace('Auth');
+  }, [navigation]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 10 }]}>
@@ -111,12 +117,8 @@ const profileImage = profile.profileImage || null;
             icon="🚪"
             label="Logout"
             danger
-            onPress={async () => {
-              stopLocationTracking();
-              await logout();
-              navigation.replace('Auth');
-            }}
-/> 
+            onPress={handleLogout}
+          /> 
         </View>
 
         <Text style={styles.version}>Conza Partner v1.0.0</Text>

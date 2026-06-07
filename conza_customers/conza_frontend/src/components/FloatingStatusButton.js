@@ -1,39 +1,50 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, View, Animated } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
 import { useNavigation } from '@react-navigation/native';
 
-const FloatingStatusButton = () => {
-  const { activeBookingId, activeBooking } = useAppStore();
-  const navigation = useNavigation();
+const getStatusText = (status) => {
+  switch (status) {
+    case 'pending':   return 'Waiting for Partner';
+    case 'accepted':  return 'Partner on the way';
+    case 'arrived':   return 'Worker at location';
+    case 'completed': return 'Work Completed!';
+    case 'cancelled': return 'Booking Cancelled';
+    default:          return 'View Status';
+  }
+};
+
+const FloatingStatusButton = React.memo(() => {
+  const activeBookingId = useAppStore((s) => s.activeBookingId);
+  const activeBooking   = useAppStore((s) => s.activeBooking);
+  const navigation      = useNavigation();
+
+  const handlePress = useCallback(() => {
+    navigation.navigate('Status');
+  }, [navigation]);
+
+  const statusColor = useMemo(() => {
+    if (!activeBooking) return '#F59E0B';
+    switch (activeBooking.status) {
+      case 'completed': return '#6366F1';
+      case 'cancelled': return '#EF4444';
+      case 'arrived':   return '#10B981';
+      default:          return '#F59E0B';
+    }
+  }, [activeBooking?.status]);
+
+  const containerStyle = useMemo(() => [
+    styles.container,
+    { backgroundColor: statusColor },
+  ], [statusColor]);
 
   if (!activeBookingId || !activeBooking) return null;
 
-  // Don't show if we are already on the tracking page
-  // We can't easily check current route name here without extra logic, 
-  // but usually navigation state can be accessed.
-  
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'pending':   return 'Waiting for Partner';
-      case 'accepted':  return 'Partner on the way';
-      case 'arrived':   return 'Worker at location';
-      case 'completed': return 'Work Completed!';
-      case 'cancelled': return 'Booking Cancelled';
-      default:          return 'View Status';
-    }
-  };
-
-  const statusColor = 
-    activeBooking.status === 'completed' ? '#6366F1' :
-    activeBooking.status === 'cancelled' ? '#EF4444' :
-    activeBooking.status === 'arrived'   ? '#10B981' : '#F59E0B';
-
   return (
-    <TouchableOpacity 
-      style={[styles.container, { backgroundColor: statusColor }]}
-      onPress={() => navigation.navigate('Status')}
+    <TouchableOpacity
+      style={containerStyle}
+      onPress={handlePress}
       activeOpacity={0.9}
     >
       <View style={styles.content}>
@@ -46,12 +57,12 @@ const FloatingStatusButton = () => {
       <MaterialCommunityIcons name="chevron-right" size={24} color="#FFF" />
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 90, // Above tab bar
+    bottom: 90,
     left: 20,
     right: 20,
     height: 60,
@@ -67,25 +78,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     zIndex: 9999,
   },
-  content: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  icon: {
-    marginRight: 12,
-  },
-  label: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  status: {
-    color: '#FFF',
-    fontSize: 15,
-    fontWeight: '800',
-  }
+  content: { flexDirection: 'row', alignItems: 'center' },
+  icon:    { marginRight: 12 },
+  label:   { color: 'rgba(255,255,255,0.8)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  status:  { color: '#FFF', fontSize: 15, fontWeight: '800' },
 });
 
 export default FloatingStatusButton;

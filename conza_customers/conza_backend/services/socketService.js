@@ -1,41 +1,41 @@
 // conza_backend/services/socketService.js
-const { Server }            = require('socket.io');
-const { createAdapter }     = require('@socket.io/redis-adapter');
-const mongoose              = require('mongoose');
+const { Server }                  = require('socket.io');
+const { createAdapter }           = require('@socket.io/redis-adapter');
+const mongoose                    = require('mongoose');
 const { getRedis, getSubscriber } = require('../config/redis');
+const logger                      = require('../utils/logger');
+const Sentry                      = require('@sentry/node');
 
 let io;
 
 const initSocket = (server) => {
   io = new Server(server, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
-    transports: ['websocket', 'polling'],  // allow polling fallback
+    transports: ['websocket', 'polling'],
     pingTimeout: 60000,
     pingInterval: 25000,
   });
 
-  // ── Redis Pub/Sub adapter for horizontal scaling ──────────────────────────
   try {
     const pubClient = getRedis();
     const subClient = getSubscriber();
     io.adapter(createAdapter(pubClient, subClient));
-    console.log('✅ Socket.io Redis adapter attached');
+    logger.info('Socket.io Redis adapter attached');
   } catch (err) {
-    console.warn('⚠️  Socket.io Redis adapter failed (running in-memory):', err.message);
-    // Falls back to in-memory adapter — single-instance still works fine
+    logger.warn({ err }, 'Socket.io Redis adapter failed (running in-memory)');
   }
 
   io.on('connection', (socket) => {
-    console.log(`🔌 Connected: ${socket.id}`);
+    logger.info({ socketId: socket.id }, 'Client connected');
 
     socket.on('join_booking',  (id) => socket.join(`booking_${id}`));
     socket.on('join_customer', (id) => socket.join(`customer_${id}`));
     socket.on('join_seller',   (id) => {
       socket.join(`seller_${id}`);
-      console.log(`🏪 Seller joined room: seller_${id}`);
+      logger.info({ sellerId: id }, 'Seller joined room');
     });
 
-    socket.on('disconnect', () => console.log(`🔌 Disconnected: ${socket.id}`));
+    socket.on('disconnect', () => logger.info({ socketId: socket.id }, 'Client disconnected'));
   });
 
   watchChanges();
@@ -46,7 +46,7 @@ const watchChanges = () => {
   const db = mongoose.connection;
 
   const startWatching = () => {
-    console.log('👀 Watching MongoDB collections...');
+    logger.info('Watching MongoDB collections...');
     try {
       const workerStream = db.collection('workers').watch([], { fullDocument: 'updateLookup' });
       workerStream.on('change', (c) => {
@@ -79,8 +79,8 @@ const watchChanges = () => {
       productStream.on('error', () => setTimeout(startWatching, 5000));
 
     } catch (err) {
-      console.error('❌ Change streams failed:', err.message);
-      console.error('   → Run MongoDB as replica set or use Atlas for Change Streams');
+      logger.error({ err }, 'Change streams failed — run MongoDB as replica set or use Atlas');
+      Sentry.captureException(err);
     }
   };
 

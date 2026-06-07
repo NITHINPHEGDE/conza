@@ -1,9 +1,11 @@
-// conzacsb/server.js
+require('./instrument.js');
+
 const express = require('express');
 const dotenv  = require('dotenv');
 const helmet  = require('helmet');
 const cors    = require('cors');
 const morgan  = require('morgan');
+const Sentry  = require('@sentry/node');
 
 dotenv.config();
 
@@ -21,7 +23,6 @@ const http = require('http');
 const { initSocket } = require('./services/socketService');
 
 connectDB();
-// Warm up Redis connection (non-blocking)
 require('./config/redis').getRedis().connect().catch(() => {});
 
 const app    = express();
@@ -30,6 +31,7 @@ const server = http.createServer(app);
 initSocket(server);
 
 app.use(helmet());
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : ['*'];
@@ -46,7 +48,7 @@ app.use(cors({
 }));
 
 if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
-app.use(express.json({ limit: '20mb' }));  // large base64 images
+app.use(express.json({ limit: '1mb' }));
 
 // ── Customer routes ──
 app.use('/api/auth',     authLimiter, authRoutes);
@@ -58,7 +60,7 @@ app.use('/api/seller/auth',     authLimiter, sellerAuthRoutes);
 app.use('/api/seller/products', productRoutes);
 app.use('/api/seller/orders',   sellerOrderRoutes);
 
-// ── Public product browsing (customer side) ──
+// ── Public product browsing ──
 app.use('/api/products', require('./routes/productRoutes'));
 
 // ── Customer place seller order ──
@@ -66,6 +68,9 @@ app.use('/api/orders/seller', sellerOrderRoutes);
 
 // Health
 app.get('/api/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));
+
+// Sentry error handler — must be before any other error middleware
+Sentry.setupExpressErrorHandler(app);
 
 app.use(errorHandler);
 

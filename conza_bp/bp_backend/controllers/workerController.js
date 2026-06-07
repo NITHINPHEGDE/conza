@@ -1,15 +1,14 @@
-const asyncHandler  = require('../utils/asyncHandler');
-const workerService = require('../services/workerService');
-const AppError      = require('../utils/AppError');
+const asyncHandler   = require('../utils/asyncHandler');
+const workerService  = require('../services/workerService');
+const AppError       = require('../utils/AppError');
 const { cloudinary } = require('../config/cloudinary');
+const logger         = require('../utils/logger');
 
-// PATCH /api/workers/toggle-online  (protected)
 const toggleOnline = asyncHandler(async (req, res) => {
   const worker = await workerService.toggleOnlineStatus(req.worker._id);
   res.status(200).json({ success: true, isOnline: worker.isOnline, worker });
 });
 
-// PATCH /api/workers/location  (protected)
 const updateLocation = asyncHandler(async (req, res) => {
   const { latitude, longitude } = req.body;
   const worker = await workerService.updateWorkerLocation(
@@ -24,8 +23,6 @@ const updateLocation = asyncHandler(async (req, res) => {
   });
 });
 
-// PATCH /api/workers/profile-image  (protected)
-// Expects multipart/form-data with field "image" (handled by multer/cloudinary)
 const updateProfileImage = asyncHandler(async (req, res) => {
   if (!req.file || !req.file.path) {
     throw new AppError('No image file provided.', 400);
@@ -34,14 +31,11 @@ const updateProfileImage = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, profileImage: worker.profileImage, worker });
 });
 
-// GET /api/workers/upload-signature  (protected)
 const getUploadSignature = asyncHandler(async (req, res) => {
   const timestamp = Math.round(Date.now() / 1000);
   const folder    = 'conza_partners';
 
-  // Debug: Log params being signed
-  console.log('[Cloudinary Debug] Generating signature for:', { timestamp, folder });
-  console.log('[Cloudinary Debug] Secret exists:', !!process.env.CLOUDINARY_API_SECRET);
+  logger.info({ timestamp, folder }, 'Generating Cloudinary upload signature');
 
   const signature = cloudinary.utils.api_sign_request(
     { timestamp, folder },

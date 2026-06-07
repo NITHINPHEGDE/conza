@@ -1,5 +1,6 @@
 // bp_backend/config/redis.js
-const Redis = require('ioredis');
+const Redis  = require('ioredis');
+const logger = require('../utils/logger');
 
 let redisClient;
 let redisSubscriber;
@@ -12,9 +13,9 @@ const createClient = () => {
     retryStrategy: (times) => Math.min(times * 50, 2000),
   });
 
-  client.on('connect',      () => console.log('✅ [BP] Redis connected'));
-  client.on('reconnecting', () => console.log('🔄 [BP] Redis reconnecting...'));
-  client.on('error',        (err) => console.error('⚠️  [BP] Redis error (failing-safe):', err.message));
+  client.on('connect',      () => logger.info('[BP] Redis connected'));
+  client.on('reconnecting', () => logger.warn('[BP] Redis reconnecting...'));
+  client.on('error',        (err) => logger.error({ err }, '[BP] Redis error (failing-safe)'));
 
   return client;
 };
@@ -24,7 +25,6 @@ const getRedis = () => {
   return redisClient;
 };
 
-// Separate subscriber client required by Socket.io Redis adapter
 const getSubscriber = () => {
   if (!redisSubscriber) redisSubscriber = createClient();
   return redisSubscriber;

@@ -12,7 +12,7 @@ const COMMISSION_RATE = 0.03;
 const PAYMENT_OPTIONS = ['UPI', 'Net Banking', 'Debit Card', 'Wallet'];
 
 // ── Detail Modal ──────────────────────────────────────────────────────────────
-const DetailModal = ({ visible, item, onClose }) => {
+const DetailModal = React.memo(({ visible, item, onClose }) => {
   if (!item) return null;
   const commission = parseFloat((item.amount * COMMISSION_RATE).toFixed(2));
   const net        = parseFloat((item.amount - commission).toFixed(2));
@@ -62,15 +62,15 @@ const DetailModal = ({ visible, item, onClose }) => {
       </TouchableOpacity>
     </Modal>
   );
-};
+});
 
 // ── Withdraw Modal ────────────────────────────────────────────────────────────
-const WithdrawModal = ({ visible, onClose, availableBalance }) => {
+const WithdrawModal = React.memo(({ visible, onClose, availableBalance }) => {
   const [amount, setAmount]   = useState('');
   const [done, setDone]       = useState(false);
   const [error, setError]     = useState('');
 
-  const handleSubmit = () => {
+  const handleSubmit = useCallback(() => {
     const num = parseFloat(amount);
     if (!amount || isNaN(num) || num <= 0) {
       setError('Enter a valid amount.');
@@ -87,7 +87,7 @@ const WithdrawModal = ({ visible, onClose, availableBalance }) => {
       setAmount('');
       onClose();
     }, 2000);
-  };
+  }, [amount, availableBalance, onClose]);
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -134,14 +134,14 @@ const WithdrawModal = ({ visible, onClose, availableBalance }) => {
       </View>
     </Modal>
   );
-};
+});
 
 // ── Pay Platform Modal ────────────────────────────────────────────────────────
-const PayPlatformModal = ({ visible, onClose, pendingAmount }) => {
+const PayPlatformModal = React.memo(({ visible, onClose, pendingAmount }) => {
   const [selected, setSelected] = useState(null);
   const [done, setDone]         = useState(false);
 
-  const handlePay = () => {
+  const handlePay = useCallback(() => {
     if (!selected) return;
     setDone(true);
     setTimeout(() => {
@@ -149,7 +149,7 @@ const PayPlatformModal = ({ visible, onClose, pendingAmount }) => {
       setSelected(null);
       onClose();
     }, 2000);
-  };
+  }, [selected, pendingAmount, onClose]);
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -213,7 +213,7 @@ const PayPlatformModal = ({ visible, onClose, pendingAmount }) => {
       </View>
     </Modal>
   );
-};
+});
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 const PaymentScreen = () => {

@@ -1,20 +1,21 @@
 // conza_backend/config/redis.js
-const Redis = require('ioredis');
+const Redis  = require('ioredis');
+const logger = require('../utils/logger');
 
 let redisClient;
 let redisSubscriber;
 
 const createClient = () => {
   const client = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', {
-    maxRetriesPerRequest: null,       // required by redlock
+    maxRetriesPerRequest: null,
     enableReadyCheck: false,
     lazyConnect: true,
     retryStrategy: (times) => Math.min(times * 50, 2000),
   });
 
-  client.on('connect',      () => console.log('✅ Redis connected'));
-  client.on('reconnecting', () => console.log('🔄 Redis reconnecting...'));
-  client.on('error',        (err) => console.error('⚠️  Redis error (failing-safe):', err.message));
+  client.on('connect',      () => logger.info('Redis connected'));
+  client.on('reconnecting', () => logger.warn('Redis reconnecting...'));
+  client.on('error',        (err) => logger.error({ err }, 'Redis error (failing-safe)'));
 
   return client;
 };
@@ -24,7 +25,6 @@ const getRedis = () => {
   return redisClient;
 };
 
-// Separate subscriber client for Socket.io adapter
 const getSubscriber = () => {
   if (!redisSubscriber) redisSubscriber = createClient();
   return redisSubscriber;

@@ -40,6 +40,7 @@ const workerSchema = new mongoose.Schema(
 );
 
 workerSchema.index({ location: '2dsphere' });
+workerSchema.index({ category: 1, isAvailable: 1 });
 
 workerSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();

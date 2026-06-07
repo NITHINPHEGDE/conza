@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, RefreshControl,
@@ -7,7 +7,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
 import { SkeletonList, BookingCardSkeleton } from '../components/Skeleton';
 
-// ── ORIGINAL labour status helper — unchanged ─────────────────────────────────
 const getStatusDisplay = (status) => {
   switch (status) {
     case 'pending':     return { text: 'Waiting for response', color: '#F59E0B', icon: 'clock-outline' };
@@ -18,9 +17,8 @@ const getStatusDisplay = (status) => {
   }
 };
 
-// ── ORIGINAL BookingCard — completely unchanged ───────────────────────────────
-const BookingCard = ({ booking, onPress }) => {
-  const s = getStatusDisplay(booking.status);
+const BookingCard = React.memo(({ booking, onPress }) => {
+  const s      = getStatusDisplay(booking.status);
   const worker = booking.workers?.[0];
 
   return (
@@ -35,9 +33,7 @@ const BookingCard = ({ booking, onPress }) => {
           <Text style={styles.bookingIdText}>#{booking._id.slice(-6).toUpperCase()}</Text>
         </View>
         <Text style={styles.serviceName}>{booking.category || 'Booking'}</Text>
-        {worker && (
-          <Text style={styles.workerName}>👷 {worker.fullName}</Text>
-        )}
+        {worker && <Text style={styles.workerName}>👷 {worker.fullName}</Text>}
         <Text style={styles.locationText} numberOfLines={1}>
           📍 {booking.area ? `${booking.area}, ` : ''}{booking.city}
         </Text>
@@ -50,9 +46,8 @@ const BookingCard = ({ booking, onPress }) => {
       </View>
     </TouchableOpacity>
   );
-};
+});
 
-// ── NEW: Material status helper ───────────────────────────────────────────────
 const getMaterialStatus = (status) => {
   switch (status) {
     case 'new':              return { text: 'Order Placed',     color: '#3B82F6', icon: 'package-variant' };
@@ -64,10 +59,12 @@ const getMaterialStatus = (status) => {
   }
 };
 
-// ── NEW: Material booking card ────────────────────────────────────────────────
-const MaterialCard = ({ order }) => {
+const MaterialCard = React.memo(({ order }) => {
   const s         = getMaterialStatus(order.status);
-  const itemNames = (order.items || []).map((i) => i.title || i.name).filter(Boolean).join(', ');
+  const itemNames = useMemo(() =>
+    (order.items || []).map((i) => i.title || i.name).filter(Boolean).join(', '),
+    [order.items]
+  );
   return (
     <View style={styles.card}>
       <View style={[styles.cardAccent, { backgroundColor: s.color }]} />
@@ -81,9 +78,7 @@ const MaterialCard = ({ order }) => {
             <Text style={styles.typeBadgeText}>📦 Materials</Text>
           </View>
         </View>
-        <Text style={styles.serviceName} numberOfLines={1}>
-          {itemNames || 'Material Order'}
-        </Text>
+        <Text style={styles.serviceName} numberOfLines={1}>{itemNames || 'Material Order'}</Text>
         <Text style={styles.locationText}>📍 {order.city}</Text>
         <View style={styles.cardBottom}>
           <Text style={styles.amountText}>₹{order.total}</Text>
@@ -92,9 +87,8 @@ const MaterialCard = ({ order }) => {
       </View>
     </View>
   );
-};
+});
 
-// ── NEW: Rental status helper ─────────────────────────────────────────────────
 const getRentalStatus = (status) => {
   switch (status) {
     case 'new':      return { text: 'Booking Placed',   color: '#3B82F6', icon: 'clock-outline'   };
@@ -107,10 +101,12 @@ const getRentalStatus = (status) => {
   }
 };
 
-// ── NEW: Rental booking card ──────────────────────────────────────────────────
-const RentalCard = ({ order }) => {
+const RentalCard = React.memo(({ order }) => {
   const s         = getRentalStatus(order.status);
-  const itemNames = (order.items || []).map((i) => i.title || i.name).filter(Boolean).join(', ');
+  const itemNames = useMemo(() =>
+    (order.items || []).map((i) => i.title || i.name).filter(Boolean).join(', '),
+    [order.items]
+  );
   return (
     <View style={styles.card}>
       <View style={[styles.cardAccent, { backgroundColor: s.color }]} />
@@ -124,9 +120,7 @@ const RentalCard = ({ order }) => {
             <Text style={[styles.typeBadgeText, { color: '#4338CA' }]}>🏗️ Rental</Text>
           </View>
         </View>
-        <Text style={styles.serviceName} numberOfLines={1}>
-          {itemNames || 'Equipment Rental'}
-        </Text>
+        <Text style={styles.serviceName} numberOfLines={1}>{itemNames || 'Equipment Rental'}</Text>
         <Text style={styles.locationText}>📍 {order.city}</Text>
         <View style={styles.cardBottom}>
           <Text style={styles.amountText}>₹{order.total}</Text>
@@ -135,9 +129,8 @@ const RentalCard = ({ order }) => {
       </View>
     </View>
   );
-};
+});
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
 const StatusScreen = ({ navigation }) => {
   const {
     activeBookings,
@@ -150,34 +143,41 @@ const StatusScreen = ({ navigation }) => {
   } = useAppStore();
 
   useEffect(() => {
-    fetchActiveBookings();      // original — fetches labour bookings
-    fetchMySellerOrders();      // new — fetches material + rental orders
-  }, []);
-
-  // ORIGINAL handler — untouched
-  const handleViewBooking = async (booking) => {
-    await setActiveBookingId(booking._id);
-    navigation.navigate('BookingDetail');
-  };
-
-  const onRefresh = () => {
     fetchActiveBookings();
     fetchMySellerOrders();
-  };
+  }, []);
+
+  const handleViewBooking = useCallback(async (booking) => {
+    await setActiveBookingId(booking._id);
+    navigation.navigate('BookingDetail');
+  }, [setActiveBookingId, navigation]);
+
+  const onRefresh = useCallback(() => {
+    fetchActiveBookings();
+    fetchMySellerOrders();
+  }, [fetchActiveBookings, fetchMySellerOrders]);
 
   const isLoading = activeBookingsLoading || sellerOrdersLoading;
 
-  // Only labour bookings go through BookingCard (original flow)
-  const labourBookings = (activeBookings || []).filter(
-    (b) => !b.bookingType || b.bookingType === 'labour'
+  const labourBookings = useMemo(() =>
+    (activeBookings || []).filter((b) => !b.bookingType || b.bookingType === 'labour'),
+    [activeBookings]
   );
 
-  // Seller orders split by type, hide terminal statuses
-  const activeSellerOrders = (sellerOrders || []).filter(
-    (o) => !['delivered', 'returned', 'cancelled'].includes(o.status)
+  const activeSellerOrders = useMemo(() =>
+    (sellerOrders || []).filter((o) => !['delivered', 'returned', 'cancelled'].includes(o.status)),
+    [sellerOrders]
   );
-  const materialOrders = activeSellerOrders.filter((o) => o.orderType === 'material');
-  const rentalOrders   = activeSellerOrders.filter((o) => o.orderType === 'rental');
+
+  const materialOrders = useMemo(() =>
+    activeSellerOrders.filter((o) => o.orderType === 'material'),
+    [activeSellerOrders]
+  );
+
+  const rentalOrders = useMemo(() =>
+    activeSellerOrders.filter((o) => o.orderType === 'rental'),
+    [activeSellerOrders]
+  );
 
   const totalActive = labourBookings.length + activeSellerOrders.length;
 
@@ -219,7 +219,6 @@ const StatusScreen = ({ navigation }) => {
           </View>
         ) : (
           <>
-            {/* Labour bookings — original BookingCard, original onPress */}
             {labourBookings.map((booking) => (
               <BookingCard
                 key={booking._id}
@@ -227,13 +226,9 @@ const StatusScreen = ({ navigation }) => {
                 onPress={() => handleViewBooking(booking)}
               />
             ))}
-
-            {/* Material orders — new card, no navigation needed yet */}
             {materialOrders.map((order) => (
               <MaterialCard key={order._id} order={order} />
             ))}
-
-            {/* Rental orders — new card */}
             {rentalOrders.map((order) => (
               <RentalCard key={order._id} order={order} />
             ))}
@@ -244,7 +239,6 @@ const StatusScreen = ({ navigation }) => {
   );
 };
 
-// ── Styles — original styles kept exactly, typeBadge added ───────────────────
 const styles = StyleSheet.create({
   container:      { flex: 1, backgroundColor: '#F8FAFC' },
   header: {
@@ -263,8 +257,6 @@ const styles = StyleSheet.create({
   scrollContent:  { padding: 16, paddingBottom: 40 },
   center:         { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' },
   loadingText:    { marginTop: 10, color: '#64748B' },
-
-  // Card — original
   card: {
     flexDirection:   'row',
     backgroundColor: '#FFF',
@@ -307,12 +299,8 @@ const styles = StyleSheet.create({
   amountText:     { fontSize: 16, fontWeight: '800', color: '#1E293B' },
   viewBtn:        { backgroundColor: '#EEF2FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   viewBtnText:    { fontSize: 12, fontWeight: '700', color: '#6366F1' },
-
-  // New — type badge for material/rental cards
   typeBadge:      { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   typeBadgeText:  { fontSize: 10, fontWeight: '700', color: '#92400E' },
-
-  // Empty — original
   emptyState:     { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 100 },
   emptyEmoji:     { fontSize: 52, marginBottom: 16 },
   emptyTitle:     { fontSize: 18, fontWeight: '700', color: '#1E293B', marginBottom: 6 },

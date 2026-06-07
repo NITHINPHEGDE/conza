@@ -1,24 +1,12 @@
 const Booking = require('../models/Booking');
 const Worker  = require('../models/Worker');
-require('../models/User'); // Register User model for population
+const logger  = require('../utils/logger');
+require('../models/User');
 
-// @desc    Get all pending requests for the logged-in worker
-// @route   GET /api/bookings/requests
-// @access  Private
 const getWorkerRequests = async (req, res) => {
   try {
     const workerId = req.worker._id;
 
-    console.log('🔍 Fetching requests for worker:', workerId);
-    
-    // DEBUG: Let's see if there are ANY pending bookings at all
-    const allPending = await Booking.find({ status: 'pending' });
-    console.log('🧪 Debug: Total pending bookings in DB:', allPending.length);
-    if (allPending.length > 0) {
-      console.log('🧪 Debug: First pending booking workers:', allPending[0].workers);
-    }
-
-    // Find bookings where this worker is in the workers array AND status is pending
     const requests = await Booking.find({
       workers: workerId,
       status: 'pending'
@@ -26,20 +14,14 @@ const getWorkerRequests = async (req, res) => {
     .populate('user', 'fullName phone profileImage')
     .sort({ createdAt: -1 });
 
-    console.log('📦 Found', requests.length, 'requests for worker:', workerId);
-    res.json({
-      success: true,
-      count: requests.length,
-      requests
-    });
+    logger.info({ workerId, count: requests.length }, 'Fetched worker requests');
+    res.json({ success: true, count: requests.length, requests });
   } catch (err) {
+    logger.error({ err }, 'getWorkerRequests failed');
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// @desc    Accept/Reject a booking request
-// @route   PATCH /api/bookings/:id/status
-// @access  Private
 const updateBookingStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -50,65 +32,41 @@ const updateBookingStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Ensure worker is part of this booking
     const isAssigned = booking.workers.some(id => id.toString() === req.worker._id.toString());
     if (!isAssigned) {
       return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
     }
 
-    // Automatically set timestamps based on status
-    if (status === 'accepted' && !booking.acceptedAt) {
-      booking.acceptedAt = new Date();
-    }
-    
-    if (status === 'arrived' && !booking.checkInTime) {
-  booking.checkInTime = new Date();
-}
-    
+    if (status === 'accepted' && !booking.acceptedAt) booking.acceptedAt = new Date();
+    if (status === 'arrived'  && !booking.checkInTime) booking.checkInTime = new Date();
     if (status === 'completed' && !booking.checkOutTime) {
       booking.checkOutTime = new Date();
-      // Update payment method if worker specified how they collected
-      if (req.body.paymentMethod) {
-        booking.paymentMethod = req.body.paymentMethod;
-      }
+      if (req.body.paymentMethod) booking.paymentMethod = req.body.paymentMethod;
     }
-
-    if (status === 'cancelled') {
-      booking.workerCancelled = true;
-    }
+    if (status === 'cancelled') booking.workerCancelled = true;
 
     booking.status = status;
     await booking.save();
 
-    // ── Toggle worker availability ────────────────────────────────────────
     if (status === 'accepted') {
-      await Worker.updateMany(
-        { _id: { $in: booking.workers } },
-        { isAvailable: false }
-      );
+      await Worker.updateMany({ _id: { $in: booking.workers } }, { isAvailable: false });
     }
-
     if (status === 'completed' || status === 'cancelled') {
-      await Worker.updateMany(
-        { _id: { $in: booking.workers } },
-        { isAvailable: true }
-      );
+      await Worker.updateMany({ _id: { $in: booking.workers } }, { isAvailable: true });
     }
 
+    logger.info({ bookingId, status }, 'Booking status updated');
     res.json({ success: true, booking });
   } catch (err) {
+    logger.error({ err }, 'updateBookingStatus failed');
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// @desc    Get booking history for the logged-in worker
-// @route   GET /api/bookings/history
-// @access  Private
 const getWorkerHistory = async (req, res) => {
   try {
     const workerId = req.worker._id;
 
-    // Find bookings where this worker is in the workers array AND status is terminal (completed/cancelled)
     const history = await Booking.find({
       workers: workerId,
       status: { $in: ['completed', 'cancelled'] }
@@ -116,19 +74,13 @@ const getWorkerHistory = async (req, res) => {
     .populate('user', 'fullName phone profileImage')
     .sort({ updatedAt: -1 });
 
-    res.json({
-      success: true,
-      count: history.length,
-      history
-    });
+    res.json({ success: true, count: history.length, history });
   } catch (err) {
+    logger.error({ err }, 'getWorkerHistory failed');
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// @desc    Get booking by ID
-// @route   GET /api/bookings/:id
-// @access  Private
 const getBookingById = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id)
@@ -136,13 +88,9 @@ const getBookingById = async (req, res) => {
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
     res.json({ success: true, booking });
   } catch (err) {
+    logger.error({ err }, 'getBookingById failed');
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-module.exports = {
-  getWorkerRequests,
-  updateBookingStatus,
-  getWorkerHistory,
-  getBookingById
-};
+module.exports = { getWorkerRequests, updateBookingStatus, getWorkerHistory, getBookingById };

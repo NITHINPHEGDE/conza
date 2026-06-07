@@ -3,38 +3,38 @@ const { Server }                  = require('socket.io');
 const { createAdapter }           = require('@socket.io/redis-adapter');
 const mongoose                    = require('mongoose');
 const { getRedis, getSubscriber } = require('../config/redis');
+const logger                      = require('../utils/logger');
+const Sentry                      = require('@sentry/node');
 
 let io;
 
 const initSocket = (server) => {
   io = new Server(server, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
-    transports: ['websocket', 'polling'],  // allow polling fallback
+    transports: ['websocket', 'polling'],
     pingTimeout: 60000,
     pingInterval: 25000,
   });
 
-  // ── Redis Pub/Sub adapter for horizontal scaling ────────────────────────
   try {
     const pubClient = getRedis();
     const subClient = getSubscriber();
     io.adapter(createAdapter(pubClient, subClient));
-    console.log('✅ [BP] Socket.io Redis adapter attached');
+    logger.info('[BP] Socket.io Redis adapter attached');
   } catch (err) {
-    console.warn('⚠️  [BP] Socket.io Redis adapter failed (running in-memory):', err.message);
-    // Single-instance still works fine without it
+    logger.warn({ err }, '[BP] Socket.io Redis adapter failed (running in-memory)');
   }
 
   io.on('connection', (socket) => {
-    console.log(`🔌 [BP] Client connected: ${socket.id}`);
+    logger.info({ socketId: socket.id }, '[BP] Client connected');
 
     socket.on('join_booking', (bookingId) => {
       socket.join(`booking_${bookingId}`);
-      console.log(`🔌 [BP] Client joined booking room: booking_${bookingId}`);
+      logger.info({ bookingId }, '[BP] Client joined booking room');
     });
 
     socket.on('disconnect', () => {
-      console.log(`🔌 [BP] Client disconnected: ${socket.id}`);
+      logger.info({ socketId: socket.id }, '[BP] Client disconnected');
     });
   });
 
@@ -46,13 +46,13 @@ const watchChanges = () => {
   const db = mongoose.connection;
 
   const startWatching = () => {
-    console.log('👀 [BP] Watching MongoDB collections for changes...');
+    logger.info('[BP] Watching MongoDB collections for changes...');
 
     try {
       const bookingChangeStream = db.collection('bookings').watch([], { fullDocument: 'updateLookup' });
 
       bookingChangeStream.on('change', (change) => {
-        console.log('✨ [BP] Booking change detected:', change.operationType, 'status:', change.fullDocument?.status);
+        logger.info({ operationType: change.operationType, status: change.fullDocument?.status }, '[BP] Booking change detected');
 
         io.emit('booking_updated', {
           operationType: change.operationType,
@@ -70,14 +70,14 @@ const watchChanges = () => {
       });
 
       bookingChangeStream.on('error', (err) => {
-        console.error('❌ [BP] Booking change stream error:', err.message);
+        logger.error({ err }, '[BP] Booking change stream error');
+        Sentry.captureException(err);
         setTimeout(startWatching, 5000);
       });
 
     } catch (err) {
-      console.error('❌ [BP] Failed to start change stream:', err.message);
-      console.error('   → Make sure MongoDB is running as a replica set for Change Streams to work.');
-      console.error('   → Run: mongod --replSet rs0   OR use MongoDB Atlas');
+      logger.error({ err }, '[BP] Failed to start change stream — run MongoDB as replica set or use Atlas');
+      Sentry.captureException(err);
     }
   };
 

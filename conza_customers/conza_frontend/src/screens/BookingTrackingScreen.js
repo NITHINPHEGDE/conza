@@ -1,47 +1,80 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, Modal } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
 import { BookingTrackingSkeleton } from '../components/Skeleton';
 
+const getStatusDisplay = (status) => {
+  switch (status) {
+    case 'pending':     return { text: 'Waiting for response', color: '#F59E0B', icon: 'clock-outline' };
+    case 'accepted':    return { text: 'Waiting for arrival',  color: '#3B82F6', icon: 'car-side' };
+    case 'arrived':     return { text: 'Worker Arrived',       color: '#10B981', icon: 'account-check' };
+    case 'in_progress': return { text: 'Work in Progress',     color: '#6366F1', icon: 'hammer-wrench' };
+    case 'completed':   return { text: 'Work Completed',       color: '#6366F1', icon: 'check-circle' };
+    case 'cancelled':   return { text: 'Cancelled',            color: '#EF4444', icon: 'close-circle' };
+    default:            return { text: status,                 color: '#6B7280', icon: 'help-circle' };
+  }
+};
+
+const DetailRow = React.memo(({ label, value }) => (
+  <View style={styles.detailRow}>
+    <Text style={styles.detailLabel}>{label}</Text>
+    <Text style={styles.detailValue}>{value}</Text>
+  </View>
+));
+
 const BookingTrackingScreen = ({ navigation }) => {
-  const { activeBooking, activeBookingId, fetchActiveBooking, cancelActiveBooking, clearActiveBooking } = useAppStore();
+  const activeBooking        = useAppStore((s) => s.activeBooking);
+  const activeBookingId      = useAppStore((s) => s.activeBookingId);
+  const fetchActiveBooking   = useAppStore((s) => s.fetchActiveBooking);
+  const cancelActiveBooking  = useAppStore((s) => s.cancelActiveBooking);
+  const clearActiveBooking   = useAppStore((s) => s.clearActiveBooking);
+
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
+  const [cancelling, setCancelling]           = useState(false);
 
   useEffect(() => {
-    if (activeBookingId) {
-      fetchActiveBooking(activeBookingId);
-    }
+    if (activeBookingId) fetchActiveBooking(activeBookingId);
   }, [activeBookingId]);
 
-  const handleCancel = () => {
-    console.log('=== CANCEL PRESSED, showing modal ===');
+  const handleCancel = useCallback(() => {
     setShowCancelModal(true);
-  };
+  }, []);
 
-  const confirmCancel = async () => {
-    console.log('=== CONFIRM CANCEL TAPPED ===');
+  const handleDismissModal = useCallback(() => {
+    setShowCancelModal(false);
+  }, []);
+
+  const confirmCancel = useCallback(async () => {
     setCancelling(true);
     try {
       await cancelActiveBooking();
-      console.log('=== CANCEL SUCCESS ===');
       setShowCancelModal(false);
     } catch (err) {
-      console.log('=== CANCEL ERROR ===', err.message);
       setShowCancelModal(false);
       Alert.alert('Error', err.message || 'Could not cancel booking.');
     } finally {
       setCancelling(false);
     }
-  };
+  }, [cancelActiveBooking]);
 
-  const handleOK = async () => {
+  const handleOK = useCallback(async () => {
     await clearActiveBooking();
-    navigation.navigate('StatusList'); // goes back to the list
-  };
+    navigation.navigate('StatusList');
+  }, [clearActiveBooking, navigation]);
 
-  // ── No active booking ────────────────────────────────────────────────────
+  const status = useMemo(() =>
+    activeBooking ? getStatusDisplay(activeBooking.status) : null,
+    [activeBooking?.status]
+  );
+
+  const worker = activeBooking?.workers?.[0];
+
+  const statusCardStyle = useMemo(() =>
+    status ? [styles.statusCard, { borderColor: status.color }] : styles.statusCard,
+    [status?.color]
+  );
+
   if (!activeBookingId) {
     return (
       <View style={styles.center}>
@@ -52,8 +85,7 @@ const BookingTrackingScreen = ({ navigation }) => {
     );
   }
 
-  // ── Loading ──────────────────────────────────────────────────────────────
-  if (!activeBooking) {
+  if (!activeBooking || !status) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -66,21 +98,6 @@ const BookingTrackingScreen = ({ navigation }) => {
     );
   }
 
-  const getStatusDisplay = (status) => {
-    switch (status) {
-      case 'pending':     return { text: 'Waiting for response', color: '#F59E0B', icon: 'clock-outline' };
-      case 'accepted':    return { text: 'Waiting for arrival',  color: '#3B82F6', icon: 'car-side' };
-      case 'arrived':     return { text: 'Worker Arrived',       color: '#10B981', icon: 'account-check' };
-      case 'in_progress': return { text: 'Work in Progress',     color: '#6366F1', icon: 'hammer-wrench' };
-      case 'completed':   return { text: 'Work Completed',       color: '#6366F1', icon: 'check-circle' };
-      case 'cancelled':   return { text: 'Cancelled',            color: '#EF4444', icon: 'close-circle' };
-      default:            return { text: status,                 color: '#6B7280', icon: 'help-circle' };
-    }
-  };
-
-  const status = getStatusDisplay(activeBooking.status);
-  const worker = activeBooking.workers?.[0];
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -91,14 +108,12 @@ const BookingTrackingScreen = ({ navigation }) => {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
-        {/* Status Card */}
-        <View style={[styles.statusCard, { borderColor: status.color }]}>
+        <View style={statusCardStyle}>
           <MaterialCommunityIcons name={status.icon} size={48} color={status.color} />
           <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
           <Text style={styles.bookingId}>ID: {activeBooking._id.slice(-8).toUpperCase()}</Text>
         </View>
 
-        {/* Worker Info */}
         {worker && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Worker Information</Text>
@@ -122,7 +137,6 @@ const BookingTrackingScreen = ({ navigation }) => {
           </View>
         )}
 
-        {/* Booking Details */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Booking Details</Text>
           <View style={styles.detailsCard}>
@@ -134,7 +148,6 @@ const BookingTrackingScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Terminal — Completed */}
         {activeBooking.status === 'completed' && (
           <View style={styles.terminalCard}>
             <Text style={styles.terminalTitle}>Work Completed!</Text>
@@ -145,7 +158,6 @@ const BookingTrackingScreen = ({ navigation }) => {
           </View>
         )}
 
-        {/* Terminal — Worker Cancelled */}
         {activeBooking.workerCancelled && (
           <View style={[styles.terminalCard, { backgroundColor: '#FEF2F2' }]}>
             <Text style={[styles.terminalTitle, { color: '#EF4444' }]}>Worker Cancelled Job</Text>
@@ -156,7 +168,6 @@ const BookingTrackingScreen = ({ navigation }) => {
           </View>
         )}
 
-        {/* Terminal — Customer Cancelled */}
         {activeBooking.status === 'cancelled' && !activeBooking.workerCancelled && (
           <View style={[styles.terminalCard, { backgroundColor: '#F3F4F6' }]}>
             <Text style={[styles.terminalTitle, { color: '#6B7280' }]}>Booking Cancelled</Text>
@@ -167,7 +178,6 @@ const BookingTrackingScreen = ({ navigation }) => {
           </View>
         )}
 
-        {/* Cancel Button — only while pending */}
         {activeBooking.status === 'pending' && (
           <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
             <Text style={styles.cancelBtnText}>Cancel Booking</Text>
@@ -176,48 +186,31 @@ const BookingTrackingScreen = ({ navigation }) => {
 
       </ScrollView>
 
-      {/* Cancel Confirmation Modal */}
       <Modal
         visible={showCancelModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowCancelModal(false)}
+        onRequestClose={handleDismissModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>Cancel Booking?</Text>
             <Text style={styles.modalSub}>Are you sure you want to cancel this booking?</Text>
-            <TouchableOpacity
-              style={styles.modalConfirmBtn}
-              onPress={confirmCancel}
-              disabled={cancelling}
-            >
+            <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmCancel} disabled={cancelling}>
               {cancelling
                 ? <ActivityIndicator color="#FFF" />
                 : <Text style={styles.modalConfirmText}>Yes, Cancel</Text>
               }
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.modalDismissBtn}
-              onPress={() => setShowCancelModal(false)}
-              disabled={cancelling}
-            >
+            <TouchableOpacity style={styles.modalDismissBtn} onPress={handleDismissModal} disabled={cancelling}>
               <Text style={styles.modalDismissText}>No, Keep It</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-
     </View>
   );
 };
-
-const DetailRow = ({ label, value }) => (
-  <View style={styles.detailRow}>
-    <Text style={styles.detailLabel}>{label}</Text>
-    <Text style={styles.detailValue}>{value}</Text>
-  </View>
-);
 
 const styles = StyleSheet.create({
   container:      { flex: 1, backgroundColor: '#F8FAFC' },
@@ -233,7 +226,6 @@ const styles = StyleSheet.create({
   headerTitle:    { fontSize: 18, fontWeight: '700', color: '#1E293B' },
   scrollContent:  { padding: 20 },
   center:         { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' },
-  loadingText:    { marginTop: 10, color: '#64748B' },
   noBookingTitle: { fontSize: 18, fontWeight: '700', color: '#1E293B', marginTop: 12 },
   noBookingSub:   { fontSize: 14, color: '#94A3B8', marginTop: 6 },
   statusCard: {
@@ -303,7 +295,7 @@ const styles = StyleSheet.create({
   terminalTitle: { fontSize: 18, fontWeight: '800', color: '#6366F1', marginBottom: 5 },
   terminalSub:   { fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 15 },
   okButton: {
-    backgroundColor:  '#6366F1',
+    backgroundColor:   '#6366F1',
     paddingHorizontal: 40,
     paddingVertical:   12,
     borderRadius:      12,
@@ -311,8 +303,6 @@ const styles = StyleSheet.create({
   okButtonText:  { color: '#FFF', fontWeight: '700', fontSize: 16 },
   cancelBtn:     { padding: 15, alignItems: 'center', marginTop: 10, borderWidth: 2, borderColor: '#EF4444', borderRadius: 12 },
   cancelBtnText: { color: '#EF4444', fontWeight: '700', fontSize: 16 },
-
-  // Modal
   modalOverlay: {
     flex:            1,
     backgroundColor: 'rgba(0,0,0,0.5)',

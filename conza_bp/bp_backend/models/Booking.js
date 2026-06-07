@@ -56,4 +56,7 @@ const bookingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+bookingSchema.index({ workers: 1, status: 1 });     // getWorkerRequests / getWorkerHistory
+bookingSchema.index({ status: 1, createdAt: -1 });  // pending requests sorted by time
+
 module.exports = mongoose.model('Booking', bookingSchema);

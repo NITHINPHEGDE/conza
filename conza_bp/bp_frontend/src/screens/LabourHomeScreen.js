@@ -19,7 +19,7 @@ import { colors }   from '../theme/colors';
 // ─────────────────────────────────────────────────────────────────────────────
 // OnlineToggle — animated pill with spinner, pulse ring, and slide transition
 // ─────────────────────────────────────────────────────────────────────────────
-const OnlineToggle = ({ isOnline, isToggling, toggleDirection, onPress }) => {
+const OnlineToggle = React.memo(({ isOnline, isToggling, toggleDirection, onPress }) => {
   const spinAnim     = useRef(new Animated.Value(0)).current;
   const pulseScale   = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.6)).current;
@@ -103,7 +103,7 @@ const OnlineToggle = ({ isOnline, isToggling, toggleDirection, onPress }) => {
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 const toggleStyles = StyleSheet.create({
   hitArea:       { padding: 2 },
@@ -120,13 +120,13 @@ const toggleStyles = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 // Static empty component
 // ─────────────────────────────────────────────────────────────────────────────
-const ListEmpty = () => (
+const ListEmpty = React.memo(() => (
   <View style={styles.emptyState}>
     <Text style={styles.emptyIcon}>📭</Text>
     <Text style={styles.emptyTitle}>No New Requests</Text>
     <Text style={styles.emptySubtitle}>New job requests will appear here</Text>
   </View>
-);
+));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main screen

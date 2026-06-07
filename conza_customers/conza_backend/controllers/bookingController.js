@@ -1,5 +1,6 @@
 const Redlock          = require('redlock');
 const { getRedis }     = require('../config/redis');
+const logger           = require('../utils/logger');
 
 let _redlock;
 const getRedlock = () => {
@@ -9,7 +10,7 @@ const getRedlock = () => {
       retryDelay:   200,   // ms
       retryJitter:  100,
     });
-    _redlock.on('error', (err) => console.warn('[Redlock] error (non-fatal):', err.message));
+    _redlock.on('error', (err) => logger.warn({ err }, 'Redlock error (non-fatal)'));
   }
   return _redlock;
 };
@@ -39,9 +40,9 @@ const sendPushNotification = async (pushToken, title, body, data = {}) => {
       }),
     });
     const result = await res.json();
-    console.log('[Push] Expo response:', JSON.stringify(result));
+    logger.info({ result }, 'Push notification sent');
   } catch (err) {
-    console.warn('[Push] Failed to send notification:', err.message);
+    logger.warn({ err }, 'Push notification failed');
   }
 };
 
@@ -60,7 +61,7 @@ const createBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing required booking fields' });
     }
 
-    console.log('📝 Creating booking for workers:', workerIds);
+    logger.info({ workerIds }, 'Creating booking');
 
     // ── Distributed lock: prevents double-booking the same worker(s) ─────────
     const lockKeys = (workerIds && workerIds.length > 0)
@@ -78,7 +79,7 @@ const createBooking = async (req, res) => {
         )
       );
     } catch (lockErr) {
-      console.warn('[Booking] Could not acquire lock, proceeding without (Redis may be down):', lockErr.message);
+      logger.warn({ err: lockErr }, 'Could not acquire lock, proceeding without (Redis may be down)');
       // Graceful degradation: continue without lock if Redis is unavailable
     }
 
@@ -115,7 +116,7 @@ const createBooking = async (req, res) => {
       await Promise.allSettled(locks.map((lock) => lock.release()));
     }
 
-    console.log('✅ Booking created:', booking._id, 'Workers:', booking.workers);
+    logger.info({ bookingId: booking._id, workers: booking.workers }, 'Booking created');
 
     // Emit socket event to all connected BP workers immediately
     try {
@@ -136,8 +137,7 @@ const createBooking = async (req, res) => {
         .then((workers) => {
           const pushPromises = workers
             .filter((w) => {
-              if (!w.pushToken) console.warn(`[Push] Worker ${w.fullName} has no push token`);
-              else console.log(`[Push] Worker ${w.fullName} token: ${w.pushToken}`);
+              if (!w.pushToken) logger.warn({ workerName: w.fullName }, 'Worker has no push token');
               return w.pushToken;
             })
             .map((w) =>

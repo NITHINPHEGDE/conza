@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { colors } from '../theme/colors';
 import {
@@ -7,13 +7,13 @@ import {
   SkeletonList,
 } from './Skeleton';
 
-export const SectionLoader = ({ message = 'Loading...' }) => (
+export const SectionLoader = memo(({ message = 'Loading...' }) => (
   <View style={styles.center}>
     <Text style={styles.loaderText}>{message}</Text>
   </View>
-);
+));
 
-export const ErrorState = ({ message = 'Something went wrong', onRetry }) => (
+export const ErrorState = memo(({ message = 'Something went wrong', onRetry }) => (
   <View style={styles.center}>
     <Text style={styles.errorEmoji}>⚠️</Text>
     <Text style={styles.errorTitle}>Oops!</Text>
@@ -24,45 +24,40 @@ export const ErrorState = ({ message = 'Something went wrong', onRetry }) => (
       </TouchableOpacity>
     )}
   </View>
-);
+));
 
-export const EmptyState = ({ emoji = '📦', title = 'No data found', subtitle }) => (
+export const EmptyState = memo(({ emoji = '📦', title = 'No data found', subtitle }) => (
   <View style={styles.center}>
     <Text style={styles.emptyEmoji}>{emoji}</Text>
     <Text style={styles.emptyTitle}>{title}</Text>
     {subtitle && <Text style={styles.emptySub}>{subtitle}</Text>}
   </View>
-);
+));
 
-// Workers list skeleton (replaces SectionLoader on WorkersNearbyScreen + BookingScreen workers tab)
-export const WorkerListSkeleton = () => (
+export const WorkerListSkeleton = memo(() => (
   <View style={{ paddingTop: 8 }}>
     <SkeletonList component={WorkerCardSkeleton} count={4} />
   </View>
-);
+));
 
-// Category pills skeleton (BookingScreen labour tab)
-export const CategoryGridSkeleton = () => (
+export const CategoryGridSkeleton = memo(() => (
   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 8, gap: 10 }} scrollEnabled={false}>
     <SkeletonList component={CategoryCardSkeleton} count={5} />
   </ScrollView>
-);
+));
 
-// Materials horizontal scroll skeleton
-export const MaterialGridSkeleton = () => (
+export const MaterialGridSkeleton = memo(() => (
   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 8, gap: 0 }} scrollEnabled={false}>
     <SkeletonList component={MaterialCardSkeleton} count={4} />
   </ScrollView>
-);
+));
 
-// Rental horizontal scroll skeleton
-export const RentalGridSkeleton = () => (
+export const RentalGridSkeleton = memo(() => (
   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 8 }} scrollEnabled={false}>
     <SkeletonList component={RentalCardSkeleton} count={4} />
   </ScrollView>
-);
+));
 
-// Keep SkeletonGrid exported so existing imports don't break — now renders real skeletons
 export const SkeletonGrid = MaterialGridSkeleton;
 
 const styles = StyleSheet.create({
