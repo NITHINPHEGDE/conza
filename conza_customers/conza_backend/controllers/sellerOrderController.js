@@ -37,14 +37,12 @@ const placeOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: `Invalid sellerId: ${sellerId}` });
     }
 
-    // Validate all productIds are present before hitting the DB
     for (const item of items) {
       if (!item.productId || !mongoose.Types.ObjectId.isValid(item.productId)) {
         return res.status(400).json({ success: false, message: `Invalid or missing productId: ${item.productId}` });
       }
     }
 
-    // Build item snapshots & decrement stock
     const productIds = items.map((i) => i.productId);
     const products   = await Product.find({ _id: { $in: productIds } }).lean();
     const productMap = Object.fromEntries(products.map((p) => [p._id.toString(), p]));
@@ -68,7 +66,6 @@ const placeOrder = async (req, res) => {
       });
     }
 
-    // Still do stock decrement in parallel (after building snapshot)
     if (orderType === 'material') {
       await Promise.all(
         items.map((item) =>
@@ -102,7 +99,6 @@ const placeOrder = async (req, res) => {
 
     await order.populate('seller', 'pushToken shopName');
 
-    // Real-time: notify seller room (non-fatal — socket may not be connected)
     try {
       const io = getIO();
       io.to(`seller_${sellerId}`).emit('new_seller_order', {
@@ -113,7 +109,6 @@ const placeOrder = async (req, res) => {
       });
     } catch (_) {}
 
-    // Push notification to seller (non-fatal)
     sendSellerPush(
       order.seller.pushToken,
       '🛒 New Order Received',
@@ -125,11 +120,10 @@ const placeOrder = async (req, res) => {
   } catch (err) {
     const fs = require('fs');
     fs.appendFileSync('error.log', `${new Date().toISOString()} - ${err.message}\n${err.stack}\n\n`);
-    // Stock/validation/cast errors → 400, unexpected errors → 500
-    const isClientError = 
-      err.name === 'ValidationError' || 
-      err.name === 'CastError' || 
-      err.message?.includes('not found') || 
+    const isClientError =
+      err.name === 'ValidationError' ||
+      err.name === 'CastError' ||
+      err.message?.includes('not found') ||
       err.message?.includes('Insufficient stock');
     res.status(isClientError ? 400 : 500).json({ success: false, message: err.message });
   }
@@ -145,7 +139,7 @@ const getSellerOrders = async (req, res) => {
 
     const skip = (Number(page) - 1) * Number(limit);
     const [orders, total] = await Promise.all([
-      SellerOrder.find(query).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)),
+      SellerOrder.find(query).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
       SellerOrder.countDocuments(query),
     ]);
 
@@ -158,7 +152,7 @@ const getSellerOrders = async (req, res) => {
 // ── SELLER: GET /api/seller/orders/:id ───────────────────────────────────
 const getOrderById = async (req, res) => {
   try {
-    const order = await SellerOrder.findOne({ _id: req.params.id, seller: req.seller._id });
+    const order = await SellerOrder.findOne({ _id: req.params.id, seller: req.seller._id }).lean();
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
     res.json({ success: true, order });
   } catch (err) {
@@ -172,12 +166,12 @@ const updateOrderStatus = async (req, res) => {
     const { status } = req.body;
     if (!status) return res.status(400).json({ success: false, message: 'status required' });
 
+    // needs .save() — no .lean()
     const order = await SellerOrder.findOne({ _id: req.params.id, seller: req.seller._id });
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
     order.status = status;
 
-    // If rental returned, update product availability
     if (status === 'returned') {
       for (const item of order.items) {
         if (item.product) {
@@ -190,7 +184,6 @@ const updateOrderStatus = async (req, res) => {
 
     const io = getIO();
     io.to(`seller_${req.seller._id}`).emit('order_status_updated', { orderId: order._id, status });
-    // Also notify customer's room
     io.to(`customer_${order.customer}`).emit('seller_order_status_changed', { orderId: order._id, status });
 
     res.json({ success: true, order });
@@ -247,9 +240,8 @@ const getDashboard = async (req, res) => {
         },
         { $group: { _id: null, total: { $sum: '$total' } } },
       ]),
-      SellerOrder.find({ seller: sellerId, orderType: 'material' }).sort({ createdAt: -1 }).limit(5),
-      SellerOrder.find({ seller: sellerId, orderType: 'rental'   }).sort({ createdAt: -1 }).limit(5),
-      // 7-day revenue chart
+      SellerOrder.find({ seller: sellerId, orderType: 'material' }).sort({ createdAt: -1 }).limit(5).lean(),
+      SellerOrder.find({ seller: sellerId, orderType: 'rental'   }).sort({ createdAt: -1 }).limit(5).lean(),
       SellerOrder.aggregate([
         {
           $match: {
@@ -268,8 +260,8 @@ const getDashboard = async (req, res) => {
       ]),
     ]);
 
-    const revenue      = revenueAgg[0]?.total      || 0;
-    const monthRevenue = monthRevenueAgg[0]?.total  || 0;
+    const revenue      = revenueAgg[0]?.total       || 0;
+    const monthRevenue = monthRevenueAgg[0]?.total   || 0;
     const lastMonth    = lastMonthRevenueAgg[0]?.total || 0;
     const growth = lastMonth > 0
       ? `${monthRevenue >= lastMonth ? '+' : ''}${Math.round(((monthRevenue - lastMonth) / lastMonth) * 100)}%`
@@ -293,7 +285,7 @@ const getDashboard = async (req, res) => {
       totalRevenue: revenue,
       recentMaterialOrders,
       recentRentalOrders,
-      chartData,   // [{ _id: 'YYYY-MM-DD', total: number }]   // [{ _id: 'YYYY-MM-DD', total: number }]
+      chartData,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -305,7 +297,8 @@ const getMyOrders = async (req, res) => {
   try {
     const orders = await SellerOrder.find({ customer: req.user._id })
       .populate('seller', 'name shopName phone')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
     res.json({ success: true, orders });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

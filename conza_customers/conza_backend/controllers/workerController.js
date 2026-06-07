@@ -155,74 +155,87 @@ const getCategories = async (req, res) => {
 };
 
 // ── GET /api/workers/search ───────────────────────────────────────────────────
-// Search is intentionally NOT cached — results vary too widely per query string
+// Cache popular/exact searches for 30s. Per-user or wildcard queries skip cache.
 const searchWorkers = async (req, res) => {
   try {
     const { q, lat, lng, radius = 50000 } = req.query;
     if (!q) return res.json({ success: true, workers: [] });
 
-    const regex  = new RegExp(q, 'i');
-    const filter = {
-      $or: [
-        { fullName: regex },
-        { category: regex },
-        { skills:   regex },
-        { bio:      regex },
-      ],
-      isAvailable: { $ne: false },
+    // Only cache short, clean queries (likely popular category/skill searches)
+    const isSimpleQuery = q.length <= 30 && /^[\w\s]+$/.test(q);
+    const rLat = lat ? round3(lat) : 'x';
+    const rLng = lng ? round3(lng) : 'x';
+    const cacheKey = `workers:search:${q.toLowerCase().trim()}:${rLat}:${rLng}:${radius}`;
+    const TTL      = isSimpleQuery ? 30 : 0;
+
+    const doSearch = async () => {
+      const regex  = new RegExp(q, 'i');
+      const filter = {
+        $or: [
+          { fullName: regex },
+          { category: regex },
+          { skills:   regex },
+          { bio:      regex },
+        ],
+        isAvailable: { $ne: false },
+      };
+
+      if (lat && lng) {
+        filter.location = {
+          $near: {
+            $geometry:    { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] },
+            $maxDistance: parseInt(radius),
+          },
+        };
+      }
+
+      const workers = await Worker.find(filter).limit(20).select(
+        'fullName username profileImage category skills minCharge locationText isOnline rating totalJobs memberSince location'
+      ).lean();
+
+      const userLat = lat ? parseFloat(lat) : null;
+      const userLng = lng ? parseFloat(lng) : null;
+
+      return workers.map((w) => {
+        let distanceKm = null;
+        if (userLat && userLng) {
+          const [wLng, wLat] = w.location.coordinates;
+          const R    = 6371;
+          const dLat = ((wLat - userLat) * Math.PI) / 180;
+          const dLon = ((wLng - userLng) * Math.PI) / 180;
+          const a    =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos((userLat * Math.PI) / 180) *
+              Math.cos((wLat * Math.PI) / 180) *
+              Math.sin(dLon / 2) ** 2;
+          distanceKm = parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1));
+        }
+        return {
+          id:           w._id,
+          _id:          w._id,
+          name:         w.fullName,
+          initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+          category:     w.category,
+          skills:       w.skills,
+          pricePerDay:  w.minCharge || 0,
+          rating:       w.rating,
+          totalJobs:    w.totalJobs,
+          distance:     distanceKm ? `${distanceKm} km away` : '',
+          distanceKm,
+          available:    w.isOnline,
+          isOnline:     w.isOnline,
+          locationText: w.locationText,
+          memberSince:  w.memberSince,
+          profileImage: w.profileImage,
+        };
+      });
     };
 
-    if (lat && lng) {
-      filter.location = {
-        $near: {
-          $geometry:    { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] },
-          $maxDistance: parseInt(radius),
-        },
-      };
-    }
+    const workers = TTL > 0
+      ? await withCache(cacheKey, TTL, doSearch)
+      : await doSearch();
 
-    const workers = await Worker.find(filter).limit(20).select(
-      'fullName username profileImage category skills minCharge locationText isOnline rating totalJobs memberSince location'
-    ).lean();
-
-    const userLat = lat ? parseFloat(lat) : null;
-    const userLng = lng ? parseFloat(lng) : null;
-
-    const mapped = workers.map((w) => {
-      let distanceKm = null;
-      if (userLat && userLng) {
-        const [wLng, wLat] = w.location.coordinates;
-        const R    = 6371;
-        const dLat = ((wLat - userLat) * Math.PI) / 180;
-        const dLng = ((wLng - userLng) * Math.PI) / 180;
-        const a    =
-          Math.sin(dLat / 2) ** 2 +
-          Math.cos((userLat * Math.PI) / 180) *
-            Math.cos((wLat * Math.PI) / 180) *
-            Math.sin(dLng / 2) ** 2;
-        distanceKm = parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1));
-      }
-      return {
-        id:           w._id,
-        _id:          w._id,
-        name:         w.fullName,
-        initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
-        category:     w.category,
-        skills:       w.skills,
-        pricePerDay:  w.minCharge || 0,
-        rating:       w.rating,
-        totalJobs:    w.totalJobs,
-        distance:     distanceKm ? `${distanceKm} km away` : '',
-        distanceKm,
-        available:    w.isOnline,
-        isOnline:     w.isOnline,
-        locationText: w.locationText,
-        memberSince:  w.memberSince,
-        profileImage: w.profileImage,
-      };
-    });
-
-    res.json({ success: true, workers: mapped });
+    res.json({ success: true, workers });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

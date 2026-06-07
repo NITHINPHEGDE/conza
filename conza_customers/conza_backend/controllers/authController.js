@@ -15,8 +15,8 @@ const signup = async (req, res) => {
     }
 
     // Duplicate checks
-    const existingPhone    = await User.findOne({ phone });
-    const existingUsername = await User.findOne({ username: username.toLowerCase() });
+    const existingPhone    = await User.findOne({ phone }).lean();
+    const existingUsername = await User.findOne({ username: username.toLowerCase() }).lean();
     if (existingPhone)    return res.status(400).json({ success: false, message: 'Phone number already registered' });
     if (existingUsername) return res.status(400).json({ success: false, message: 'Username already taken' });
 

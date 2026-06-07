@@ -31,11 +31,11 @@ const register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'name, phone, password, shopName are required' });
     }
 
-    const existing = await Seller.findOne({ phone });
+    const existing = await Seller.findOne({ phone }).lean();
     if (existing) return res.status(400).json({ success: false, message: 'Phone already registered' });
 
     if (email) {
-      const existingEmail = await Seller.findOne({ email: email.toLowerCase() });
+      const existingEmail = await Seller.findOne({ email: email.toLowerCase() }).lean();
       if (existingEmail) return res.status(400).json({ success: false, message: 'Email already registered' });
     }
 

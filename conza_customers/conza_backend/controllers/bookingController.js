@@ -1,14 +1,15 @@
 const Redlock          = require('redlock');
 const { getRedis }     = require('../config/redis');
+const { withCache, invalidateCache } = require('../utils/cacheHelpers');
 const logger           = require('../utils/logger');
 
 let _redlock;
 const getRedlock = () => {
   if (!_redlock) {
     _redlock = new Redlock([getRedis()], {
-      retryCount:   5,
-      retryDelay:   200,   // ms
-      retryJitter:  100,
+      retryCount:  5,
+      retryDelay:  200,
+      retryJitter: 100,
     });
     _redlock.on('error', (err) => logger.warn({ err }, 'Redlock error (non-fatal)'));
   }
@@ -63,7 +64,6 @@ const createBooking = async (req, res) => {
 
     logger.info({ workerIds }, 'Creating booking');
 
-    // ── Distributed lock: prevents double-booking the same worker(s) ─────────
     const lockKeys = (workerIds && workerIds.length > 0)
       ? workerIds.map((id) => `lock:worker:${id}`)
       : [`lock:booking:user:${req.user._id}`];
@@ -72,7 +72,6 @@ const createBooking = async (req, res) => {
     let locks = [];
 
     try {
-      // Acquire locks for all targeted workers
       locks = await Promise.all(
         lockKeys.map((k) =>
           getRedlock().acquire([k], parseInt(process.env.REDIS_LOCK_TTL) || 5000)
@@ -80,7 +79,6 @@ const createBooking = async (req, res) => {
       );
     } catch (lockErr) {
       logger.warn({ err: lockErr }, 'Could not acquire lock, proceeding without (Redis may be down)');
-      // Graceful degradation: continue without lock if Redis is unavailable
     }
 
     try {
@@ -112,13 +110,14 @@ const createBooking = async (req, res) => {
         description:    description     || '',
       });
     } finally {
-      // Always release locks
       await Promise.allSettled(locks.map((lock) => lock.release()));
     }
 
     logger.info({ bookingId: booking._id, workers: booking.workers }, 'Booking created');
 
-    // Emit socket event to all connected BP workers immediately
+    // Invalidate the user's booking list cache
+    await invalidateCache(`bookings:user:${req.user._id}`).catch(() => {});
+
     try {
       const { getIO } = require('../services/socketService');
       const io = getIO();
@@ -131,7 +130,6 @@ const createBooking = async (req, res) => {
 
     res.status(201).json({ success: true, booking });
 
-    // Fire-and-forget push + totalJobs update (after response is sent)
     if (bookingType === 'labour' && workerIds && workerIds.length > 0) {
       Worker.find({ _id: { $in: workerIds } }).select('pushToken fullName').lean()
         .then((workers) => {
@@ -165,10 +163,17 @@ const createBooking = async (req, res) => {
 // ── GET /api/bookings/my ──────────────────────────────────────────────────
 const getMyBookings = async (req, res) => {
   try {
-    const bookings = await Booking.find({ user: req.user._id })
-      .sort({ createdAt: -1 })
-      .populate('workers', 'fullName category profileImage')
-      .lean();
+    const userId   = req.user._id.toString();
+    const cacheKey = `bookings:user:${userId}`;
+    const TTL      = 20; // seconds — short so status changes reflect quickly
+
+    const bookings = await withCache(cacheKey, TTL, () =>
+      Booking.find({ user: userId })
+        .sort({ createdAt: -1 })
+        .populate('workers', 'fullName category profileImage')
+        .lean()
+    );
+
     res.json({ success: true, bookings });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -178,9 +183,16 @@ const getMyBookings = async (req, res) => {
 // ── GET /api/bookings/:id ─────────────────────────────────────────────────
 const getBookingById = async (req, res) => {
   try {
-    const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id })
-      .populate('workers', 'fullName category profileImage rating phone bio')
-      .lean();
+    const bookingId = req.params.id;
+    const cacheKey  = `bookings:detail:${bookingId}`;
+    const TTL       = 30;
+
+    const booking = await withCache(cacheKey, TTL, () =>
+      Booking.findOne({ _id: bookingId, user: req.user._id })
+        .populate('workers', 'fullName category profileImage rating phone bio')
+        .lean()
+    );
+
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
     res.json({ success: true, booking });
   } catch (err) {
@@ -203,6 +215,12 @@ const cancelBooking = async (req, res) => {
 
     booking.status = 'cancelled';
     await booking.save();
+
+    // Invalidate caches for this booking and the user's list
+    await invalidateCache(
+      `bookings:detail:${booking._id}`,
+      `bookings:user:${req.user._id}`
+    );
 
     try {
       const io = getIO();
