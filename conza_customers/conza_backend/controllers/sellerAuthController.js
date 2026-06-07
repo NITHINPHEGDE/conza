@@ -83,16 +83,16 @@ const login = async (req, res) => {
 // GET /api/seller/auth/me
 const getMe = async (req, res) => {
   try {
-    const seller = await Seller.findById(req.seller._id).select('-password');
     const Product     = require('../models/Product');
     const SellerOrder = require('../models/SellerOrder');
 
-    const [totalProducts, totalOrders, pendingOrders, revenueAgg] = await Promise.all([
-      Product.countDocuments({ seller: seller._id }),
-      SellerOrder.countDocuments({ seller: seller._id }),
-      SellerOrder.countDocuments({ seller: seller._id, status: 'new' }),
+    const [seller, totalProducts, totalOrders, pendingOrders, revenueAgg] = await Promise.all([
+      Seller.findById(req.seller._id).select('-password'),
+      Product.countDocuments({ seller: req.seller._id }),
+      SellerOrder.countDocuments({ seller: req.seller._id }),
+      SellerOrder.countDocuments({ seller: req.seller._id, status: 'new' }),
       SellerOrder.aggregate([
-        { $match: { seller: seller._id, status: { $in: ['delivered', 'returned'] } } },
+        { $match: { seller: req.seller._id, status: { $in: ['delivered', 'returned'] } } },
         { $group: { _id: null, total: { $sum: '$total' } } },
       ]),
     ]);

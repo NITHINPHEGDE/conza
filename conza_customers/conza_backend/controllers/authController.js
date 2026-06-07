@@ -93,17 +93,18 @@ const login = async (req, res) => {
 // ── GET /api/auth/me ───────────────────────────────────────────────────────────
 const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id)
-      .select('-password')
-      .populate('savedWorkers', 'fullName category rating minCharge profileImage');
+    const Booking = require('../models/Booking');
 
-    const bookingsCount = await require('../models/Booking').countDocuments({
-      user: req.user._id, status: 'completed',
-    });
-
-    const activeBookings = await require('../models/Booking').countDocuments({
-  user: req.user._id, status: { $in: ['pending', 'accepted', 'arrived', 'in_progress'] },
-});
+    const [user, bookingsCount, activeBookings] = await Promise.all([
+      User.findById(req.user._id)
+        .select('-password')
+        .populate('savedWorkers', 'fullName category rating minCharge profileImage'),
+      Booking.countDocuments({ user: req.user._id, status: 'completed' }),
+      Booking.countDocuments({
+        user: req.user._id,
+        status: { $in: ['pending', 'accepted', 'arrived', 'in_progress'] },
+      }),
+    ]);
 
     res.json({
       success: true,
