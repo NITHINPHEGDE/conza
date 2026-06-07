@@ -39,18 +39,18 @@ const workerSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// getNearbyWorkers + $geoNear: geo + availability + category filter
-// Only ONE 2dsphere index so $geoNear doesn't get confused
+// Compound geo index — covers all $near and $geoNear queries
+// (single-field 2dsphere is redundant when compound exists)
 workerSchema.index({ location: '2dsphere', category: 1, isAvailable: 1 });
 
-// getCategories aggregation $match: isOnline + isAvailable
+// category listing + online status (getCategories aggregation $match)
 workerSchema.index({ category: 1, isOnline: 1, isAvailable: 1 });
+
+// general availability filter
+workerSchema.index({ category: 1, isAvailable: 1 });
 
 // text search across name/category/skills/bio
 workerSchema.index({ fullName: 'text', category: 'text', skills: 'text', bio: 'text' });
-
-// general
-workerSchema.index({ category: 1, isAvailable: 1 });
 
 workerSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();

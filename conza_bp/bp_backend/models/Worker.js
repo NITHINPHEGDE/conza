@@ -53,11 +53,10 @@ const workerSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ── 2dsphere index for geospatial queries ──────────────────────────────────
-// Only ONE 2dsphere index so $geoNear doesn't get confused
+// Compound geo index — single 2dsphere field index removed
 workerSchema.index({ location: '2dsphere', category: 1, isAvailable: 1 });
 
-// category listing + online status (getCategories aggregation $match)
+// category listing + online status
 workerSchema.index({ category: 1, isOnline: 1, isAvailable: 1 });
 
 // general availability filter
