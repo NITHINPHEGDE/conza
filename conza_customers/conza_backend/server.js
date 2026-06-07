@@ -1,6 +1,7 @@
 require('./instrument.js');
 
 const express = require('express');
+const compression = require('compression');
 const dotenv  = require('dotenv');
 const helmet  = require('helmet');
 const cors    = require('cors');
@@ -31,6 +32,7 @@ const server = http.createServer(app);
 initSocket(server);
 
 app.use(helmet());
+app.use(compression());
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')

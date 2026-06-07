@@ -56,7 +56,14 @@ const bookingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-bookingSchema.index({ workers: 1, status: 1 });     // getWorkerRequests / getWorkerHistory
-bookingSchema.index({ status: 1, createdAt: -1 });  // pending requests sorted by time
+// getWorkerRequests: workers array + pending status, sorted by createdAt
+bookingSchema.index({ workers: 1, status: 1, createdAt: -1 });
+
+// getWorkerHistory: workers + completed/cancelled, sorted by updatedAt
+bookingSchema.index({ workers: 1, status: 1, updatedAt: -1 });
+
+// getBookingById: single lookup by _id (default _id index covers this — no extra needed)
+// status-only dashboard queries
+bookingSchema.index({ status: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Booking', bookingSchema);

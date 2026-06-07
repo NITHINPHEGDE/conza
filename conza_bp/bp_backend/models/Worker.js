@@ -55,6 +55,14 @@ const workerSchema = new mongoose.Schema(
 
 // ── 2dsphere index for geospatial queries ──────────────────────────────────
 workerSchema.index({ location: '2dsphere' });
+
+// nearby workers: $near filters on isAvailable, then category
+workerSchema.index({ location: '2dsphere', category: 1, isAvailable: 1 });
+
+// category listing + online status (getCategories aggregation $match)
+workerSchema.index({ category: 1, isOnline: 1, isAvailable: 1 });
+
+// general availability filter
 workerSchema.index({ category: 1, isAvailable: 1 });
 
 // ── Hash password before save ──────────────────────────────────────────────

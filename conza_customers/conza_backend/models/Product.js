@@ -35,8 +35,20 @@ const productSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// getMyProducts: seller + type filter + availability, sorted by createdAt
+productSchema.index({ seller: 1, type: 1, isAvailable: 1, createdAt: -1 });
+
+// getPublicProducts: type + category + availability (main catalog query)
+productSchema.index({ type: 1, category: 1, isAvailable: 1, createdAt: -1 });
+
+// low stock dashboard query: seller + stock <= lowStockAt
+productSchema.index({ seller: 1, stock: 1, lowStockAt: 1 });
+
+// base indexes
 productSchema.index({ seller: 1, type: 1 });
 productSchema.index({ type: 1, isAvailable: 1 });
-productSchema.index({ title: 'text', description: 'text', brand: 'text' });
+
+// full-text search
+productSchema.index({ title: 'text', description: 'text', brand: 'text', category: 'text' });
 
 module.exports = mongoose.model('Product', productSchema);

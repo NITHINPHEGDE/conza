@@ -39,7 +39,19 @@ const workerSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// geospatial base
 workerSchema.index({ location: '2dsphere' });
+
+// getNearbyWorkers: geo + availability + category filter
+workerSchema.index({ location: '2dsphere', category: 1, isAvailable: 1 });
+
+// getCategories aggregation $match: isOnline + isAvailable
+workerSchema.index({ category: 1, isOnline: 1, isAvailable: 1 });
+
+// text search across name/category/skills/bio
+workerSchema.index({ fullName: 'text', category: 'text', skills: 'text', bio: 'text' });
+
+// general
 workerSchema.index({ category: 1, isAvailable: 1 });
 
 workerSchema.pre('save', async function (next) {

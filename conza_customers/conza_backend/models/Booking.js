@@ -56,9 +56,19 @@ const bookingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-bookingSchema.index({ user: 1, createdAt: -1 });     // getMyBookings (most common query)
-bookingSchema.index({ user: 1, status: 1 });          // active bookings filter
-bookingSchema.index({ workers: 1, status: 1 });       // BP worker fetching their bookings
-bookingSchema.index({ status: 1, createdAt: -1 });   // admin/dashboard queries by status
+// getMyBookings: user sorted by newest first (most common customer query)
+bookingSchema.index({ user: 1, createdAt: -1 });
+
+// active bookings count in getMe
+bookingSchema.index({ user: 1, status: 1 });
+
+// BP worker fetching their bookings sorted by time
+bookingSchema.index({ workers: 1, status: 1, createdAt: -1 });
+
+// worker history sorted by updatedAt
+bookingSchema.index({ workers: 1, status: 1, updatedAt: -1 });
+
+// dashboard/admin status queries
+bookingSchema.index({ status: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Booking', bookingSchema);
