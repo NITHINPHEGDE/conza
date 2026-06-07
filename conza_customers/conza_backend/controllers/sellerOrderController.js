@@ -4,6 +4,7 @@ const Product     = require('../models/Product');
 const Seller      = require('../models/Seller');
 const { getIO }   = require('../services/socketService');
 const { withCache, invalidateCache } = require('../utils/cacheHelpers');
+const logger      = require('../utils/logger');
 
 const sendSellerPush = async (pushToken, title, body, data = {}) => {
   if (!pushToken) return;
@@ -122,8 +123,7 @@ const placeOrder = async (req, res) => {
 
     res.status(201).json({ success: true, order });
   } catch (err) {
-    const fs = require('fs');
-    fs.appendFileSync('error.log', `${new Date().toISOString()} - ${err.message}\n${err.stack}\n\n`);
+    logger.error({ err }, 'placeOrder failed');
     const isClientError =
       err.name === 'ValidationError' ||
       err.name === 'CastError' ||

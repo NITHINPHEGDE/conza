@@ -28,12 +28,14 @@ const initSocket = (server) => {
   io.on('connection', (socket) => {
     logger.info({ socketId: socket.id }, 'Client connected');
 
-    socket.on('join_booking',  (id) => socket.join(`booking_${id}`));
-    socket.on('join_customer', (id) => socket.join(`customer_${id}`));
-    socket.on('join_seller',   (id) => {
+    socket.on('join_booking',      (id) => socket.join(`booking_${id}`));
+    socket.on('join_customer',     (id) => socket.join(`customer_${id}`));
+    socket.on('join_seller',       (id) => {
       socket.join(`seller_${id}`);
       logger.info({ sellerId: id }, 'Seller joined room');
     });
+    socket.on('join_workers_watch', ()  => socket.join('workers_watch_room'));
+    socket.on('join_products',      ()  => socket.join('products_room'));
 
     socket.on('disconnect', () => logger.info({ socketId: socket.id }, 'Client disconnected'));
   });
@@ -50,15 +52,36 @@ const watchChanges = () => {
     try {
       const workerStream = db.collection('workers').watch([], { fullDocument: 'updateLookup' });
       workerStream.on('change', (c) => {
-        io.emit('worker_updated', { operationType: c.operationType, workerId: c.documentKey._id.toString(), fullDocument: c.fullDocument });
+        // Only customers actively browsing workers need this — they join workers_watch_room
+        io.to('workers_watch_room').emit('worker_updated', {
+          operationType: c.operationType,
+          workerId:      c.documentKey._id.toString(),
+          fullDocument:  c.fullDocument,
+        });
       });
       workerStream.on('error', () => setTimeout(startWatching, 5000));
 
       const bookingStream = db.collection('bookings').watch([], { fullDocument: 'updateLookup' });
       bookingStream.on('change', (c) => {
-        io.emit('booking_updated', { operationType: c.operationType, bookingId: c.documentKey._id.toString(), status: c.fullDocument?.status });
+        const bookingId = c.documentKey._id.toString();
+        const status    = c.fullDocument?.status;
+        const userId    = c.fullDocument?.user?.toString();
+
+        // Notify the specific customer who owns this booking
+        if (userId) {
+          io.to(`customer_${userId}`).emit('booking_updated', {
+            operationType: c.operationType,
+            bookingId,
+            status,
+          });
+        }
+
+        // Notify booking-specific room (worker tracking screen)
         if (c.documentKey._id) {
-          io.to(`booking_${c.documentKey._id}`).emit('booking_status_changed', { bookingId: c.documentKey._id.toString(), status: c.fullDocument?.status });
+          io.to(`booking_${bookingId}`).emit('booking_status_changed', {
+            bookingId,
+            status,
+          });
         }
       });
       bookingStream.on('error', () => setTimeout(startWatching, 5000));
@@ -67,14 +90,25 @@ const watchChanges = () => {
       sellerOrderStream.on('change', (c) => {
         const doc = c.fullDocument;
         if (!doc) return;
-        io.to(`seller_${doc.seller}`).emit('seller_order_change', { operationType: c.operationType, orderId: c.documentKey._id.toString(), status: doc.status });
-        io.to(`customer_${doc.customer}`).emit('seller_order_status_changed', { orderId: c.documentKey._id.toString(), status: doc.status });
+        io.to(`seller_${doc.seller}`).emit('seller_order_change', {
+          operationType: c.operationType,
+          orderId:       c.documentKey._id.toString(),
+          status:        doc.status,
+        });
+        io.to(`customer_${doc.customer}`).emit('seller_order_status_changed', {
+          orderId: c.documentKey._id.toString(),
+          status:  doc.status,
+        });
       });
       sellerOrderStream.on('error', () => setTimeout(startWatching, 5000));
 
       const productStream = db.collection('products').watch([], { fullDocument: 'updateLookup' });
       productStream.on('change', (c) => {
-        io.emit('product_updated', { operationType: c.operationType, productId: c.documentKey._id.toString() });
+        // Only customers on the product listing screen need this
+        io.to('products_room').emit('product_updated', {
+          operationType: c.operationType,
+          productId:     c.documentKey._id.toString(),
+        });
       });
       productStream.on('error', () => setTimeout(startWatching, 5000));
 
