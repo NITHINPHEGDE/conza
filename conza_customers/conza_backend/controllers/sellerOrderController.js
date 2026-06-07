@@ -3,6 +3,7 @@ const SellerOrder = require('../models/SellerOrder');
 const Product     = require('../models/Product');
 const Seller      = require('../models/Seller');
 const { getIO }   = require('../services/socketService');
+const { withCache, invalidateCache } = require('../utils/cacheHelpers');
 
 const sendSellerPush = async (pushToken, title, body, data = {}) => {
   if (!pushToken) return;
@@ -99,6 +100,9 @@ const placeOrder = async (req, res) => {
 
     await order.populate('seller', 'pushToken shopName');
 
+    // Bust seller dashboard cache — new order changes KPIs
+    invalidateCache(`dashboard:seller:${sellerId}`).catch(() => {});
+
     try {
       const io = getIO();
       io.to(`seller_${sellerId}`).emit('new_seller_order', {
@@ -182,6 +186,9 @@ const updateOrderStatus = async (req, res) => {
 
     await order.save();
 
+    // Bust dashboard cache — status change affects KPIs and revenue
+    invalidateCache(`dashboard:seller:${req.seller._id}`).catch(() => {});
+
     const io = getIO();
     io.to(`seller_${req.seller._id}`).emit('order_status_updated', { orderId: order._id, status });
     io.to(`customer_${order.customer}`).emit('seller_order_status_changed', { orderId: order._id, status });
@@ -196,96 +203,110 @@ const updateOrderStatus = async (req, res) => {
 const getDashboard = async (req, res) => {
   try {
     const sellerId = req.seller._id;
+    const cacheKey = `dashboard:seller:${sellerId}`;
+    const TTL      = 60; // 60s — fresh enough, saves 11 DB calls per open
 
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    const data = await withCache(cacheKey, TTL, async () => {
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
 
-    const [
-      totalProducts,
-      totalOrders,
-      newOrders,
-      activeRentals,
-      lowStockCount,
-      revenueAgg,
-      monthRevenueAgg,
-      lastMonthRevenueAgg,
-      recentMaterialOrders,
-      recentRentalOrders,
-      chartData,
-    ] = await Promise.all([
-      Product.countDocuments({ seller: sellerId }),
-      SellerOrder.countDocuments({ seller: sellerId }),
-      SellerOrder.countDocuments({ seller: sellerId, status: 'new' }),
-      SellerOrder.countDocuments({ seller: sellerId, orderType: 'rental', status: 'active' }),
-      Product.countDocuments({ seller: sellerId, $expr: { $lte: ['$stock', '$lowStockAt'] } }),
-      SellerOrder.aggregate([
-        { $match: { seller: sellerId, status: { $in: ['delivered', 'returned'] } } },
-        { $group: { _id: null, total: { $sum: '$total' } } },
-      ]),
-      SellerOrder.aggregate([
-        { $match: { seller: sellerId, status: { $in: ['delivered', 'returned'] }, createdAt: { $gte: startOfMonth } } },
-        { $group: { _id: null, total: { $sum: '$total' } } },
-      ]),
-      SellerOrder.aggregate([
-        {
-          $match: {
-            seller: sellerId,
-            status: { $in: ['delivered', 'returned'] },
-            createdAt: {
-              $gte: new Date(startOfMonth.getFullYear(), startOfMonth.getMonth() - 1, 1),
-              $lt:  startOfMonth,
+      const [
+        totalProducts,
+        totalOrders,
+        newOrders,
+        activeRentals,
+        lowStockCount,
+        revenueAgg,
+        monthRevenueAgg,
+        lastMonthRevenueAgg,
+        recentMaterialOrders,
+        recentRentalOrders,
+        chartData,
+      ] = await Promise.all([
+        Product.countDocuments({ seller: sellerId }),
+        SellerOrder.countDocuments({ seller: sellerId }),
+        SellerOrder.countDocuments({ seller: sellerId, status: 'new' }),
+        SellerOrder.countDocuments({ seller: sellerId, orderType: 'rental', status: 'active' }),
+        Product.countDocuments({ seller: sellerId, $expr: { $lte: ['$stock', '$lowStockAt'] } }),
+        SellerOrder.aggregate([
+          { $match: { seller: sellerId, status: { $in: ['delivered', 'returned'] } } },
+          { $group: { _id: null, total: { $sum: '$total' } } },
+        ]),
+        SellerOrder.aggregate([
+          { $match: { seller: sellerId, status: { $in: ['delivered', 'returned'] }, createdAt: { $gte: startOfMonth } } },
+          { $group: { _id: null, total: { $sum: '$total' } } },
+        ]),
+        SellerOrder.aggregate([
+          {
+            $match: {
+              seller: sellerId,
+              status: { $in: ['delivered', 'returned'] },
+              createdAt: {
+                $gte: new Date(startOfMonth.getFullYear(), startOfMonth.getMonth() - 1, 1),
+                $lt:  startOfMonth,
+              },
             },
           },
-        },
-        { $group: { _id: null, total: { $sum: '$total' } } },
-      ]),
-      SellerOrder.find({ seller: sellerId, orderType: 'material' }).sort({ createdAt: -1 }).limit(5).lean(),
-      SellerOrder.find({ seller: sellerId, orderType: 'rental'   }).sort({ createdAt: -1 }).limit(5).lean(),
-      SellerOrder.aggregate([
-        {
-          $match: {
-            seller: sellerId,
-            status: { $in: ['delivered', 'returned'] },
-            createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          { $group: { _id: null, total: { $sum: '$total' } } },
+        ]),
+        SellerOrder.find({ seller: sellerId, orderType: 'material' }).sort({ createdAt: -1 }).limit(5).lean(),
+        SellerOrder.find({ seller: sellerId, orderType: 'rental'   }).sort({ createdAt: -1 }).limit(5).lean(),
+        SellerOrder.aggregate([
+          {
+            $match: {
+              seller: sellerId,
+              status: { $in: ['delivered', 'returned'] },
+              createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+            },
           },
-        },
-        {
-          $group: {
-            _id:   { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-            total: { $sum: '$total' },
+          {
+            $group: {
+              _id:   { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+              total: { $sum: '$total' },
+            },
           },
-        },
-        { $sort: { _id: 1 } },
-      ]),
-    ]);
+          { $sort: { _id: 1 } },
+        ]),
+      ]);
 
-    const revenue      = revenueAgg[0]?.total       || 0;
-    const monthRevenue = monthRevenueAgg[0]?.total   || 0;
-    const lastMonth    = lastMonthRevenueAgg[0]?.total || 0;
-    const growth = lastMonth > 0
-      ? `${monthRevenue >= lastMonth ? '+' : ''}${Math.round(((monthRevenue - lastMonth) / lastMonth) * 100)}%`
-      : '+0%';
+      const revenue      = revenueAgg[0]?.total          || 0;
+      const monthRevenue = monthRevenueAgg[0]?.total      || 0;
+      const lastMonth    = lastMonthRevenueAgg[0]?.total  || 0;
+      const growth = lastMonth > 0
+        ? `${monthRevenue >= lastMonth ? '+' : ''}${Math.round(((monthRevenue - lastMonth) / lastMonth) * 100)}%`
+        : '+0%';
+
+      return {
+        kpi: {
+          newOrders,
+          activeRentals,
+          totalProducts,
+          lowStockItems: lowStockCount,
+        },
+        revenue,
+        monthRevenue,
+        growth,
+        recentMaterialOrders,
+        recentRentalOrders,
+        chartData,
+      };
+    });
 
     res.json({
       success: true,
-      kpi: {
-        newOrders,
-        activeRentals,
-        totalProducts,
-        lowStockItems: lowStockCount,
-      },
+      kpi:     data.kpi,
       vendor: {
         name:          req.seller.name,
         shopName:      req.seller.shopName,
         walletBalance: req.seller.walletBalance,
-        monthEarnings: monthRevenue,
-        growth,
+        monthEarnings: data.monthRevenue,
+        growth:        data.growth,
       },
-      totalRevenue: revenue,
-      recentMaterialOrders,
-      recentRentalOrders,
-      chartData,
+      totalRevenue:         data.revenue,
+      recentMaterialOrders: data.recentMaterialOrders,
+      recentRentalOrders:   data.recentRentalOrders,
+      chartData:            data.chartData,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
