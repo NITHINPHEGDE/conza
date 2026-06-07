@@ -54,9 +54,7 @@ const workerSchema = new mongoose.Schema(
 );
 
 // ── 2dsphere index for geospatial queries ──────────────────────────────────
-workerSchema.index({ location: '2dsphere' });
-
-// nearby workers: $near filters on isAvailable, then category
+// Only ONE 2dsphere index so $geoNear doesn't get confused
 workerSchema.index({ location: '2dsphere', category: 1, isAvailable: 1 });
 
 // category listing + online status (getCategories aggregation $match)

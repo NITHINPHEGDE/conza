@@ -39,10 +39,8 @@ const workerSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// geospatial base
-workerSchema.index({ location: '2dsphere' });
-
-// getNearbyWorkers: geo + availability + category filter
+// getNearbyWorkers + $geoNear: geo + availability + category filter
+// Only ONE 2dsphere index so $geoNear doesn't get confused
 workerSchema.index({ location: '2dsphere', category: 1, isAvailable: 1 });
 
 // getCategories aggregation $match: isOnline + isAvailable
