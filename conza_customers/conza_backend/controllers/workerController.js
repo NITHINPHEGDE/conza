@@ -28,7 +28,8 @@ const getNearbyWorkers = async (req, res) => {
             $maxDistance: parseInt(radius),
           },
         },
-        isAvailable: { $ne: false },
+        isOnline:    true,
+        isAvailable: true,
       };
       if (category) query.category = category;
 
@@ -118,7 +119,7 @@ const getCategories = async (req, res) => {
               spherical:     true,
             },
           },
-          { $match: { isOnline: true, isAvailable: { $ne: false } } },
+          { $match: { isOnline: true, isAvailable: true } },
           { $group: { _id: '$category', count: { $sum: 1 }, avgRating: { $avg: '$rating' } } },
         ];
 
@@ -154,8 +155,6 @@ const getCategories = async (req, res) => {
 };
 
 // ── GET /api/workers/search ───────────────────────────────────────────────────
-// Uses MongoDB $text index for indexed full-text search instead of regex collection scan.
-// Simple alphanumeric queries (likely popular category/skill terms) are cached for 30s.
 const searchWorkers = async (req, res) => {
   try {
     const { q, lat, lng, radius = 50000 } = req.query;
@@ -168,11 +167,10 @@ const searchWorkers = async (req, res) => {
     const TTL      = isSimpleQuery ? 30 : 0;
 
     const doSearch = async () => {
-      // $text uses the compound text index on fullName+category+skills+bio
-      // Falls back gracefully if text index missing — but add it to Worker model
       const filter = {
         $text:       { $search: q },
-        isAvailable: { $ne: false },
+        isOnline:    true,
+        isAvailable: true,
       };
 
       if (lat && lng) {
