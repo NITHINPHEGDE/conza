@@ -59,6 +59,10 @@ const updateBookingStatus = async (req, res) => {
 
     if (status === 'accepted'  && !booking.acceptedAt)   booking.acceptedAt   = new Date();
     if (status === 'arrived'   && !booking.checkInTime)   booking.checkInTime  = new Date();
+    if (status === 'awaiting_customer_confirmation' && !booking.checkOutTime) {
+      booking.checkOutTime = new Date(); // Tentative
+      if (req.body.paymentMethod) booking.paymentMethod = req.body.paymentMethod;
+    }
     if (status === 'completed' && !booking.checkOutTime) {
       booking.checkOutTime = new Date();
       if (req.body.paymentMethod) booking.paymentMethod = req.body.paymentMethod;
@@ -73,6 +77,20 @@ const updateBookingStatus = async (req, res) => {
     }
     if (status === 'completed' || status === 'cancelled') {
       await Worker.updateMany({ _id: { $in: booking.workers } }, { isAvailable: true });
+    }
+
+    // Emit socket event to customer for confirmation
+    if (status === 'awaiting_customer_confirmation') {
+      try {
+        const { getIO } = require('../services/socketService');
+        const io = getIO();
+        io.to(`customer_${booking.user}`).emit('work_completion_requested', { bookingId });
+        io.to(`booking_${bookingId}`).emit('work_completion_requested', { bookingId });
+        // Also emit standard status change
+        io.to(`booking_${bookingId}`).emit('booking_status_changed', { bookingId, status });
+      } catch (err) {
+        logger.error({ err }, 'Failed to emit work_completion_requested');
+      }
     }
 
     // Invalidate all paginated request/history cache pages for affected workers

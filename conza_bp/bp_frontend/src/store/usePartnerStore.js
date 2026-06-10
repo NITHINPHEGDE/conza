@@ -197,6 +197,23 @@ const usePartnerStore = create((set, get) => ({
         get().fetchActiveJob(data.bookingId);
       }
     });
+
+    socket.on('job_completed_confirmed', (data) => {
+      console.log('🔄 BP: Job completion confirmed by customer:', data.bookingId);
+      if (get().activeJobId === data.bookingId) {
+        // Customer confirmed, now we can complete the job and ask for payment
+        set({ jobStatus: 'completed' }); 
+      }
+    });
+
+    socket.on('issue_reported', (data) => {
+      console.log('🔄 BP: Issue reported by customer:', data.bookingId);
+      if (get().activeJobId === data.bookingId) {
+        get().fetchActiveJob(data.bookingId); // To get the issue report details
+        const { Alert } = require('react-native');
+        Alert.alert('Issue Reported', 'The customer has reported an issue with the completed work. Please discuss with the customer or contact support.');
+      }
+    });
   },
 
   updateRequestStatus: async (requestId, status, extraData = {}) => {
@@ -296,10 +313,12 @@ const usePartnerStore = create((set, get) => ({
   },
 
   completeJob: async (paymentMethod = 'cod') => {
-    const { activeJob, updateRequestStatus, todaysJobs, todaysEarnings, history, requests } = get();
+    const { activeJob, todaysJobs, todaysEarnings, history, requests } = get();
     if (!activeJob) return;
 
-    await updateRequestStatus(activeJob.id, 'completed', { paymentMethod });
+    // Notice we do NOT call updateRequestStatus('completed') here anymore, 
+    // because that's now done by the customer's confirmation.
+    // We only process the local store updates for the completed job.
 
     const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     // paymentMethod is set by setLastPaymentMethod right after this completes

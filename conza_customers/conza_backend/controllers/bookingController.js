@@ -255,4 +255,93 @@ const cancelBooking = async (req, res) => {
   }
 };
 
-module.exports = { createBooking, getMyBookings, getBookingById, cancelBooking };
+const confirmCompletion = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+
+    const booking = await Booking.findOne({ _id: bookingId, user: req.user._id });
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (booking.status !== 'awaiting_customer_confirmation') {
+      return res.status(400).json({ success: false, message: 'Booking is not awaiting confirmation' });
+    }
+
+    booking.status = 'completed';
+    await booking.save();
+
+    // Release workers
+    if (booking.workers && booking.workers.length > 0) {
+      await Worker.updateMany({ _id: { $in: booking.workers } }, { isAvailable: true });
+    }
+
+    await invalidateCache(
+      `bookings:detail:${booking._id}`,
+      `bookings:user:${req.user._id}:*`
+    );
+
+    try {
+      const io = getIO();
+      // Notify customer
+      io.emit('booking_updated', {
+        operationType: 'update',
+        bookingId:     booking._id,
+        status:        'completed',
+      });
+      io.to(`booking_${booking._id}`).emit('booking_status_changed', {
+        bookingId: booking._id,
+        status:    'completed',
+      });
+      // Notify workers
+      booking.workers.forEach(wId => {
+        io.emit(`worker_${wId}`, { type: 'job_completed_confirmed', bookingId });
+      });
+    } catch (_) {}
+
+    res.json({ success: true, booking });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const reportIssue = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { comment } = req.body;
+
+    const booking = await Booking.findOne({ _id: bookingId, user: req.user._id });
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    if (booking.status !== 'awaiting_customer_confirmation') {
+      return res.status(400).json({ success: false, message: 'Booking is not awaiting confirmation' });
+    }
+
+    booking.issueReport = {
+      comment: comment || '',
+      reportedAt: new Date()
+    };
+    await booking.save();
+
+    await invalidateCache(
+      `bookings:detail:${booking._id}`,
+      `bookings:user:${req.user._id}:*`
+    );
+
+    try {
+      const io = getIO();
+      // Notify workers
+      booking.workers.forEach(wId => {
+        io.emit(`worker_${wId}`, { type: 'issue_reported', bookingId });
+      });
+    } catch (_) {}
+
+    res.json({ success: true, booking });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { createBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue };

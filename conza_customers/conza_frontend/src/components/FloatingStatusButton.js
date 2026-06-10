@@ -9,6 +9,8 @@ const getStatusText = (status) => {
     case 'pending':   return 'Waiting for Partner';
     case 'accepted':  return 'Partner on the way';
     case 'arrived':   return 'Worker at location';
+    case 'in_progress': return 'Work in progress';
+    case 'awaiting_customer_confirmation': return 'Confirm Completion';
     case 'completed': return 'Work Completed!';
     case 'cancelled': return 'Booking Cancelled';
     default:          return 'View Status';
@@ -28,6 +30,7 @@ const FloatingStatusButton = React.memo(() => {
     if (!activeBooking) return '#F59E0B';
     switch (activeBooking.status) {
       case 'completed': return '#6366F1';
+      case 'awaiting_customer_confirmation': return '#F59E0B';
       case 'cancelled': return '#EF4444';
       case 'arrived':   return '#10B981';
       default:          return '#F59E0B';

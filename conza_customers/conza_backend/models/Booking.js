@@ -40,7 +40,7 @@ const bookingSchema = new mongoose.Schema(
     // Status
     status: {
       type: String,
-      enum: ['pending', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled'],
+      enum: ['pending', 'accepted', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed', 'cancelled'],
       default: 'pending',
     },
 
@@ -52,6 +52,12 @@ const bookingSchema = new mongoose.Schema(
     workerCancelled: { type: Boolean, default: false },
     notes:         { type: String, default: '' },
     description:   { type: String, default: '' },
+
+    // Issue Reporting
+    issueReport: {
+      comment: { type: String, default: '' },
+      reportedAt: { type: Date, default: null }
+    }
   },
   { timestamps: true }
 );
