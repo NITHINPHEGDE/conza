@@ -28,14 +28,9 @@ const getNearbyWorkers = async (req, res) => {
             $maxDistance: parseInt(radius),
           },
         },
-<<<<<<< HEAD
         // Only show workers who are both available (not on a job) AND online
         isOnline:    true,
         isAvailable: { $ne: false },
-=======
-        isOnline:    true,
-        isAvailable: true,
->>>>>>> b2a586f651e1c2b1aba8ef3f8565b70c0aff58a8
       };
       if (category) query.category = category;
 
@@ -173,18 +168,11 @@ const searchWorkers = async (req, res) => {
     const TTL      = isSimpleQuery ? 30 : 0;
 
     const doSearch = async () => {
-<<<<<<< HEAD
       // $text uses the compound text index on fullName+category+skills+bio
       const filter = {
         $text:       { $search: q },
         isOnline:    true,
         isAvailable: { $ne: false },
-=======
-      const filter = {
-        $text:       { $search: q },
-        isOnline:    true,
-        isAvailable: true,
->>>>>>> b2a586f651e1c2b1aba8ef3f8565b70c0aff58a8
       };
 
       if (lat && lng) {

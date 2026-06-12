@@ -208,17 +208,9 @@ const toggleOnlineStatus = async (workerId) => {
 
   await worker.save();
 
-<<<<<<< HEAD
   // Invalidate customer-facing cache so availability change is reflected immediately
   // on the next HTTP request (for any client that doesn't have a live socket)
   await invalidateWorkerCache(worker.category);
-=======
-  // Invalidate customer-side worker caches so the change is visible immediately
-  try {
-    const { invalidateCache } = require('../utils/cacheHelpers');
-    await invalidateCache('workers:nearby:*', 'workers:categories:*', 'workers:search:*');
-  } catch (_) {}
->>>>>>> b2a586f651e1c2b1aba8ef3f8565b70c0aff58a8
 
   return worker;
 };
@@ -240,13 +232,36 @@ const updateWorkerLocation = async (workerId, latitude, longitude) => {
   }
 
   if (buffered) {
-    // Return lightweight response from Redis — no DB read needed
-    // Update lastLocationAt in memory for auto-offline check accuracy
-    const worker = await Worker.findByIdAndUpdate(
-      workerId,
-      { lastLocationAt: new Date(), isOnline: true },
+    // On the first ping (lastLocationAt is null) or if the location in MongoDB is still the default [0, 0],
+    // update the coordinates in MongoDB immediately so the worker is instantly visible.
+    let worker = await Worker.findOneAndUpdate(
+      {
+        _id: workerId,
+        $or: [
+          { lastLocationAt: null },
+          { 'location.coordinates': [0, 0] },
+          { location: { $exists: false } }
+        ]
+      },
+      {
+        $set: {
+          location:       { type: 'Point', coordinates: [longitude, latitude] },
+          lastLocationAt: new Date(),
+          isOnline:       true
+        }
+      },
       { new: true, select: '-password' }
     );
+
+    if (!worker) {
+      // Subsequent pings: only update lastLocationAt in MongoDB; coordinates stay in Redis
+      worker = await Worker.findByIdAndUpdate(
+        workerId,
+        { lastLocationAt: new Date(), isOnline: true },
+        { new: true, select: '-password' }
+      );
+    }
+
     if (!worker) throw new AppError('Worker not found.', 404);
     // Overlay buffered coordinates so response reflects the latest ping
     worker.location = { type: 'Point', coordinates: [longitude, latitude] };
