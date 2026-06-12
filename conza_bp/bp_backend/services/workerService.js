@@ -56,13 +56,22 @@ const flushLocationBuffer = async () => {
     if (bulkOps.length) {
       await Worker.bulkWrite(bulkOps, { ordered: false });
       console.log(`🗺️  [BP] Flushed ${bulkOps.length} worker location(s) to MongoDB`);
+
+      // Bust the session cache for every worker whose record was just updated.
+      // The flush writes isOnline:true to MongoDB; if the cached session object
+      // still says isOnline:false the next toggle would flip to false instead of
+      // true — making the button appear broken for that worker.
+      const sessionDelPipeline = redis.pipeline();
+      for (const workerId of members) {
+        sessionDelPipeline.del(`worker:session:${workerId}`);
+      }
+      await sessionDelPipeline.exec();
     }
 
     // Clear the geo set after flush
     await redis.del(GEO_KEY);
   } catch (err) {
     console.error('⚠️  [BP] Location buffer flush failed (will retry next interval):', err.message);
-    // Non-fatal: next interval will try again; Redis or Mongo may have been temporarily unavailable
   }
 };
 
@@ -178,6 +187,9 @@ const getWorkerProfile = async (workerId) => {
 
 // ── Toggle online / offline ────────────────────────────────────────────────
 const toggleOnlineStatus = async (workerId) => {
+  // Always read fresh from DB — never use a cached value to determine current
+  // isOnline state, because the location flush job can set isOnline:true in
+  // Mongo while the session cache still holds an older value.
   const worker = await Worker.findById(workerId).select('-password');
   if (!worker) throw new AppError('Worker not found.', 404);
 
@@ -189,27 +201,18 @@ const toggleOnlineStatus = async (workerId) => {
     try {
       await getRedis().zrem(GEO_KEY, workerId.toString());
     } catch (_) {}
-  } else {
-    // Going online: if location is buffered in Redis (new worker or recent ping),
-    // flush it immediately to MongoDB so they appear in customer geo queries right away.
-    try {
-      const redis = getRedis();
-      const workerIdStr = workerId.toString();
-      const buffered = await redis.geopos(GEO_KEY, workerIdStr);
-      const pos = buffered?.[0];
-      if (pos) {
-        const [lng, lat] = pos.map(parseFloat);
-        worker.location       = { type: 'Point', coordinates: [lng, lat] };
-        worker.lastLocationAt = new Date();
-        await redis.zrem(GEO_KEY, workerIdStr); // remove from buffer — already written
-      }
-    } catch (_) {}
   }
 
   await worker.save();
 
-  // Invalidate customer-facing cache so availability change is reflected immediately
-  // on the next HTTP request (for any client that doesn't have a live socket)
+  // Bust the session cache so the next authenticated request reads the
+  // updated isOnline value from MongoDB rather than the stale cached object.
+  try {
+    await getRedis().del(`worker:session:${workerId.toString()}`);
+  } catch (_) {}
+
+  // Invalidate customer-facing cache so availability change is reflected
+  // immediately on the next HTTP request for any client without a live socket.
   await invalidateWorkerCache(worker.category);
 
   return worker;
@@ -232,36 +235,13 @@ const updateWorkerLocation = async (workerId, latitude, longitude) => {
   }
 
   if (buffered) {
-    // On the first ping (lastLocationAt is null) or if the location in MongoDB is still the default [0, 0],
-    // update the coordinates in MongoDB immediately so the worker is instantly visible.
-    let worker = await Worker.findOneAndUpdate(
-      {
-        _id: workerId,
-        $or: [
-          { lastLocationAt: null },
-          { 'location.coordinates': [0, 0] },
-          { location: { $exists: false } }
-        ]
-      },
-      {
-        $set: {
-          location:       { type: 'Point', coordinates: [longitude, latitude] },
-          lastLocationAt: new Date(),
-          isOnline:       true
-        }
-      },
+    // Return lightweight response from Redis — no DB read needed
+    // Update lastLocationAt in memory for auto-offline check accuracy
+    const worker = await Worker.findByIdAndUpdate(
+      workerId,
+      { lastLocationAt: new Date(), isOnline: true },
       { new: true, select: '-password' }
     );
-
-    if (!worker) {
-      // Subsequent pings: only update lastLocationAt in MongoDB; coordinates stay in Redis
-      worker = await Worker.findByIdAndUpdate(
-        workerId,
-        { lastLocationAt: new Date(), isOnline: true },
-        { new: true, select: '-password' }
-      );
-    }
-
     if (!worker) throw new AppError('Worker not found.', 404);
     // Overlay buffered coordinates so response reflects the latest ping
     worker.location = { type: 'Point', coordinates: [longitude, latitude] };
@@ -292,11 +272,15 @@ const checkAndAutoOffline = async (worker) => {
     worker.isOnline = false;
     worker.lastLocationAt = null;
     await worker.save();
-    // Also remove from GPS buffer
+    // Remove from GPS buffer
     try {
       await getRedis().zrem(GEO_KEY, worker._id.toString());
     } catch (_) {}
-    // Invalidate cache so customer sees worker as offline
+    // Bust session cache so next toggle reads fresh state from DB
+    try {
+      await getRedis().del(`worker:session:${worker._id.toString()}`);
+    } catch (_) {}
+    // Invalidate customer cache
     await invalidateWorkerCache(worker.category);
   }
   return worker;
