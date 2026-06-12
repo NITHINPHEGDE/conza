@@ -178,6 +178,21 @@ const CompletionModal = React.memo(({ visible, amount, onFinished }) => {
   );
 });
 
+// ── AwaitingConfirmationModal ────────────────────────────────────────────────
+const AwaitingConfirmationModal = React.memo(({ visible }) => (
+  <Modal visible={visible} transparent animationType="fade">
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalCard}>
+        <Text style={styles.modalEmoji}>⏳</Text>
+        <Text style={styles.modalTitle}>Waiting for Customer</Text>
+        <Text style={styles.modalSub}>
+          Please wait while the customer confirms that the work has been completed.
+        </Text>
+      </View>
+    </View>
+  </Modal>
+));
+
 // ── No-job placeholder ────────────────────────────────────────────────────────
 const NoJobView = () => (
   <View style={[styles.screen, styles.noJobState]}>
@@ -198,16 +213,31 @@ const ActiveJobScreen = ({ navigation }) => {
   const [showModal, setShowModal] = useState(false);
 
   const stepStatuses = useMemo(() => {
-    const order = ['pending', 'accepted', 'arrived', 'completed'];
+    const order = ['pending', 'accepted', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed'];
     const currentIdx = order.indexOf(jobStatus);
-    return [0, 1, 2].map((i) =>
-      i < (currentIdx - 1) ? 'done' : i === (currentIdx - 1) ? 'active' : 'pending'
-    );
+    
+    // step 1: arrived (idx 2)
+    // step 2: in_progress (idx 3)
+    // step 3: awaiting_customer_confirmation (idx 4) or completed (idx 5)
+    
+    return [0, 1, 2].map((i) => {
+      // mapping our 3 steps to the status index
+      // Step 1 (idx 0) -> 'accepted' (1) active, 'arrived' (2+) done
+      // Step 2 (idx 1) -> 'arrived' (2) active, 'in_progress' (3+) done
+      // Step 3 (idx 2) -> 'in_progress' (3) active, 'awaiting_customer_confirmation' (4) active, 'completed' (5) done
+      
+      if (i === 0) return currentIdx >= 2 ? 'done' : currentIdx === 1 ? 'active' : 'pending';
+      if (i === 1) return currentIdx >= 3 ? 'done' : currentIdx === 2 ? 'active' : 'pending';
+      if (i === 2) return currentIdx >= 5 ? 'done' : currentIdx >= 3 ? 'active' : 'pending';
+      return 'pending';
+    });
   }, [jobStatus]);
 
-  const handleWorkDone = useCallback(() => {
-    setShowModal(true);
-  }, []);
+  const handleWorkDone = useCallback(async () => {
+    // Instead of showing modal directly, ask customer for confirmation
+    await usePartnerStore.getState().updateRequestStatus(activeJob.id, 'awaiting_customer_confirmation');
+    // Store updates status, which will trigger the AwaitingConfirmationModal (jobStatus === 'awaiting_customer_confirmation')
+  }, [activeJob]);
 
   const handleFinished = useCallback(async (paymentType) => {
     setShowModal(false);
@@ -334,11 +364,11 @@ const ActiveJobScreen = ({ navigation }) => {
         <StatusCard
           step={3} title="Work in Progress"
           description="Finish the work and collect payment from the customer."
-          status={jobStatus === 'in_progress' ? 'active' : (jobStatus === 'completed' ? 'done' : 'pending')} buttonLabel="Work Completed ✓"
+          status={jobStatus === 'in_progress' ? 'active' : (['awaiting_customer_confirmation', 'completed'].includes(jobStatus) ? 'done' : 'pending')} buttonLabel="Work Completed ✓"
           onPress={handleWorkDone} isLast
         />
 
-        {jobStatus !== 'completed' && (
+        {(!['awaiting_customer_confirmation', 'completed'].includes(jobStatus)) && (
           <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelJob}>
             <Text style={styles.cancelBtnText}>Cancel Job</Text>
           </TouchableOpacity>
@@ -347,9 +377,13 @@ const ActiveJobScreen = ({ navigation }) => {
       </ScrollView>
 
       <CompletionModal
-        visible={showModal}
+        visible={jobStatus === 'completed' && showModal === false} // Only show if completed via customer confirmation
         amount={activeJob.estimatedAmount}
         onFinished={handleFinished}
+      />
+      
+      <AwaitingConfirmationModal 
+        visible={jobStatus === 'awaiting_customer_confirmation'} 
       />
     </View>
   );

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert, Modal, TextInput } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
+import { bookingAPI } from '../api/bookingAPI';
 import { BookingTrackingSkeleton } from '../components/Skeleton';
 
 const getStatusDisplay = (status) => {
@@ -32,6 +33,22 @@ const BookingTrackingScreen = ({ navigation }) => {
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling]           = useState(false);
+  const [confirming, setConfirming]           = useState(false);
+  const [reportingIssue, setReportingIssue]   = useState(false);
+  const [issueComment, setIssueComment]       = useState('');
+
+  // Setup 5s polling interval to ensure we don't miss status updates
+  useEffect(() => {
+    let intervalId;
+    if (activeBookingId && activeBooking?.status !== 'completed' && activeBooking?.status !== 'cancelled') {
+      intervalId = setInterval(() => {
+        fetchActiveBooking(activeBookingId);
+      }, 5000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [activeBookingId, activeBooking?.status]);
 
   useEffect(() => {
     if (activeBookingId) fetchActiveBooking(activeBookingId);
@@ -57,6 +74,34 @@ const BookingTrackingScreen = ({ navigation }) => {
       setCancelling(false);
     }
   }, [cancelActiveBooking]);
+
+  const handleConfirmCompletion = useCallback(async () => {
+    if (!activeBookingId) return;
+    setConfirming(true);
+    try {
+      await bookingAPI.confirmCompletion(activeBookingId);
+      await fetchActiveBooking(activeBookingId);
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.message || err.message || 'Could not confirm completion.');
+    } finally {
+      setConfirming(false);
+    }
+  }, [activeBookingId, fetchActiveBooking]);
+
+  const handleReportIssue = useCallback(async () => {
+    if (!activeBookingId) return;
+    setReportingIssue(true);
+    try {
+      await bookingAPI.reportIssue(activeBookingId, issueComment);
+      await fetchActiveBooking(activeBookingId);
+      Alert.alert('Issue Reported', 'We have notified the worker. Support will review your booking.');
+      setIssueComment('');
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.message || err.message || 'Could not report issue.');
+    } finally {
+      setReportingIssue(false);
+    }
+  }, [activeBookingId, issueComment, fetchActiveBooking]);
 
   const handleOK = useCallback(async () => {
     await clearActiveBooking();
@@ -205,6 +250,58 @@ const BookingTrackingScreen = ({ navigation }) => {
             <TouchableOpacity style={styles.modalDismissBtn} onPress={handleDismissModal} disabled={cancelling}>
               <Text style={styles.modalDismissText}>No, Keep It</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={activeBooking.status === 'awaiting_customer_confirmation'}
+        transparent
+        animationType="slide"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, { fontSize: 20, marginBottom: 12 }]}>Confirm Work Completion</Text>
+            <Text style={styles.modalSub}>
+              The worker has marked the job as completed. Please confirm if you are satisfied with the work.
+            </Text>
+            
+            <TouchableOpacity 
+              style={[styles.modalConfirmBtn, { backgroundColor: '#10B981', marginBottom: 16 }]} 
+              onPress={handleConfirmCompletion} 
+              disabled={confirming || reportingIssue}
+            >
+              {confirming
+                ? <ActivityIndicator color="#FFF" />
+                : <Text style={styles.modalConfirmText}>✓ Confirm Work Completed</Text>
+              }
+            </TouchableOpacity>
+
+            <View style={{ width: '100%', height: 1, backgroundColor: '#E2E8F0', marginBottom: 16 }} />
+            
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#64748B', alignSelf: 'flex-start', marginBottom: 8 }}>
+              Not satisfied? Report an issue:
+            </Text>
+            
+            <TextInput
+              style={{ width: '100%', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, minHeight: 60, marginBottom: 12, textAlignVertical: 'top' }}
+              placeholder="Describe the issue (optional)"
+              value={issueComment}
+              onChangeText={setIssueComment}
+              multiline
+            />
+            
+            <TouchableOpacity 
+              style={[styles.modalConfirmBtn, { backgroundColor: '#EF4444', marginBottom: 0 }]} 
+              onPress={handleReportIssue} 
+              disabled={confirming || reportingIssue}
+            >
+              {reportingIssue
+                ? <ActivityIndicator color="#FFF" />
+                : <Text style={styles.modalConfirmText}>Report Issue</Text>
+              }
+            </TouchableOpacity>
+
           </View>
         </View>
       </Modal>

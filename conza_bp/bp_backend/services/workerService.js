@@ -189,13 +189,36 @@ const toggleOnlineStatus = async (workerId) => {
     try {
       await getRedis().zrem(GEO_KEY, workerId.toString());
     } catch (_) {}
+  } else {
+    // Going online: if location is buffered in Redis (new worker or recent ping),
+    // flush it immediately to MongoDB so they appear in customer geo queries right away.
+    try {
+      const redis = getRedis();
+      const workerIdStr = workerId.toString();
+      const buffered = await redis.geopos(GEO_KEY, workerIdStr);
+      const pos = buffered?.[0];
+      if (pos) {
+        const [lng, lat] = pos.map(parseFloat);
+        worker.location       = { type: 'Point', coordinates: [lng, lat] };
+        worker.lastLocationAt = new Date();
+        await redis.zrem(GEO_KEY, workerIdStr); // remove from buffer — already written
+      }
+    } catch (_) {}
   }
 
   await worker.save();
 
+<<<<<<< HEAD
   // Invalidate customer-facing cache so availability change is reflected immediately
   // on the next HTTP request (for any client that doesn't have a live socket)
   await invalidateWorkerCache(worker.category);
+=======
+  // Invalidate customer-side worker caches so the change is visible immediately
+  try {
+    const { invalidateCache } = require('../utils/cacheHelpers');
+    await invalidateCache('workers:nearby:*', 'workers:categories:*', 'workers:search:*');
+  } catch (_) {}
+>>>>>>> b2a586f651e1c2b1aba8ef3f8565b70c0aff58a8
 
   return worker;
 };

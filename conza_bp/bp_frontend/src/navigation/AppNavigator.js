@@ -59,7 +59,7 @@ const FloatingJobButton = React.memo(({ navigation }) => {
   const jobStatus = usePartnerStore(selectJobStatus);
   const handlePress = useCallback(() => navigation.navigate('ActiveJob'), [navigation]);
 
-  if (!activeJob || jobStatus === 'completed') return null;
+  if (!activeJob || ['completed', 'awaiting_customer_confirmation'].includes(jobStatus)) return null;
 
   const statusLabel =
     jobStatus === 'accepted'    ? '🚗 On the Way' :

@@ -22,6 +22,16 @@ export const bookingAPI = {
     return res.data;
   },
 
+  confirmCompletion: async (id) => {
+    const res = await api.patch(`/bookings/${id}/confirm-completion`);
+    return res.data;
+  },
+
+  reportIssue: async (id, comment) => {
+    const res = await api.patch(`/bookings/${id}/report-issue`, { comment });
+    return res.data;
+  },
+
   // ── Seller orders (material / rental) ──────────────────────────────────
   placeSellerOrder: async (data) => {
     const res = await api.post('/orders/seller', data);
