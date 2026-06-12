@@ -66,6 +66,39 @@ const flushLocationBuffer = async () => {
   }
 };
 
+// ── Invalidate customer-facing worker cache ─────────────────────────────────
+// Both bp_backend and conza_backend share the same Redis instance (same REDIS_URL).
+// When a worker's online status changes, we must bust all nearby/category cache
+// keys so the customer backend serves fresh data on next request.
+const invalidateWorkerCache = async (category) => {
+  const redis = getRedis();
+  try {
+    // Scan and delete all nearby and category cache keys
+    const patterns = [
+      'workers:nearby:*',
+      'workers:categories:*',
+    ];
+    if (category) {
+      // Also bust category-specific search cache if it exists
+      patterns.push(`workers:search:${category.toLowerCase()}:*`);
+    }
+
+    for (const pattern of patterns) {
+      let cursor = '0';
+      do {
+        const [next, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        cursor = next;
+        if (keys.length) {
+          await redis.del(...keys);
+        }
+      } while (cursor !== '0');
+    }
+  } catch (err) {
+    // Non-fatal — cache will expire on its own TTL; log but don't block
+    console.warn('[BP] Cache invalidation failed (non-fatal):', err.message);
+  }
+};
+
 // ── Sign Up ────────────────────────────────────────────────────────────────
 const signUpWorker = async (data) => {
   const {
@@ -105,6 +138,9 @@ const signUpWorker = async (data) => {
     experience:   experience || null,
     bio:          bio || '',
   });
+
+  // Bust category cache so newly registered worker appears when they go online
+  await invalidateWorkerCache(category);
 
   const token = generateToken(worker._id);
   return { worker: worker.toSafeObject(), token };
@@ -156,6 +192,11 @@ const toggleOnlineStatus = async (workerId) => {
   }
 
   await worker.save();
+
+  // Invalidate customer-facing cache so availability change is reflected immediately
+  // on the next HTTP request (for any client that doesn't have a live socket)
+  await invalidateWorkerCache(worker.category);
+
   return worker;
 };
 
@@ -217,6 +258,8 @@ const checkAndAutoOffline = async (worker) => {
     try {
       await getRedis().zrem(GEO_KEY, worker._id.toString());
     } catch (_) {}
+    // Invalidate cache so customer sees worker as offline
+    await invalidateWorkerCache(worker.category);
   }
   return worker;
 };

@@ -333,7 +333,6 @@ const data = res.data;
   },
 
   // ── Active Booking Tracking ────────────────────────────────────────────────
-  // ── Active Booking Tracking ────────────────────────────────────────────────
   activeBookingId: null,
   activeBooking:   null,
 
@@ -382,18 +381,16 @@ const data = res.data;
     }
   },
 
-  // Replace cancelActiveBooking in useAppStore.js (store/useAppStore.js):
-cancelActiveBooking: async () => {
-  const id = get().activeBookingId;
-  if (!id) return;
-  try {
-    await bookingAPI.cancelBooking(id);
-    // Await so the UI re-renders with status: 'cancelled' before returning
-    await get().fetchActiveBooking(id);
-  } catch (err) {
-    throw new Error(err.message); // Let the screen show the Alert
-  }
-},
+  cancelActiveBooking: async () => {
+    const id = get().activeBookingId;
+    if (!id) return;
+    try {
+      await bookingAPI.cancelBooking(id);
+      await get().fetchActiveBooking(id);
+    } catch (err) {
+      throw new Error(err.message);
+    }
+  },
 
   clearActiveBooking: async () => {
     await AsyncStorage.removeItem('activeBookingId');
@@ -463,12 +460,91 @@ cancelActiveBooking: async () => {
   },
 
   initSocketHandlers: () => {
+    // Remove all existing listeners before re-registering to prevent duplicates
     socket.off('booking_updated');
     socket.off('booking_status_changed');
     socket.off('worker_updated');
+    socket.off('worker_availability_changed');
+    socket.off('worker_went_offline');
+
+    // ── Worker availability: real-time add/remove from list ────────────────
+    socket.on('worker_availability_changed', (data) => {
+      const { workerId, isOnline, isAvailable, category, worker } = data;
+
+      // Only act if availability is meaningful (worker is visible or just hid)
+      if (!category) return;
+
+      set((state) => {
+        const current = state.workersByCategory[category] || EMPTY_ARRAY;
+
+        if (isOnline && isAvailable !== false && worker) {
+          // Worker came online — add to list if not already present
+          const alreadyPresent = current.some(
+            (w) => w._id?.toString() === workerId || w.id?.toString() === workerId
+          );
+          if (alreadyPresent) {
+            // Update existing entry (e.g. profile image changed)
+            return {
+              workersByCategory: {
+                ...state.workersByCategory,
+                [category]: current.map((w) =>
+                  w._id?.toString() === workerId || w.id?.toString() === workerId
+                    ? { ...w, ...worker, available: true, isOnline: true }
+                    : w
+                ),
+              },
+            };
+          }
+          // Append to list; distance is unknown from server without location —
+          // the entry still shows with the locationText placeholder from the payload.
+          return {
+            workersByCategory: {
+              ...state.workersByCategory,
+              [category]: [...current, { ...worker, available: true, isOnline: true }],
+            },
+          };
+        } else {
+          // Worker went offline or became unavailable — remove from list
+          return {
+            workersByCategory: {
+              ...state.workersByCategory,
+              [category]: current.filter(
+                (w) => w._id?.toString() !== workerId && w.id?.toString() !== workerId
+              ),
+            },
+          };
+        }
+      });
+
+      // Also refresh category counts (the bubble numbers on the home screen)
+      get().fetchLabourData();
+    });
+
+    // Explicit offline event — immediate removal without waiting for field check
+    socket.on('worker_went_offline', ({ workerId, category }) => {
+      if (!category) return;
+      set((state) => {
+        const current = state.workersByCategory[category] || EMPTY_ARRAY;
+        return {
+          workersByCategory: {
+            ...state.workersByCategory,
+            [category]: current.filter(
+              (w) => w._id?.toString() !== workerId && w.id?.toString() !== workerId
+            ),
+          },
+        };
+      });
+    });
+
+    // ── Legacy worker_updated (kept for backwards compatibility) ────────────
+    socket.on('worker_updated', (data) => {
+      // Only used as a fallback; precise updates are handled by
+      // worker_availability_changed and worker_went_offline above.
+      // Refresh category counts in case a worker's profile changed.
+      get().fetchLabourData();
+    });
 
     socket.on('booking_updated', (data) => {
-      console.log('🔄 Booking update received:', data);
       get().fetchProjects();
       get().fetchActiveBookings();
       if (get().activeBookingId === data.bookingId) {
@@ -477,19 +553,11 @@ cancelActiveBooking: async () => {
     });
 
     socket.on('booking_status_changed', (data) => {
-      console.log('🔄 Booking status changed:', data.status);
       if (get().activeBookingId === data.bookingId) {
         get().fetchActiveBooking(data.bookingId);
       }
     });
 
-    socket.on('worker_updated', (data) => {
-      console.log('🔄 Worker updated:', data.workerId);
-      get().fetchLabourData();
-      if (data.fullDocument?.category) {
-        get().fetchWorkersByCategory(data.fullDocument.category);
-      }
-    });
     socket.on('seller_order_status_changed', ({ orderId, status }) => {
       set((s) => ({
         sellerOrders: s.sellerOrders.map((o) =>
@@ -499,6 +567,16 @@ cancelActiveBooking: async () => {
         ),
       }));
     });
+
+    // Re-join workers_watch_room after reconnect so change-stream events keep flowing
+    socket.on('connect', () => {
+      socket.emit('join_workers_watch');
+    });
+
+    // Join on initial connect as well (in case connect fired before handlers were set)
+    if (socket.connected) {
+      socket.emit('join_workers_watch');
+    }
   },
 }));
 

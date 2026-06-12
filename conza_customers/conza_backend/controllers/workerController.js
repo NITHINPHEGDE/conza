@@ -28,6 +28,8 @@ const getNearbyWorkers = async (req, res) => {
             $maxDistance: parseInt(radius),
           },
         },
+        // Only show workers who are both available (not on a job) AND online
+        isOnline:    true,
         isAvailable: { $ne: false },
       };
       if (category) query.category = category;
@@ -169,9 +171,9 @@ const searchWorkers = async (req, res) => {
 
     const doSearch = async () => {
       // $text uses the compound text index on fullName+category+skills+bio
-      // Falls back gracefully if text index missing — but add it to Worker model
       const filter = {
         $text:       { $search: q },
+        isOnline:    true,
         isAvailable: { $ne: false },
       };
 

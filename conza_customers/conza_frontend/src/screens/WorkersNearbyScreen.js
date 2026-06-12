@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import useAppStore, { EMPTY_ARRAY } from '../store/useAppStore';
 import { WorkerListSkeleton, ErrorState, EmptyState } from '../components/LoadingState';
 import { colors } from '../theme/colors';
+import { socket } from '../utils/socket';
 
 // ─── Worker Card ──────────────────────────────────────────────────────────────
 const WorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
@@ -160,6 +161,14 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
       fetchWorkersByCategory(category);
     }
   }, [category, fetchWorkersByCategory]);
+
+  // Join the workers_watch_room so this screen receives real-time
+  // worker_availability_changed and worker_went_offline events.
+  useEffect(() => {
+    socket.emit('join_workers_watch');
+    // No leave needed — being in the room is harmless when navigating away,
+    // and the store handles state updates globally.
+  }, []);
 
   const [selected, setSelected]       = useState([]);
   const [filterAvail, setFilterAvail] = useState('All');

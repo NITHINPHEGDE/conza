@@ -1,4 +1,4 @@
-// bp_backend/services/socketService.js
+// conza_backend/services/socketService.js
 const { Server }                  = require('socket.io');
 const { createAdapter }           = require('@socket.io/redis-adapter');
 const mongoose                    = require('mongoose');
@@ -20,85 +20,166 @@ const initSocket = (server) => {
     const pubClient = getRedis();
     const subClient = getSubscriber();
     io.adapter(createAdapter(pubClient, subClient));
-    logger.info('[BP] Socket.io Redis adapter attached');
+    logger.info('Socket.io Redis adapter attached');
   } catch (err) {
-    logger.warn({ err }, '[BP] Socket.io Redis adapter failed (running in-memory)');
+    logger.warn({ err }, 'Socket.io Redis adapter failed (running in-memory)');
   }
 
   io.on('connection', (socket) => {
-    logger.info({ socketId: socket.id }, '[BP] Client connected');
+    logger.info({ socketId: socket.id }, 'Client connected');
 
-    // Worker joins their personal room to receive targeted events
-    socket.on('join_worker', (workerId) => {
-      socket.join(`worker_${workerId}`);
-      socket.join('workers_room'); // room all online BP workers share
-      logger.info({ workerId }, '[BP] Worker joined room');
+    socket.on('join_booking',      (id) => socket.join(`booking_${id}`));
+    socket.on('join_customer',     (id) => socket.join(`customer_${id}`));
+    socket.on('join_seller',       (id) => {
+      socket.join(`seller_${id}`);
+      logger.info({ sellerId: id }, 'Seller joined room');
     });
+    socket.on('join_workers_watch', ()  => socket.join('workers_watch_room'));
+    socket.on('join_products',      ()  => socket.join('products_room'));
 
-    socket.on('join_booking', (bookingId) => {
-      socket.join(`booking_${bookingId}`);
-      logger.info({ bookingId }, '[BP] Client joined booking room');
-    });
-
-    socket.on('disconnect', () => {
-      logger.info({ socketId: socket.id }, '[BP] Client disconnected');
-    });
+    socket.on('disconnect', () => logger.info({ socketId: socket.id }, 'Client disconnected'));
   });
 
   watchChanges();
   return io;
 };
 
+// ── Build the worker payload the customer frontend needs ───────────────────
+// This mirrors the shape produced by getNearbyWorkers so the frontend can
+// add/update the worker in its list without making an additional HTTP call.
+const buildWorkerPayload = (doc) => {
+  if (!doc) return null;
+  return {
+    id:           doc._id.toString(),
+    _id:          doc._id.toString(),
+    name:         doc.fullName,
+    initials:     doc.fullName
+      ? doc.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase()
+      : '??',
+    category:     doc.category,
+    skills:       doc.skills || [],
+    pricePerDay:  doc.minCharge || 0,
+    minCharge:    doc.minCharge || 0,
+    rating:       doc.rating || 5.0,
+    totalJobs:    doc.totalJobs || 0,
+    // Distance is unknown server-side without the customer's location;
+    // the frontend will show a placeholder and update on next refresh.
+    distance:     doc.locationText || '—',
+    distanceKm:   null,
+    available:    doc.isOnline === true,
+    isOnline:     doc.isOnline === true,
+    bio:          doc.bio || '',
+    experience:   doc.experience || null,
+    locationText: doc.locationText || '',
+    memberSince:  doc.memberSince || '',
+    profileImage: doc.profileImage || null,
+  };
+};
+
 const watchChanges = () => {
   const db = mongoose.connection;
 
   const startWatching = () => {
-    logger.info('[BP] Watching MongoDB collections for changes...');
-
+    logger.info('Watching MongoDB collections...');
     try {
-      const bookingChangeStream = db.collection('bookings').watch([], { fullDocument: 'updateLookup' });
+      const workerStream = db.collection('workers').watch([], { fullDocument: 'updateLookup' });
 
-      bookingChangeStream.on('change', (change) => {
-        const bookingId = change.documentKey._id.toString();
-        const status    = change.fullDocument?.status;
-        const workers   = change.fullDocument?.workers || [];
+      workerStream.on('change', (c) => {
+        const workerId = c.documentKey._id.toString();
+        const doc      = c.fullDocument;
 
-        logger.info({ operationType: change.operationType, status }, '[BP] Booking change detected');
+        // ── Generic worker_updated (backwards-compat) ──────────────────────
+        // All customers actively browsing workers receive this.
+        io.to('workers_watch_room').emit('worker_updated', {
+          operationType: c.operationType,
+          workerId,
+          fullDocument:  doc,
+        });
 
-        if (change.operationType === 'insert') {
-          // New booking — notify all online workers so they can poll for new requests
-          io.to('workers_room').emit('booking_updated', {
-            operationType: 'insert',
-            bookingId,
-            status,
-          });
-        } else {
-          // Update — notify only workers assigned to this booking
-          workers.forEach((wId) => {
-            io.to(`worker_${wId}`).emit('booking_updated', {
-              operationType: change.operationType,
-              bookingId,
-              status,
-            });
+        // ── Precise availability event ─────────────────────────────────────
+        // Emitted on every insert or update so the customer frontend can
+        // add/remove workers from the "Available Now" list in real-time
+        // without needing to re-fetch (and hit stale cache).
+        if (c.operationType === 'insert' || c.operationType === 'update') {
+          io.to('workers_watch_room').emit('worker_availability_changed', {
+            workerId,
+            isOnline:  doc ? doc.isOnline  : false,
+            isAvailable: doc ? doc.isAvailable : true,
+            category:  doc ? doc.category  : null,
+            worker:    doc ? buildWorkerPayload(doc) : null,
           });
         }
 
-        // Always notify the specific booking room (customer tracking)
-        io.to(`booking_${bookingId}`).emit('booking_status_changed', {
-          bookingId,
-          status,
-          booking: change.fullDocument,
+        // ── Explicit offline broadcast ─────────────────────────────────────
+        // When a worker is explicitly set offline, emit a focused event so
+        // the frontend can immediately remove them without checking fields.
+        if (
+          c.operationType === 'update' &&
+          doc &&
+          doc.isOnline === false
+        ) {
+          io.to('workers_watch_room').emit('worker_went_offline', {
+            workerId,
+            category: doc.category,
+          });
+        }
+      });
+
+      workerStream.on('error', () => setTimeout(startWatching, 5000));
+
+      const bookingStream = db.collection('bookings').watch([], { fullDocument: 'updateLookup' });
+      bookingStream.on('change', (c) => {
+        const bookingId = c.documentKey._id.toString();
+        const status    = c.fullDocument?.status;
+        const userId    = c.fullDocument?.user?.toString();
+
+        // Notify the specific customer who owns this booking
+        if (userId) {
+          io.to(`customer_${userId}`).emit('booking_updated', {
+            operationType: c.operationType,
+            bookingId,
+            status,
+          });
+        }
+
+        // Notify booking-specific room (worker tracking screen)
+        if (c.documentKey._id) {
+          io.to(`booking_${bookingId}`).emit('booking_status_changed', {
+            bookingId,
+            status,
+          });
+        }
+      });
+      bookingStream.on('error', () => setTimeout(startWatching, 5000));
+
+      const sellerOrderStream = db.collection('sellerorders').watch([], { fullDocument: 'updateLookup' });
+      sellerOrderStream.on('change', (c) => {
+        const doc = c.fullDocument;
+        if (!doc) return;
+        io.to(`seller_${doc.seller}`).emit('seller_order_change', {
+          operationType: c.operationType,
+          orderId:       c.documentKey._id.toString(),
+          status:        doc.status,
+        });
+        io.to(`customer_${doc.customer}`).emit('seller_order_status_changed', {
+          orderId: c.documentKey._id.toString(),
+          status:  doc.status,
         });
       });
+      sellerOrderStream.on('error', () => setTimeout(startWatching, 5000));
 
-      bookingChangeStream.on('error', (err) => {
-        logger.error({ err }, '[BP] Booking change stream error');
-        Sentry.captureException(err);
-        setTimeout(startWatching, 5000);
+      const productStream = db.collection('products').watch([], { fullDocument: 'updateLookup' });
+      productStream.on('change', (c) => {
+        // Only customers on the product listing screen need this
+        io.to('products_room').emit('product_updated', {
+          operationType: c.operationType,
+          productId:     c.documentKey._id.toString(),
+        });
       });
+      productStream.on('error', () => setTimeout(startWatching, 5000));
 
     } catch (err) {
-      logger.error({ err }, '[BP] Failed to start change stream — run MongoDB as replica set or use Atlas');
+      logger.error({ err }, 'Change streams failed — run MongoDB as replica set or use Atlas');
       Sentry.captureException(err);
     }
   };
