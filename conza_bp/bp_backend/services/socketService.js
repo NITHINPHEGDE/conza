@@ -142,12 +142,21 @@ const watchChanges = () => {
           });
         }
 
-        // Notify booking-specific room (worker tracking screen)
+        // Notify booking-specific room (worker tracking screen + labour app)
         if (c.documentKey._id) {
           io.to(`booking_${bookingId}`).emit('booking_status_changed', {
             bookingId,
             status,
           });
+
+          // When the customer confirms completion (status → 'completed'),
+          // also emit job_completed_confirmed so the labour app's existing
+          // handler triggers the CompletionModal as a belt-and-suspenders fallback.
+          if (status === 'completed') {
+            io.to(`booking_${bookingId}`).emit('job_completed_confirmed', {
+              bookingId,
+            });
+          }
         }
       });
       bookingStream.on('error', () => setTimeout(startWatching, 5000));

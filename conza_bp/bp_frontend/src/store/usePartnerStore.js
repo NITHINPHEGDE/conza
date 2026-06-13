@@ -194,7 +194,20 @@ const usePartnerStore = create((set, get) => ({
     socket.on('booking_status_changed', (data) => {
       console.log('🔄 BP: Booking status changed:', data.status);
       if (get().activeJobId === data.bookingId) {
-        get().fetchActiveJob(data.bookingId);
+        // Apply status directly from the socket event to avoid hitting
+        // stale Redis cache in fetchActiveJob. This is the critical fix:
+        // when the customer confirms completion, status becomes 'completed'
+        // but fetchActiveJob would return cached 'awaiting_customer_confirmation'
+        // for up to 30 seconds, blocking the CompletionModal from showing.
+        if (data.status) {
+          set({ jobStatus: data.status });
+        }
+        // Background refetch for full document (address, amount, etc.)
+        // but only if NOT completed — once completed, activeJob data is already
+        // frozen and we don't want a stale cache response overwriting jobStatus.
+        if (data.status !== 'completed') {
+          get().fetchActiveJob(data.bookingId);
+        }
       }
     });
 
