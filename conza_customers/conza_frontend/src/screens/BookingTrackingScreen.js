@@ -8,13 +8,14 @@ import { socket } from '../utils/socket';
 
 const getStatusDisplay = (status) => {
   switch (status) {
-    case 'pending':     return { text: 'Waiting for response', color: '#F59E0B', icon: 'clock-outline' };
-    case 'accepted':    return { text: 'Waiting for arrival',  color: '#3B82F6', icon: 'car-side' };
-    case 'arrived':     return { text: 'Worker Arrived',       color: '#10B981', icon: 'account-check' };
-    case 'in_progress': return { text: 'Work in Progress',     color: '#6366F1', icon: 'hammer-wrench' };
-    case 'completed':   return { text: 'Work Completed',       color: '#6366F1', icon: 'check-circle' };
-    case 'cancelled':   return { text: 'Cancelled',            color: '#EF4444', icon: 'close-circle' };
-    default:            return { text: status,                 color: '#6B7280', icon: 'help-circle' };
+    case 'pending':                        return { text: 'Waiting for response',    color: '#F59E0B', icon: 'clock-outline'   };
+    case 'accepted':                       return { text: 'Waiting for arrival',     color: '#3B82F6', icon: 'car-side'        };
+    case 'arrived':                        return { text: 'Worker Arrived',          color: '#10B981', icon: 'account-check'   };
+    case 'in_progress':                    return { text: 'Work in Progress',        color: '#6366F1', icon: 'hammer-wrench'   };
+    case 'awaiting_customer_confirmation': return { text: 'Confirm Work Completion', color: '#F97316', icon: 'clipboard-check' };
+    case 'completed':                      return { text: 'Work Completed',          color: '#6366F1', icon: 'check-circle'    };
+    case 'cancelled':                      return { text: 'Cancelled',               color: '#EF4444', icon: 'close-circle'    };
+    default:                               return { text: status,                    color: '#6B7280', icon: 'help-circle'     };
   }
 };
 
@@ -39,14 +40,24 @@ const BookingTrackingScreen = ({ navigation }) => {
   const [issueComment, setIssueComment]       = useState('');
 
   // Join the booking-specific socket room so booking_status_changed events
-  // are received even if the customer room was not yet joined when status changed.
+  // are received. Re-join on reconnect to handle network interruptions.
   useEffect(() => {
-    if (activeBookingId) {
+    if (!activeBookingId) return;
+
+    socket.emit('join_booking', activeBookingId);
+
+    const handleReconnect = () => {
       socket.emit('join_booking', activeBookingId);
-    }
+    };
+    socket.on('connect', handleReconnect);
+
+    return () => {
+      socket.off('connect', handleReconnect);
+    };
   }, [activeBookingId]);
 
-  // Fallback polling at 30s — socket handles real-time; this catches any missed events
+  // Fallback polling at 30s — socket handles real-time; this catches any missed
+  // events (e.g. app was in background, network blip). This is existing architecture.
   useEffect(() => {
     let intervalId;
     if (activeBookingId && activeBooking?.status !== 'completed' && activeBooking?.status !== 'cancelled') {

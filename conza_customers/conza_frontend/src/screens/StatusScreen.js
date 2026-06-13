@@ -9,11 +9,12 @@ import { SkeletonList, BookingCardSkeleton } from '../components/Skeleton';
 
 const getStatusDisplay = (status) => {
   switch (status) {
-    case 'pending':     return { text: 'Waiting for response', color: '#F59E0B', icon: 'clock-outline' };
-    case 'accepted':    return { text: 'Worker on the way',    color: '#3B82F6', icon: 'car-side' };
-    case 'arrived':     return { text: 'Worker Arrived',       color: '#10B981', icon: 'account-check' };
-    case 'in_progress': return { text: 'Work in Progress',     color: '#6366F1', icon: 'hammer-wrench' };
-    default:            return { text: status,                 color: '#6B7280', icon: 'help-circle' };
+    case 'pending':                        return { text: 'Waiting for response',       color: '#F59E0B', icon: 'clock-outline'   };
+    case 'accepted':                       return { text: 'Worker on the way',          color: '#3B82F6', icon: 'car-side'        };
+    case 'arrived':                        return { text: 'Worker Arrived',             color: '#10B981', icon: 'account-check'   };
+    case 'in_progress':                    return { text: 'Work in Progress',           color: '#6366F1', icon: 'hammer-wrench'   };
+    case 'awaiting_customer_confirmation': return { text: 'Confirm Work Completion',    color: '#F97316', icon: 'clipboard-check' };
+    default:                               return { text: status,                       color: '#6B7280', icon: 'help-circle'     };
   }
 };
 

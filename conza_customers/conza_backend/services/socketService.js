@@ -52,7 +52,6 @@ const watchChanges = () => {
     try {
       const workerStream = db.collection('workers').watch([], { fullDocument: 'updateLookup' });
       workerStream.on('change', (c) => {
-        // Only customers actively browsing workers need this — they join workers_watch_room
         io.to('workers_watch_room').emit('worker_updated', {
           operationType: c.operationType,
           workerId:      c.documentKey._id.toString(),
@@ -63,26 +62,58 @@ const watchChanges = () => {
 
       const bookingStream = db.collection('bookings').watch([], { fullDocument: 'updateLookup' });
       bookingStream.on('change', (c) => {
-        const bookingId = c.documentKey._id.toString();
-        const status    = c.fullDocument?.status;
-        const userId    = c.fullDocument?.user?.toString();
+        const bookingId  = c.documentKey._id.toString();
+        const doc        = c.fullDocument;
+        const status     = doc?.status;
+        const userId     = doc?.user?.toString();
 
-        // Notify the specific customer who owns this booking
+        // Build a lightweight booking snapshot from the change stream document.
+        // This lets the customer store update local state instantly without
+        // making an HTTP round-trip that would hit a stale Redis cache.
+        const bookingSnapshot = doc ? {
+          _id:          bookingId,
+          status:       doc.status,
+          user:         doc.user?.toString(),
+          category:     doc.category,
+          area:         doc.area,
+          city:         doc.city,
+          total:        doc.total,
+          paymentMethod: doc.paymentMethod,
+          bookingType:  doc.bookingType,
+          workers:      doc.workers || [],
+          workerCancelled: doc.workerCancelled || false,
+          address:      doc.address,
+          latitude:     doc.latitude,
+          longitude:    doc.longitude,
+          subtotal:     doc.subtotal,
+          platformFee:  doc.platformFee,
+          createdAt:    doc.createdAt,
+          updatedAt:    doc.updatedAt,
+          acceptedAt:   doc.acceptedAt,
+          checkInTime:  doc.checkInTime,
+          checkOutTime: doc.checkOutTime,
+          issueReport:  doc.issueReport,
+        } : null;
+
+        // Notify the specific customer who owns this booking (StatusScreen list)
         if (userId) {
           io.to(`customer_${userId}`).emit('booking_updated', {
-            operationType: c.operationType,
+            operationType:   c.operationType,
             bookingId,
             status,
+            bookingSnapshot,
           });
         }
 
-        // Notify booking-specific room (worker tracking screen)
-        if (c.documentKey._id) {
-          io.to(`booking_${bookingId}`).emit('booking_status_changed', {
-            bookingId,
-            status,
-          });
-        }
+        // Notify booking-specific room (BookingTrackingScreen detail)
+        io.to(`booking_${bookingId}`).emit('booking_status_changed', {
+          bookingId,
+          status,
+          bookingSnapshot,
+          // Emit work_completion_requested inline so the customer tracking screen
+          // reacts immediately when labour marks work done — no separate event needed.
+          isWorkCompletion: status === 'awaiting_customer_confirmation',
+        });
       });
       bookingStream.on('error', () => setTimeout(startWatching, 5000));
 
@@ -104,7 +135,6 @@ const watchChanges = () => {
 
       const productStream = db.collection('products').watch([], { fullDocument: 'updateLookup' });
       productStream.on('change', (c) => {
-        // Only customers on the product listing screen need this
         io.to('products_room').emit('product_updated', {
           operationType: c.operationType,
           productId:     c.documentKey._id.toString(),

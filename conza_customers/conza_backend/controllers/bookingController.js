@@ -1,5 +1,6 @@
 const Redlock          = require('redlock');
 const { getRedis }     = require('../config/redis');
+
 const { withCache, invalidateCache } = require('../utils/cacheHelpers');
 const logger           = require('../utils/logger');
 
@@ -118,13 +119,15 @@ const createBooking = async (req, res) => {
     // Invalidate the user's booking list cache
     await invalidateCache(`bookings:user:${req.user._id}:*`).catch(() => {});
 
+    // Notify the customer's personal socket room (not broadcast to all)
     try {
       const { getIO } = require('../services/socketService');
       const io = getIO();
-      io.emit('booking_updated', {
-        operationType: 'insert',
-        bookingId:     booking._id.toString(),
-        status:        'pending',
+      io.to(`customer_${req.user._id}`).emit('booking_updated', {
+        operationType:   'insert',
+        bookingId:       booking._id.toString(),
+        status:          'pending',
+        bookingSnapshot: null, // new booking; store will refetch list
       });
     } catch (_) {}
 
@@ -198,8 +201,21 @@ const getMyBookings = async (req, res) => {
 const getBookingById = async (req, res) => {
   try {
     const bookingId = req.params.id;
-    const cacheKey  = `bookings:detail:${bookingId}`;
-    const TTL       = 30;
+
+    // When the client appends ?_cb=<timestamp>, bypass Redis cache entirely.
+    // This is used by the socket-triggered fetchActiveBooking to guarantee
+    // fresh data after a status change, without poisoning the cache for
+    // other callers (e.g. initial page loads) that still benefit from caching.
+    if (req.query._cb) {
+      const booking = await Booking.findOne({ _id: bookingId, user: req.user._id })
+        .populate('workers', 'fullName category profileImage rating phone bio')
+        .lean();
+      if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+      return res.json({ success: true, booking });
+    }
+
+    const cacheKey = `bookings:detail:${bookingId}`;
+    const TTL      = 30;
 
     const booking = await withCache(cacheKey, TTL, () =>
       Booking.findOne({ _id: bookingId, user: req.user._id })
@@ -238,14 +254,18 @@ const cancelBooking = async (req, res) => {
 
     try {
       const io = getIO();
-      io.emit('booking_updated', {
-        operationType: 'update',
-        bookingId:     booking._id,
-        status:        'cancelled',
+      // Target customer's personal room — do not broadcast to all sockets
+      io.to(`customer_${req.user._id}`).emit('booking_updated', {
+        operationType:   'update',
+        bookingId:       booking._id.toString(),
+        status:          'cancelled',
+        bookingSnapshot: null,
       });
       io.to(`booking_${booking._id}`).emit('booking_status_changed', {
-        bookingId: booking._id,
-        status:    'cancelled',
+        bookingId:       booking._id.toString(),
+        status:          'cancelled',
+        bookingSnapshot: null,
+        isWorkCompletion: false,
       });
     } catch (_) {}
 
@@ -283,19 +303,22 @@ const confirmCompletion = async (req, res) => {
 
     try {
       const io = getIO();
-      // Notify customer
-      io.emit('booking_updated', {
-        operationType: 'update',
-        bookingId:     booking._id,
-        status:        'completed',
+      // Notify customer's personal room
+      io.to(`customer_${req.user._id}`).emit('booking_updated', {
+        operationType:   'update',
+        bookingId:       booking._id.toString(),
+        status:          'completed',
+        bookingSnapshot: null,
       });
       io.to(`booking_${booking._id}`).emit('booking_status_changed', {
-        bookingId: booking._id,
-        status:    'completed',
+        bookingId:        booking._id.toString(),
+        status:           'completed',
+        bookingSnapshot:  null,
+        isWorkCompletion: false,
       });
-      // Notify workers
+      // Notify workers via their booking room
       booking.workers.forEach(wId => {
-        io.emit(`worker_${wId}`, { type: 'job_completed_confirmed', bookingId });
+        io.to(`booking_${bookingId}`).emit('job_completed_confirmed', { bookingId });
       });
     } catch (_) {}
 
@@ -332,10 +355,8 @@ const reportIssue = async (req, res) => {
 
     try {
       const io = getIO();
-      // Notify workers
-      booking.workers.forEach(wId => {
-        io.emit(`worker_${wId}`, { type: 'issue_reported', bookingId });
-      });
+      // Notify via booking room so the labour app (which is joined to booking_{id}) receives it
+      io.to(`booking_${bookingId}`).emit('issue_reported', { bookingId });
     } catch (_) {}
 
     res.json({ success: true, booking });
@@ -343,5 +364,4 @@ const reportIssue = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 module.exports = { createBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue };

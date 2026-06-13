@@ -97,8 +97,6 @@ const useAppStore = create((set, get) => ({
       newState.userLocationText = user.locationText || '';
     }
     set(newState);
-    // Join the customer-specific socket room so the backend can target
-    // booking_updated events directly to this user (customer_{userId})
     if (user?._id) {
       socket.emit('join_customer', user._id.toString());
     }
@@ -108,7 +106,7 @@ const useAppStore = create((set, get) => ({
     try {
       set({ profileLoading: true });
       const data = await authAPI.getMe();
-      get().setUserProfile(data.user);  // routes through setUserProfile so join_customer fires
+      get().setUserProfile(data.user);
     } catch {
       // Not logged in — ignore
     } finally {
@@ -129,7 +127,7 @@ const useAppStore = create((set, get) => ({
   labourCategories:  [],
   workersByCategory: {},
   allWorkers:        [],
-  labourLoading:     true,  // true by default so skeleton shows immediately on first render
+  labourLoading:     true,
   labourError:       null,
 
   fetchLabourData: async () => {
@@ -165,7 +163,6 @@ const useAppStore = create((set, get) => ({
     }
   },
 
-
   getWorkersByCategory: (category) => get().workersByCategory[category] || EMPTY_ARRAY,
 
   searchWorkers: async (query) => {
@@ -179,7 +176,7 @@ const useAppStore = create((set, get) => ({
     }
   },
 
-  // ── Materials (fetched from vendor backend via customer backend proxy) ─────────
+  // ── Materials ─────────────────────────────────────────────────────────────
   materials:       [],
   materialsLoading: false,
   materialsError:  null,
@@ -205,7 +202,6 @@ const useAppStore = create((set, get) => ({
           replaceable: false,
           returnPolicy: 'Contact seller for return policy.',
           replacementPolicy: 'Contact seller for replacement policy.',
-          // extra fields for cart/checkout
           sellerId:    p.seller?._id?.toString(),
           sellerPhone: p.seller?.phone,
           sellerCity:  p.seller?.city,
@@ -215,7 +211,6 @@ const useAppStore = create((set, get) => ({
         }));
         set({ materials: normalized });
       } else {
-        // Fall back to dummy data if no real products yet
         set({ materials: dummyMaterials });
       }
     } catch (err) {
@@ -237,7 +232,7 @@ const useAppStore = create((set, get) => ({
     );
   },
 
-  // ── Rental (fetched from vendor backend via customer backend proxy) ──────────
+  // ── Rental ──────────────────────────────────────────────────────────────
   rentalItems:      [],
   rentalCategories: [],
   rentalLoading:    false,
@@ -247,8 +242,7 @@ const useAppStore = create((set, get) => ({
     try {
       set({ rentalLoading: true, rentalError: null });
       const res  = await api.get('/products/public?type=rental&limit=100');
-const data = res.data;
-      
+      const data = res.data;
 
       if (data.success && data.products?.length) {
         const normalized = data.products.map((p) => ({
@@ -272,7 +266,6 @@ const data = res.data;
           specs:       [],
         }));
 
-        // Build dynamic category list from returned products
         const catSet = new Set(normalized.map((i) => i.category));
         const categories = [
           { id: 'all', label: 'All', emoji: '🏗️' },
@@ -285,7 +278,6 @@ const data = res.data;
 
         set({ rentalItems: normalized, rentalCategories: categories });
       } else {
-        // Fall back to dummy data
         set({ rentalItems: dummyRentalItems, rentalCategories: dummyRentalCategories });
       }
     } catch (err) {
@@ -314,7 +306,6 @@ const data = res.data;
     try {
       set({ projectsLoading: true });
       const data = await bookingAPI.getMyBookings();
-      // Map bookings → project shape the ProjectScreen expects
       const projects = (data.bookings || []).map((b) => ({
         id:        b._id,
         name:      b.category
@@ -329,15 +320,14 @@ const data = res.data;
         eta:       '—',
         workers:   b.workers?.length || 0,
         statusColor:
-  b.status === 'completed'   ? '#6366F1' :
-  b.status === 'awaiting_customer_confirmation' ? '#F59E0B' :
-  b.status === 'in_progress' ? '#F97316' :
-  b.status === 'arrived'     ? '#3B82F6' :
-  b.status === 'accepted'    ? '#22C55E' : '#94A3B8',
+          b.status === 'completed'   ? '#6366F1' :
+          b.status === 'awaiting_customer_confirmation' ? '#F59E0B' :
+          b.status === 'in_progress' ? '#F97316' :
+          b.status === 'arrived'     ? '#3B82F6' :
+          b.status === 'accepted'    ? '#22C55E' : '#94A3B8',
       }));
       set({ projects });
     } catch {
-      // Not logged in — fall back to dummy
       set({ projects: dummyProjects });
     } finally {
       set({ projectsLoading: false });
@@ -377,15 +367,21 @@ const data = res.data;
     if (id) get().fetchActiveBooking(id);
   },
 
+  // fetchActiveBooking bypasses Redis cache by appending a cache-busting timestamp.
+  // This ensures that socket-triggered refetches always get fresh data from MongoDB
+  // rather than a stale cached response.
   fetchActiveBooking: async (id) => {
     const bookingId = id || get().activeBookingId;
     if (!bookingId) return;
 
     try {
-      const data = await bookingAPI.getBookingById(bookingId);
+      // Use axiosInstance directly with a cache-bust param so the server
+      // handler skips withCache for this call.
+      const res = await api.get(`/bookings/${bookingId}?_cb=${Date.now()}`);
+      const data = res.data;
       if (data.success) {
         set({ activeBooking: data.booking });
-        // Join socket room for this booking
+        // Ensure we're in the booking socket room
         socket.emit('join_booking', bookingId);
       }
     } catch (err) {
@@ -451,7 +447,7 @@ const data = res.data;
   getCartItemCount: () =>
     Object.values(get().cart).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0),
 
-  // ── Seller Orders (material + rental) ───────────────────────────────────
+  // ── Seller Orders ───────────────────────────────────────────────────────
   sellerOrders:        [],
   sellerOrdersLoading: false,
 
@@ -481,23 +477,19 @@ const data = res.data;
     socket.off('worker_went_offline');
     socket.off('connect');
 
-    // ── Worker availability: real-time add/remove from list ────────────────
+    // ── Worker availability ────────────────────────────────────────────────
     socket.on('worker_availability_changed', (data) => {
       const { workerId, isOnline, isAvailable, category, worker } = data;
-
-      // Only act if availability is meaningful (worker is visible or just hid)
       if (!category) return;
 
       set((state) => {
         const current = state.workersByCategory[category] || EMPTY_ARRAY;
 
         if (isOnline && isAvailable !== false && worker) {
-          // Worker came online — add to list if not already present
           const alreadyPresent = current.some(
             (w) => w._id?.toString() === workerId || w.id?.toString() === workerId
           );
           if (alreadyPresent) {
-            // Update existing entry (e.g. profile image changed)
             return {
               workersByCategory: {
                 ...state.workersByCategory,
@@ -509,8 +501,6 @@ const data = res.data;
               },
             };
           }
-          // Append to list; distance is unknown from server without location —
-          // the entry still shows with the locationText placeholder from the payload.
           return {
             workersByCategory: {
               ...state.workersByCategory,
@@ -518,7 +508,6 @@ const data = res.data;
             },
           };
         } else {
-          // Worker went offline or became unavailable — remove from list
           return {
             workersByCategory: {
               ...state.workersByCategory,
@@ -530,11 +519,9 @@ const data = res.data;
         }
       });
 
-      // Also refresh category counts (the bubble numbers on the home screen)
       get().fetchLabourData();
     });
 
-    // Explicit offline event — immediate removal without waiting for field check
     socket.on('worker_went_offline', ({ workerId, category }) => {
       if (!category) return;
       set((state) => {
@@ -550,67 +537,96 @@ const data = res.data;
       });
     });
 
-    // ── Legacy worker_updated (kept for backwards compatibility) ────────────
-    socket.on('worker_updated', (data) => {
-      // Only used as a fallback; precise updates are handled by
-      // worker_availability_changed and worker_went_offline above.
-      // Refresh category counts in case a worker's profile changed.
+    socket.on('worker_updated', () => {
       get().fetchLabourData();
     });
 
+    // ── Booking status updates ─────────────────────────────────────────────
+    // booking_updated: fired by customer backend when a booking document changes.
+    // The event now includes bookingSnapshot so we can update local state
+    // immediately without an HTTP round-trip (which would hit stale Redis cache).
     socket.on('booking_updated', (data) => {
-      // Optimistically update status in the activeBookings list for instant UI
-      if (data.bookingId && data.status) {
-        set((s) => ({
-          activeBookings: s.activeBookings.map((b) =>
-            b._id?.toString() === data.bookingId?.toString()
-              ? { ...b, status: data.status }
-              : b
-          ),
-        }));
-      }
-      get().fetchProjects();
-      get().fetchActiveBookings();
-      if (get().activeBookingId === data.bookingId) {
-        get().fetchActiveBooking(data.bookingId);
-      }
-    });
+      const { bookingId, status, bookingSnapshot } = data;
 
-    socket.on('booking_status_changed', (data) => {
-      // Optimistically update status in the activeBookings list for instant UI
-      if (data.bookingId && data.status) {
+      if (bookingId && status) {
         set((s) => ({
+          // Update the status in the activeBookings list immediately
           activeBookings: s.activeBookings.map((b) =>
-            b._id?.toString() === data.bookingId?.toString()
-              ? { ...b, status: data.status }
+            b._id?.toString() === bookingId?.toString()
+              ? { ...b, status }
               : b
           ),
-          // Also update activeBooking detail if it matches
+          // Update the activeBooking detail object if it matches and we have a snapshot
           activeBooking:
-            s.activeBooking?._id?.toString() === data.bookingId?.toString()
-              ? { ...s.activeBooking, status: data.status }
+            s.activeBooking?._id?.toString() === bookingId?.toString()
+              ? bookingSnapshot
+                ? { ...s.activeBooking, ...bookingSnapshot, status }
+                : { ...s.activeBooking, status }
               : s.activeBooking,
         }));
       }
-      if (get().activeBookingId === data.bookingId) {
-        get().fetchActiveBooking(data.bookingId);
+
+      // Background HTTP refetch to get full populated document (workers, etc.)
+      // This runs after the optimistic update so the UI is already correct.
+      if (bookingId && get().activeBookingId?.toString() === bookingId?.toString()) {
+        get().fetchActiveBooking(bookingId);
+      }
+
+      // Refresh the list in the background for accurate filtering
+      get().fetchActiveBookings();
+      get().fetchProjects();
+    });
+
+    // booking_status_changed: fired to the booking_{id} room.
+    // Same treatment — apply snapshot immediately, then background-refetch.
+    socket.on('booking_status_changed', (data) => {
+      const { bookingId, status, bookingSnapshot, isWorkCompletion } = data;
+
+      if (bookingId && status) {
+        set((s) => ({
+          activeBookings: s.activeBookings.map((b) =>
+            b._id?.toString() === bookingId?.toString()
+              ? { ...b, status }
+              : b
+          ),
+          activeBooking:
+            s.activeBooking?._id?.toString() === bookingId?.toString()
+              ? bookingSnapshot
+                ? { ...s.activeBooking, ...bookingSnapshot, status }
+                : { ...s.activeBooking, status }
+              : s.activeBooking,
+        }));
+      }
+
+      // Background refetch for full populated booking detail
+      if (bookingId && get().activeBookingId?.toString() === bookingId?.toString()) {
+        get().fetchActiveBooking(bookingId);
       }
     });
 
-    // BP backend emits this when worker marks work done (awaiting_customer_confirmation)
+    // work_completion_requested: kept for backward compatibility with the BP backend
+    // which still emits this directly on its own socket server.
+    // On the customer backend side, isWorkCompletion flag in booking_status_changed
+    // carries this signal — but we keep this handler in case it ever arrives.
     socket.on('work_completion_requested', (data) => {
-      if (data.bookingId && get().activeBookingId === data.bookingId) {
-        get().fetchActiveBooking(data.bookingId);
-      }
-      // Also update list optimistically
-      if (data.bookingId) {
-        set((s) => ({
-          activeBookings: s.activeBookings.map((b) =>
-            b._id?.toString() === data.bookingId?.toString()
-              ? { ...b, status: 'awaiting_customer_confirmation' }
-              : b
-          ),
-        }));
+      const { bookingId } = data;
+      if (!bookingId) return;
+
+      // Optimistically set status to awaiting_customer_confirmation
+      set((s) => ({
+        activeBookings: s.activeBookings.map((b) =>
+          b._id?.toString() === bookingId?.toString()
+            ? { ...b, status: 'awaiting_customer_confirmation' }
+            : b
+        ),
+        activeBooking:
+          s.activeBooking?._id?.toString() === bookingId?.toString()
+            ? { ...s.activeBooking, status: 'awaiting_customer_confirmation' }
+            : s.activeBooking,
+      }));
+
+      if (get().activeBookingId?.toString() === bookingId?.toString()) {
+        get().fetchActiveBooking(bookingId);
       }
     });
 
@@ -624,22 +640,25 @@ const data = res.data;
       }));
     });
 
-    // Re-join workers_watch_room after reconnect so change-stream events keep flowing
+    // Re-join all rooms after reconnect
     socket.on('connect', () => {
       socket.emit('join_workers_watch');
-      // Re-join customer room on reconnect to restore targeted booking events
       const userId = get().userProfile?._id;
       if (userId) {
         socket.emit('join_customer', userId.toString());
       }
-      // Re-join active booking room on reconnect
       const activeBookingId = get().activeBookingId;
       if (activeBookingId) {
         socket.emit('join_booking', activeBookingId);
       }
+      // Refetch active bookings on reconnect to catch any events missed while disconnected
+      get().fetchActiveBookings();
+      if (activeBookingId) {
+        get().fetchActiveBooking(activeBookingId);
+      }
     });
 
-    // Join on initial connect as well (in case connect fired before handlers were set)
+    // Join on initial connect (in case connect fired before handlers were set)
     if (socket.connected) {
       socket.emit('join_workers_watch');
       const userId = get().userProfile?._id;
