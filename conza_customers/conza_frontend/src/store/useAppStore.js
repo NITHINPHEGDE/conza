@@ -91,6 +91,11 @@ const useAppStore = create((set, get) => ({
       newState.userLocationText = user.locationText || '';
     }
     set(newState);
+    // Join the customer-specific socket room so the backend can target
+    // booking_updated events directly to this user (customer_{userId})
+    if (user?._id) {
+      socket.emit('join_customer', user._id.toString());
+    }
   },
 
   fetchUserProfile: async () => {
@@ -118,7 +123,7 @@ const useAppStore = create((set, get) => ({
   labourCategories:  [],
   workersByCategory: {},
   allWorkers:        [],
-  labourLoading:     false,
+  labourLoading:     true,  // true by default so skeleton shows immediately on first render
   labourError:       null,
 
   fetchLabourData: async () => {
@@ -464,9 +469,11 @@ const data = res.data;
     // Remove all existing listeners before re-registering to prevent duplicates
     socket.off('booking_updated');
     socket.off('booking_status_changed');
+    socket.off('work_completion_requested');
     socket.off('worker_updated');
     socket.off('worker_availability_changed');
     socket.off('worker_went_offline');
+    socket.off('connect');
 
     // ── Worker availability: real-time add/remove from list ────────────────
     socket.on('worker_availability_changed', (data) => {
@@ -546,6 +553,16 @@ const data = res.data;
     });
 
     socket.on('booking_updated', (data) => {
+      // Optimistically update status in the activeBookings list for instant UI
+      if (data.bookingId && data.status) {
+        set((s) => ({
+          activeBookings: s.activeBookings.map((b) =>
+            b._id?.toString() === data.bookingId?.toString()
+              ? { ...b, status: data.status }
+              : b
+          ),
+        }));
+      }
       get().fetchProjects();
       get().fetchActiveBookings();
       if (get().activeBookingId === data.bookingId) {
@@ -554,8 +571,40 @@ const data = res.data;
     });
 
     socket.on('booking_status_changed', (data) => {
+      // Optimistically update status in the activeBookings list for instant UI
+      if (data.bookingId && data.status) {
+        set((s) => ({
+          activeBookings: s.activeBookings.map((b) =>
+            b._id?.toString() === data.bookingId?.toString()
+              ? { ...b, status: data.status }
+              : b
+          ),
+          // Also update activeBooking detail if it matches
+          activeBooking:
+            s.activeBooking?._id?.toString() === data.bookingId?.toString()
+              ? { ...s.activeBooking, status: data.status }
+              : s.activeBooking,
+        }));
+      }
       if (get().activeBookingId === data.bookingId) {
         get().fetchActiveBooking(data.bookingId);
+      }
+    });
+
+    // BP backend emits this when worker marks work done (awaiting_customer_confirmation)
+    socket.on('work_completion_requested', (data) => {
+      if (data.bookingId && get().activeBookingId === data.bookingId) {
+        get().fetchActiveBooking(data.bookingId);
+      }
+      // Also update list optimistically
+      if (data.bookingId) {
+        set((s) => ({
+          activeBookings: s.activeBookings.map((b) =>
+            b._id?.toString() === data.bookingId?.toString()
+              ? { ...b, status: 'awaiting_customer_confirmation' }
+              : b
+          ),
+        }));
       }
     });
 
@@ -572,11 +621,29 @@ const data = res.data;
     // Re-join workers_watch_room after reconnect so change-stream events keep flowing
     socket.on('connect', () => {
       socket.emit('join_workers_watch');
+      // Re-join customer room on reconnect to restore targeted booking events
+      const userId = get().userProfile?._id;
+      if (userId) {
+        socket.emit('join_customer', userId.toString());
+      }
+      // Re-join active booking room on reconnect
+      const activeBookingId = get().activeBookingId;
+      if (activeBookingId) {
+        socket.emit('join_booking', activeBookingId);
+      }
     });
 
     // Join on initial connect as well (in case connect fired before handlers were set)
     if (socket.connected) {
       socket.emit('join_workers_watch');
+      const userId = get().userProfile?._id;
+      if (userId) {
+        socket.emit('join_customer', userId.toString());
+      }
+      const activeBookingId = get().activeBookingId;
+      if (activeBookingId) {
+        socket.emit('join_booking', activeBookingId);
+      }
     }
   },
 }));

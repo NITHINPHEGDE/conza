@@ -4,6 +4,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
 import { bookingAPI } from '../api/bookingAPI';
 import { BookingTrackingSkeleton } from '../components/Skeleton';
+import { socket } from '../utils/socket';
 
 const getStatusDisplay = (status) => {
   switch (status) {
@@ -37,13 +38,21 @@ const BookingTrackingScreen = ({ navigation }) => {
   const [reportingIssue, setReportingIssue]   = useState(false);
   const [issueComment, setIssueComment]       = useState('');
 
-  // Setup 5s polling interval to ensure we don't miss status updates
+  // Join the booking-specific socket room so booking_status_changed events
+  // are received even if the customer room was not yet joined when status changed.
+  useEffect(() => {
+    if (activeBookingId) {
+      socket.emit('join_booking', activeBookingId);
+    }
+  }, [activeBookingId]);
+
+  // Fallback polling at 30s — socket handles real-time; this catches any missed events
   useEffect(() => {
     let intervalId;
     if (activeBookingId && activeBooking?.status !== 'completed' && activeBooking?.status !== 'cancelled') {
       intervalId = setInterval(() => {
         fetchActiveBooking(activeBookingId);
-      }, 5000);
+      }, 30000);
     }
     return () => {
       if (intervalId) clearInterval(intervalId);

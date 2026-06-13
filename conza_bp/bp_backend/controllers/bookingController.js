@@ -93,6 +93,28 @@ const updateBookingStatus = async (req, res) => {
       }
     }
 
+    // Emit standard booking_updated + booking_status_changed for all workflow transitions
+    // so the customer app (joined to customer_{userId} and booking_{id} rooms) updates instantly
+    if (['accepted', 'arrived', 'in_progress', 'cancelled'].includes(status)) {
+      try {
+        const { getIO } = require('../services/socketService');
+        const io = getIO();
+        // Notify customer's personal room (StatusScreen list updates)
+        io.to(`customer_${booking.user}`).emit('booking_updated', {
+          operationType: 'update',
+          bookingId,
+          status,
+        });
+        // Notify booking detail room (BookingTrackingScreen updates)
+        io.to(`booking_${bookingId}`).emit('booking_status_changed', {
+          bookingId,
+          status,
+        });
+      } catch (err) {
+        logger.error({ err }, 'Failed to emit booking status event');
+      }
+    }
+
     // Invalidate all paginated request/history cache pages for affected workers
     await Promise.allSettled(
       booking.workers.map((wId) =>
