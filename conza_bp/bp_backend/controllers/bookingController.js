@@ -115,7 +115,7 @@ const updateBookingStatus = async (req, res) => {
       }
     }
 
-    // Invalidate all paginated request/history cache pages for affected workers
+    // Invalidate worker-side cache (BP backend)
     await Promise.allSettled(
       booking.workers.map((wId) =>
         invalidateCache(
@@ -125,6 +125,13 @@ const updateBookingStatus = async (req, res) => {
         )
       )
     );
+
+    // Invalidate customer-side cache so fetchActiveBookings() returns
+    // fresh status instead of serving the stale cached value
+    await invalidateCache(
+      `bookings:user:${booking.user}:*`,
+      `bookings:detail:${bookingId}`
+    ).catch(() => {});
 
     logger.info({ bookingId, status }, 'Booking status updated');
     res.json({ success: true, booking });

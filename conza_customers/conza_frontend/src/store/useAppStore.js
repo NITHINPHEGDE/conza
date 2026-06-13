@@ -68,6 +68,12 @@ const useAppStore = create((set, get) => ({
     // 3. Finally fetch labour data (which needs lat/lng)
     await get().fetchLabourData();
 
+    // Guarantee join_customer after both socket and profile are ready
+    const userId = get().userProfile?._id;
+    if (userId) {
+      socket.emit('join_customer', userId.toString());
+    }
+
     // 4. Check for active booking in storage
     const activeId = await AsyncStorage.getItem('activeBookingId');
     if (activeId) {
@@ -102,7 +108,7 @@ const useAppStore = create((set, get) => ({
     try {
       set({ profileLoading: true });
       const data = await authAPI.getMe();
-      set({ userProfile: data.user });
+      get().setUserProfile(data.user);  // routes through setUserProfile so join_customer fires
     } catch {
       // Not logged in — ignore
     } finally {
