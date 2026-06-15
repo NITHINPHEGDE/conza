@@ -239,7 +239,7 @@ const getSavedAddresses = async (req, res) => {
 // ── POST /api/auth/addresses ───────────────────────────────────────────────────
 const addSavedAddress = async (req, res) => {
   try {
-    const { label, address, latitude, longitude, landmark } = req.body;
+    const { label, address, latitude, longitude, landmark, houseNo, building, street, area, city, district, state, pincode } = req.body;
 
     if (!label || !address || latitude == null || longitude == null) {
       return res.status(400).json({
@@ -258,6 +258,14 @@ const addSavedAddress = async (req, res) => {
             latitude:  parseFloat(latitude),
             longitude: parseFloat(longitude),
             landmark:  (landmark || '').trim(),
+            houseNo:   (houseNo || '').trim(),
+            building:  (building || '').trim(),
+            street:    (street || '').trim(),
+            area:      (area || '').trim(),
+            city:      (city || '').trim(),
+            district:  (district || '').trim(),
+            state:     (state || '').trim(),
+            pincode:   (pincode || '').trim(),
           },
         },
       },
@@ -278,7 +286,7 @@ const addSavedAddress = async (req, res) => {
 const updateSavedAddress = async (req, res) => {
   try {
     const { addressId } = req.params;
-    const { label, address, latitude, longitude, landmark } = req.body;
+    const { label, address, latitude, longitude, landmark, houseNo, building, street, area, city, district, state, pincode } = req.body;
 
     if (!label) {
       return res.status(400).json({ success: false, message: 'label is required' });
@@ -290,6 +298,14 @@ const updateSavedAddress = async (req, res) => {
     if (latitude  != null) updateFields['savedAddresses.$.latitude']  = parseFloat(latitude);
     if (longitude != null) updateFields['savedAddresses.$.longitude'] = parseFloat(longitude);
     if (landmark  != null) updateFields['savedAddresses.$.landmark']  = landmark.trim();
+    if (houseNo   != null) updateFields['savedAddresses.$.houseNo']   = houseNo.trim();
+    if (building  != null) updateFields['savedAddresses.$.building']  = building.trim();
+    if (street    != null) updateFields['savedAddresses.$.street']    = street.trim();
+    if (area      != null) updateFields['savedAddresses.$.area']      = area.trim();
+    if (city      != null) updateFields['savedAddresses.$.city']      = city.trim();
+    if (district  != null) updateFields['savedAddresses.$.district']  = district.trim();
+    if (state     != null) updateFields['savedAddresses.$.state']     = state.trim();
+    if (pincode   != null) updateFields['savedAddresses.$.pincode']   = pincode.trim();
 
     const user = await User.findOneAndUpdate(
       { _id: req.user._id, 'savedAddresses._id': addressId },

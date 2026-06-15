@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,23 +11,32 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import useAppStore from '../store/useAppStore';
-import { SavedAddressCardSkeleton } from './Skeleton';
-import { SkeletonList } from './Skeleton';
+import { SavedAddressCardSkeleton, SkeletonList } from './Skeleton';
 import { colors } from '../theme/colors';
+import { authAPI } from '../api/authAPI';
 
-// ── Label presets ─────────────────────────────────────────────────────────────
-const LABEL_PRESETS = ['Home', 'Work', 'Site', 'Other'];
+// ── Constants ─────────────────────────────────────────────────────────────────
+const LABEL_PRESETS = [
+  { key: 'Home', emoji: '🏠' },
+  { key: 'Work', emoji: '🏢' },
+  { key: 'Site', emoji: '🏗' },
+  { key: 'Other', emoji: '📍' },
+];
 
-// ── Single address row ────────────────────────────────────────────────────────
+const getEmoji = (label) => {
+  const found = LABEL_PRESETS.find((p) => p.key === label);
+  return found ? found.emoji : '📍';
+};
+
+// ── Address Row (list item) ───────────────────────────────────────────────────
 const AddressRow = React.memo(({ item, onSelect, onEdit, onDelete }) => (
   <View style={styles.addressRow}>
     <View style={styles.addressRowIcon}>
-      <Text style={styles.addressRowEmoji}>
-        {item.label === 'Home' ? '🏠' : item.label === 'Work' ? '💼' : item.label === 'Site' ? '🏗️' : '📍'}
-      </Text>
+      <Text style={styles.addressRowEmoji}>{getEmoji(item.label)}</Text>
     </View>
     <TouchableOpacity style={styles.addressRowBody} onPress={() => onSelect(item)} activeOpacity={0.7}>
       <Text style={styles.addressRowLabel}>{item.label}</Text>
@@ -47,159 +56,355 @@ const AddressRow = React.memo(({ item, onSelect, onEdit, onDelete }) => (
   </View>
 ));
 
-// ── Add / Edit sub-form ───────────────────────────────────────────────────────
+// ── Redesigned Add / Edit Form ────────────────────────────────────────────────
 const AddressForm = React.memo(({
   initial,
-  prefillAddress,
   prefillLat,
   prefillLng,
+  prefillAddress,
   onSave,
   onCancel,
   saving,
 }) => {
-  const [label,    setLabel]    = useState(initial?.label    || '');
-  const [address,  setAddress]  = useState(initial?.address  || prefillAddress || '');
-  const [landmark, setLandmark] = useState(initial?.landmark || '');
-  const [lat,      setLat]      = useState(
-    initial?.latitude  != null ? String(initial.latitude)  : (prefillLat  != null ? String(prefillLat)  : '')
+  // Internal lat/lng — stored but never shown
+  const latRef = useRef(
+    initial?.latitude  != null ? initial.latitude  :
+    prefillLat         != null ? prefillLat         : null
   );
-  const [lng,      setLng]      = useState(
-    initial?.longitude != null ? String(initial.longitude) : (prefillLng != null ? String(prefillLng) : '')
-  );
-  const [customLabel, setCustomLabel] = useState(
-    initial?.label && !LABEL_PRESETS.includes(initial.label) ? initial.label : ''
-  );
-  const [usingPreset, setUsingPreset] = useState(
-    LABEL_PRESETS.includes(initial?.label || '') ? (initial?.label || '') : (initial?.label ? '' : '')
+  const lngRef = useRef(
+    initial?.longitude != null ? initial.longitude :
+    prefillLng         != null ? prefillLng         : null
   );
 
-  const effectiveLabel = usingPreset || customLabel;
+  // Address type chip
+  const initialPreset = LABEL_PRESETS.find((p) => p.key === initial?.label)?.key || '';
+  const [selectedPreset, setSelectedPreset] = useState(initialPreset);
+  const [customLabel,    setCustomLabel]    = useState(
+    initial?.label && !LABEL_PRESETS.find((p) => p.key === initial.label) ? initial.label : ''
+  );
 
-  const handlePreset = useCallback((p) => {
-    setUsingPreset(p);
-    setCustomLabel('');
-    setLabel(p);
-  }, []);
+  // Address detail fields
+  const [houseNo,   setHouseNo]   = useState(initial?.houseNo   || '');
+  const [building,  setBuilding]  = useState(initial?.building  || '');
+  const [street,    setStreet]    = useState(initial?.street    || '');
+  const [area,      setArea]      = useState(initial?.area      || '');
+  const [landmark,  setLandmark]  = useState(initial?.landmark  || '');
 
-  const handleCustom = useCallback((v) => {
-    setUsingPreset('');
-    setCustomLabel(v);
-    setLabel(v);
-  }, []);
+  // Auto-filled read-only fields
+  const [city,     setCity]     = useState(initial?.city     || '');
+  const [district, setDistrict] = useState(initial?.district || '');
+  const [state,    setState]    = useState(initial?.state    || '');
+  const [pincode,  setPincode]  = useState(initial?.pincode  || '');
 
-  const handleSave = useCallback(() => {
-    const finalLabel = effectiveLabel.trim();
-    if (!finalLabel)        { Alert.alert('Required', 'Please choose or enter a label.'); return; }
-    if (!address.trim())    { Alert.alert('Required', 'Please enter the address.'); return; }
-    const parsedLat = parseFloat(lat);
-    const parsedLng = parseFloat(lng);
-    if (isNaN(parsedLat) || isNaN(parsedLng)) {
-      Alert.alert('Required', 'Latitude and longitude are required.');
+  // Geocode loading
+  const [geocodeLoading, setGeocodeLoading] = useState(false);
+
+  // Selected location display
+  const [locationDisplay, setLocationDisplay] = useState(
+    prefillAddress || initial?.address || ''
+  );
+
+  // Run reverse geocode on mount when we have coordinates
+  useEffect(() => {
+    const lat = latRef.current;
+    const lng = lngRef.current;
+    if (lat == null || lng == null) return;
+
+    // If editing an existing address with structured fields already populated, skip
+    if (initial?.city) {
+      setCity(initial.city || '');
+      setDistrict(initial.district || '');
+      setState(initial.state || '');
+      setPincode(initial.pincode || '');
+      setArea(initial.area || area);
+      setStreet(initial.street || street);
+      setHouseNo(initial.houseNo || houseNo);
+      setBuilding(initial.building || building);
       return;
     }
+
+    // Auto-fill from reverse geocode
+    (async () => {
+      setGeocodeLoading(true);
+      try {
+        const data = await authAPI.reverseGeocode(lat, lng);
+        if (data.success && data.address) {
+          const a = data.address;
+          setHouseNo((v)  => v || a.houseNumber || '');
+          setBuilding((v) => v || a.houseName   || '');
+          setStreet((v)   => v || a.street      || '');
+          setArea((v)     => v || a.area        || '');
+          setCity(a.city     || a.district || '');
+          setDistrict(a.district || '');
+          setState(a.state   || '');
+          setPincode(a.pincode || '');
+          setLocationDisplay(a.fullAddress || prefillAddress || '');
+        }
+      } catch (_) {
+        // Silently ignore — user can still fill manually
+      } finally {
+        setGeocodeLoading(false);
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const effectiveLabel = selectedPreset || customLabel.trim();
+
+  const handlePresetPress = useCallback((key) => {
+    setSelectedPreset(key);
+    setCustomLabel('');
+  }, []);
+
+  const handleCustomLabelChange = useCallback((v) => {
+    setSelectedPreset('');
+    setCustomLabel(v);
+  }, []);
+
+  const buildFullAddress = useCallback(() => {
+    return [houseNo.trim(), building.trim(), street.trim(), area.trim(), city.trim(), state.trim(), pincode.trim()]
+      .filter(Boolean)
+      .join(', ');
+  }, [houseNo, building, street, area, city, state, pincode]);
+
+  const handleSave = useCallback(() => {
+    const finalLabel = effectiveLabel;
+    if (!finalLabel) {
+      Alert.alert('Required', 'Please select or enter an address type.');
+      return;
+    }
+    if (!area.trim() && !street.trim() && !houseNo.trim()) {
+      Alert.alert('Required', 'Please enter at least a street or area.');
+      return;
+    }
+    if (latRef.current == null || lngRef.current == null) {
+      Alert.alert('Required', 'Location coordinates are missing. Please go back and pick a location first.');
+      return;
+    }
+
+    const fullAddress = buildFullAddress();
+
     onSave({
       label:     finalLabel,
-      address:   address.trim(),
-      latitude:  parsedLat,
-      longitude: parsedLng,
+      address:   fullAddress,
+      latitude:  latRef.current,
+      longitude: lngRef.current,
       landmark:  landmark.trim(),
+      // Extra structured fields stored internally for potential future use
+      houseNo:   houseNo.trim(),
+      building:  building.trim(),
+      street:    street.trim(),
+      area:      area.trim(),
+      city:      city.trim(),
+      district:  district.trim(),
+      state:     state.trim(),
+      pincode:   pincode.trim(),
     });
-  }, [effectiveLabel, address, lat, lng, landmark, onSave]);
+  }, [effectiveLabel, houseNo, building, street, area, landmark, city, district, state, pincode, buildFullAddress, onSave]);
+
+  const hasLocation = latRef.current != null && lngRef.current != null;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Text style={styles.formTitle}>{initial ? 'Edit Address' : 'Add Address'}</Text>
-
-      {/* Label presets */}
-      <Text style={styles.formLabel}>Label</Text>
-      <View style={styles.presetRow}>
-        {LABEL_PRESETS.map((p) => (
-          <TouchableOpacity
-            key={p}
-            style={[styles.presetBtn, usingPreset === p && styles.presetBtnActive]}
-            onPress={() => handlePreset(p)}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.presetText, usingPreset === p && styles.presetTextActive]}>{p}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <TextInput
-        style={styles.input}
-        placeholder="Or type custom label…"
-        placeholderTextColor={colors.textMuted}
-        value={customLabel}
-        onChangeText={handleCustom}
-        maxLength={30}
-      />
-
-      {/* Address */}
-      <Text style={styles.formLabel}>Full Address</Text>
-      <TextInput
-        style={[styles.input, styles.inputMultiline]}
-        placeholder="House / Building, Street, Area, City…"
-        placeholderTextColor={colors.textMuted}
-        value={address}
-        onChangeText={setAddress}
-        multiline
-        numberOfLines={3}
-      />
-
-      {/* Landmark (optional) */}
-      <Text style={styles.formLabel}>Landmark <Text style={styles.optionalTag}>(optional)</Text></Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Near school, beside park…"
-        placeholderTextColor={colors.textMuted}
-        value={landmark}
-        onChangeText={setLandmark}
-        maxLength={80}
-      />
-
-      {/* Coordinates — shown read-only when prefilled, editable otherwise */}
-      <View style={styles.coordRow}>
-        <View style={styles.coordField}>
-          <Text style={styles.formLabel}>Latitude</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. 12.9716"
-            placeholderTextColor={colors.textMuted}
-            value={lat}
-            onChangeText={setLat}
-            keyboardType="numeric"
-          />
-        </View>
-        <View style={styles.coordField}>
-          <Text style={styles.formLabel}>Longitude</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. 77.5946"
-            placeholderTextColor={colors.textMuted}
-            value={lng}
-            onChangeText={setLng}
-            keyboardType="numeric"
-          />
+      {/* Header */}
+      <View style={styles.formHeaderRow}>
+        <TouchableOpacity onPress={onCancel} style={styles.formBackBtn} activeOpacity={0.7}>
+          <Text style={styles.formBackIcon}>‹</Text>
+        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.formTitle}>Add New Address</Text>
+          <Text style={styles.formSubtitle}>Save an address for faster booking</Text>
         </View>
       </View>
 
-      {/* Actions */}
+      {/* ── Address Type Chips ── */}
+      <Text style={styles.sectionLabel}>Address Type</Text>
+      <View style={styles.chipRow}>
+        {LABEL_PRESETS.map(({ key, emoji }) => {
+          const active = selectedPreset === key;
+          return (
+            <TouchableOpacity
+              key={key}
+              style={[styles.chip, active && styles.chipActive]}
+              onPress={() => handlePresetPress(key)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.chipEmoji}>{emoji}</Text>
+              <Text style={[styles.chipText, active && styles.chipTextActive]}>{key}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Custom label (shown only when Other selected) */}
+      {selectedPreset === 'Other' && (
+        <TextInput
+          style={[styles.input, styles.inputSm]}
+          placeholder="Enter custom label…"
+          placeholderTextColor={colors.textMuted}
+          value={customLabel}
+          onChangeText={handleCustomLabelChange}
+          maxLength={30}
+          returnKeyType="done"
+        />
+      )}
+
+      {/* ── Location Card ── */}
+      <Text style={styles.sectionLabel}>Location</Text>
+      <View style={[styles.locationCard, !hasLocation && styles.locationCardEmpty]}>
+        <View style={styles.locationCardLeft}>
+          <Text style={styles.locationCardIcon}>📍</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.locationCardTitle}>
+              {hasLocation ? 'Selected Location' : 'No location selected'}
+            </Text>
+            {geocodeLoading ? (
+              <View style={styles.geocodeRow}>
+                <ActivityIndicator size="small" color={colors.accentAmber} style={{ marginRight: 6 }} />
+                <Text style={styles.geocodeLoadingText}>Fetching address…</Text>
+              </View>
+            ) : (
+              <Text style={styles.locationCardAddress} numberOfLines={2}>
+                {locationDisplay || (hasLocation ? `${latRef.current?.toFixed(4)}, ${lngRef.current?.toFixed(4)}` : 'Go back to pick a location')}
+              </Text>
+            )}
+          </View>
+        </View>
+      </View>
+
+      {/* ── Address Details ── */}
+      <Text style={styles.sectionLabel}>Address Details</Text>
+
+      <View style={styles.inputRow}>
+        <View style={[styles.inputWrap, { flex: 1 }]}>
+          <Text style={styles.inputLabel}>House / Flat No</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="A-101"
+            placeholderTextColor={colors.textMuted}
+            value={houseNo}
+            onChangeText={setHouseNo}
+            returnKeyType="next"
+          />
+        </View>
+        <View style={[styles.inputWrap, { flex: 1 }]}>
+          <Text style={styles.inputLabel}>Building Name</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Sunrise Apts"
+            placeholderTextColor={colors.textMuted}
+            value={building}
+            onChangeText={setBuilding}
+            returnKeyType="next"
+          />
+        </View>
+      </View>
+
+      <View style={styles.inputWrap}>
+        <Text style={styles.inputLabel}>Street / Road</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="MG Road"
+          placeholderTextColor={colors.textMuted}
+          value={street}
+          onChangeText={setStreet}
+          returnKeyType="next"
+        />
+      </View>
+
+      <View style={styles.inputWrap}>
+        <Text style={styles.inputLabel}>Area / Locality</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Koramangala"
+          placeholderTextColor={colors.textMuted}
+          value={area}
+          onChangeText={setArea}
+          returnKeyType="next"
+        />
+      </View>
+
+      <View style={styles.inputWrap}>
+        <Text style={styles.inputLabel}>
+          Landmark <Text style={styles.optionalTag}>(optional)</Text>
+        </Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Near bus stop, opposite park…"
+          placeholderTextColor={colors.textMuted}
+          value={landmark}
+          onChangeText={setLandmark}
+          maxLength={80}
+          returnKeyType="done"
+        />
+      </View>
+
+      {/* ── Auto-filled Section ── */}
+      {(city || district || state || pincode || geocodeLoading) ? (
+        <>
+          <Text style={styles.sectionLabel}>
+            Auto-filled Details
+            {geocodeLoading && (
+              <Text style={styles.autoFillNote}> · Loading…</Text>
+            )}
+          </Text>
+          <View style={styles.autoFillCard}>
+            <View style={styles.autoFillRow}>
+              <View style={styles.autoFillField}>
+                <Text style={styles.autoFillFieldLabel}>City</Text>
+                {geocodeLoading
+                  ? <View style={styles.autoFillSkeleton} />
+                  : <Text style={styles.autoFillFieldValue}>{city || '—'}</Text>
+                }
+              </View>
+              <View style={styles.autoFillDivider} />
+              <View style={styles.autoFillField}>
+                <Text style={styles.autoFillFieldLabel}>District</Text>
+                {geocodeLoading
+                  ? <View style={styles.autoFillSkeleton} />
+                  : <Text style={styles.autoFillFieldValue}>{district || '—'}</Text>
+                }
+              </View>
+            </View>
+            <View style={[styles.autoFillRow, { borderTopWidth: 1, borderTopColor: colors.border }]}>
+              <View style={styles.autoFillField}>
+                <Text style={styles.autoFillFieldLabel}>State</Text>
+                {geocodeLoading
+                  ? <View style={styles.autoFillSkeleton} />
+                  : <Text style={styles.autoFillFieldValue}>{state || '—'}</Text>
+                }
+              </View>
+              <View style={styles.autoFillDivider} />
+              <View style={styles.autoFillField}>
+                <Text style={styles.autoFillFieldLabel}>Pincode</Text>
+                {geocodeLoading
+                  ? <View style={styles.autoFillSkeleton} />
+                  : <Text style={styles.autoFillFieldValue}>{pincode || '—'}</Text>
+                }
+              </View>
+            </View>
+          </View>
+        </>
+      ) : null}
+
+      {/* ── Save Button ── */}
       <LinearGradient
         colors={[colors.gradientStart, colors.gradientEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.saveBtn}
       >
-        <TouchableOpacity style={styles.saveBtnTouch} onPress={handleSave} disabled={saving} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={styles.saveBtnTouch}
+          onPress={handleSave}
+          disabled={saving || geocodeLoading}
+          activeOpacity={0.85}
+        >
           {saving
-            ? <ActivityIndicator color="#000" />
-            : <Text style={styles.saveBtnText}>{initial ? 'Save Changes' : 'Add Address'}</Text>
+            ? <ActivityIndicator color={colors.black} />
+            : <Text style={styles.saveBtnText}>Save Address</Text>
           }
         </TouchableOpacity>
       </LinearGradient>
-
-      <TouchableOpacity onPress={onCancel} style={styles.cancelBtn} activeOpacity={0.7}>
-        <Text style={styles.cancelText}>Cancel</Text>
-      </TouchableOpacity>
     </KeyboardAvoidingView>
   );
 });
@@ -221,24 +426,16 @@ const SavedAddressSheet = ({
   const deleteSavedAddress    = useAppStore((s) => s.deleteSavedAddress);
   const userProfile           = useAppStore((s) => s.userProfile);
 
-  // 'list' | 'add' | 'edit'
   const [view,       setView]       = useState('list');
   const [editTarget, setEditTarget] = useState(null);
   const [saving,     setSaving]     = useState(false);
 
-  // Fetch on open (only if logged in and we haven't loaded yet or list is stale)
   useEffect(() => {
-    if (visible && userProfile) {
-      fetchSavedAddresses();
-    }
+    if (visible && userProfile) fetchSavedAddresses();
   }, [visible, userProfile]);
 
-  // Reset to list view on close
   useEffect(() => {
-    if (!visible) {
-      setView('list');
-      setEditTarget(null);
-    }
+    if (!visible) { setView('list'); setEditTarget(null); }
   }, [visible]);
 
   const handleSelect = useCallback((item) => {
@@ -258,32 +455,26 @@ const SavedAddressSheet = ({
     onClose?.();
   }, [currentLat, currentLng, currentAddress, onSelect, onClose]);
 
-  const handleSaveCurrentAsAddress = useCallback(() => {
-    setEditTarget(null);
-    setView('add');
-  }, []);
-
   const handleEdit = useCallback((item) => {
     setEditTarget(item);
     setView('edit');
   }, []);
 
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
   const handleDelete = useCallback((item) => {
-    Alert.alert(
-      'Delete Address',
-      `Remove "${item.label}" from saved addresses?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteSavedAddress(item._id?.toString() || item._id);
-          },
-        },
-      ]
-    );
-  }, [deleteSavedAddress]);
+    setDeleteTarget(item);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    const result = await deleteSavedAddress(deleteTarget._id?.toString() || deleteTarget._id);
+    setDeleteTarget(null);
+    if (result && !result.success) {
+      setDeleteTarget(null);
+      Alert.alert('Error', result.error || 'Could not delete address.');
+    }
+  }, [deleteTarget, deleteSavedAddress]);
 
   const handleAddSave = useCallback(async (fields) => {
     setSaving(true);
@@ -323,18 +514,51 @@ const SavedAddressSheet = ({
           {/* Handle */}
           <View style={styles.handle} />
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scrollContent}
+          >
+            {/* ── Delete Confirmation ── */}
+            {deleteTarget && (
+              <View style={styles.deleteConfirmCard}>
+                <Text style={styles.deleteConfirmText}>
+                  Remove "{deleteTarget.label}" from saved addresses?
+                </Text>
+                <View style={styles.deleteConfirmBtns}>
+                  <TouchableOpacity
+                    style={styles.deleteConfirmCancel}
+                    onPress={() => setDeleteTarget(null)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.deleteConfirmCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.deleteConfirmDelete}
+                    onPress={confirmDelete}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.deleteConfirmDeleteText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
             {/* ── List View ── */}
             {view === 'list' && (
               <>
                 <View style={styles.sheetHeader}>
                   <Text style={styles.sheetTitle}>Delivery Location</Text>
-                  <TouchableOpacity onPress={() => setView('add')} activeOpacity={0.7}>
+                  <TouchableOpacity
+                    onPress={() => { setEditTarget(null); setView('add'); }}
+                    activeOpacity={0.7}
+                    style={styles.addNewBtn}
+                  >
                     <Text style={styles.addNewText}>+ Add New</Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* Use current GPS location */}
+                {/* Current GPS */}
                 {hasCurrentLocation && (
                   <TouchableOpacity
                     style={styles.currentLocationRow}
@@ -356,18 +580,18 @@ const SavedAddressSheet = ({
                   </TouchableOpacity>
                 )}
 
-                {/* Save current as address shortcut */}
+                {/* Save current as shortcut */}
                 {hasCurrentLocation && (
                   <TouchableOpacity
                     style={styles.saveCurrentRow}
-                    onPress={handleSaveCurrentAsAddress}
+                    onPress={() => { setEditTarget(null); setView('add'); }}
                     activeOpacity={0.75}
                   >
                     <Text style={styles.saveCurrentText}>📌 Save current location as an address</Text>
                   </TouchableOpacity>
                 )}
 
-                {/* Saved addresses list */}
+                {/* Saved addresses */}
                 {savedAddressesLoading ? (
                   <View style={{ paddingTop: 8 }}>
                     <SkeletonList component={SavedAddressCardSkeleton} count={3} />
@@ -398,14 +622,9 @@ const SavedAddressSheet = ({
             {/* ── Add View ── */}
             {view === 'add' && (
               <AddressForm
-                initial={hasCurrentLocation ? {
-                  address:   currentAddress || '',
-                  latitude:  currentLat,
-                  longitude: currentLng,
-                } : undefined}
-                prefillAddress={currentAddress}
                 prefillLat={currentLat}
                 prefillLng={currentLng}
+                prefillAddress={currentAddress}
                 onSave={handleAddSave}
                 onCancel={() => setView('list')}
                 saving={saving}
@@ -416,6 +635,9 @@ const SavedAddressSheet = ({
             {view === 'edit' && editTarget && (
               <AddressForm
                 initial={editTarget}
+                prefillLat={editTarget.latitude}
+                prefillLng={editTarget.longitude}
+                prefillAddress={editTarget.address}
                 onSave={handleEditSave}
                 onCancel={() => { setView('list'); setEditTarget(null); }}
                 saving={saving}
@@ -428,6 +650,7 @@ const SavedAddressSheet = ({
   );
 };
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -441,7 +664,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 36,
-    maxHeight: '88%',
+    maxHeight: '92%',
+  },
+  scrollContent: {
+    paddingBottom: 12,
   },
   handle: {
     width: 40,
@@ -452,7 +678,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
-  // Header
+  // ── List header ──
   sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -464,13 +690,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.textPrimary,
   },
+  addNewBtn: {
+    backgroundColor: colors.accentYellowSoft,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: colors.accentYellow,
+  },
   addNewText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: colors.accentAmber,
   },
 
-  // Current location row
+  // ── Current location row ──
   currentLocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -501,7 +735,6 @@ const styles = StyleSheet.create({
   currentLocationSub: {
     fontSize: 12,
     color: colors.textSecondary,
-    fontWeight: '400',
   },
   useChip: {
     backgroundColor: colors.accentAmber,
@@ -514,8 +747,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.white,
   },
-
-  // Save current shortcut
   saveCurrentRow: {
     paddingVertical: 10,
     marginBottom: 14,
@@ -525,8 +756,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.accentAmber,
   },
-
-  // List section
   listSectionTitle: {
     fontSize: 11,
     fontWeight: '700',
@@ -536,7 +765,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  // Address row
+  // ── Address row ──
   addressRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -569,13 +798,11 @@ const styles = StyleSheet.create({
   addressRowText: {
     fontSize: 12,
     color: colors.textSecondary,
-    fontWeight: '400',
     lineHeight: 17,
   },
   addressRowLandmark: {
     fontSize: 11,
     color: colors.textMuted,
-    fontWeight: '400',
     marginTop: 2,
   },
   addressRowActions: {
@@ -594,7 +821,7 @@ const styles = StyleSheet.create({
   },
   addressActionIcon: { fontSize: 14 },
 
-  // Empty
+  // ── Empty state ──
   emptyState: {
     alignItems: 'center',
     paddingVertical: 40,
@@ -613,80 +840,214 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 
-  // Form
+  // ── Form ──
+  formHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 22,
+    gap: 12,
+  },
+  formBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 2,
+  },
+  formBackIcon: {
+    fontSize: 24,
+    color: colors.textPrimary,
+    lineHeight: 28,
+  },
   formTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: colors.textPrimary,
-    marginBottom: 20,
-    textAlign: 'center',
+    marginBottom: 2,
   },
-  formLabel: {
+  formSubtitle: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '400',
+  },
+
+  // chips
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+    flexWrap: 'wrap',
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+  },
+  chipActive: {
+    borderColor: colors.accentYellow,
+    backgroundColor: colors.accentYellowSoft,
+  },
+  chipEmoji: { fontSize: 15 },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  chipTextActive: {
+    color: colors.accentAmber,
+    fontWeight: '700',
+  },
+
+  // location card
+  locationCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 20,
+  },
+  locationCardEmpty: {
+    borderStyle: 'dashed',
+    borderColor: colors.textMuted,
+    backgroundColor: colors.surfaceElevated,
+  },
+  locationCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  locationCardIcon: { fontSize: 18, marginTop: 1 },
+  locationCardTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.textSecondary,
-    marginBottom: 6,
+    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  locationCardAddress: {
+    fontSize: 13,
+    color: colors.textPrimary,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  geocodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  geocodeLoadingText: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+
+  // inputs
+  inputRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 0,
+  },
+  inputWrap: {
+    marginBottom: 12,
+  },
+  inputLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 5,
+    letterSpacing: 0.2,
   },
   optionalTag: {
     fontSize: 11,
     fontWeight: '400',
     color: colors.textMuted,
-    textTransform: 'none',
-  },
-  presetRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-  },
-  presetBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
-  },
-  presetBtnActive: {
-    borderColor: colors.accentYellow,
-    backgroundColor: colors.accentYellowSoft,
-  },
-  presetText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  presetTextActive: {
-    color: colors.accentAmber,
   },
   input: {
     backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
     fontSize: 14,
     color: colors.textPrimary,
+  },
+  inputSm: {
     marginBottom: 14,
   },
-  inputMultiline: {
-    minHeight: 72,
-    textAlignVertical: 'top',
-  },
-  coordRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  coordField: { flex: 1 },
 
-  // Save button
+  // auto-fill card
+  autoFillCard: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  autoFillRow: {
+    flexDirection: 'row',
+  },
+  autoFillField: {
+    flex: 1,
+    padding: 12,
+  },
+  autoFillDivider: {
+    width: 1,
+    backgroundColor: colors.border,
+  },
+  autoFillFieldLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  autoFillFieldValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  autoFillNote: {
+    fontSize: 10,
+    fontWeight: '400',
+    color: colors.textMuted,
+    textTransform: 'none',
+  },
+  autoFillSkeleton: {
+    height: 14,
+    width: '70%',
+    borderRadius: 6,
+    backgroundColor: colors.border,
+  },
+
+  // save button
   saveBtn: {
     borderRadius: 14,
     overflow: 'hidden',
-    marginTop: 4,
-    marginBottom: 10,
+    marginTop: 8,
+    marginBottom: 4,
   },
   saveBtnTouch: {
     paddingVertical: 16,
@@ -698,14 +1059,50 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     letterSpacing: 0.3,
   },
-  cancelBtn: {
-    paddingVertical: 10,
+  deleteConfirmCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: colors.danger || '#EF4444',
+  },
+  deleteConfirmText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 14,
+    lineHeight: 20,
+  },
+  deleteConfirmBtns: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  deleteConfirmCancel: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    backgroundColor: colors.surfaceElevated,
+  },
+  deleteConfirmCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  deleteConfirmDelete: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: '#EF4444',
     alignItems: 'center',
   },
-  cancelText: {
+  deleteConfirmDeleteText: {
     fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
 

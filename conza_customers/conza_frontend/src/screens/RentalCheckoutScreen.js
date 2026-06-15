@@ -16,6 +16,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
 import { useBooking } from '../hooks/useBooking';
+import SavedAddressSheet from '../components/SavedAddressSheet';
 
 const PLATFORM_FEE_RATE = 0.05;
 const DELIVERY_FEE = 149;
@@ -68,11 +69,19 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
   const [state,       setState]       = useState('');
   const [pincode,     setPincode]     = useState('');
   const [paymentMethod, setPayment]   = useState('cod');
-  
+
   const [lat,         setLat]         = useState(null);
   const [lng,         setLng]         = useState(null);
   const [fetching,    setFetching]    = useState(false);
   const [description, setDescription] = useState('');
+
+  const [savedAddressSheetVisible, setSavedAddressSheetVisible] = useState(false);
+
+  const currentAddressDisplay = useMemo(() => {
+    return [houseNumber, houseName, street, area, city, state, pincode]
+      .filter(Boolean)
+      .join(', ') || null;
+  }, [houseNumber, houseName, street, area, city, state, pincode]);
 
   const { submitBooking, loading: submitting, error: submitError } = useBooking('rental');
 
@@ -118,6 +127,19 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
       setFetching(false);
     }
   };
+
+  const handleSavedAddressSelect = useCallback((item) => {
+    setHouseNumber(item.houseNo   || '');
+    setHouseName(item.building    || '');
+    setStreet(item.street         || '');
+    setArea(item.area             || '');
+    setCity(item.city             || '');
+    setDistrict(item.district     || '');
+    setState(item.state           || '');
+    setPincode(item.pincode       || '');
+    setLat(item.latitude          ?? null);
+    setLng(item.longitude         ?? null);
+  }, []);
 
   const handleConfirmRental = useCallback(async () => {
     const ok = await submitBooking({
@@ -193,8 +215,9 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📍  Delivery Address</Text>
 
-          <TouchableOpacity 
-            style={styles.fetchLocationBtn} 
+          {/* Auto Fetch */}
+          <TouchableOpacity
+            style={styles.fetchLocationBtn}
             onPress={handleAutoFetch}
             disabled={fetching}
             activeOpacity={0.8}
@@ -211,6 +234,16 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
                 <Text style={styles.fetchLocationArrow}>→</Text>
               </>
             )}
+          </TouchableOpacity>
+
+          {/* Use Saved Address */}
+          <TouchableOpacity
+            style={styles.savedAddressBtn}
+            activeOpacity={0.8}
+            onPress={() => setSavedAddressSheetVisible(true)}
+          >
+            <MaterialIcons name="bookmark-border" size={18} color={colors.textSecondary} />
+            <Text style={styles.savedAddressBtnText}>Use Saved Address</Text>
           </TouchableOpacity>
 
           <View style={styles.inputRow}>
@@ -380,6 +413,16 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
           <Text style={styles.submitError}>{submitError}</Text>
         )}
       </View>
+
+      {/* Saved Address Sheet */}
+      <SavedAddressSheet
+        visible={savedAddressSheetVisible}
+        onClose={() => setSavedAddressSheetVisible(false)}
+        onSelect={handleSavedAddressSelect}
+        currentLat={lat}
+        currentLng={lng}
+        currentAddress={currentAddressDisplay}
+      />
     </SafeAreaView>
   );
 };
@@ -452,7 +495,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentYellowSoft,
     borderRadius: 14,
     padding: 14,
-    marginBottom: 16,
+    marginBottom: 10,
     borderWidth: 1.5,
     borderColor: colors.accentYellow,
     gap: 12,
@@ -460,6 +503,26 @@ const styles = StyleSheet.create({
   fetchLocationText: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
   fetchLocationSub: { fontSize: 11, color: colors.textSecondary, fontWeight: '500' },
   fetchLocationArrow: { fontSize: 16, color: colors.accentAmber, fontWeight: '700' },
+
+  savedAddressBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+  },
+  savedAddressBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    letterSpacing: 0.2,
+  },
+
   inputLabel: {
     fontSize: 12,
     fontWeight: '600',

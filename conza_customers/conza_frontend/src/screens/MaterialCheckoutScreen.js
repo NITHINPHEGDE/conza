@@ -18,6 +18,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
 import { useBooking } from '../hooks/useBooking';
+import SavedAddressSheet from '../components/SavedAddressSheet';
 
 const PLATFORM_FEE_RATE = 0.05;
 const DELIVERY_FEE = 99;
@@ -89,17 +90,25 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
   const [state,       setState]       = useState('');
   const [pincode,     setPincode]     = useState('');
   const [paymentMethod, setPayment]   = useState('cod');
-  
+
   const [lat,         setLat]         = useState(null);
   const [lng,         setLng]         = useState(null);
   const [fetching,    setFetching]    = useState(false);
 
   const [description, setDescription] = useState('');
-  const [bookingType, setBookingType] = useState('immediate'); // 'immediate' or 'scheduled'
+  const [bookingType, setBookingType] = useState('immediate');
   const [scheduledDate, setScheduledDate] = useState(new Date());
   const [scheduledTime, setScheduledTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const [savedAddressSheetVisible, setSavedAddressSheetVisible] = useState(false);
+
+  const currentAddressDisplay = useMemo(() => {
+    return [houseNumber, houseName, street, area, city, state, pincode]
+      .filter(Boolean)
+      .join(', ') || null;
+  }, [houseNumber, houseName, street, area, city, state, pincode]);
 
   const { submitBooking, loading: submitting, error: submitError } = useBooking('material');
 
@@ -150,6 +159,19 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleSavedAddressSelect = useCallback((item) => {
+    setHouseNumber(item.houseNo   || '');
+    setHouseName(item.building    || '');
+    setStreet(item.street         || '');
+    setArea(item.area             || '');
+    setCity(item.city             || '');
+    setDistrict(item.district     || '');
+    setState(item.state           || '');
+    setPincode(item.pincode       || '');
+    setLat(item.latitude          ?? null);
+    setLng(item.longitude         ?? null);
+  }, []);
+
   const handleDateChange = (event, date) => {
     setShowDatePicker(Platform.OS === 'ios');
     if (date) {
@@ -175,16 +197,16 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
 
   const handlePlaceOrder = useCallback(async () => {
     const ok = await submitBooking({
-     items: cartItems.map(item => ({
-  id:       item.id,
-  name:     item.name,
-  price:    item.price,
-  quantity: cart[item.id] ?? item.quantity ?? 1,
-  image:    item.image,
-  seller:   item.seller,
-  sellerId: item.sellerId,
-  unit:     item.unit,
-})),
+      items: cartItems.map(item => ({
+        id:       item.id,
+        name:     item.name,
+        price:    item.price,
+        quantity: cart[item.id] ?? item.quantity ?? 1,
+        image:    item.image,
+        seller:   item.seller,
+        sellerId: item.sellerId,
+        unit:     item.unit,
+      })),
       subtotal,
       platformFee,
       total,
@@ -255,8 +277,9 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🚚  Delivery Address</Text>
 
-          <TouchableOpacity 
-            style={styles.fetchLocationBtn} 
+          {/* Auto Fetch */}
+          <TouchableOpacity
+            style={styles.fetchLocationBtn}
             onPress={handleAutoFetch}
             disabled={fetching}
             activeOpacity={0.8}
@@ -273,6 +296,16 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
                 <Text style={styles.fetchLocationArrow}>→</Text>
               </>
             )}
+          </TouchableOpacity>
+
+          {/* Use Saved Address */}
+          <TouchableOpacity
+            style={styles.savedAddressBtn}
+            activeOpacity={0.8}
+            onPress={() => setSavedAddressSheetVisible(true)}
+          >
+            <MaterialIcons name="bookmark-border" size={18} color={colors.textSecondary} />
+            <Text style={styles.savedAddressBtnText}>Use Saved Address</Text>
           </TouchableOpacity>
 
           <View style={styles.inputRow}>
@@ -388,13 +421,13 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
 
           <Text style={styles.inputLabel}>Booking Schedule</Text>
           <View style={styles.bookingTypeRow}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.typeBtn, bookingType === 'immediate' && styles.typeBtnActive]}
               onPress={() => setBookingType('immediate')}
             >
               <Text style={[styles.typeBtnText, bookingType === 'immediate' && styles.typeBtnTextActive]}>⚡ Immediate</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.typeBtn, bookingType === 'scheduled' && styles.typeBtnActive]}
               onPress={() => setBookingType('scheduled')}
             >
@@ -488,6 +521,16 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
           <Text style={styles.submitError}>{submitError}</Text>
         )}
       </View>
+
+      {/* Saved Address Sheet */}
+      <SavedAddressSheet
+        visible={savedAddressSheetVisible}
+        onClose={() => setSavedAddressSheetVisible(false)}
+        onSelect={handleSavedAddressSelect}
+        currentLat={lat}
+        currentLng={lng}
+        currentAddress={currentAddressDisplay}
+      />
     </SafeAreaView>
   );
 };
@@ -496,7 +539,6 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
 
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -520,7 +562,6 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: colors.borderLight },
   scroll: { paddingTop: 20, paddingHorizontal: 20 },
 
-  // Section
   section: {
     backgroundColor: colors.surface,
     borderRadius: 18,
@@ -546,7 +587,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 
-  // Material item row
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -597,14 +637,13 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
 
-  // Fetch location
   fetchLocationBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.accentYellowSoft,
     borderRadius: 14,
     padding: 14,
-    marginBottom: 16,
+    marginBottom: 10,
     borderWidth: 1.5,
     borderColor: colors.accentYellow,
     gap: 12,
@@ -626,7 +665,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Inputs
+  savedAddressBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+  },
+  savedAddressBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    letterSpacing: 0.2,
+  },
+
   inputLabel: {
     fontSize: 12,
     fontWeight: '600',
@@ -651,7 +708,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
 
-  // Payment
   paymentOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -697,7 +753,6 @@ const styles = StyleSheet.create({
   paymentLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
   paymentSub: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
 
-  // Bill
   billSection: {
     backgroundColor: colors.accentYellowSoft,
     borderRadius: 18,
@@ -722,7 +777,6 @@ const styles = StyleSheet.create({
   billTotalLabel: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
   billTotalValue: { fontSize: 18, fontWeight: '800', color: colors.accentAmber },
 
-  // Confirm
   confirmWrapper: {
     position: 'absolute',
     bottom: 0,

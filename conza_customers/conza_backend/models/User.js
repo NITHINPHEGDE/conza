@@ -4,13 +4,21 @@ const bcrypt   = require('bcryptjs');
 // ── Saved Address sub-document ─────────────────────────────────────────────────
 const savedAddressSchema = new mongoose.Schema(
   {
-    label:     { type: String, required: true, trim: true },   // "Home", "Work", custom
-    address:   { type: String, required: true, trim: true },   // full human-readable address
+    label:     { type: String, required: true, trim: true },
+    address:   { type: String, required: true, trim: true },
     latitude:  { type: Number, required: true },
     longitude: { type: Number, required: true },
-    landmark:  { type: String, default: '', trim: true },      // optional
+    landmark:  { type: String, default: '', trim: true },
+    houseNo:   { type: String, default: '', trim: true },
+    building:  { type: String, default: '', trim: true },
+    street:    { type: String, default: '', trim: true },
+    area:      { type: String, default: '', trim: true },
+    city:      { type: String, default: '', trim: true },
+    district:  { type: String, default: '', trim: true },
+    state:     { type: String, default: '', trim: true },
+    pincode:   { type: String, default: '', trim: true },
   },
-  { timestamps: true }                                         // adds createdAt + updatedAt
+  { timestamps: true }
 );
 
 const userSchema = new mongoose.Schema(

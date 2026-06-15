@@ -10,7 +10,6 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
-  Linking,
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +19,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
 import { useBooking } from '../hooks/useBooking';
+import SavedAddressSheet from '../components/SavedAddressSheet';
 
 const PLATFORM_FEE_RATE = 0.05;
 
@@ -44,7 +44,6 @@ const PAYMENT_METHODS = [
   },
 ];
 
-// ─── Selected Worker Row ──────────────────────────────────────────────────────
 const WorkerRow = React.memo(({ worker }) => (
   <View style={styles.workerRow}>
     <LinearGradient
@@ -67,7 +66,6 @@ const WorkerRow = React.memo(({ worker }) => (
   </View>
 ));
 
-// ─── Payment Method Option ────────────────────────────────────────────────────
 const PaymentOption = React.memo(({ method, selected, onSelect }) => {
   const handlePress = useCallback(() => {
     onSelect(method.id);
@@ -93,7 +91,27 @@ const PaymentOption = React.memo(({ method, selected, onSelect }) => {
   );
 });
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+const SelectedAddressCard = React.memo(({ address, onClear }) => {
+  if (!address) return null;
+  return (
+    <View style={styles.selectedAddressCard}>
+      <View style={styles.selectedAddressCardLeft}>
+        <Text style={styles.selectedAddressCardEmoji}>📍</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.selectedAddressCardLabel}>{address.label || 'Saved Address'}</Text>
+          <Text style={styles.selectedAddressCardText} numberOfLines={2}>{address.address}</Text>
+          {!!address.landmark && (
+            <Text style={styles.selectedAddressCardLandmark}>Near: {address.landmark}</Text>
+          )}
+        </View>
+      </View>
+      <TouchableOpacity onPress={onClear} activeOpacity={0.7} style={styles.selectedAddressClearBtn}>
+        <Text style={styles.selectedAddressClearText}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
+
 const LabourCheckoutScreen = ({ route, navigation }) => {
   const { selectedWorkers = [], category = '' } = route.params || {};
 
@@ -106,17 +124,26 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const [state,       setState]       = useState('');
   const [pincode,     setPincode]     = useState('');
   const [paymentMethod, setPayment]   = useState('cod');
-  
+
   const [lat,         setLat]         = useState(null);
   const [lng,         setLng]         = useState(null);
   const [fetching,    setFetching]    = useState(false);
 
   const [description, setDescription] = useState('');
-  const [bookingType, setBookingType] = useState('immediate'); // 'immediate' or 'scheduled'
+  const [bookingType, setBookingType] = useState('immediate');
   const [scheduledDate, setScheduledDate] = useState(new Date());
   const [scheduledTime, setScheduledTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const [savedAddressSheetVisible, setSavedAddressSheetVisible] = useState(false);
+  const [selectedSavedAddress, setSelectedSavedAddress] = useState(null);
+
+  const currentAddressDisplay = useMemo(() => {
+    return [houseNumber, houseName, street, area, city, state, pincode]
+      .filter(Boolean)
+      .join(', ') || null;
+  }, [houseNumber, houseName, street, area, city, state, pincode]);
 
   const { submitBooking, loading: submitting, error: submitError } = useBooking('labour');
 
@@ -131,43 +158,71 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
 
   const handleAutoFetch = async () => {
-  try {
-    setFetching(true);
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Location permission is required to autofill address.');
-      return;
+    try {
+      setFetching(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required to autofill address.');
+        return;
+      }
+
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const place = await reverseGeocodeFullAddress(
+        pos.coords.latitude,
+        pos.coords.longitude,
+      );
+
+      if (place) {
+        setHouseNumber(place.houseNumber);
+        setHouseName(place.houseName);
+        setStreet(place.street);
+        setArea(place.area);
+        setCity(place.city);
+        setDistrict(place.district);
+        setState(place.state);
+        setPincode(place.pincode);
+      }
+
+      setLat(pos.coords.latitude);
+      setLng(pos.coords.longitude);
+      setSelectedSavedAddress(null);
+    } catch {
+      Alert.alert('Error', 'Could not fetch location. Please enter manually.');
+    } finally {
+      setFetching(false);
     }
+  };
 
-    const pos = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
+  const handleSavedAddressSelect = useCallback((item) => {
+    setSelectedSavedAddress(item);
+    setHouseNumber(item.houseNo   || '');
+    setHouseName(item.building    || '');
+    setStreet(item.street         || '');
+    setArea(item.area             || '');
+    setCity(item.city             || '');
+    setDistrict(item.district     || '');
+    setState(item.state           || '');
+    setPincode(item.pincode       || '');
+    setLat(item.latitude          ?? null);
+    setLng(item.longitude         ?? null);
+  }, []);
 
-    // Use Mappls for accurate Indian address breakdown
-    const place = await reverseGeocodeFullAddress(
-      pos.coords.latitude,
-      pos.coords.longitude,
-    );
-
-    if (place) {
-      setHouseNumber(place.houseNumber);
-      setHouseName(place.houseName);
-      setStreet(place.street);
-      setArea(place.area);
-      setCity(place.city);
-      setDistrict(place.district);
-      setState(place.state);
-      setPincode(place.pincode);
-    }
-
-    setLat(pos.coords.latitude);
-    setLng(pos.coords.longitude);
-  } catch {
-    Alert.alert('Error', 'Could not fetch location. Please enter manually.');
-  } finally {
-    setFetching(false);
-  }
-};
+  const handleClearSavedAddress = useCallback(() => {
+    setSelectedSavedAddress(null);
+    setHouseNumber('');
+    setHouseName('');
+    setStreet('');
+    setArea('');
+    setCity('');
+    setDistrict('');
+    setState('');
+    setPincode('');
+    setLat(null);
+    setLng(null);
+  }, []);
 
   const combinedScheduledDate = useMemo(() => {
     const d = new Date(scheduledDate);
@@ -224,7 +279,6 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -243,7 +297,6 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-        {/* Selected Workers */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Selected Workers</Text>
           {selectedWorkers.map((worker) => (
@@ -251,7 +304,6 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
           ))}
         </View>
 
-        {/* Work Location */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📍  Work Location</Text>
           {showDatePicker && (
@@ -272,20 +324,34 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
             />
           )}
 
-          <TouchableOpacity 
-            style={styles.autoFetchBtn} 
-            onPress={handleAutoFetch} 
+          <SelectedAddressCard
+            address={selectedSavedAddress}
+            onClear={handleClearSavedAddress}
+          />
+
+          <TouchableOpacity
+            style={styles.autoFetchBtn}
+            onPress={handleAutoFetch}
             disabled={fetching}
             activeOpacity={0.8}
           >
             {fetching ? (
-              <ActivityIndicator size="small" color={colors.accentGreen} />
+              <ActivityIndicator size="small" color={colors.accentAmber} />
             ) : (
               <>
-                <MaterialIcons name="my-location" size={20} color={colors.accentGreen} />
+                <MaterialIcons name="my-location" size={20} color={colors.accentAmber} />
                 <Text style={styles.autoFetchText}>Autofetch My Location</Text>
               </>
             )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.savedAddressBtn}
+            activeOpacity={0.8}
+            onPress={() => setSavedAddressSheetVisible(true)}
+          >
+            <MaterialIcons name="bookmark-border" size={18} color={colors.accentAmber} />
+            <Text style={styles.savedAddressBtnText}>Use Saved Address</Text>
           </TouchableOpacity>
 
           <View style={styles.inputRow}>
@@ -383,13 +449,13 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
 
           <Text style={styles.inputLabel}>Booking Schedule</Text>
           <View style={styles.bookingTypeRow}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.typeBtn, bookingType === 'immediate' && styles.typeBtnActive]}
               onPress={() => setBookingType('immediate')}
             >
               <Text style={[styles.typeBtnText, bookingType === 'immediate' && styles.typeBtnTextActive]}>⚡ Immediate</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.typeBtn, bookingType === 'scheduled' && styles.typeBtnActive]}
               onPress={() => setBookingType('scheduled')}
             >
@@ -422,7 +488,6 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
           />
         </View>
 
-        {/* Payment Method */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
           {PAYMENT_METHODS.map((method) => (
@@ -435,7 +500,6 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
           ))}
         </View>
 
-        {/* Bill Summary */}
         <View style={styles.billSection}>
           <View style={styles.billRow}>
             <Text style={styles.billLabel}>
@@ -457,7 +521,6 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Confirm Button */}
       <View style={styles.confirmWrapper}>
         <LinearGradient
           colors={[colors.gradientStart, colors.gradientEnd]}
@@ -481,15 +544,22 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
           <Text style={styles.submitError}>{submitError}</Text>
         )}
       </View>
+
+      <SavedAddressSheet
+        visible={savedAddressSheetVisible}
+        onClose={() => setSavedAddressSheetVisible(false)}
+        onSelect={handleSavedAddressSelect}
+        currentLat={lat}
+        currentLng={lng}
+        currentAddress={currentAddressDisplay}
+      />
     </SafeAreaView>
   );
 };
 
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
 
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -514,7 +584,6 @@ const styles = StyleSheet.create({
 
   scroll: { paddingTop: 20, paddingHorizontal: 20 },
 
-  // Section card
   section: {
     backgroundColor: colors.surface,
     borderRadius: 18,
@@ -536,7 +605,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
 
-  // Worker row
   workerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -563,21 +631,92 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accentGreenSoft,
+    backgroundColor: colors.accentYellowSoft,
     borderRadius: 14,
     padding: 14,
-    marginBottom: 16,
+    marginBottom: 10,
     borderWidth: 1.5,
-    borderColor: colors.accentGreen,
+    borderColor: colors.accentYellow,
     gap: 10,
   },
   autoFetchText: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.accentGreen,
+    color: colors.accentAmber,
   },
 
-  // Inputs
+  savedAddressBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+  },
+  savedAddressBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    letterSpacing: 0.2,
+  },
+
+  selectedAddressCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.accentYellowSoft,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: colors.accentYellow,
+    gap: 10,
+  },
+  selectedAddressCardLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  selectedAddressCardEmoji: { fontSize: 20, marginTop: 1 },
+  selectedAddressCardLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.accentAmber,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 3,
+  },
+  selectedAddressCardText: {
+    fontSize: 13,
+    color: colors.textPrimary,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  selectedAddressCardLandmark: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  selectedAddressClearBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  selectedAddressClearText: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '700',
+  },
+
   inputLabel: {
     fontSize: 12,
     fontWeight: '600',
@@ -602,7 +741,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
 
-  // Payment
   paymentOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -650,7 +788,6 @@ const styles = StyleSheet.create({
   paymentLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
   paymentSub: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
 
-  // Bill
   billSection: {
     backgroundColor: colors.accentYellowSoft,
     borderRadius: 18,
@@ -675,7 +812,6 @@ const styles = StyleSheet.create({
   billTotalLabel: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
   billTotalValue: { fontSize: 18, fontWeight: '800', color: colors.accentAmber },
 
-  // Confirm
   confirmWrapper: {
     position: 'absolute',
     bottom: 0,

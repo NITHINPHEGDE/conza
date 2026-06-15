@@ -149,10 +149,10 @@ const useAppStore = create((set, get) => ({
     }
   },
 
-  addSavedAddress: async ({ label, address, latitude, longitude, landmark }) => {
+  addSavedAddress: async ({ label, address, latitude, longitude, landmark, houseNo, building, street, area, city, district, state, pincode }) => {
     try {
       set({ savedAddressesLoading: true, savedAddressesError: null });
-      const data = await authAPI.addSavedAddress({ label, address, latitude, longitude, landmark });
+      const data = await authAPI.addSavedAddress({ label, address, latitude, longitude, landmark, houseNo, building, street, area, city, district, state, pincode });
       set({ savedAddresses: data.addresses || [] });
       return { success: true, address: data.address };
     } catch (err) {
