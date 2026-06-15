@@ -1,12 +1,18 @@
 {
   "expo": {
-    "name": "conza_frontend",
+    "name": "Conzaa",
     "slug": "conza_frontend",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "conzafrontend",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
       "supportsTablet": true
     },

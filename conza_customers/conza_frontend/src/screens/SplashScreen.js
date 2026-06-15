@@ -1,12 +1,16 @@
 import React from 'react';
-import { View, ActivityIndicator, StyleSheet, Image, Text } from 'react-native';
-import { colors } from '../theme/colors';
+import { View, Image, StyleSheet, Dimensions } from 'react-native';
+
+const { width, height } = Dimensions.get('window');
 
 const SplashScreen = () => {
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={colors.accentAmber} />
-      <Text style={styles.text}>Loading Conza...</Text>
+      <Image
+        source={require('../../assets/splash.png')}
+        style={styles.image}
+        resizeMode="cover"
+      />
     </View>
   );
 };
@@ -14,15 +18,11 @@ const SplashScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#ffffff',
   },
-  text: {
-    marginTop: 20,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
+  image: {
+    width,
+    height,
   },
 });
 
