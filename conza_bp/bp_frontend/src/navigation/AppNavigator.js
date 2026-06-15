@@ -18,6 +18,7 @@ import PaymentScreen        from '../screens/PaymentScreen';
 import AuthLandingScreen    from '../screens/auth/AuthLandingScreen';
 import LoginScreen          from '../screens/auth/LoginScreen';
 import SignUpScreen         from '../screens/auth/SignUpScreen';
+import HelpFAQScreen      from '../screens/HelpFAQScreen';
 
 import usePartnerStore, { selectActiveJob, selectJobStatus } from '../store/usePartnerStore';
 import { getLoggedInUser } from '../services/authService';
@@ -111,6 +112,7 @@ const MainAppStack = () => (
     <Stack.Screen name="Tabs"           component={MainTabs}             />
     <Stack.Screen name="RequestDetails" component={RequestDetailsScreen} options={CARD_OPTS} />
     <Stack.Screen name="ActiveJob"      component={ActiveJobScreen}      options={CARD_OPTS} />
+    <Stack.Screen name="HelpFAQ"        component={HelpFAQScreen}        options={CARD_OPTS} />
   </Stack.Navigator>
 );
 

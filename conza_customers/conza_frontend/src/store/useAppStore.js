@@ -414,6 +414,34 @@ const useAppStore = create((set, get) => ({
     }
   },
 
+  // ── Completed Orders ────────────────────────────────────────────────────────
+  completedOrders:        [],
+  derivedCompletedCount:  null,
+  derivedActiveSitesCount: null,
+  completedOrdersLoading: false,
+
+  fetchCompletedOrders: async () => {
+    try {
+      set({ completedOrdersLoading: true });
+      const data = await bookingAPI.getMyBookings();
+      const allBookings = data.bookings || [];
+      const completed = allBookings.filter((b) => b.status === 'completed');
+      const active = allBookings.filter(
+        (b) => !['completed', 'cancelled'].includes(b.status)
+      );
+      set({
+        completedOrders: completed,
+        derivedCompletedCount: completed.length,
+        derivedActiveSitesCount: active.length,
+      });
+    } catch (err) {
+      console.error('fetchCompletedOrders error:', err.message);
+      set({ completedOrders: [] });
+    } finally {
+      set({ completedOrdersLoading: false });
+    }
+  },
+
   // ── Active Booking Tracking ────────────────────────────────────────────────
   activeBookingId: null,
   activeBooking:   null,

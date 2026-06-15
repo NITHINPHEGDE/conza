@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Linking,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,6 +19,8 @@ import { SectionLoader } from '../components/LoadingState';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 import SavedAddressSheet from '../components/SavedAddressSheet';
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 const StatCard = React.memo(({ value, label }) => (
   <View style={styles.statCard}>
@@ -38,32 +42,219 @@ const MenuItem = React.memo(({ icon, label, sub, danger, onPress }) => (
   </TouchableOpacity>
 ));
 
+// ── FAQ data ──────────────────────────────────────────────────────────────────
+
+const FAQ_SECTIONS = [
+  {
+    title: 'Booking',
+    icon: '📅',
+    items: [
+      { q: 'How do I book a service?', a: 'Go to the Home tab, select a service category (Labour, Materials, or Rental), choose your provider, and follow the checkout steps.' },
+      { q: 'How do I track my booking?', a: 'Open the Status tab to see all active bookings and their real-time status updates.' },
+      { q: 'Can I cancel a booking?', a: 'Yes. Open the Status tab, tap on your active booking, and use the Cancel option. Cancellations are only allowed before the worker has started.' },
+      { q: 'What happens after booking confirmation?', a: 'You will receive a real-time status update when the worker accepts and travels to your location.' },
+    ],
+  },
+  {
+    title: 'Orders',
+    icon: '📋',
+    items: [
+      { q: 'Where can I see completed orders?', a: 'Tap My Orders in your Profile. It shows all bookings and orders that have been successfully completed.' },
+      { q: 'How do I view booking details?', a: 'Tap any order in My Orders to see full details including date, service, location, and status history.' },
+    ],
+  },
+  {
+    title: 'Payments',
+    icon: '💳',
+    items: [
+      { q: 'When am I charged?', a: 'Payment is collected at checkout before the booking is confirmed. For labour bookings, the amount is agreed upon before work begins.' },
+      { q: 'What if payment succeeds but booking fails?', a: 'In such cases, your payment will be automatically refunded within 5–7 business days. Contact support if it takes longer.' },
+    ],
+  },
+  {
+    title: 'Addresses',
+    icon: '📍',
+    items: [
+      { q: 'How do saved addresses work?', a: 'Saved addresses let you quickly select a delivery or service location at checkout without re-entering your address every time.' },
+      { q: 'Can I edit or delete saved addresses?', a: 'Yes. Go to Saved Addresses in your Profile to add, edit, or remove any address.' },
+    ],
+  },
+  {
+    title: 'Account',
+    icon: '👤',
+    items: [
+      { q: 'How do I update my profile?', a: 'Tap Edit Profile on your Profile page to update your name, email, or location.' },
+      { q: 'How do I contact support?', a: 'Use the Chat With Us option in your Profile to send us a support email directly.' },
+    ],
+  },
+];
+
+// ── Orders Modal ──────────────────────────────────────────────────────────────
+
+const OrdersModal = React.memo(({ visible, onClose }) => {
+  const completedOrders        = useAppStore((s) => s.completedOrders);
+  const completedOrdersLoading = useAppStore((s) => s.completedOrdersLoading);
+  const fetchCompletedOrders   = useAppStore((s) => s.fetchCompletedOrders);
+
+  React.useEffect(() => {
+    if (visible) fetchCompletedOrders();
+  }, [visible]);
+
+  const formatLabel = (b) => {
+    if (b.category) return `${b.category} Booking`;
+    if (b.bookingType === 'material') return 'Material Order';
+    if (b.bookingType === 'rental')   return 'Equipment Rental';
+    return 'Booking';
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { maxHeight: '80%' }]}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>My Orders</Text>
+          {completedOrdersLoading ? (
+            <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 32 }} />
+          ) : completedOrders.length === 0 ? (
+            <View style={styles.emptyOrders}>
+              <Text style={styles.emptyOrdersIcon}>📭</Text>
+              <Text style={styles.emptyOrdersText}>No completed orders yet</Text>
+              <Text style={styles.emptyOrdersSub}>Your finished bookings and orders will appear here.</Text>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {completedOrders.map((b) => (
+                <View key={b._id} style={styles.orderCard}>
+                  <View style={styles.orderCardTop}>
+                    <Text style={styles.orderLabel}>{formatLabel(b)}</Text>
+                    <View style={styles.orderBadge}>
+                      <Text style={styles.orderBadgeText}>✓ Completed</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.orderMeta}>
+                    {b.city ? `📍 ${b.city}  ` : ''}
+                    🗓 {new Date(b.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+          <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
+            <Text style={styles.cancelBtnText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+});
+
+// ── FAQ Modal ─────────────────────────────────────────────────────────────────
+
+const FAQModal = React.memo(({ visible, onClose }) => {
+  const [expanded, setExpanded] = useState(null);
+
+  const toggle = useCallback((key) => {
+    setExpanded((prev) => (prev === key ? null : key));
+  }, []);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { maxHeight: '90%' }]}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>Help & FAQ</Text>
+          <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
+            {FAQ_SECTIONS.map((section) => (
+              <View key={section.title} style={styles.faqSection}>
+                <View style={styles.faqSectionHeader}>
+                  <Text style={styles.faqSectionIcon}>{section.icon}</Text>
+                  <Text style={styles.faqSectionTitle}>{section.title}</Text>
+                </View>
+                {section.items.map((item, idx) => {
+                  const key = `${section.title}-${idx}`;
+                  const open = expanded === key;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={styles.faqItem}
+                      activeOpacity={0.75}
+                      onPress={() => toggle(key)}
+                    >
+                      <View style={styles.faqQuestion}>
+                        <Text style={styles.faqQuestionText}>{item.q}</Text>
+                        <Text style={styles.faqChevron}>{open ? '▲' : '▼'}</Text>
+                      </View>
+                      {open && <Text style={styles.faqAnswer}>{item.a}</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
+          </ScrollView>
+          <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
+            <Text style={styles.cancelBtnText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+});
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
+
 const ProfileScreen = () => {
-  const userProfile    = useAppStore((s) => s.userProfile);
-  const profileLoading = useAppStore((s) => s.profileLoading);
-  const insets = useSafeAreaInsets();
+  const userProfile            = useAppStore((s) => s.userProfile);
+  const profileLoading         = useAppStore((s) => s.profileLoading);
+  const derivedCompletedCount  = useAppStore((s) => s.derivedCompletedCount);
+  const derivedActiveSitesCount = useAppStore((s) => s.derivedActiveSitesCount);
+  const fetchCompletedOrders   = useAppStore((s) => s.fetchCompletedOrders);
+  const insets                 = useSafeAreaInsets();
   const { logout, updateProfile, loading } = useAuth();
 
-  const [editVisible, setEditVisible] = React.useState(false);
-  const [addressSheetVisible, setAddressSheetVisible] = React.useState(false);
   const userLat          = useAppStore((s) => s.userLat);
   const userLng          = useAppStore((s) => s.userLng);
   const userLocationText = useAppStore((s) => s.userLocationText);
-  const [form, setForm] = React.useState({ fullName: '', email: '', locationText: '' });
+
+  React.useEffect(() => {
+    if (userProfile) fetchCompletedOrders();
+  }, [userProfile?._id]);
+
+  const [editVisible,    setEditVisible]    = useState(false);
+  const [ordersVisible,  setOrdersVisible]  = useState(false);
+  const [faqVisible,     setFaqVisible]     = useState(false);
+  const [addressVisible, setAddressVisible] = useState(false);
+  const [form, setForm] = useState({ fullName: '', email: '', locationText: '' });
+  const [updateError, setUpdateError] = useState(null);
 
   const openEdit = useCallback(() => {
+    setUpdateError(null);
     setForm({
-      fullName:     userProfile.fullName || '',
-      email:        userProfile.email || '',
-      locationText: userProfile.locationText || '',
+      fullName:     userProfile?.fullName || '',
+      email:        userProfile?.email || '',
+      locationText: userProfile?.locationText || '',
     });
     setEditVisible(true);
   }, [userProfile]);
 
   const handleUpdateProfile = useCallback(async () => {
+    setUpdateError(null);
     const res = await updateProfile(form);
-    if (res.success) setEditVisible(false);
+    if (res.success) {
+      setEditVisible(false);
+    } else {
+      setUpdateError(res.error || 'Update failed. Please try again.');
+    }
   }, [updateProfile, form]);
+
+  const handleChatWithUs = useCallback(() => {
+    const name  = userProfile?.fullName || '';
+    const phone = userProfile?.phone || '';
+    const body  = `Name: ${name}\nPhone: ${phone}\nIssue: `;
+    const mailto = `mailto:nr.conza@gmail.com?subject=${encodeURIComponent('Conza Support Request')}&body=${encodeURIComponent(body)}`;
+    Linking.openURL(mailto).catch(() =>
+      Alert.alert('Unable to open mail app', 'Please email us at nr.conza@gmail.com')
+    );
+  }, [userProfile]);
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -76,19 +267,19 @@ const ProfileScreen = () => {
   );
 
   const u = userProfile;
-  const initials = useMemo(() => 
+  const initials = useMemo(() =>
     u.fullName?.split(' ').map((n) => n[0]).join('') || '??',
     [u.fullName]
   );
 
   return (
-     <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>
+    <View style={[styles.safe, { paddingTop: insets.top + 10 }]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
 
         {/* Avatar Section */}
         <LinearGradient
-          colors={['rgba(34,197,94,0.1)', 'transparent']}
+          colors={['rgba(245,200,66,0.1)', 'transparent']}
           style={styles.avatarSection}
         >
           <LinearGradient
@@ -108,43 +299,48 @@ const ProfileScreen = () => {
 
         {/* Stats */}
         <View style={styles.statsRow}>
-          <StatCard value={u.projectsCompleted} label="Completed" />
+          <StatCard value={derivedCompletedCount ?? '—'} label="Completed" />
           <View style={styles.statDivider} />
-          <StatCard value={u.activeSites} label="Active Sites" />
+          <StatCard value={derivedActiveSitesCount ?? '—'} label="Active Sites" />
           <View style={styles.statDivider} />
-          <StatCard value={u.memberSince} label="Member Since" />
+          <StatCard value={u.memberSince ?? '—'} label="Member Since" />
         </View>
 
-        {/* Menu */}
+        {/* Account Menu */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-          <MenuItem icon="📍" label="Saved Addresses" sub="Manage delivery addresses" onPress={() => setAddressSheetVisible(true)} />
-          <MenuItem icon="📋" label="My Orders"            sub="View past bookings" />
-          <MenuItem icon="💳" label="Payment Methods"      sub="UPI, Card, COD" />
-          <MenuItem icon="🔔" label="Notifications"        sub="Manage alerts" />
+          <MenuItem icon="📍" label="Saved Addresses" sub="Manage delivery addresses" onPress={() => setAddressVisible(true)} />
+          <MenuItem icon="📋" label="My Orders"        sub="View completed bookings"   onPress={() => setOrdersVisible(true)} />
         </View>
 
+        {/* Support Menu */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support</Text>
-          <MenuItem icon="❓" label="Help & FAQ" />
-          <MenuItem icon="💬" label="Chat with Us" />
-          <MenuItem icon="⭐" label="Rate the App" />
+          <MenuItem icon="❓" label="Help & FAQ"   sub="Browse common questions" onPress={() => setFaqVisible(true)} />
+          <MenuItem icon="💬" label="Chat With Us" sub="Email our support team"  onPress={handleChatWithUs} />
         </View>
 
         <View style={styles.section}>
           <MenuItem icon="🚪" label="Logout" danger onPress={handleLogout} />
         </View>
 
-        <Text style={styles.version}>ConstructApp v1.0.0</Text>
+        <Text style={styles.version}>Conza v1.0.0</Text>
       </ScrollView>
 
+      {/* Saved Addresses */}
       <SavedAddressSheet
-        visible={addressSheetVisible}
-        onClose={() => setAddressSheetVisible(false)}
+        visible={addressVisible}
+        onClose={() => setAddressVisible(false)}
         currentLat={userLat}
         currentLng={userLng}
         currentAddress={userLocationText}
       />
+
+      {/* My Orders Modal */}
+      <OrdersModal visible={ordersVisible} onClose={() => setOrdersVisible(false)} />
+
+      {/* FAQ Modal */}
+      <FAQModal visible={faqVisible} onClose={() => setFaqVisible(false)} />
 
       {/* Edit Profile Modal */}
       <Modal visible={editVisible} animationType="slide" transparent>
@@ -152,14 +348,14 @@ const ProfileScreen = () => {
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Edit Profile</Text>
-            
+
             <ScrollView style={{ maxHeight: 400 }}>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Full Name</Text>
                 <TextInput
                   style={styles.input}
                   value={form.fullName}
-                  onChangeText={(v) => setForm({ ...form, fullName: v })}
+                  onChangeText={(v) => setForm((prev) => ({ ...prev, fullName: v }))}
                 />
               </View>
               <View style={styles.inputGroup}>
@@ -167,7 +363,7 @@ const ProfileScreen = () => {
                 <TextInput
                   style={styles.input}
                   value={form.email}
-                  onChangeText={(v) => setForm({ ...form, email: v })}
+                  onChangeText={(v) => setForm((prev) => ({ ...prev, email: v }))}
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
@@ -177,10 +373,13 @@ const ProfileScreen = () => {
                 <TextInput
                   style={styles.input}
                   value={form.locationText}
-                  onChangeText={(v) => setForm({ ...form, locationText: v })}
+                  onChangeText={(v) => setForm((prev) => ({ ...prev, locationText: v }))}
                   multiline
                 />
               </View>
+              {updateError ? (
+                <Text style={styles.errorText}>{updateError}</Text>
+              ) : null}
             </ScrollView>
 
             <LinearGradient
@@ -189,7 +388,9 @@ const ProfileScreen = () => {
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
             >
               <TouchableOpacity style={styles.saveBtnTouch} onPress={handleUpdateProfile} disabled={loading}>
-                {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.saveBtnText}>Save Changes</Text>}
+                {loading
+                  ? <ActivityIndicator color="#000" />
+                  : <Text style={styles.saveBtnText}>Save Changes</Text>}
               </TouchableOpacity>
             </LinearGradient>
 
@@ -202,6 +403,8 @@ const ProfileScreen = () => {
     </View>
   );
 };
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   safe: {
@@ -225,7 +428,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
-    shadowColor: colors.accentGreen,
+    shadowColor: colors.accentAmber,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -234,7 +437,7 @@ const styles = StyleSheet.create({
   avatarInitials: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.white,
+    color: colors.textPrimary,
     letterSpacing: 1,
   },
   userName: {
@@ -254,13 +457,13 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: colors.accentGreen,
-    backgroundColor: colors.accentGreenSoft,
+    borderColor: colors.accentAmber,
+    backgroundColor: colors.accentAmberSoft,
   },
   editBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.accentGreen,
+    color: colors.accentAmber,
   },
   statsRow: {
     flexDirection: 'row',
@@ -336,8 +539,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   menuIconDanger: {
-    backgroundColor: 'rgba(239,68,68,0.1)',
-    borderColor: 'rgba(239,68,68,0.2)',
+    backgroundColor: 'rgba(224,59,59,0.1)',
+    borderColor: 'rgba(224,59,59,0.2)',
   },
   menuLabel: {
     fontSize: 14,
@@ -363,19 +566,172 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontWeight: '500',
   },
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: colors.background, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40 },
-  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, textAlign: 'center', marginBottom: 24 },
+  // ── Modal shared
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  // ── Edit Profile
   inputGroup: { marginBottom: 18 },
-  label: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 8 },
-  input: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, fontSize: 15, color: colors.textPrimary },
+  label: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  errorText: {
+    fontSize: 13,
+    color: colors.danger,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
   saveBtn: { borderRadius: 16, overflow: 'hidden', marginTop: 12 },
   saveBtnTouch: { paddingVertical: 16, alignItems: 'center' },
-  saveBtnText: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
+  saveBtnText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
   cancelBtn: { marginTop: 12, paddingVertical: 12, alignItems: 'center' },
-  cancelBtnText: { fontSize: 14, color: colors.textMuted, fontWeight: '600' },
+  cancelBtnText: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  // ── Orders
+  emptyOrders: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyOrdersIcon: { fontSize: 48, marginBottom: 12 },
+  emptyOrdersText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 6,
+  },
+  emptyOrdersSub: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+  orderCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginBottom: 10,
+  },
+  orderCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  orderLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  orderBadge: {
+    backgroundColor: 'rgba(46,139,87,0.12)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  orderBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.success,
+  },
+  orderMeta: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '400',
+  },
+  // ── FAQ
+  faqSection: {
+    marginBottom: 20,
+  },
+  faqSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 8,
+  },
+  faqSectionIcon: { fontSize: 18 },
+  faqSectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+  faqItem: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginBottom: 8,
+  },
+  faqQuestion: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  faqQuestionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  faqChevron: {
+    fontSize: 10,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  faqAnswer: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginTop: 10,
+    fontWeight: '400',
+  },
 });
 
 export default ProfileScreen;

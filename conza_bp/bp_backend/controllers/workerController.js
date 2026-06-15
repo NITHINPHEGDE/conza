@@ -3,6 +3,7 @@ const workerService  = require('../services/workerService');
 const AppError       = require('../utils/AppError');
 const { cloudinary } = require('../config/cloudinary');
 const logger         = require('../utils/logger');
+const Worker         = require('../models/Worker');
 
 const toggleOnline = asyncHandler(async (req, res) => {
   const worker = await workerService.toggleOnlineStatus(req.worker._id);
@@ -52,4 +53,52 @@ const getUploadSignature = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { toggleOnline, updateLocation, updateProfileImage, getUploadSignature };
+const ALLOWED_PROFILE_FIELDS = [
+  'fullName', 'phone', 'email', 'category', 'skills',
+  'locationText', 'experience', 'bio', 'profileImage',
+];
+
+const updateProfile = asyncHandler(async (req, res) => {
+  const updates = {};
+  ALLOWED_PROFILE_FIELDS.forEach((field) => {
+    if (req.body[field] !== undefined) updates[field] = req.body[field];
+  });
+
+  if (Object.keys(updates).length === 0) {
+    throw new AppError('No valid fields to update.', 400);
+  }
+
+  // Check uniqueness for phone/email if changed
+  if (updates.phone || updates.email) {
+    const orClauses = [];
+    if (updates.phone) orClauses.push({ phone: updates.phone });
+    if (updates.email) orClauses.push({ email: updates.email.toLowerCase() });
+
+    const conflict = await Worker.findOne({
+      $or: orClauses,
+      _id: { $ne: req.worker._id },
+    });
+
+    if (conflict) {
+      if (updates.phone && conflict.phone === updates.phone)
+        throw new AppError('Phone number is already in use.', 400);
+      if (updates.email && conflict.email === updates.email.toLowerCase())
+        throw new AppError('Email is already in use.', 400);
+    }
+
+    if (updates.email) updates.email = updates.email.toLowerCase();
+  }
+
+  const worker = await Worker.findByIdAndUpdate(
+    req.worker._id,
+    { $set: updates },
+    { new: true, runValidators: true, select: '-password' }
+  );
+
+  if (!worker) throw new AppError('Worker not found.', 404);
+
+  logger.info({ workerId: req.worker._id, fields: Object.keys(updates) }, 'Profile updated');
+  res.status(200).json({ success: true, worker });
+});
+
+module.exports = { toggleOnline, updateLocation, updateProfileImage, getUploadSignature, updateProfile };

@@ -133,5 +133,24 @@ export const useAuth = () => {
     }
   };
 
-  return { signup, login, logout, restoreSession, refreshLocation, loading, error };
+  // ── Update Profile ─────────────────────────────────────────────────────────
+  const updateProfile = async (payload) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await authAPI.updateProfile(payload);
+      if (data.success) {
+        setUserProfile(data.user);
+        return { success: true };
+      }
+      return { success: false, error: data.message };
+    } catch (err) {
+      setError(err.message);
+      return { success: false, error: err.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { signup, login, logout, restoreSession, refreshLocation, updateProfile, loading, error };
 };

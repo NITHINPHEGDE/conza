@@ -51,6 +51,18 @@ const usePartnerStore = create((set, get) => ({
     AsyncStorage.removeItem('activeJobId');
   },
 
+  updateWorkerProfile: async (updates) => {
+    const { updateProfileAPI } = require('../services/workerService');
+    const data = await updateProfileAPI(updates);
+    if (data.success && data.worker) {
+      set({ worker: data.worker });
+      const { saveSession } = require('../services/authService');
+      const token = await AsyncStorage.getItem('conza_token');
+      await saveSession(token, data.worker);
+    }
+    return data;
+  },
+
   // ── Stats ──────────────────────────────────────────────────────────────
   todaysJobs:     0,
   todaysEarnings: 0,
@@ -268,17 +280,28 @@ const usePartnerStore = create((set, get) => ({
           const fmtTime = (date) => date
             ? new Date(date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
             : '—';
+          const addrParts = [
+              h.houseNumber ? `No. ${h.houseNumber}` : '',
+              h.houseName   || '',
+              h.street      || '',
+              h.area        || '',
+              h.city        || '',
+              h.pincode     ? `(${h.pincode})` : '',
+            ].filter(p => p && p.trim().length > 0);
+
           return {
             ...h,
             id:            h._id,
             userName:      h.user?.fullName || 'Client',
             location:      h.city ? `${h.city}, ${h.area || ''}` : 'Location N/A',
+            address:       addrParts.join(', ') || h.address || '',
             amount:        h.total || 0,
             service:       h.category || 'Service',
             subService:    h.subService || 'General',
             checkIn:       fmtTime(h.checkInTime),
             checkOut:      fmtTime(h.checkOutTime),
             date:          new Date(h.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+            updatedAt:     h.updatedAt || h.createdAt,
             distance:      h.distance || '—',
             paymentMethod: h.paymentMethod || 'cod',
             status:        h.status,
@@ -438,7 +461,8 @@ export const selectToggleDirection  = (s) => s.toggleDirection;
 export const selectToggleOnline   = (s) => s.toggleOnline;
 export const selectTodaysJobs     = (s) => s.todaysJobs;
 export const selectTodaysEarnings = (s) => s.todaysEarnings;
-export const selectRating         = (s) => s.worker?.rating || 5.0;
+export const selectRating               = (s) => s.worker?.rating || 5.0;
+export const selectUpdateWorkerProfile  = (s) => s.updateWorkerProfile;
 export const selectRequests       = (s) => s.requests;
 export const selectRequestsLoading = (s) => s.requestsLoading;
 export const selectHistory        = (s) => s.history;

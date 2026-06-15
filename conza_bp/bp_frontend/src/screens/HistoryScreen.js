@@ -9,66 +9,63 @@ import { colors } from '../theme/colors';
 import { RefreshControl } from 'react-native';
 import { SkeletonList, HistoryCardSkeleton } from '../components/Skeleton';
 
-const TABS = ['All', 'Completed', 'Cancelled'];
+const TABS = ['Completed'];
 
 // ── HistoryCard ───────────────────────────────────────────────────────────────
-const HistoryCard = React.memo(({ item }) => {
-  const isCompleted = item.status === 'completed';
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{item.userName.charAt(0)}</Text>
-        </View>
-        <View style={styles.headerInfo}>
-          <Text style={styles.userName}>{item.userName}</Text>
-          <Text style={styles.subService}>{item.service} · {item.subService}</Text>
-        </View>
-        <View style={isCompleted ? styles.completedBadge : styles.cancelledBadge}>
-          <Text style={isCompleted ? styles.completedText : styles.cancelledText}>
-            {isCompleted ? '✓ Paid' : '✗ Cancelled'}
-          </Text>
-        </View>
+const HistoryCard = React.memo(({ item }) => (
+  <View style={styles.card}>
+    <View style={styles.cardHeader}>
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>{(item.userName || 'C').charAt(0)}</Text>
       </View>
-
-      <View style={styles.metaRow}>
-        <Text style={styles.metaItem}>📍 {item.location}</Text>
-        <Text style={styles.metaDot}>·</Text>
-        <Text style={styles.metaItem}>🛣️ {item.distance}</Text>
-        <Text style={styles.metaDot}>·</Text>
-        <Text style={styles.metaItem}>📅 {item.date}</Text>
+      <View style={styles.headerInfo}>
+        <Text style={styles.userName}>{item.userName}</Text>
+        <Text style={styles.subService}>{item.service} · {item.subService}</Text>
       </View>
-
-      <View style={styles.divider} />
-
-      <View style={styles.cardFooter}>
-        <View style={styles.footerGroup}>
-          <Text style={styles.footerLabel}>Check-in</Text>
-          <Text style={styles.footerValue}>{item.checkIn ?? '—'}</Text>
-        </View>
-        <View style={styles.footerDivider} />
-        <View style={styles.footerGroup}>
-          <Text style={styles.footerLabel}>Check-out</Text>
-          <Text style={styles.footerValue}>{item.checkOut ?? '—'}</Text>
-        </View>
-        <View style={styles.footerDivider} />
-        <View style={styles.footerGroupRight}>
-          <Text style={styles.footerLabel}>{isCompleted ? 'Earned' : 'Est.'}</Text>
-          <Text style={isCompleted ? styles.earningAmount : styles.footerAmount}>
-            {isCompleted ? '+' : ''}₹{item.amount}
-          </Text>
-        </View>
+      <View style={styles.completedBadge}>
+        <Text style={styles.completedText}>✓ Completed</Text>
       </View>
     </View>
-  );
-});
+
+    <View style={styles.metaRow}>
+      <Text style={styles.metaItem}>🆔 {String(item.id || item._id || '').slice(-8).toUpperCase()}</Text>
+      <Text style={styles.metaDot}>·</Text>
+      <Text style={styles.metaItem}>📅 {item.date}</Text>
+    </View>
+
+    {!!item.address && (
+      <View style={styles.addressRow}>
+        <Text style={styles.metaItem}>📍 {item.address || item.location}</Text>
+      </View>
+    )}
+
+    <View style={styles.divider} />
+
+    <View style={styles.cardFooter}>
+      <View style={styles.footerGroup}>
+        <Text style={styles.footerLabel}>Booked</Text>
+        <Text style={styles.footerValue}>{item.date}</Text>
+      </View>
+      <View style={styles.footerDivider} />
+      <View style={styles.footerGroup}>
+        <Text style={styles.footerLabel}>Completed</Text>
+        <Text style={styles.footerValue}>{item.checkOut ?? '—'}</Text>
+      </View>
+      <View style={styles.footerDivider} />
+      <View style={styles.footerGroupRight}>
+        <Text style={styles.footerLabel}>Earned</Text>
+        <Text style={styles.earningAmount}>+₹{item.amount}</Text>
+      </View>
+    </View>
+  </View>
+));
 
 // ── Static empty component ────────────────────────────────────────────────────
-const ListEmpty = React.memo(({ tab }) => (
+const ListEmpty = React.memo(() => (
   <View style={styles.empty}>
     <Text style={styles.emptyIcon}>📋</Text>
-    <Text style={styles.emptyTitle}>No {tab} Jobs</Text>
-    <Text style={styles.emptySubtitle}>Your job history will appear here</Text>
+    <Text style={styles.emptyTitle}>No Completed Jobs</Text>
+    <Text style={styles.emptySubtitle}>Your completed job history will appear here once you finish your first job.</Text>
   </View>
 ));
 
@@ -77,7 +74,7 @@ const HistoryScreen = () => {
   const insets    = useSafeAreaInsets();
   const history   = usePartnerStore(selectHistory);
   const fetchHistory = usePartnerStore(selectFetchHistory);
-  const [activeTab, setActiveTab] = useState('All');
+  const [activeTab, setActiveTab] = useState('Completed');
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
@@ -92,18 +89,16 @@ const HistoryScreen = () => {
   }, [fetchHistory]);
 
   const filtered = useMemo(() => {
-    if (activeTab === 'All') return history;
-    const key = activeTab.toLowerCase();
-    return history.filter((h) => h.status === key);
-  }, [history, activeTab]);
+    const completed = history
+      .filter((h) => h.status === 'completed')
+      .sort((a, b) => new Date(b.updatedAt || b.date) - new Date(a.updatedAt || a.date));
+    return completed;
+  }, [history]);
 
   const keyExtractor = useCallback((item) => item.id, []);
   const renderItem   = useCallback(({ item }) => <HistoryCard item={item} />, []);
 
-  const ListEmptyComponent = useMemo(
-    () => <ListEmpty tab={activeTab} />,
-    [activeTab],
-  );
+  const ListEmptyComponent = useMemo(() => <ListEmpty />, []);
 
   const containerStyle = useMemo(
     () => [styles.screen, { paddingTop: insets.top + 10 }],
@@ -132,10 +127,8 @@ const HistoryScreen = () => {
         <Text style={styles.pageTitle}>History</Text>
       </View>
 
-      <View style={styles.tabs}>
-        {TABS.map((tab) => (
-          <TabPill key={tab} label={tab} active={activeTab === tab} onPress={setActiveTab} />
-        ))}
+      <View style={styles.pageSubHeader}>
+        <Text style={styles.pageSubTitle}>Completed Jobs</Text>
       </View>
 
       <FlatList
@@ -172,6 +165,9 @@ const TabPill = React.memo(({ label, active, onPress }) => {
 });
 
 const styles = StyleSheet.create({
+  pageSubHeader: { paddingHorizontal: 20, marginBottom: 16 },
+  pageSubTitle:  { fontSize: 14, fontWeight: '600', color: colors.textMuted },
+  addressRow:    { marginBottom: 8 },
   screen:       { flex: 1, backgroundColor: colors.background },
   pageHeader:   { paddingHorizontal: 20, paddingBottom: 16 },
   pageTitle:    { fontSize: 24, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.2 },

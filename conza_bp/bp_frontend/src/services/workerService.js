@@ -16,3 +16,5 @@ export const updateProfileImageAPI = async (imageUri) => {
 
   return api.upload('/workers/profile-image', formData);
 };
+
+export const updateProfileAPI = (updates) => api.patch('/workers/profile', updates);
