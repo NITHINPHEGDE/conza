@@ -196,6 +196,20 @@ export const BookingTrackingSkeleton = () => (
   </View>
 );
 
+// Matches: SavedAddressSheet address card
+export const SavedAddressCardSkeleton = () => (
+  <View style={s.addressCard}>
+    <View style={s.addressCardLeft}>
+      <Bone width={36} height={36} radius={10} />
+    </View>
+    <View style={{ flex: 1, gap: 7 }}>
+      <Bone width="40%" height={12} />
+      <Bone width="75%" height={11} />
+    </View>
+    <Bone width={28} height={28} radius={8} />
+  </View>
+);
+
 // ── Helper: render N skeletons in a list ──────────────────────────────────────
 export const SkeletonList = ({ component: Comp, count = 3 }) =>
   Array.from({ length: count }).map((_, i) => <Comp key={i} />);
@@ -221,4 +235,19 @@ const s = StyleSheet.create({
   trackingWrap:   { flex: 1, padding: 20 },
   trackingStatus: { alignItems: 'center', marginBottom: 24 },
   trackingCard:   { backgroundColor: '#fff', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#E8E6DF' },
+  addressCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E8E6DF',
+    gap: 12,
+  },
+  addressCardLeft: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

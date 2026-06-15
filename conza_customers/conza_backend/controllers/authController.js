@@ -1,5 +1,6 @@
 const jwt  = require('jsonwebtoken');
 const User = require('../models/User');
+const { invalidateCache } = require('../utils/cacheHelpers');
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const generateToken = (id) =>
@@ -14,7 +15,6 @@ const signup = async (req, res) => {
       return res.status(400).json({ success: false, message: 'fullName, username, phone, and password are required' });
     }
 
-    // Single query instead of two sequential findOne calls
     const existing = await User.findOne({
       $or: [{ phone }, { username: username.toLowerCase() }],
     }).lean();
@@ -45,15 +45,16 @@ const signup = async (req, res) => {
       message: 'Account created successfully',
       token: generateToken(user._id),
       user: {
-        _id:          user._id,
-        fullName:     user.fullName,
-        username:     user.username,
-        phone:        user.phone,
-        email:        user.email,
-        locationText: user.locationText,
-        memberSince:  user.memberSince,
-        profileImage: user.profileImage,
-        location:     user.location,
+        _id:            user._id,
+        fullName:       user.fullName,
+        username:       user.username,
+        phone:          user.phone,
+        email:          user.email,
+        locationText:   user.locationText,
+        memberSince:    user.memberSince,
+        profileImage:   user.profileImage,
+        location:       user.location,
+        savedAddresses: user.savedAddresses,
       },
     });
   } catch (err) {
@@ -79,15 +80,16 @@ const login = async (req, res) => {
       success: true,
       token: generateToken(user._id),
       user: {
-        _id:         user._id,
-        fullName:    user.fullName,
-        username:    user.username,
-        phone:       user.phone,
-        email:       user.email,
-        locationText: user.locationText,
-        memberSince: user.memberSince,
-        profileImage: user.profileImage,
-        location:    user.location,
+        _id:            user._id,
+        fullName:       user.fullName,
+        username:       user.username,
+        phone:          user.phone,
+        email:          user.email,
+        locationText:   user.locationText,
+        memberSince:    user.memberSince,
+        profileImage:   user.profileImage,
+        location:       user.location,
+        savedAddresses: user.savedAddresses,
       },
     });
   } catch (err) {
@@ -156,13 +158,16 @@ const updateProfile = async (req, res) => {
       { new: true, runValidators: true }
     ).select('-password');
 
+    // Bust user session cache so next auth request reads updated data
+    await invalidateCache(`user:session:${req.user._id}`);
+
     res.json({ success: true, user });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// ── GET /api/auth/reverse-geocode ───────────────────────────────────────────
+// ── GET /api/auth/reverse-geocode ─────────────────────────────────────────────
 const reverseGeocode = async (req, res) => {
   try {
     const { lat, lng } = req.query;
@@ -182,7 +187,7 @@ const reverseGeocode = async (req, res) => {
 
     if (data.results && data.results.length > 0) {
       const r = data.results[0];
-      
+
       const houseNumber = r.houseNumber || '';
       const houseName   = r.houseName   || '';
       const street      = r.street      || '';
@@ -191,16 +196,16 @@ const reverseGeocode = async (req, res) => {
       const district    = r.district    || '';
       const state       = r.state       || '';
       const pincode     = r.pincode     || '';
-      
+
       const fullAddress = [houseNumber, houseName, street, area]
         .filter(Boolean)
         .join(', ');
 
       const locationText = [area, city, state].filter(Boolean).join(', ');
-      
-      res.json({ 
-        success: true, 
-        locationText, 
+
+      res.json({
+        success: true,
+        locationText,
         address: {
           houseNumber,
           houseName,
@@ -210,8 +215,8 @@ const reverseGeocode = async (req, res) => {
           district,
           state,
           pincode,
-          fullAddress
-        }
+          fullAddress,
+        },
       });
     } else {
       res.status(404).json({ success: false, message: 'Address not found' });
@@ -221,4 +226,117 @@ const reverseGeocode = async (req, res) => {
   }
 };
 
-module.exports = { signup, login, getMe, updateLocation, updateProfile, reverseGeocode };
+// ── GET /api/auth/addresses ────────────────────────────────────────────────────
+const getSavedAddresses = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('savedAddresses').lean();
+    res.json({ success: true, addresses: user.savedAddresses || [] });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── POST /api/auth/addresses ───────────────────────────────────────────────────
+const addSavedAddress = async (req, res) => {
+  try {
+    const { label, address, latitude, longitude, landmark } = req.body;
+
+    if (!label || !address || latitude == null || longitude == null) {
+      return res.status(400).json({
+        success: false,
+        message: 'label, address, latitude and longitude are required',
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $push: {
+          savedAddresses: {
+            label:     label.trim(),
+            address:   address.trim(),
+            latitude:  parseFloat(latitude),
+            longitude: parseFloat(longitude),
+            landmark:  (landmark || '').trim(),
+          },
+        },
+      },
+      { new: true, runValidators: true }
+    ).select('savedAddresses');
+
+    // Bust session cache so getMe returns fresh addresses
+    await invalidateCache(`user:session:${req.user._id}`);
+
+    const newAddress = user.savedAddresses[user.savedAddresses.length - 1];
+    res.status(201).json({ success: true, address: newAddress, addresses: user.savedAddresses });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── PUT /api/auth/addresses/:addressId ────────────────────────────────────────
+const updateSavedAddress = async (req, res) => {
+  try {
+    const { addressId } = req.params;
+    const { label, address, latitude, longitude, landmark } = req.body;
+
+    if (!label) {
+      return res.status(400).json({ success: false, message: 'label is required' });
+    }
+
+    const updateFields = {};
+    if (label     != null) updateFields['savedAddresses.$.label']     = label.trim();
+    if (address   != null) updateFields['savedAddresses.$.address']   = address.trim();
+    if (latitude  != null) updateFields['savedAddresses.$.latitude']  = parseFloat(latitude);
+    if (longitude != null) updateFields['savedAddresses.$.longitude'] = parseFloat(longitude);
+    if (landmark  != null) updateFields['savedAddresses.$.landmark']  = landmark.trim();
+
+    const user = await User.findOneAndUpdate(
+      { _id: req.user._id, 'savedAddresses._id': addressId },
+      { $set: updateFields },
+      { new: true, runValidators: true }
+    ).select('savedAddresses');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Address not found' });
+    }
+
+    await invalidateCache(`user:session:${req.user._id}`);
+
+    res.json({ success: true, addresses: user.savedAddresses });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── DELETE /api/auth/addresses/:addressId ─────────────────────────────────────
+const deleteSavedAddress = async (req, res) => {
+  try {
+    const { addressId } = req.params;
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $pull: { savedAddresses: { _id: addressId } } },
+      { new: true }
+    ).select('savedAddresses');
+
+    await invalidateCache(`user:session:${req.user._id}`);
+
+    res.json({ success: true, addresses: user.savedAddresses });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = {
+  signup,
+  login,
+  getMe,
+  updateLocation,
+  updateProfile,
+  reverseGeocode,
+  getSavedAddresses,
+  addSavedAddress,
+  updateSavedAddress,
+  deleteSavedAddress,
+};

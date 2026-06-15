@@ -23,6 +23,7 @@ import { SectionLoader, ErrorState, EmptyState, WorkerListSkeleton, CategoryGrid
 
 import useAppStore from '../store/useAppStore';
 import { colors } from '../theme/colors';
+import SavedAddressSheet from '../components/SavedAddressSheet';
 
 const CATEGORIES = [
   { key: 'Labour',   icon: '👷' },
@@ -526,17 +527,38 @@ const BookingScreen = () => {
 
   const isSearching = useMemo(() => activeSearch.trim().length > 0, [activeSearch]);
 
+  const userLocationText    = useAppStore((s) => s.userLocationText);
+  const userLat             = useAppStore((s) => s.userLat);
+  const userLng             = useAppStore((s) => s.userLng);
+  const setUserLocation     = useAppStore((s) => s.setUserLocation);
+
+  const [addressSheetVisible, setAddressSheetVisible] = useState(false);
+
+  const handleAddressSelect = useCallback((addr) => {
+    setUserLocation({
+      latitude:     addr.latitude,
+      longitude:    addr.longitude,
+      locationText: addr.address,
+    });
+  }, [setUserLocation]);
+
+  const displayLocation = userLocationText || 'Set Location';
+
   const header = useMemo(() => (
     <View style={styles.header}>
-      <View>
+      <TouchableOpacity
+        onPress={() => setAddressSheetVisible(true)}
+        activeOpacity={0.75}
+        style={styles.headerLocationBtn}
+      >
         <Text style={styles.headerMeta}>📍 Deliver to</Text>
-        <Text style={styles.headerLocation}>Bangalore, KA</Text>
-      </View>
+        <Text style={styles.headerLocation} numberOfLines={1}>{displayLocation}</Text>
+      </TouchableOpacity>
       <TouchableOpacity style={styles.notifBtn} activeOpacity={0.8}>
         <Text style={{ fontSize: 19 }}>🔔</Text>
       </TouchableOpacity>
     </View>
-  ), []);
+  ), [displayLocation]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -589,6 +611,14 @@ const BookingScreen = () => {
           </>
         )}
       </View>
+      <SavedAddressSheet
+        visible={addressSheetVisible}
+        onClose={() => setAddressSheetVisible(false)}
+        onSelect={handleAddressSelect}
+        currentLat={userLat}
+        currentLng={userLng}
+        currentAddress={userLocationText}
+      />
     </SafeAreaView>
   );
 };
@@ -603,6 +633,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 14,
+  },
+  headerLocationBtn: {
+    flex: 1,
+    marginRight: 12,
   },
   headerMeta: {
     fontSize: 11,

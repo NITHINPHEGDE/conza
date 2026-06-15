@@ -1,6 +1,18 @@
 const mongoose = require('mongoose');
 const bcrypt   = require('bcryptjs');
 
+// ── Saved Address sub-document ─────────────────────────────────────────────────
+const savedAddressSchema = new mongoose.Schema(
+  {
+    label:     { type: String, required: true, trim: true },   // "Home", "Work", custom
+    address:   { type: String, required: true, trim: true },   // full human-readable address
+    latitude:  { type: Number, required: true },
+    longitude: { type: Number, required: true },
+    landmark:  { type: String, default: '', trim: true },      // optional
+  },
+  { timestamps: true }                                         // adds createdAt + updatedAt
+);
+
 const userSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true, trim: true },
@@ -29,6 +41,12 @@ const userSchema = new mongoose.Schema(
     locationUpdatedAt: { type: Date, default: null },
 
     savedWorkers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Worker' }],
+
+    // ── Saved Addresses ──────────────────────────────────────────────────────
+    savedAddresses: {
+      type:    [savedAddressSchema],
+      default: [],
+    },
 
     memberSince: {
       type: String,

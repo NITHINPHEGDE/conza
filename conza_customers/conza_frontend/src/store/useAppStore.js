@@ -42,7 +42,7 @@ const useAppStore = create((set, get) => ({
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
           const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          
+
           let locationText = '';
           try {
             const [place] = await Location.reverseGeocodeAsync({
@@ -96,6 +96,10 @@ const useAppStore = create((set, get) => ({
       newState.userLng = lng;
       newState.userLocationText = user.locationText || '';
     }
+    // Sync savedAddresses into the dedicated slice whenever profile changes
+    if (user?.savedAddresses) {
+      newState.savedAddresses = user.savedAddresses;
+    }
     set(newState);
     if (user?._id) {
       socket.emit('join_customer', user._id.toString());
@@ -121,6 +125,82 @@ const useAppStore = create((set, get) => ({
 
   setUserLocation: ({ latitude, longitude, locationText }) => {
     set({ userLat: latitude, userLng: longitude, userLocationText: locationText || '' });
+  },
+
+  // ── Saved Addresses ─────────────────────────────────────────────────────────
+  savedAddresses:        [],
+  savedAddressesLoading: false,
+  savedAddressesError:   null,
+
+  fetchSavedAddresses: async () => {
+    // If we already loaded from profile on boot, skip a redundant network call
+    // unless addresses list is explicitly empty and profile is loaded
+    const { userProfile, savedAddressesLoading } = get();
+    if (savedAddressesLoading) return;
+
+    try {
+      set({ savedAddressesLoading: true, savedAddressesError: null });
+      const data = await authAPI.getSavedAddresses();
+      set({ savedAddresses: data.addresses || [] });
+    } catch (err) {
+      set({ savedAddressesError: err.message });
+    } finally {
+      set({ savedAddressesLoading: false });
+    }
+  },
+
+  addSavedAddress: async ({ label, address, latitude, longitude, landmark }) => {
+    try {
+      set({ savedAddressesLoading: true, savedAddressesError: null });
+      const data = await authAPI.addSavedAddress({ label, address, latitude, longitude, landmark });
+      set({ savedAddresses: data.addresses || [] });
+      return { success: true, address: data.address };
+    } catch (err) {
+      set({ savedAddressesError: err.message });
+      return { success: false, error: err.message };
+    } finally {
+      set({ savedAddressesLoading: false });
+    }
+  },
+
+  updateSavedAddress: async (addressId, fields) => {
+    // Optimistic update
+    const prev = get().savedAddresses;
+    set({
+      savedAddresses: prev.map((a) =>
+        (a._id === addressId || a._id?.toString() === addressId)
+          ? { ...a, ...fields }
+          : a
+      ),
+    });
+    try {
+      const data = await authAPI.updateSavedAddress(addressId, fields);
+      set({ savedAddresses: data.addresses || [] });
+      return { success: true };
+    } catch (err) {
+      // Rollback
+      set({ savedAddresses: prev, savedAddressesError: err.message });
+      return { success: false, error: err.message };
+    }
+  },
+
+  deleteSavedAddress: async (addressId) => {
+    // Optimistic update
+    const prev = get().savedAddresses;
+    set({
+      savedAddresses: prev.filter(
+        (a) => a._id !== addressId && a._id?.toString() !== addressId
+      ),
+    });
+    try {
+      const data = await authAPI.deleteSavedAddress(addressId);
+      set({ savedAddresses: data.addresses || [] });
+      return { success: true };
+    } catch (err) {
+      // Rollback
+      set({ savedAddresses: prev, savedAddressesError: err.message });
+      return { success: false, error: err.message };
+    }
   },
 
   // ── Labour / Workers ────────────────────────────────────────────────────────
@@ -367,21 +447,15 @@ const useAppStore = create((set, get) => ({
     if (id) get().fetchActiveBooking(id);
   },
 
-  // fetchActiveBooking bypasses Redis cache by appending a cache-busting timestamp.
-  // This ensures that socket-triggered refetches always get fresh data from MongoDB
-  // rather than a stale cached response.
   fetchActiveBooking: async (id) => {
     const bookingId = id || get().activeBookingId;
     if (!bookingId) return;
 
     try {
-      // Use axiosInstance directly with a cache-bust param so the server
-      // handler skips withCache for this call.
       const res = await api.get(`/bookings/${bookingId}?_cb=${Date.now()}`);
       const data = res.data;
       if (data.success) {
         set({ activeBooking: data.booking });
-        // Ensure we're in the booking socket room
         socket.emit('join_booking', bookingId);
       }
     } catch (err) {
@@ -468,7 +542,6 @@ const useAppStore = create((set, get) => ({
   },
 
   initSocketHandlers: () => {
-    // Remove all existing listeners before re-registering to prevent duplicates
     socket.off('booking_updated');
     socket.off('booking_status_changed');
     socket.off('work_completion_requested');
@@ -477,7 +550,6 @@ const useAppStore = create((set, get) => ({
     socket.off('worker_went_offline');
     socket.off('connect');
 
-    // ── Worker availability ────────────────────────────────────────────────
     socket.on('worker_availability_changed', (data) => {
       const { workerId, isOnline, isAvailable, category, worker } = data;
       if (!category) return;
@@ -541,22 +613,16 @@ const useAppStore = create((set, get) => ({
       get().fetchLabourData();
     });
 
-    // ── Booking status updates ─────────────────────────────────────────────
-    // booking_updated: fired by customer backend when a booking document changes.
-    // The event now includes bookingSnapshot so we can update local state
-    // immediately without an HTTP round-trip (which would hit stale Redis cache).
     socket.on('booking_updated', (data) => {
       const { bookingId, status, bookingSnapshot } = data;
 
       if (bookingId && status) {
         set((s) => ({
-          // Update the status in the activeBookings list immediately
           activeBookings: s.activeBookings.map((b) =>
             b._id?.toString() === bookingId?.toString()
               ? { ...b, status }
               : b
           ),
-          // Update the activeBooking detail object if it matches and we have a snapshot
           activeBooking:
             s.activeBooking?._id?.toString() === bookingId?.toString()
               ? bookingSnapshot
@@ -566,21 +632,16 @@ const useAppStore = create((set, get) => ({
         }));
       }
 
-      // Background HTTP refetch to get full populated document (workers, etc.)
-      // This runs after the optimistic update so the UI is already correct.
       if (bookingId && get().activeBookingId?.toString() === bookingId?.toString()) {
         get().fetchActiveBooking(bookingId);
       }
 
-      // Refresh the list in the background for accurate filtering
       get().fetchActiveBookings();
       get().fetchProjects();
     });
 
-    // booking_status_changed: fired to the booking_{id} room.
-    // Same treatment — apply snapshot immediately, then background-refetch.
     socket.on('booking_status_changed', (data) => {
-      const { bookingId, status, bookingSnapshot, isWorkCompletion } = data;
+      const { bookingId, status, bookingSnapshot } = data;
 
       if (bookingId && status) {
         set((s) => ({
@@ -598,21 +659,15 @@ const useAppStore = create((set, get) => ({
         }));
       }
 
-      // Background refetch for full populated booking detail
       if (bookingId && get().activeBookingId?.toString() === bookingId?.toString()) {
         get().fetchActiveBooking(bookingId);
       }
     });
 
-    // work_completion_requested: kept for backward compatibility with the BP backend
-    // which still emits this directly on its own socket server.
-    // On the customer backend side, isWorkCompletion flag in booking_status_changed
-    // carries this signal — but we keep this handler in case it ever arrives.
     socket.on('work_completion_requested', (data) => {
       const { bookingId } = data;
       if (!bookingId) return;
 
-      // Optimistically set status to awaiting_customer_confirmation
       set((s) => ({
         activeBookings: s.activeBookings.map((b) =>
           b._id?.toString() === bookingId?.toString()
@@ -640,7 +695,6 @@ const useAppStore = create((set, get) => ({
       }));
     });
 
-    // Re-join all rooms after reconnect
     socket.on('connect', () => {
       socket.emit('join_workers_watch');
       const userId = get().userProfile?._id;
@@ -651,14 +705,12 @@ const useAppStore = create((set, get) => ({
       if (activeBookingId) {
         socket.emit('join_booking', activeBookingId);
       }
-      // Refetch active bookings on reconnect to catch any events missed while disconnected
       get().fetchActiveBookings();
       if (activeBookingId) {
         get().fetchActiveBooking(activeBookingId);
       }
     });
 
-    // Join on initial connect (in case connect fired before handlers were set)
     if (socket.connected) {
       socket.emit('join_workers_watch');
       const userId = get().userProfile?._id;

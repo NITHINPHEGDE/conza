@@ -16,6 +16,7 @@ import useAppStore from '../store/useAppStore';
 import { SectionLoader } from '../components/LoadingState';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
+import SavedAddressSheet from '../components/SavedAddressSheet';
 
 const StatCard = React.memo(({ value, label }) => (
   <View style={styles.statCard}>
@@ -44,6 +45,10 @@ const ProfileScreen = () => {
   const { logout, updateProfile, loading } = useAuth();
 
   const [editVisible, setEditVisible] = React.useState(false);
+  const [addressSheetVisible, setAddressSheetVisible] = React.useState(false);
+  const userLat          = useAppStore((s) => s.userLat);
+  const userLng          = useAppStore((s) => s.userLng);
+  const userLocationText = useAppStore((s) => s.userLocationText);
   const [form, setForm] = React.useState({ fullName: '', email: '', locationText: '' });
 
   const openEdit = useCallback(() => {
@@ -113,7 +118,7 @@ const ProfileScreen = () => {
         {/* Menu */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-          <MenuItem icon="📍" label="Saved Addresses"      sub={u.locationText || 'No address set'} />
+          <MenuItem icon="📍" label="Saved Addresses" sub="Manage delivery addresses" onPress={() => setAddressSheetVisible(true)} />
           <MenuItem icon="📋" label="My Orders"            sub="View past bookings" />
           <MenuItem icon="💳" label="Payment Methods"      sub="UPI, Card, COD" />
           <MenuItem icon="🔔" label="Notifications"        sub="Manage alerts" />
@@ -132,6 +137,14 @@ const ProfileScreen = () => {
 
         <Text style={styles.version}>ConstructApp v1.0.0</Text>
       </ScrollView>
+
+      <SavedAddressSheet
+        visible={addressSheetVisible}
+        onClose={() => setAddressSheetVisible(false)}
+        currentLat={userLat}
+        currentLng={userLng}
+        currentAddress={userLocationText}
+      />
 
       {/* Edit Profile Modal */}
       <Modal visible={editVisible} animationType="slide" transparent>

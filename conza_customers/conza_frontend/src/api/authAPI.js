@@ -39,4 +39,25 @@ export const authAPI = {
   },
 
   getToken: () => AsyncStorage.getItem('authToken'),
+
+  // ── Saved Addresses ──────────────────────────────────────────────────────
+  getSavedAddresses: async () => {
+    const res = await api.get('/auth/addresses');
+    return res.data;
+  },
+
+  addSavedAddress: async ({ label, address, latitude, longitude, landmark }) => {
+    const res = await api.post('/auth/addresses', { label, address, latitude, longitude, landmark });
+    return res.data;
+  },
+
+  updateSavedAddress: async (addressId, { label, address, latitude, longitude, landmark }) => {
+    const res = await api.put(`/auth/addresses/${addressId}`, { label, address, latitude, longitude, landmark });
+    return res.data;
+  },
+
+  deleteSavedAddress: async (addressId) => {
+    const res = await api.delete(`/auth/addresses/${addressId}`);
+    return res.data;
+  },
 };
