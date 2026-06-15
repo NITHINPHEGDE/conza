@@ -46,13 +46,13 @@ export const authAPI = {
     return res.data;
   },
 
-  addSavedAddress: async ({ label, address, latitude, longitude, landmark }) => {
-    const res = await api.post('/auth/addresses', { label, address, latitude, longitude, landmark });
+  addSavedAddress: async (fields) => {
+    const res = await api.post('/auth/addresses', fields);
     return res.data;
   },
 
-  updateSavedAddress: async (addressId, { label, address, latitude, longitude, landmark }) => {
-    const res = await api.put(`/auth/addresses/${addressId}`, { label, address, latitude, longitude, landmark });
+  updateSavedAddress: async (addressId, fields) => {
+    const res = await api.put(`/auth/addresses/${addressId}`, fields);
     return res.data;
   },
 
