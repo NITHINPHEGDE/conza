@@ -1,6 +1,6 @@
 // src/navigation/AppNavigator.js
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -199,15 +199,11 @@ useEffect(() => {
   if (!initialRoute) {
     return (
       <View style={styles.splash}>
-        <LinearGradient
-          colors={[colors.gradientStart, colors.gradientEnd]}
-          start={GRAD_START} end={GRAD_END}
-          style={styles.splashBadge}
-        >
-          <Text style={styles.splashEmoji}>🔨</Text>
-        </LinearGradient>
-        <Text style={styles.splashBrand}>Conza Partner</Text>
-        <ActivityIndicator color={colors.accentAmber} style={styles.splashSpinner} />
+        <Image
+          source={require('../../assets/images/splash.png')}
+          style={styles.splashImage}
+          resizeMode="cover"
+        />
       </View>
     );
   }
@@ -235,11 +231,8 @@ const styles = StyleSheet.create({
   floatingPulse:    { fontSize: 10, color: colors.danger, fontWeight: '900' },
   floatingBtnText:  { fontSize: 13, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
   floatingArrow:    { fontSize: 18, color: colors.textPrimary, fontWeight: '300', lineHeight: 22 },
-  splash:           { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  splashBadge:      { width: 80, height: 80, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  splashEmoji:      { fontSize: 36 },
-  splashBrand:      { fontSize: 20, fontWeight: '900', color: colors.textPrimary, letterSpacing: 0.5 },
-  splashSpinner:    { marginTop: 8 },
+  splash:           { flex: 1, backgroundColor: '#ffffff' },
+  splashImage:      { width: '100%', height: '100%' },
 });
 
 export default AppNavigator;
