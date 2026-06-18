@@ -21,8 +21,10 @@ const MaterialCard = React.memo(({
   inStock, 
   quantity = 0, 
   onUpdate, 
-  onImagePress 
+  onImagePress,
+  onAddToCart,
 }) => {
+  const [cartAdded, setCartAdded] = React.useState(false);
   const imageSource = useMemo(() => ({ uri: image }), [image]);
   
   const stockDotStyle = useMemo(() => [
@@ -56,6 +58,13 @@ const MaterialCard = React.memo(({
   const handleAdd = useCallback(() => {
     if (inStock) onUpdate(id, 1);
   }, [onUpdate, id, inStock]);
+
+  const handleAddToCart = useCallback(() => {
+    if (!inStock) return;
+    onAddToCart && onAddToCart({ id, name, seller, price, unit, distance, image, rating, inStock });
+    setCartAdded(true);
+    setTimeout(() => setCartAdded(false), 2000);
+  }, [onAddToCart, id, name, seller, price, unit, distance, image, rating, inStock]);
 
   return (
     <View style={styles.card}>
@@ -122,6 +131,16 @@ const MaterialCard = React.memo(({
             </TouchableOpacity>
           )}
         </View>
+
+        <TouchableOpacity
+          style={[styles.addCartBtn, !inStock && styles.addCartBtnDisabled]}
+          onPress={handleAddToCart}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.addCartBtnText}>
+            {cartAdded ? '✓ Added to Cart' : '🛒 Add to Cart'}
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -147,6 +166,15 @@ const styles = StyleSheet.create({
   addBtn: { width: 28, height: 28, borderRadius: 9, backgroundColor: colors.accentYellow, alignItems: 'center', justifyContent: 'center' },
   addBtnDisabled: { backgroundColor: colors.surfaceElevated },
   addBtnText: { fontSize: 18, fontWeight: '700' },
+  addCartBtn: {
+    marginTop: 8,
+    backgroundColor: colors.accentYellow,
+    borderRadius: 10,
+    paddingVertical: 7,
+    alignItems: 'center',
+  },
+  addCartBtnDisabled: { backgroundColor: colors.surfaceElevated },
+  addCartBtnText: { fontSize: 12, fontWeight: '800', color: '#111' },
   qtyWrapper: { alignItems: 'flex-end' },
   qtyControl: { flexDirection: 'row', alignItems: 'center', borderRadius: 9, borderWidth: 1, borderColor: colors.border },
   qtyBtnMinus: { width: 24, height: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentYellow, borderTopLeftRadius: 7, borderBottomLeftRadius: 7 },

@@ -19,6 +19,7 @@ import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
 import { useBooking } from '../hooks/useBooking';
 import SavedAddressSheet from '../components/SavedAddressSheet';
+import useAppStore from '../store/useAppStore';
 
 const PLATFORM_FEE_RATE = 0.05;
 const DELIVERY_FEE = 99;
@@ -226,6 +227,7 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
       longitude: lng,
     });
     if (ok) {
+      useAppStore.getState().clearCart();
       navigation.reset({
         index: 0,
         routes: [{ name: 'BookingHome' }],

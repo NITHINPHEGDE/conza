@@ -549,6 +549,25 @@ const useAppStore = create((set, get) => ({
   getCartItemCount: () =>
     Object.values(get().cart).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0),
 
+  // ── Rental Cart ─────────────────────────────────────────────────────────────
+  rentalCart: [],
+
+  addToRentalCart: (item) => {
+    set((state) => {
+      const exists = state.rentalCart.find((r) => r.id === item.id);
+      if (exists) return state;
+      return { rentalCart: [...state.rentalCart, item] };
+    });
+  },
+
+  removeFromRentalCart: (itemId) => {
+    set((state) => ({ rentalCart: state.rentalCart.filter((r) => r.id !== itemId) }));
+  },
+
+  clearRentalCart: () => set({ rentalCart: [] }),
+
+  getRentalCartCount: () => get().rentalCart.length,
+
   // ── Seller Orders ───────────────────────────────────────────────────────
   sellerOrders:        [],
   sellerOrdersLoading: false,

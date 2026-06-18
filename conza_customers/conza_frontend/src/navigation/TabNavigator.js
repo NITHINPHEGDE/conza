@@ -16,6 +16,8 @@ import LoginScreen            from '../screens/LoginScreen';
 import SignupScreen           from '../screens/SignupScreen';
 import StatusScreen           from '../screens/StatusScreen';
 import BookingTrackingScreen  from '../screens/BookingTrackingScreen';
+import CartScreen             from '../screens/CartScreen';
+import useAppStore            from '../store/useAppStore';
 import { colors }             from '../theme/colors';
 
 const Tab   = createBottomTabNavigator();
@@ -28,8 +30,6 @@ const PlaceholderScreen = ({ label }) => (
     <Text style={styles.placeholderSub}>Coming Soon</Text>
   </View>
 );
-
-const ExploreScreen = () => <PlaceholderScreen label="Explore" />;
 
 // Booking tab stack
 const BookingStack = () => (
@@ -61,27 +61,38 @@ export const AuthStack = () => (
 
 const TAB_ICONS = {
   Booking:  '🏠',
-  Explore:  '🔍',
+  CartTab:  '🛒',
   Projects: '📋',
   Status:   '🔔',
   Profile:  '👤',
 };
 
-const TabIcon = ({ name, focused }) => (
-  <View style={styles.iconWrapper}>
-    {focused && (
-      <LinearGradient
-        colors={[colors.gradientStart, colors.gradientEnd]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.activePill}
-      />
-    )}
-    <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>
-      {TAB_ICONS[name]}
-    </Text>
-  </View>
-);
+const TabIcon = ({ name, focused }) => {
+  const materialCartCount = useAppStore((s) => s.getCartItemCount());
+  const rentalCartCount   = useAppStore((s) => s.getRentalCartCount());
+  const totalCart = materialCartCount + rentalCartCount;
+
+  return (
+    <View style={styles.iconWrapper}>
+      {focused && (
+        <LinearGradient
+          colors={[colors.gradientStart, colors.gradientEnd]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.activePill}
+        />
+      )}
+      <Text style={[styles.tabIcon, focused && styles.tabIconActive]}>
+        {TAB_ICONS[name]}
+      </Text>
+      {name === 'CartTab' && totalCart > 0 && (
+        <View style={styles.tabBadge}>
+          <Text style={styles.tabBadgeText}>{totalCart}</Text>
+        </View>
+      )}
+    </View>
+  );
+};
 
 const TabNavigator = () => (
   <Tab.Navigator
@@ -97,7 +108,7 @@ const TabNavigator = () => (
     })}
   >
     <Tab.Screen name="Booking"  component={BookingStack}  options={{ title: 'Home'     }} />
-    <Tab.Screen name="Explore"  component={ExploreScreen} options={{ title: 'Explore'  }} />
+    <Tab.Screen name="CartTab"  component={CartScreen}    options={{ title: 'Cart'     }} />
     <Tab.Screen name="Projects" component={ProjectScreen} options={{ title: 'Projects' }} />
     <Tab.Screen name="Status"   component={StatusStack}   options={{ title: 'Status'   }} />
     <Tab.Screen name="Profile"  component={ProfileScreen} options={{ title: 'Profile'  }} />
@@ -123,6 +134,19 @@ const styles = StyleSheet.create({
   activePill:    { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 10, opacity: 0.2 },
   tabIcon:       { fontSize: 21, opacity: 0.4 },
   tabIconActive: { opacity: 1 },
+  tabBadge: {
+    position: 'absolute',
+    top: -2,
+    right: 0,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.accentAmber,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  tabBadgeText: { fontSize: 9, fontWeight: '800', color: '#fff' },
   placeholder:   { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   placeholderEmoji: { fontSize: 48, marginBottom: 14 },
   placeholderText:  { fontSize: 20, fontWeight: '800', color: colors.textPrimary, marginBottom: 5 },

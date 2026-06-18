@@ -8,6 +8,7 @@ import {
   StyleSheet,
   StatusBar,
   Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -239,6 +240,11 @@ const MaterialView = React.memo(() => {
 
   const handleClearQuery = useCallback(() => setQuery(''), []);
 
+  const handleAddMaterialToCart = useCallback((item) => {
+    addToCart(item);
+    Alert.alert('Added to Cart', `${item.name} added to your cart.`, [{ text: 'OK' }]);
+  }, [addToCart]);
+
   const renderItem = useCallback(({ item }) => (
     <View style={styles.materialCardWrapper}>
       <MaterialCard
@@ -246,9 +252,10 @@ const MaterialView = React.memo(() => {
         quantity={Number(cart[item.id]) || 0}
         onUpdate={handleUpdateQuantity}
         onImagePress={handleImagePress}
+        onAddToCart={handleAddMaterialToCart}
       />
     </View>
-  ), [cart, handleUpdateQuantity, handleImagePress]);
+  ), [cart, handleUpdateQuantity, handleImagePress, handleAddMaterialToCart]);
 
   const listHeader = useMemo(() => (
     <View>
@@ -343,11 +350,17 @@ const MaterialView = React.memo(() => {
 const RentalView = React.memo(() => {
   const navigation        = useNavigation();
   const filterRentalItems = useAppStore((s) => s.filterRentalItems);
-  const rentalItems       = useAppStore((s) => s.rentalItems);  // subscribe so list re-renders on load
+  const rentalItems       = useAppStore((s) => s.rentalItems);
   const rentalCategories  = useAppStore((s) => s.rentalCategories);
   const rentalLoading     = useAppStore((s) => s.rentalLoading);
   const rentalError       = useAppStore((s) => s.rentalError);
   const fetchRental       = useAppStore((s) => s.fetchRentalData);
+  const addToRentalCart   = useAppStore((s) => s.addToRentalCart);
+
+  const handleAddToCart = useCallback((item) => {
+    addToRentalCart(item);
+    Alert.alert('Added to Cart', `${item.name} added to your cart.`, [{ text: 'OK' }]);
+  }, [addToRentalCart]);
 
   const [query,       setQuery]       = useState('');
   const [selectedCat, setSelectedCat] = useState('all');
@@ -375,9 +388,10 @@ const RentalView = React.memo(() => {
       <RentalCard
         item={item}
         onPress={handleRentalPress}
+        onAddToCart={handleAddToCart}
       />
     </View>
-  ), [handleRentalPress]);
+  ), [handleRentalPress, handleAddToCart]);
 
   const renderCatItem = useCallback(({ item: cat }) => (
     <TouchableOpacity
@@ -544,6 +558,11 @@ const BookingScreen = () => {
 
   const displayLocation = userLocationText || 'Set Location';
 
+  const navigation = useNavigation();
+  const rentalCartCount = useAppStore((s) => s.getRentalCartCount());
+  const materialCartCount = useAppStore((s) => s.getCartItemCount());
+  const totalCartCount = rentalCartCount + materialCartCount;
+
   const header = useMemo(() => (
     <View style={styles.header}>
       <TouchableOpacity
@@ -554,11 +573,22 @@ const BookingScreen = () => {
         <Text style={styles.headerMeta}>📍 Deliver to</Text>
         <Text style={styles.headerLocation} numberOfLines={1}>{displayLocation}</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.notifBtn} activeOpacity={0.8}>
-        <Text style={{ fontSize: 19 }}>🔔</Text>
-      </TouchableOpacity>
+      {activeCategory === 'Labour' ? null : (
+        <TouchableOpacity
+          style={styles.notifBtn}
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate('CartTab')}
+        >
+          <Text style={{ fontSize: 19 }}>🛒</Text>
+          {totalCartCount > 0 && (
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>{totalCartCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
     </View>
-  ), [displayLocation]);
+  ), [displayLocation, activeCategory, totalCartCount, navigation]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -661,7 +691,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.border,
+    position: 'relative',
   },
+  cartBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.accentAmber,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  cartBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff' },
   fixedSection: {
     paddingHorizontal: 20,
     paddingBottom: 14,
