@@ -10,7 +10,7 @@ const { getRedis }  = require('../config/redis');
 // This reduces write load by ~92% (1 write per 2 min vs ~8-12 per 2 min).
 
 const GEO_KEY        = 'worker:geo';                  // Redis sorted set key
-const FLUSH_INTERVAL = parseInt(process.env.LOCATION_BUFFER_FLUSH_MS || '120000', 10);
+const FLUSH_INTERVAL = parseInt(process.env.LOCATION_BUFFER_FLUSH_MS || '15000', 10);
 
 let _flushTimer = null;
 

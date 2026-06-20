@@ -21,15 +21,7 @@ const getNearbyWorkers = async (req, res) => {
     const TTL      = 8;
 
     const workersWithDistance = await withCache(cacheKey, TTL, async () => {
-      const query = {
-        location: {
-          $near: {
-            $geometry:    { type: 'Point', coordinates: [parseFloat(lng), parseFloat(lat)] },
-            $maxDistance: parseInt(radius),
-          },
-        },
-        isAvailable: { $ne: false },
-      };
+      const query = { isAvailable: { $ne: false } };
       if (category) query.category = category;
 
       const workers = await Worker.find(query).select(
@@ -38,41 +30,45 @@ const getNearbyWorkers = async (req, res) => {
 
       const userLat = parseFloat(lat);
       const userLng = parseFloat(lng);
+      const maxKm   = parseInt(radius) / 1000;
 
-      const mapped = workers.map((w) => {
-        const [wLng, wLat] = w.location.coordinates;
-        const R    = 6371;
-        const dLat = ((wLat - userLat) * Math.PI) / 180;
-        const dLng = ((wLng - userLng) * Math.PI) / 180;
-        const a    =
-          Math.sin(dLat / 2) ** 2 +
-          Math.cos((userLat * Math.PI) / 180) *
-            Math.cos((wLat * Math.PI) / 180) *
-            Math.sin(dLng / 2) ** 2;
-        const distKm = (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1);
-
-        return {
-          id:           w._id,
-          _id:          w._id,
-          name:         w.fullName,
-          initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
-          category:     w.category,
-          skills:       w.skills,
-          pricePerDay:  w.minCharge || 0,
-          minCharge:    w.minCharge,
-          rating:       w.rating,
-          totalJobs:    w.totalJobs,
-          distance:     `${distKm} km away`,
-          distanceKm:   parseFloat(distKm),
-          available:    w.isOnline,
-          isOnline:     w.isOnline,
-          bio:          w.bio,
-          experience:   w.experience,
-          locationText: w.locationText,
-          memberSince:  w.memberSince,
-          profileImage: w.profileImage,
-        };
-      });
+      const mapped = workers
+        .map((w) => {
+          const [wLng, wLat] = w.location.coordinates;
+          if (wLng === 0 && wLat === 0) return null;
+          const R      = 6371;
+          const dLat   = ((wLat - userLat) * Math.PI) / 180;
+          const dLng   = ((wLng - userLng) * Math.PI) / 180;
+          const a      =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos((userLat * Math.PI) / 180) *
+              Math.cos((wLat * Math.PI) / 180) *
+              Math.sin(dLng / 2) ** 2;
+          const distKm = parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1));
+          if (distKm > maxKm) return null;
+          return {
+            id:           w._id,
+            _id:          w._id,
+            name:         w.fullName,
+            initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+            category:     w.category,
+            skills:       w.skills,
+            pricePerDay:  w.minCharge || 0,
+            minCharge:    w.minCharge,
+            rating:       w.rating,
+            totalJobs:    w.totalJobs,
+            distance:     `${distKm} km away`,
+            distanceKm:   distKm,
+            available:    true,
+            isOnline:     true,
+            bio:          w.bio,
+            experience:   w.experience,
+            locationText: w.locationText,
+            memberSince:  w.memberSince,
+            profileImage: w.profileImage,
+          };
+        })
+        .filter(Boolean);
 
       mapped.sort((a, b) => a.distanceKm - b.distanceKm);
       return mapped;

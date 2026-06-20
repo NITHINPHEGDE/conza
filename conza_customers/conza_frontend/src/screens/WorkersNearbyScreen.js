@@ -170,16 +170,11 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
     // and the store handles state updates globally.
   }, []);
 
-  const [selected, setSelected]       = useState([]);
-  const [filterAvail, setFilterAvail] = useState('All');
-  const [showModal, setShowModal]     = useState(false);
-  const [quantity, setQuantity]       = useState(1);
+  const [selected, setSelected] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [quantity, setQuantity]   = useState(1);
 
-  const displayed = useMemo(() =>
-    filterAvail === 'Available'
-      ? allWorkers.filter((w) => w.available)
-      : allWorkers
-  , [allWorkers, filterAvail]);
+  const displayed = allWorkers;
 
   const toggleWorker = useCallback((worker) => {
     setSelected((prev) =>
