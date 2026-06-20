@@ -11,7 +11,33 @@ const getNearbyWorkers = async (req, res) => {
     const { category, lat, lng, radius = 5000 } = req.query;
 
     if (!lat || !lng) {
-      return res.status(400).json({ success: false, message: 'lat and lng are required' });
+      const query = { isAvailable: { $ne: false } };
+      if (category) query.category = category;
+      const workers = await Worker.find(query).select(
+        'fullName username profileImage category skills minCharge locationText experience bio isOnline rating totalJobs memberSince location'
+      ).lean();
+      const mapped = workers.map((w) => ({
+        id:           w._id,
+        _id:          w._id,
+        name:         w.fullName,
+        initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+        category:     w.category,
+        skills:       w.skills,
+        pricePerDay:  w.minCharge || 0,
+        minCharge:    w.minCharge,
+        rating:       w.rating,
+        totalJobs:    w.totalJobs,
+        distance:     w.locationText || 'Nearby',
+        distanceKm:   null,
+        available:    true,
+        isOnline:     true,
+        bio:          w.bio,
+        experience:   w.experience,
+        locationText: w.locationText,
+        memberSince:  w.memberSince,
+        profileImage: w.profileImage,
+      }));
+      return res.json({ success: true, count: mapped.length, workers: mapped });
     }
 
     const rLat = round3(lat);
@@ -104,30 +130,37 @@ const getCategories = async (req, res) => {
       const TTL      = 10;
 
       const categories = await withCache(cacheKey, TTL, async () => {
-        const RADIUS   = 5000;
-        const pipeline = [
-          {
-            $geoNear: {
-              near:          { type: 'Point', coordinates: [parsedLng, parsedLat] },
-              distanceField: 'dist',
-              maxDistance:   RADIUS,
-              spherical:     true,
-            },
-          },
-          { $match: { isAvailable: true } },
-          { $group: { _id: '$category', count: { $sum: 1 }, avgRating: { $avg: '$rating' } } },
-        ];
+        const RADIUS_KM = 5;
+        const workers   = await Worker.find({ isAvailable: { $ne: false } })
+          .select('category rating location')
+          .lean();
 
-        const results = await Worker.aggregate(pipeline);
+        const withinRadius = workers.filter((w) => {
+          const [wLng, wLat] = w.location.coordinates;
+          if (wLng === 0 && wLat === 0) return false;
+          const R    = 6371;
+          const dLat = ((wLat - parsedLat) * Math.PI) / 180;
+          const dLng = ((wLng - parsedLng) * Math.PI) / 180;
+          const a    =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos((parsedLat * Math.PI) / 180) *
+              Math.cos((wLat * Math.PI) / 180) *
+              Math.sin(dLng / 2) ** 2;
+          const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          return distKm <= RADIUS_KM;
+        });
 
         return Object.keys(emojiMap).map((label) => {
-          const found = results.find((r) => r._id === label);
+          const matching = withinRadius.filter((w) => w.category === label);
+          const avgRating = matching.length
+            ? matching.reduce((s, w) => s + w.rating, 0) / matching.length
+            : 0;
           return {
             id:        label.toLowerCase(),
             label,
             emoji:     emojiMap[label],
-            available: found ? found.count : 0,
-            rating:    found ? parseFloat(found.avgRating.toFixed(1)) : 0,
+            available: matching.length,
+            rating:    parseFloat(avgRating.toFixed(1)),
           };
         });
       });

@@ -37,32 +37,30 @@ const useAppStore = create((set, get) => ({
 
     // 2. If no location from profile, try to get from device
     const profile = get().userProfile;
-    if (!profile?.location?.coordinates) {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
 
-          let locationText = '';
-          try {
-            const [place] = await Location.reverseGeocodeAsync({
-              latitude: pos.coords.latitude, longitude: pos.coords.longitude,
-            });
-            locationText = [place.city, place.region].filter(Boolean).join(', ');
-          } catch {
-            const data = await authAPI.reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-            locationText = data.locationText;
-          }
-
-          get().setUserLocation({
-            latitude:  pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            locationText,
+        let locationText = '';
+        try {
+          const [place] = await Location.reverseGeocodeAsync({
+            latitude: pos.coords.latitude, longitude: pos.coords.longitude,
           });
+          locationText = [place.city, place.region].filter(Boolean).join(', ');
+        } catch {
+          const data = await authAPI.reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+          locationText = data.locationText;
         }
-      } catch (e) {
-        console.warn("Could not auto-fetch location:", e.message);
+
+        get().setUserLocation({
+          latitude:  pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          locationText,
+        });
       }
+    } catch (e) {
+      console.warn("Could not auto-fetch location:", e.message);
     }
 
     // 3. Finally fetch labour data (which needs lat/lng)
