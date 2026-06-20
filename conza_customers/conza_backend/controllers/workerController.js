@@ -8,7 +8,7 @@ const round3 = (n) => Math.round(parseFloat(n) * 1000) / 1000;
 // ── GET /api/workers/nearby ────────────────────────────────────────────────────
 const getNearbyWorkers = async (req, res) => {
   try {
-    const { category, lat, lng, radius = 50000 } = req.query;
+    const { category, lat, lng, radius = 10000 } = req.query;
 
     if (!lat || !lng) {
       return res.status(400).json({ success: false, message: 'lat and lng are required' });
@@ -28,8 +28,6 @@ const getNearbyWorkers = async (req, res) => {
             $maxDistance: parseInt(radius),
           },
         },
-        // Only show workers who are both available (not on a job) AND online
-        isOnline:    true,
         isAvailable: { $ne: false },
       };
       if (category) query.category = category;
@@ -110,7 +108,7 @@ const getCategories = async (req, res) => {
       const TTL      = 10;
 
       const categories = await withCache(cacheKey, TTL, async () => {
-        const RADIUS   = 50000;
+        const RADIUS   = 10000;
         const pipeline = [
           {
             $geoNear: {
@@ -120,7 +118,7 @@ const getCategories = async (req, res) => {
               spherical:     true,
             },
           },
-          { $match: { isOnline: true, isAvailable: true } },
+          { $match: { isAvailable: true } },
           { $group: { _id: '$category', count: { $sum: 1 }, avgRating: { $avg: '$rating' } } },
         ];
 
@@ -171,7 +169,6 @@ const searchWorkers = async (req, res) => {
       // $text uses the compound text index on fullName+category+skills+bio
       const filter = {
         $text:       { $search: q },
-        isOnline:    true,
         isAvailable: { $ne: false },
       };
 

@@ -178,21 +178,7 @@ const LabourHomeScreen = ({ navigation }) => {
         />
       </View>
 
-      {!isOnline && !isToggling && (
-        <TouchableOpacity
-          style={styles.offlineBanner}
-          activeOpacity={0.8}
-          onPress={toggleOnline}
-        >
-          <Text style={styles.offlineBannerIcon}>🔕</Text>
-          <View>
-            <Text style={styles.offlineBannerTitle}>You're Offline</Text>
-            <Text style={styles.offlineBannerSub}>
-              New requests are paused. Tap Online to resume.
-            </Text>
-          </View>
-        </TouchableOpacity>
-      )}
+
 
       <View style={styles.statsRow}>
         <StatsCard emoji="🏠" value={String(todaysJobs)}    label="Today's Jobs" />
@@ -203,11 +189,11 @@ const LabourHomeScreen = ({ navigation }) => {
       </View>
 
       <SectionHeader
-        title={isOnline ? `New Requests (${requests.length})` : 'New Requests (paused)'}
+        title={`New Requests (${requests.length})`}
       />
     </>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [isOnline, isToggling, toggleDirection, todaysJobs, todaysEarnings, rating, requests.length,
+  ), [isToggling, toggleDirection, todaysJobs, todaysEarnings, rating, requests.length,
       profile.name, profile.fullName, profile.category, profile.location, profile.locationText,
       toggleOnline]);
 
@@ -216,13 +202,12 @@ const LabourHomeScreen = ({ navigation }) => {
   ), [handleViewDetails]);
 
   const keyExtractor  = useCallback((item) => item.id, []);
-  const listData      = isOnline ? requests : EMPTY_ARRAY;
+  const listData    = requests;
 
-  const screenStyle   = useMemo(() => [
+  const screenStyle = useMemo(() => [
     styles.screen,
-    !isOnline && !isToggling && styles.screenOffline,
     { paddingTop: insets.top + 10 },
-  ], [isOnline, isToggling, insets.top]);
+  ], [insets.top]);
 
   return (
     <View style={screenStyle}>
@@ -255,9 +240,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  screenOffline: {
-    backgroundColor: '#F5F5F2',
-  },
+
   list: {
     paddingBottom: 100,
   },
@@ -294,21 +277,7 @@ const styles = StyleSheet.create({
   emptyIcon:     { fontSize: 48, marginBottom: 16 },
   emptyTitle:    { fontSize: 18, fontWeight: '700', color: colors.textPrimary, marginBottom: 8 },
   emptySubtitle: { fontSize: 13, color: colors.textMuted, textAlign: 'center', lineHeight: 19 },
-  offlineBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginHorizontal: 20,
-    marginBottom: 20,
-    backgroundColor: 'rgba(156,163,175,0.12)',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(156,163,175,0.3)',
-  },
-  offlineBannerIcon:  { fontSize: 26 },
-  offlineBannerTitle: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 2 },
-  offlineBannerSub:   { fontSize: 11, color: colors.textMuted, fontWeight: '400', lineHeight: 16 },
+
 });
 
 export default LabourHomeScreen;

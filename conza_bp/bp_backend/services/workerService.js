@@ -135,7 +135,7 @@ const signUpWorker = async (data) => {
 
   const worker = await Worker.create({
     fullName,
-    username: username.toLowerCase(),
+    username:     username.toLowerCase(),
     password,
     phone,
     email:        email || undefined,
@@ -146,6 +146,7 @@ const signUpWorker = async (data) => {
     locationText: locationText || '',
     experience:   experience || null,
     bio:          bio || '',
+    isOnline:     true,
   });
 
   // Bust category cache so newly registered worker appears when they go online
@@ -174,6 +175,16 @@ const loginWorker = async (identifier, password) => {
     throw new AppError('Incorrect password.', 401);
   }
 
+  // Ensure worker is always online on login
+  if (!worker.isOnline) {
+    worker.isOnline = true;
+    await worker.save();
+    try {
+      await getRedis().del(`worker:session:${worker._id.toString()}`);
+    } catch (_) {}
+    await invalidateWorkerCache(worker.category);
+  }
+
   const token = generateToken(worker._id);
   return { worker: worker.toSafeObject(), token };
 };
@@ -185,34 +196,20 @@ const getWorkerProfile = async (workerId) => {
   return worker;
 };
 
-// ── Toggle online / offline ────────────────────────────────────────────────
+// ── Toggle online — workers can only go online, never offline ─────────────
 const toggleOnlineStatus = async (workerId) => {
-  // Always read fresh from DB — never use a cached value to determine current
-  // isOnline state, because the location flush job can set isOnline:true in
-  // Mongo while the session cache still holds an older value.
   const worker = await Worker.findById(workerId).select('-password');
   if (!worker) throw new AppError('Worker not found.', 404);
 
-  worker.isOnline = !worker.isOnline;
-
-  if (!worker.isOnline) {
-    worker.lastLocationAt = null;
-    // Remove from GPS buffer when going offline
-    try {
-      await getRedis().zrem(GEO_KEY, workerId.toString());
-    } catch (_) {}
-  }
+  // Workers are always online — only set to true, never false
+  worker.isOnline = true;
 
   await worker.save();
 
-  // Bust the session cache so the next authenticated request reads the
-  // updated isOnline value from MongoDB rather than the stale cached object.
   try {
     await getRedis().del(`worker:session:${workerId.toString()}`);
   } catch (_) {}
 
-  // Invalidate customer-facing cache so availability change is reflected
-  // immediately on the next HTTP request for any client without a live socket.
   await invalidateWorkerCache(worker.category);
 
   return worker;
@@ -262,25 +259,15 @@ const updateWorkerLocation = async (workerId, latitude, longitude) => {
   return worker;
 };
 
-// ── Auto-offline timeout check ─────────────────────────────────────────────
+// ── Auto-offline disabled — workers are always online ─────────────────────
 const checkAndAutoOffline = async (worker) => {
-  const timeout = parseInt(process.env.LOCATION_TIMEOUT_MS || '30000', 10);
-  if (!worker.isOnline || !worker.lastLocationAt) return worker;
-
-  const elapsed = Date.now() - new Date(worker.lastLocationAt).getTime();
-  if (elapsed > timeout) {
-    worker.isOnline = false;
-    worker.lastLocationAt = null;
+  // Workers are always online; ensure isOnline is true if somehow false
+  if (!worker.isOnline) {
+    worker.isOnline = true;
     await worker.save();
-    // Remove from GPS buffer
-    try {
-      await getRedis().zrem(GEO_KEY, worker._id.toString());
-    } catch (_) {}
-    // Bust session cache so next toggle reads fresh state from DB
     try {
       await getRedis().del(`worker:session:${worker._id.toString()}`);
     } catch (_) {}
-    // Invalidate customer cache
     await invalidateWorkerCache(worker.category);
   }
   return worker;

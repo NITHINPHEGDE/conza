@@ -23,7 +23,7 @@ const workerSchema = new mongoose.Schema(
     bio:          { type: String, default: '' },
 
     // ── Online / Offline ───────────────────────────────────────────────────
-    isOnline:         { type: Boolean, default: false },
+    isOnline:         { type: Boolean, default: true },
     isAvailable:      { type: Boolean, default: true },   // false while worker has an active job
     lastLocationAt:   { type: Date,    default: null },   // last GPS ping timestamp
 

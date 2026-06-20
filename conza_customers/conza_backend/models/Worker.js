@@ -21,7 +21,7 @@ const workerSchema = new mongoose.Schema(
     locationText: { type: String, default: '' },
     experience:   { type: Number, default: null },
     bio:          { type: String, default: '' },
-    isOnline:     { type: Boolean, default: false },
+    isOnline:     { type: Boolean, default: true },
     isAvailable:  { type: Boolean, default: true },   // false while worker has an active job
     lastLocationAt: { type: Date, default: null },
     location: {

@@ -74,17 +74,14 @@ const usePartnerStore = create((set, get) => ({
 
   toggleOnline: async () => {
     if (get().isTogglingOnline) return; // debounce double-taps
-    set({ isTogglingOnline: true, toggleDirection: get().isOnline ? 'going_offline' : 'going_online' });
+    set({ isTogglingOnline: true, toggleDirection: 'going_online' });
     try {
       const data = await toggleOnlineAPI();
-      set({ isOnline: data.isOnline });
-      if (data.isOnline) {
-        await startLocationTracking();
-      } else {
-        stopLocationTracking();
-      }
+      // Workers are always online — ignore server response if it says offline
+      set({ isOnline: true });
+      await startLocationTracking();
       set((state) => ({
-        worker: state.worker ? { ...state.worker, isOnline: data.isOnline } : state.worker,
+        worker: state.worker ? { ...state.worker, isOnline: true } : state.worker,
       }));
     } catch (err) {
       console.error('[Store] toggleOnline failed:', err.message);
@@ -95,12 +92,9 @@ const usePartnerStore = create((set, get) => ({
   },
 
   syncOnlineState: (isOnline) => {
-    set({ isOnline });
-    if (isOnline) {
-      startLocationTracking();
-    } else {
-      stopLocationTracking();
-    }
+    // Workers are always online — only allow going online, never offline
+    set({ isOnline: true });
+    startLocationTracking();
   },
 
   // ── Requests ───────────────────────────────────────────────────────────
