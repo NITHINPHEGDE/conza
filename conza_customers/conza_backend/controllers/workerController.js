@@ -8,7 +8,7 @@ const round3 = (n) => Math.round(parseFloat(n) * 1000) / 1000;
 // ── GET /api/workers/nearby ────────────────────────────────────────────────────
 const getNearbyWorkers = async (req, res) => {
   try {
-    const { category, lat, lng, radius = 10000 } = req.query;
+    const { category, lat, lng, radius = 5000 } = req.query;
 
     if (!lat || !lng) {
       return res.status(400).json({ success: false, message: 'lat and lng are required' });
@@ -108,7 +108,7 @@ const getCategories = async (req, res) => {
       const TTL      = 10;
 
       const categories = await withCache(cacheKey, TTL, async () => {
-        const RADIUS   = 10000;
+        const RADIUS   = 5000;
         const pipeline = [
           {
             $geoNear: {

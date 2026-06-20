@@ -231,7 +231,7 @@ const useAppStore = create((set, get) => ({
         category,
         lat:    userLat,
         lng:    userLng,
-        radius: 50000,
+        radius: 5000,
       });
       set((state) => ({
         workersByCategory: { ...state.workersByCategory, [category]: data.workers || EMPTY_ARRAY },

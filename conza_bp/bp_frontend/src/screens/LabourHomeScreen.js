@@ -75,9 +75,8 @@ const OnlineToggle = React.memo(({ isOnline, isToggling, toggleDirection, onPres
 
   return (
     <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.75}
-      disabled={isToggling}
+      activeOpacity={1}
+      disabled={true}
       style={toggleStyles.hitArea}
     >
       <View style={[toggleStyles.badge, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>

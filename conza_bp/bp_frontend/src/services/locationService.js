@@ -10,8 +10,8 @@ export const TRACKING_MODE = {
 };
 
 const INTERVAL_MS = {
-  [TRACKING_MODE.IDLE]:   5 * 60 * 1000,  // 300 000 ms
-  [TRACKING_MODE.ACTIVE]: 25 * 1000,       //  25 000 ms
+  [TRACKING_MODE.IDLE]:   60 * 1000,  // 60 000 ms — 1 min
+  [TRACKING_MODE.ACTIVE]: 25 * 1000,  //  25 000 ms
 };
 
 // ── Module state ───────────────────────────────────────────────────────────

@@ -27,6 +27,8 @@ const usePartnerStore = create((set, get) => ({
     if (worker) {
       connectSocket();
       setTimeout(() => get().initSocketHandlers(), 300);
+      // Workers are always online — start location tracking immediately on login
+      setTimeout(() => startLocationTracking(), 500);
 
       setTimeout(async () => {
         try {

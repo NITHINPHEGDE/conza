@@ -218,20 +218,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
     });
   }, [navigation, selected, category]);
 
-  const listHeader = useMemo(() => (
-    <View style={styles.filterRow}>
-      <FilterChip
-        label={`All (${allWorkers.length})`}
-        active={filterAvail === 'All'}
-        onPress={handleFilterAll}
-      />
-      <FilterChip
-        label="🟢  Available Now"
-        active={filterAvail === 'Available'}
-        onPress={handleFilterAvailable}
-      />
-    </View>
-  ), [allWorkers.length, filterAvail, handleFilterAll, handleFilterAvailable]);
+  const listHeader = null;
 
   const listEmpty = useMemo(() => (
     <View style={styles.emptyState}>
