@@ -1,0 +1,100 @@
+export const mockCustomers = [
+  {
+    id: '1',
+    fullName: 'Rahul Sharma',
+    username: 'rahulsharma',
+    phone: '+91 9876543210',
+    email: 'rahul.sharma@gmail.com',
+    profileImage: null,
+    locationText: 'Whitefield, Bangalore',
+    status: 'active',
+    memberSince: 'Jan 2024',
+    totalBookings: 12,
+    totalOrders: 8,
+    walletBalance: 2500,
+    savedAddresses: [
+      { label: 'Home', address: '403, Prestige Shantiniketan, ITPL Main Road, Whitefield', city: 'Bangalore', pincode: '560048' },
+    ],
+  },
+  {
+    id: '2',
+    fullName: 'Priya Patel',
+    username: 'priyapatel',
+    phone: '+91 9876543213',
+    email: 'priya.patel@gmail.com',
+    profileImage: null,
+    locationText: 'Koramangala, Bangalore',
+    status: 'active',
+    memberSince: 'Feb 2024',
+    totalBookings: 8,
+    totalOrders: 15,
+    walletBalance: 4800,
+    savedAddresses: [
+      { label: 'Home', address: '78, 5th Block, Koramangala', city: 'Bangalore', pincode: '560095' },
+    ],
+  },
+  {
+    id: '3',
+    fullName: 'Ananya R',
+    username: 'ananyar',
+    phone: '+91 9876543215',
+    email: 'ananya.r@gmail.com',
+    profileImage: null,
+    locationText: 'Marathahalli, Bangalore',
+    status: 'active',
+    memberSince: 'Mar 2024',
+    totalBookings: 5,
+    totalOrders: 3,
+    walletBalance: 1200,
+    savedAddresses: [],
+  },
+  {
+    id: '4',
+    fullName: 'Nithin S',
+    username: 'nithins',
+    phone: '+91 9380737619',
+    email: 'nithin.s@gmail.com',
+    profileImage: null,
+    locationText: 'Indiranagar, Bangalore',
+    status: 'suspended',
+    memberSince: 'Dec 2023',
+    totalBookings: 20,
+    totalOrders: 12,
+    walletBalance: 0,
+    savedAddresses: [
+      { label: 'Home', address: '12, 100 Feet Road, Indiranagar', city: 'Bangalore', pincode: '560038' },
+    ],
+  },
+  {
+    id: '5',
+    fullName: 'Meena T',
+    username: 'meenat',
+    phone: '+91 9876543218',
+    email: 'meena.t@gmail.com',
+    profileImage: null,
+    locationText: 'JP Nagar, Bangalore',
+    status: 'active',
+    memberSince: 'Jan 2024',
+    totalBookings: 3,
+    totalOrders: 6,
+    walletBalance: 800,
+    savedAddresses: [],
+  },
+]
+
+export const mockCustomerBookings = [
+  { id: 'BK001', customerId: '1', worker: 'Suresh Kumar', category: 'Plumber', total: 750, status: 'completed', date: '2024-06-20T14:00:00Z' },
+  { id: 'BK005', customerId: '1', worker: 'Amit Singh', category: 'Electrician', total: 1200, status: 'completed', date: '2024-06-18T10:00:00Z' },
+  { id: 'BK006', customerId: '1', worker: 'Ravi Kumar', category: 'Carpenter', total: 900, status: 'cancelled', date: '2024-06-15T14:00:00Z' },
+]
+
+export const mockCustomerPayments = [
+  { id: 'PAY001', customerId: '1', amount: 750, method: 'upi', status: 'success', date: '2024-06-20T14:00:00Z', type: 'booking' },
+  { id: 'PAY002', customerId: '1', amount: 1200, method: 'card', status: 'success', date: '2024-06-18T10:00:00Z', type: 'booking' },
+  { id: 'PAY003', customerId: '1', amount: 3200, method: 'upi', status: 'success', date: '2024-06-17T16:00:00Z', type: 'order' },
+]
+
+export const mockCustomerComplaints = [
+  { id: 'C001', customerId: '1', subject: 'Worker did not arrive', status: 'open', priority: 'high', date: '2024-06-20T11:00:00Z' },
+  { id: 'C005', customerId: '1', subject: 'Overcharged for service', status: 'resolved', priority: 'medium', date: '2024-06-10T14:00:00Z' },
+]
