@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Eye, Ban, CheckCircle, Store } from 'lucide-react'
+import { Eye, Ban, CheckCircle, Store, ShieldCheck, ShieldX } from 'lucide-react'
 import useVendorStore from '../../store/vendors/useVendorStore'
 import Table from '../../components/common/Table/Table'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
@@ -11,11 +11,25 @@ import Select from '../../components/common/Select/Select'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function VendorList() {
-  const { vendors, updateVendorStatus, getFilteredVendors } = useVendorStore()
+  const { vendors, updateVendorStatus } = useVendorStore()
   const [filters, setFilters] = useState({ status: 'all', type: 'all', search: '' })
+  const [activeTab, setActiveTab] = useState('verified')
   const [selectedVendor, setSelectedVendor] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalAction, setModalAction] = useState('')
+
+  const verifiedVendors = vendors.filter(v => v.isVerified === true)
+  const unverifiedVendors = vendors.filter(v => v.isVerified !== true)
+  const displayedVendors = activeTab === 'verified' ? verifiedVendors : unverifiedVendors
+
+  const getFilteredVendors = () => {
+    return displayedVendors.filter((v) => {
+      if (filters.status !== 'all' && v.status !== filters.status) return false
+      if (filters.type !== 'all' && v.sellerType !== filters.type) return false
+      if (filters.search && !v.shopName.toLowerCase().includes(filters.search.toLowerCase()) && !v.name.toLowerCase().includes(filters.search.toLowerCase())) return false
+      return true
+    })
+  }
 
   const filtered = getFilteredVendors()
 
@@ -91,6 +105,29 @@ export default function VendorList() {
           />
         </div>
       </div>
+
+      {/* Verified / Unverified Tabs */}
+      <div className="flex border-b border-border">
+        <button
+          onClick={() => setActiveTab('verified')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'verified' ? 'border-accentAmber text-accentAmber' : 'border-transparent text-textMuted hover:text-textPrimary'}`}
+        >
+          <span className="flex items-center gap-2">
+            <ShieldCheck size={16} />
+            VERIFIED ({verifiedVendors.length})
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab('unverified')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'unverified' ? 'border-accentAmber text-accentAmber' : 'border-transparent text-textMuted hover:text-textPrimary'}`}
+        >
+          <span className="flex items-center gap-2">
+            <ShieldX size={16} />
+            UNVERIFIED ({unverifiedVendors.length})
+          </span>
+        </button>
+      </div>
+
       <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/vendors/${row.id}`} />
 
       <Modal

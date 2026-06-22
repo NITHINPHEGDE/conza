@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Store, Phone, Mail, MapPin, Star, Calendar, Wallet, ShoppingCart, FileText } from 'lucide-react'
+import { ArrowLeft, Store, Phone, Mail, MapPin, Star, Calendar, Wallet, ShoppingCart, FileText, ShieldCheck } from 'lucide-react'
 import useVendorStore from '../../store/vendors/useVendorStore'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Button from '../../components/common/Button/Button'
@@ -7,7 +7,7 @@ import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function VendorDetails() {
   const { id } = useParams()
-  const { vendors, updateVendorStatus } = useVendorStore()
+  const { vendors, updateVendorStatus, verifyVendor } = useVendorStore()
   const vendor = vendors.find((v) => v.id === id)
 
   if (!vendor) return <div className="text-center py-12 text-textMuted">Vendor not found</div>
@@ -23,6 +23,12 @@ export default function VendorDetails() {
           <StatusBadge status={vendor.status} />
         </div>
         <div className="flex gap-2">
+          {!vendor.isVerified && (
+            <Button onClick={() => verifyVendor(id)} className="flex items-center gap-2">
+              <ShieldCheck size={16} />
+              Mark as Verified
+            </Button>
+          )}
           {vendor.status === 'active' ? (
             <Button variant="outline" onClick={() => updateVendorStatus(id, 'suspended')}>Suspend</Button>
           ) : (

@@ -22,6 +22,15 @@ const useBookingStore = create((set, get) => ({
       if (filters.search && !b.id.toLowerCase().includes(filters.search.toLowerCase())) return false
       return true
     })
+  },
+  getBookingsByType: (type) => {
+    const { bookings, filters } = get()
+    return bookings.filter((b) => {
+      if (b.bookingType !== type) return false
+      if (filters.status !== 'all' && b.status !== filters.status) return false
+      if (filters.search && !b.id.toLowerCase().includes(filters.search.toLowerCase())) return false
+      return true
+    })
   }
 }))
 

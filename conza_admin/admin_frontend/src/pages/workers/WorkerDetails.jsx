@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, HardHat, Phone, Mail, MapPin, Star, Calendar, CheckCircle, XCircle, Wallet, Briefcase } from 'lucide-react'
+import { ArrowLeft, HardHat, Phone, Mail, MapPin, Star, Calendar, CheckCircle, XCircle, Wallet, Briefcase, ShieldCheck } from 'lucide-react'
 import useWorkerStore from '../../store/workers/useWorkerStore'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Button from '../../components/common/Button/Button'
@@ -7,7 +7,7 @@ import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function WorkerDetails() {
   const { id } = useParams()
-  const { workers, updateWorkerStatus } = useWorkerStore()
+  const { workers, updateWorkerStatus, verifyWorker } = useWorkerStore()
   const worker = workers.find((w) => w.id === id)
 
   if (!worker) return <div className="text-center py-12 text-textMuted">Worker not found</div>
@@ -24,6 +24,12 @@ export default function WorkerDetails() {
           {worker.isOnline && <StatusBadge status="online" label="Online" />}
         </div>
         <div className="flex gap-2">
+          {!worker.isVerified && (
+            <Button onClick={() => verifyWorker(id)} className="flex items-center gap-2">
+              <ShieldCheck size={16} />
+              Mark as Verified
+            </Button>
+          )}
           {worker.status === 'active' ? (
             <Button variant="outline" onClick={() => updateWorkerStatus(id, 'suspended')}>Suspend</Button>
           ) : (

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Eye, Ban, CheckCircle, Trash2, HardHat } from 'lucide-react'
+import { Eye, Ban, CheckCircle, Trash2, HardHat, ShieldCheck, ShieldX } from 'lucide-react'
 import useWorkerStore from '../../store/workers/useWorkerStore'
 import Table from '../../components/common/Table/Table'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
@@ -11,11 +11,25 @@ import Select from '../../components/common/Select/Select'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function WorkerList() {
-  const { workers, updateWorkerStatus, deleteCustomer, getFilteredWorkers } = useWorkerStore()
-  const [filters, setFilters] = useState({ status: 'all', category: 'all', search: '' })
+  const { workers, updateWorkerStatus, deleteCustomer } = useWorkerStore()
+  const [filters, setFilters] = useState({ status: 'all', category: 'all', search: '', verification: 'all' })
+  const [activeTab, setActiveTab] = useState('verified')
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalAction, setModalAction] = useState('')
+
+  const verifiedWorkers = workers.filter(w => w.isVerified === true)
+  const unverifiedWorkers = workers.filter(w => w.isVerified !== true)
+  const displayedWorkers = activeTab === 'verified' ? verifiedWorkers : unverifiedWorkers
+
+  const getFilteredWorkers = () => {
+    return displayedWorkers.filter((w) => {
+      if (filters.status !== 'all' && w.status !== filters.status) return false
+      if (filters.category !== 'all' && w.category !== filters.category) return false
+      if (filters.search && !w.fullName.toLowerCase().includes(filters.search.toLowerCase()) && !w.phone.includes(filters.search)) return false
+      return true
+    })
+  }
 
   const filtered = getFilteredWorkers()
 
@@ -101,6 +115,29 @@ export default function WorkerList() {
           />
         </div>
       </div>
+
+      {/* Verified / Unverified Tabs */}
+      <div className="flex border-b border-border">
+        <button
+          onClick={() => setActiveTab('verified')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'verified' ? 'border-accentAmber text-accentAmber' : 'border-transparent text-textMuted hover:text-textPrimary'}`}
+        >
+          <span className="flex items-center gap-2">
+            <ShieldCheck size={16} />
+            VERIFIED ({verifiedWorkers.length})
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab('unverified')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'unverified' ? 'border-accentAmber text-accentAmber' : 'border-transparent text-textMuted hover:text-textPrimary'}`}
+        >
+          <span className="flex items-center gap-2">
+            <ShieldX size={16} />
+            UNVERIFIED ({unverifiedWorkers.length})
+          </span>
+        </button>
+      </div>
+
       <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/workers/${row.id}`} />
 
       <Modal

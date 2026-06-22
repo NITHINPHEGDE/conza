@@ -49,6 +49,13 @@ export const ROUTES = {
   BOOKING_DETAILS: '/bookings/:id',
   BOOKING_TIMELINE: '/bookings/:id/timeline',
   BOOKING_DISPUTES: '/bookings/disputes',
+
+  BOOKINGS_LABOUR: '/bookings/labour',
+  BOOKINGS_MATERIALS: '/bookings/materials',
+  BOOKINGS_RENTALS: '/bookings/rentals',
+  BOOKING_LABOUR_DETAILS: '/bookings/labour/:id',
+  BOOKING_MATERIALS_DETAILS: '/bookings/materials/:id',
+  BOOKING_RENTALS_DETAILS: '/bookings/rentals/:id',
   
   ORDERS: '/orders',
   ORDER_DETAILS: '/orders/:id',
@@ -116,5 +123,8 @@ export const ROUTES = {
   
   AUDIT_LOGS: '/audit-logs',
   LOGIN_HISTORY: '/audit-logs/login-history',
-  ADMIN_ACTIONS: '/audit-logs/admin-actions'
+  ADMIN_ACTIONS: '/audit-logs/admin-actions',
+  
+  ADMIN_MANAGEMENT: '/admin-management',
+  PRICING_MANAGEMENT: '/pricing-management'
 }

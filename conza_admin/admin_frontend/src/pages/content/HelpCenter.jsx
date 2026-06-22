@@ -64,7 +64,7 @@ export default function HelpCenter() {
     <PageWrapper title="Help Center" subtitle="Manage help articles and guides">
       <div className="space-y-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <SearchBar value={search} onChange={setSearch} placeholder="Search articles..." />
+          <SearchBar onSearch={setSearch} placeholder="Search articles..." />
           <Button onClick={() => { setEditArticle(null); setIsModalOpen(true) }}>Add Article</Button>
         </div>
 

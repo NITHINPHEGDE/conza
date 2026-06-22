@@ -55,6 +55,9 @@ import BookingList from '../pages/bookings/BookingList'
 import BookingDetails from '../pages/bookings/BookingDetails'
 import BookingTimeline from '../pages/bookings/BookingTimeline'
 import Disputes from '../pages/bookings/Disputes'
+import LabourBookings from '../pages/bookings/LabourBookings'
+import MaterialBookings from '../pages/bookings/MaterialBookings'
+import RentalBookings from '../pages/bookings/RentalBookings'
 
 import OrderList from '../pages/orders/OrderList'
 import OrderDetails from '../pages/orders/OrderDetails'
@@ -119,6 +122,8 @@ import ConversionAnalytics from '../pages/analytics/ConversionAnalytics'
 
 import RoleManagement from '../pages/roles/RoleManagement'
 import Permissions from '../pages/roles/Permissions'
+import AdminManagement from '../pages/admin/AdminManagement'
+import PricingManagement from '../pages/pricing/PricingManagement'
 
 import AuditLogs from '../pages/auditLogs/AuditLogs'
 import LoginHistory from '../pages/auditLogs/LoginHistory'
@@ -183,6 +188,9 @@ export default function AppRoutes() {
           <Route path="/bookings/:id" element={<BookingDetails />} />
           <Route path="/bookings/:id/timeline" element={<BookingTimeline />} />
           <Route path="/bookings/disputes" element={<Disputes />} />
+          <Route path="/bookings/labour" element={<LabourBookings />} />
+          <Route path="/bookings/materials" element={<MaterialBookings />} />
+          <Route path="/bookings/rentals" element={<RentalBookings />} />
 
           <Route path="/orders" element={<OrderList />} />
           <Route path="/orders/:id" element={<OrderDetails />} />
@@ -249,6 +257,8 @@ export default function AppRoutes() {
           <Route path="/roles/permissions" element={<Permissions />} />
 
           <Route path="/audit-logs" element={<AuditLogs />} />
+          <Route path="/admin-management" element={<AdminManagement />} />
+          <Route path="/pricing-management" element={<PricingManagement />} />
           <Route path="/audit-logs/login-history" element={<LoginHistory />} />
           <Route path="/audit-logs/admin-actions" element={<AdminActions />} />
         </Route>

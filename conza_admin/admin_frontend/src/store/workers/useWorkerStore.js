@@ -11,9 +11,21 @@ const useWorkerStore = create((set, get) => ({
   updateWorkerStatus: (id, status) => set((state) => ({
     workers: state.workers.map((w) => w.id === id ? { ...w, status } : w)
   })),
-  verifyWorker: (id, field, value) => set((state) => ({
+  verifyWorkerField: (id, field, value) => set((state) => ({
     workers: state.workers.map((w) => w.id === id ? { ...w, verification: { ...w.verification, [field]: value } } : w)
   })),
+  deleteCustomer: (id) => {
+    set((state) => ({
+      workers: state.workers.filter((w) => w.id !== id),
+    }))
+  },
+  verifyWorker: (id) => {
+    set((state) => ({
+      workers: state.workers.map((w) =>
+        w.id === id ? { ...w, isVerified: true, status: w.status === 'pending_verification' ? 'active' : w.status } : w
+      ),
+    }))
+  },
   getFilteredWorkers: () => {
     const { workers, filters } = get()
     return workers.filter((w) => {

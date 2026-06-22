@@ -11,6 +11,18 @@ const useVendorStore = create((set, get) => ({
   updateVendorStatus: (id, status) => set((state) => ({
     vendors: state.vendors.map((v) => v.id === id ? { ...v, status } : v)
   })),
+  deleteVendor: (id) => {
+    set((state) => ({
+      vendors: state.vendors.filter((v) => v.id !== id),
+    }))
+  },
+  verifyVendor: (id) => {
+    set((state) => ({
+      vendors: state.vendors.map((v) =>
+        v.id === id ? { ...v, isVerified: true, status: v.status === 'pending_verification' ? 'active' : v.status } : v
+      ),
+    }))
+  },
   getFilteredVendors: () => {
     const { vendors, filters } = get()
     return vendors.filter((v) => {
