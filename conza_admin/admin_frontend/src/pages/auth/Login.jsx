@@ -4,21 +4,30 @@ import { HardHat } from 'lucide-react'
 import Button from '../../components/common/Button/Button'
 import Input from '../../components/common/Input/Input'
 import useAuthStore from '../../store/auth/useAuthStore'
+import authService from '../../services/authService'
 
 export default function Login() {
   const navigate = useNavigate()
-  const login = useAuthStore((s) => s.login)
+  const { login } = useAuthStore()
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
-    setTimeout(() => {
-      login({ id: '1', name: 'Super Admin', email: form.email, role: 'super_admin' })
+    try {
+      const res = await authService.login(form)
+      if (res.success) {
+        login(res.admin, res.token)
+        navigate('/')
+      } else {
+        alert(res.message || 'Login failed. Check your credentials.')
+      }
+    } catch (err) {
+      alert('Unable to connect to server.')
+    } finally {
       setLoading(false)
-      navigate('/')
-    }, 1000)
+    }
   }
 
   return (
