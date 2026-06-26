@@ -49,7 +49,7 @@ const seed = async () => {
       { name: 'Painter', baseCharge: 450, commission: 15, radius: 5, workers: 156, bookings: 480, active: true },
       { name: 'Builder', baseCharge: 800, commission: 15, radius: 5, workers: 87, bookings: 320, active: true },
       { name: 'AC Repair', baseCharge: 400, commission: 15, radius: 5, workers: 120, bookings: 450, active: true },
-      { name: 'Appliance Repair', baseCharge: 350, commission: 15, radius: 5, workers: 95, bookings: 380, active: true },
+      { name: 'Appliance Repair', baseCharge: 350, commission: 15, radius: 5, workers: 95, bookings: 380, active: true },//
     ]
 
     for (const cat of categories) {
