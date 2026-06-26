@@ -1,63 +1,141 @@
-import { useState } from 'react'
-import { Users, Plus, Trash2, Mail, Lock } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Users, Plus, Trash2, Mail, Lock, RefreshCw } from 'lucide-react'
 import PageWrapper from '../../components/layout/PageWrapper/PageWrapper'
 import Button from '../../components/common/Button/Button'
 import Input from '../../components/common/Input/Input'
 import Modal from '../../components/common/Modal/Modal'
 import Table from '../../components/common/Table/Table'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
+import api from '../../services/api'
 
-const initialAdmins = [
-  { id: 1, name: 'Super Admin', email: 'superadmin@gmail.com', role: 'Super Admin', status: 'active', createdAt: '2024-01-15' },
-  { id: 2, name: 'Operations Manager', email: 'ops.manager@gmail.com', role: 'Operations Manager', status: 'active', createdAt: '2024-02-20' },
-  { id: 3, name: 'Finance Manager', email: 'finance@gmail.com', role: 'Finance Manager', status: 'active', createdAt: '2024-03-10' },
-]
+const ROLE_MAP = {
+  super_admin: 'Super Admin',
+  operations_manager: 'Operations Manager',
+  finance_manager: 'Finance Manager',
+  support_manager: 'Support Manager',
+  content_manager: 'Content Manager',
+}
+
+const ROLE_VALUES = {
+  'Super Admin': 'super_admin',
+  'Operations Manager': 'operations_manager',
+  'Finance Manager': 'finance_manager',
+  'Support Manager': 'support_manager',
+  'Content Manager': 'content_manager',
+}
 
 export default function AdminManagement() {
-  const [admins, setAdmins] = useState(initialAdmins)
+  const [admins, setAdmins] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [search, setSearch] = useState('')
-
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'Operations Manager' })
+  const [formError, setFormError] = useState('')
 
-  const handleAddAdmin = () => {
-    if (!form.name || !form.email || !form.password) return
-    const newAdmin = {
-      id: admins.length + 1,
-      name: form.name,
-      email: form.email,
-      role: form.role,
-      status: 'active',
-      createdAt: new Date().toISOString().split('T')[0],
+  const fetchAdmins = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await api.get('/admins')
+      if (res.success) {
+        setAdmins(res.data)
+      } else {
+        setError(res.message || 'Failed to load admins.')
+      }
+    } catch {
+      setError('Unable to connect to server.')
+    } finally {
+      setLoading(false)
     }
-    setAdmins([...admins, newAdmin])
-    setForm({ name: '', email: '', password: '', role: 'Operations Manager' })
-    setIsModalOpen(false)
   }
 
-  const handleDelete = (id) => {
-    setAdmins(admins.filter(a => a.id !== id))
+  useEffect(() => {
+    fetchAdmins()
+  }, [])
+
+  const handleAddAdmin = async () => {
+    setFormError('')
+    if (!form.name || !form.email || !form.password) {
+      setFormError('Name, email, and password are required.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const res = await api.post('/admins', {
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        role: ROLE_VALUES[form.role] || 'operations_manager',
+      })
+      if (res.success) {
+        setAdmins(prev => [res.admin, ...prev])
+        setForm({ name: '', email: '', password: '', role: 'Operations Manager' })
+        setIsModalOpen(false)
+      } else {
+        setFormError(res.message || 'Failed to create admin.')
+      }
+    } catch {
+      setFormError('Unable to connect to server.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDelete = async (id, name) => {
+    if (!window.confirm(`Delete admin "${name}"? This cannot be undone.`)) return
+    try {
+      const res = await api.delete(`/admins/${id}`)
+      if (res.success) {
+        setAdmins(prev => prev.filter(a => a._id !== id))
+      } else {
+        alert(res.message || 'Failed to delete admin.')
+      }
+    } catch {
+      alert('Unable to connect to server.')
+    }
   }
 
   const filtered = admins.filter(a =>
-    a.name.toLowerCase().includes(search.toLowerCase()) ||
-    a.email.toLowerCase().includes(search.toLowerCase())
+    a.name?.toLowerCase().includes(search.toLowerCase()) ||
+    a.email?.toLowerCase().includes(search.toLowerCase())
   )
 
   const columns = [
     { key: 'name', title: 'Name' },
-    { key: 'email', title: 'Gmail ID', render: (row) => (
-      <span className="flex items-center gap-2 text-textSecondary">
-        <Mail size={14} />
-        {row.email}
-      </span>
-    )},
-    { key: 'role', title: 'Role' },
+    {
+      key: 'email', title: 'Gmail ID', render: (row) => (
+        <span className="flex items-center gap-2 text-textSecondary">
+          <Mail size={14} />
+          {row.email}
+        </span>
+      )
+    },
+    {
+      key: 'role', title: 'Role', render: (row) => (
+        <span>{ROLE_MAP[row.role] || row.role}</span>
+      )
+    },
     { key: 'status', title: 'Status', render: (row) => <StatusBadge status={row.status} /> },
-    { key: 'createdAt', title: 'Created Date' },
-    { key: 'actions', title: 'Actions', render: (row) => (
-      <Button size="sm" variant="danger" onClick={() => handleDelete(row.id)}><Trash2 size={14} /></Button>
-    )},
+    {
+      key: 'createdAt', title: 'Created Date', render: (row) => (
+        <span>{row.createdAt ? new Date(row.createdAt).toISOString().split('T')[0] : '—'}</span>
+      )
+    },
+    {
+      key: 'actions', title: 'Actions', render: (row) => (
+        <Button
+          size="sm"
+          variant="danger"
+          onClick={() => handleDelete(row._id, row.name)}
+          disabled={row.role === 'super_admin'}
+          title={row.role === 'super_admin' ? 'Cannot delete super admin' : 'Delete admin'}
+        >
+          <Trash2 size={14} />
+        </Button>
+      )
+    },
   ]
 
   return (
@@ -68,7 +146,14 @@ export default function AdminManagement() {
             <Users size={24} className="text-accentAmber" />
             <h2 className="text-xl font-semibold text-textPrimary">Admin Users</h2>
           </div>
-          <Button onClick={() => setIsModalOpen(true)}><Plus size={16} /> Add New Admin</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={fetchAdmins} disabled={loading}>
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            </Button>
+            <Button onClick={() => { setFormError(''); setIsModalOpen(true) }}>
+              <Plus size={16} /> Add New Admin
+            </Button>
+          </div>
         </div>
 
         <div className="flex gap-3 max-w-md">
@@ -80,10 +165,33 @@ export default function AdminManagement() {
           />
         </div>
 
-        <Table columns={columns} data={filtered} />
+        {error && (
+          <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-textMuted">
+            <RefreshCw size={20} className="animate-spin mr-2" /> Loading admins...
+          </div>
+        ) : (
+          <Table columns={columns} data={filtered} />
+        )}
+
+        {!loading && !error && filtered.length === 0 && (
+          <div className="text-center py-12 text-textMuted">
+            {search ? 'No admins match your search.' : 'No admins found.'}
+          </div>
+        )}
 
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add New Admin">
           <div className="space-y-4">
+            {formError && (
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                {formError}
+              </div>
+            )}
             <Input
               label="Full Name"
               value={form.name}
@@ -103,7 +211,7 @@ export default function AdminManagement() {
               type="password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder="Enter password"
+              placeholder="Min. 8 characters"
               icon={<Lock size={16} />}
             />
             <div>
@@ -121,8 +229,8 @@ export default function AdminManagement() {
               </select>
             </div>
             <div className="flex justify-end gap-3 pt-2">
-              <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddAdmin}>Add Admin</Button>
+              <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={submitting}>Cancel</Button>
+              <Button onClick={handleAddAdmin} loading={submitting}>Add Admin</Button>
             </div>
           </div>
         </Modal>
