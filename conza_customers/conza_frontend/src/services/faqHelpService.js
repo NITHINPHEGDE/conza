@@ -5,12 +5,12 @@ const ADMIN_API_BASE_URL =
   process.env.EXPO_PUBLIC_ADMIN_API_URL || 'http://localhost:5000/api';
 
 /**
- * Fetch FAQ sections for the Worker app.
+ * Fetch FAQ sections for the Customer app.
  * Returns { sections: [{ title, icon, items: [{q, a}] }], total }
  */
-export const fetchWorkerFAQs = async () => {
+export const fetchCustomerFAQs = async () => {
   const response = await fetch(
-    `${ADMIN_API_BASE_URL}/faq-help/public/faqs/worker`,
+    `${ADMIN_API_BASE_URL}/faq-help/public/faqs/customer`,
     { method: 'GET', headers: { 'Content-Type': 'application/json' } }
   );
   const data = await response.json();
@@ -21,12 +21,12 @@ export const fetchWorkerFAQs = async () => {
 };
 
 /**
- * Fetch Help articles for the Worker app.
- * Returns { articles: [{ _id, title, content, order, createdAt }], total }
+ * Fetch Help articles for the Customer app.
+ * Returns { articles: [{ title, content, order }], total }
  */
-export const fetchWorkerHelpArticles = async () => {
+export const fetchCustomerHelpArticles = async () => {
   const response = await fetch(
-    `${ADMIN_API_BASE_URL}/faq-help/public/help/worker`,
+    `${ADMIN_API_BASE_URL}/faq-help/public/help/customer`,
     { method: 'GET', headers: { 'Content-Type': 'application/json' } }
   );
   const data = await response.json();

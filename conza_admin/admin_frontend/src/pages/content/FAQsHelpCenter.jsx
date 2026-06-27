@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Edit, Trash2, Plus, HelpCircle, BookOpen, ChevronDown, ChevronRight, Loader } from 'lucide-react'
+import { Edit, Trash2, Plus, HelpCircle, BookOpen, Loader } from 'lucide-react'
 import Table from '../../components/common/Table/Table'
 import Button from '../../components/common/Button/Button'
 import Modal from '../../components/common/Modal/Modal'
@@ -91,7 +91,8 @@ function FAQsTab() {
     try {
       const params = filterApp !== 'all' ? { appTarget: filterApp } : {}
       const res = await getFAQs({ ...params, limit: 200 })
-      setFaqs(res.data?.data || []) // Using res.data.data since sendPaginated/sendSuccess can differ
+      // res is the parsed JSON directly: { success, data: [...], pagination: {...} }
+      setFaqs(res.data || [])
     } catch {
       addToast('Failed to load FAQs.', 'error')
     } finally {
@@ -129,12 +130,10 @@ function FAQsTab() {
     setSaving(true)
     try {
       if (editing) {
-        const res = await updateFAQ(editing._id, form)
-        setFaqs((prev) => prev.map((f) => f._id === editing._id ? res.data?.faq || res.faq : f))
+        await updateFAQ(editing._id, form)
         addToast('FAQ updated successfully.', 'success')
       } else {
-        const res = await createFAQ(form)
-        setFaqs((prev) => [res.data?.faq || res.faq, ...prev])
+        await createFAQ(form)
         addToast('FAQ created successfully.', 'success')
       }
       setModalOpen(false)
@@ -150,8 +149,8 @@ function FAQsTab() {
     if (!deleteTarget) return
     try {
       await deleteFAQ(deleteTarget._id)
-      setFaqs((prev) => prev.filter((f) => f._id !== deleteTarget._id))
       addToast('FAQ deleted.', 'success')
+      loadFAQs()
     } catch {
       addToast('Failed to delete FAQ.', 'error')
     } finally {
@@ -223,7 +222,7 @@ function FAQsTab() {
           <Loader size={24} className="text-accentAmber animate-spin" />
         </div>
       ) : (
-        <Table columns={columns} data={faqs} />
+        <Table columns={columns} data={faqs} emptyText="No FAQs found. Click 'Add FAQ' to create one." />
       )}
 
       {/* Add / Edit Modal */}
@@ -334,7 +333,8 @@ function HelpArticlesTab() {
     try {
       const params = filterApp !== 'all' ? { appTarget: filterApp } : {}
       const res = await getHelpArticles({ ...params, limit: 200 })
-      setArticles(res.data?.data || [])
+      // res is the parsed JSON directly: { success, data: [...], pagination: {...} }
+      setArticles(res.data || [])
     } catch {
       addToast('Failed to load help articles.', 'error')
     } finally {
@@ -370,12 +370,10 @@ function HelpArticlesTab() {
     setSaving(true)
     try {
       if (editing) {
-        const res = await updateHelpArticle(editing._id, form)
-        setArticles((prev) => prev.map((a) => a._id === editing._id ? res.data?.article || res.article : a))
+        await updateHelpArticle(editing._id, form)
         addToast('Help article updated successfully.', 'success')
       } else {
-        const res = await createHelpArticle(form)
-        setArticles((prev) => [res.data?.article || res.article, ...prev])
+        await createHelpArticle(form)
         addToast('Help article created successfully.', 'success')
       }
       setModalOpen(false)
@@ -391,8 +389,8 @@ function HelpArticlesTab() {
     if (!deleteTarget) return
     try {
       await deleteHelpArticle(deleteTarget._id)
-      setArticles((prev) => prev.filter((a) => a._id !== deleteTarget._id))
       addToast('Help article deleted.', 'success')
+      loadArticles()
     } catch {
       addToast('Failed to delete help article.', 'error')
     } finally {
@@ -458,7 +456,7 @@ function HelpArticlesTab() {
           <Loader size={24} className="text-accentAmber animate-spin" />
         </div>
       ) : (
-        <Table columns={columns} data={articles} />
+        <Table columns={columns} data={articles} emptyText="No help articles found. Click 'Add Article' to create one." />
       )}
 
       {/* Add / Edit Modal */}
@@ -543,8 +541,8 @@ export default function FAQsHelpCenter() {
   const [activeTab, setActiveTab] = useState('faqs')
 
   const tabs = [
-    { key: 'faqs',  label: 'FAQs',          icon: <HelpCircle size={16} /> },
-    { key: 'help',  label: 'Help Articles',  icon: <BookOpen size={16} /> },
+    { key: 'faqs', label: 'FAQs',         icon: <HelpCircle size={16} /> },
+    { key: 'help', label: 'Help Articles', icon: <BookOpen size={16} /> },
   ]
 
   return (

@@ -10,26 +10,7 @@ import useVendorStore  from '../store/useVendorStore';
 import ModeToggle      from '../components/ModeToggle';
 import { colors }      from '../theme/colors';
 import { logoutSeller } from '../services/authService';
-import { fetchVendorFAQs } from '../services/faqHelpService';
-
-// Static fallback FAQs for vendor app
-const FAQ_FALLBACK_SECTIONS = [
-  {
-    title: 'Getting Started',
-    icon: '🚀',
-    items: [
-      { q: 'How do I list my products?', a: 'Go to the Inventory tab and tap the + button to add a new product or equipment for rental.' },
-      { q: 'How do I manage orders?', a: 'Open the Orders tab to view, accept, and manage incoming orders from customers.' },
-    ],
-  },
-  {
-    title: 'Support',
-    icon: '🆘',
-    items: [
-      { q: 'How do I contact support?', a: 'Email us at nr.conza@gmail.com with your shop name, issue description, and contact details.' },
-    ],
-  },
-];
+import { fetchVendorFAQs, fetchVendorHelpArticles } from '../services/faqHelpService';
 
 // ── FAQ Item ──────────────────────────────────────────────────────────────────
 const FAQItem = React.memo(({ q, a }) => {
@@ -47,25 +28,38 @@ const FAQItem = React.memo(({ q, a }) => {
   );
 });
 
-// ── Help Modal ────────────────────────────────────────────────────────────────
-const HelpModal = React.memo(({ visible, onClose }) => {
-  const [sections, setSections]     = useState(FAQ_FALLBACK_SECTIONS);
-  const [loadingFAQ, setLoadingFAQ] = useState(true);
+// ── Article Item ──────────────────────────────────────────────────────────────
+const ArticleItem = React.memo(({ article }) => {
+  const [open, setOpen] = useState(false);
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+
+  return (
+    <TouchableOpacity style={styles.articleItem} onPress={toggle} activeOpacity={0.8}>
+      <View style={styles.articleHeader}>
+        <Text style={styles.articleTitle}>{article.title}</Text>
+        <Text style={styles.faqChevron}>{open ? '▲' : '▼'}</Text>
+      </View>
+      {open && <Text style={styles.articleContent}>{article.content}</Text>}
+    </TouchableOpacity>
+  );
+});
+
+// ── FAQs Modal ────────────────────────────────────────────────────────────────
+const FAQsModal = React.memo(({ visible, onClose }) => {
+  const [sections, setSections] = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
   const fetchedRef = useRef(false);
 
   useEffect(() => {
     if (!visible || fetchedRef.current) return;
     fetchedRef.current = true;
+    setLoading(true);
+    setError(null);
     fetchVendorFAQs()
-      .then((data) => {
-        if (data.sections && data.sections.length > 0) {
-          setSections(data.sections);
-        }
-      })
-      .catch(() => {
-        // Silently fall back to static data
-      })
-      .finally(() => setLoadingFAQ(false));
+      .then((data) => setSections(data.sections || []))
+      .catch(() => setError('Failed to load FAQs. Please try again.'))
+      .finally(() => setLoading(false));
   }, [visible]);
 
   return (
@@ -73,9 +67,19 @@ const HelpModal = React.memo(({ visible, onClose }) => {
       <View style={styles.modalOverlay}>
         <View style={[styles.modalSheet, { maxHeight: '90%' }]}>
           <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>Help & Support</Text>
-          {loadingFAQ ? (
+          <Text style={styles.modalTitle}>FAQs</Text>
+          {loading ? (
             <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 32 }} />
+          ) : error ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>⚠️</Text>
+              <Text style={styles.emptyText}>{error}</Text>
+            </View>
+          ) : sections.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>❓</Text>
+              <Text style={styles.emptyText}>No FAQs available yet.</Text>
+            </View>
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
               {sections.map((section) => (
@@ -88,6 +92,58 @@ const HelpModal = React.memo(({ visible, onClose }) => {
                     <FAQItem key={idx} q={item.q} a={item.a} />
                   ))}
                 </View>
+              ))}
+            </ScrollView>
+          )}
+          <TouchableOpacity onPress={onClose} style={styles.closeBtnContainer}>
+            <Text style={styles.closeBtnText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+});
+
+// ── Help Articles Modal ───────────────────────────────────────────────────────
+const HelpArticlesModal = React.memo(({ visible, onClose }) => {
+  const [articles, setArticles] = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (!visible || fetchedRef.current) return;
+    fetchedRef.current = true;
+    setLoading(true);
+    setError(null);
+    fetchVendorHelpArticles()
+      .then((data) => setArticles(data.articles || []))
+      .catch(() => setError('Failed to load help articles. Please try again.'))
+      .finally(() => setLoading(false));
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { maxHeight: '90%' }]}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>Help Articles</Text>
+          {loading ? (
+            <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 32 }} />
+          ) : error ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>⚠️</Text>
+              <Text style={styles.emptyText}>{error}</Text>
+            </View>
+          ) : articles.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>📖</Text>
+              <Text style={styles.emptyText}>No help articles available yet.</Text>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
+              {articles.map((article) => (
+                <ArticleItem key={article._id} article={article} />
               ))}
             </ScrollView>
           )}
@@ -114,7 +170,8 @@ const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
   const { mode } = useModeStore();
   const { seller, clearSeller } = useVendorStore();
-  const [helpVisible, setHelpVisible] = useState(false);
+  const [faqsVisible,         setFaqsVisible]         = useState(false);
+  const [helpArticlesVisible, setHelpArticlesVisible] = useState(false);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -170,7 +227,8 @@ const ProfileScreen = () => {
         <View style={styles.menuCard}>
           <MenuItem icon="🔔" label="Notifications" />
           <MenuItem icon="🔒" label="Privacy"       />
-          <MenuItem icon="❓" label="Help & Support" onPress={() => setHelpVisible(true)} />
+          <MenuItem icon="❓" label="FAQs"          onPress={() => setFaqsVisible(true)} />
+          <MenuItem icon="📖" label="Help Articles" onPress={() => setHelpArticlesVisible(true)} />
           <TouchableOpacity
             style={styles.menuItem}
             onPress={async () => {
@@ -186,7 +244,8 @@ const ProfileScreen = () => {
 
       </ScrollView>
 
-      <HelpModal visible={helpVisible} onClose={() => setHelpVisible(false)} />
+      <FAQsModal         visible={faqsVisible}         onClose={() => setFaqsVisible(false)} />
+      <HelpArticlesModal visible={helpArticlesVisible} onClose={() => setHelpArticlesVisible(false)} />
     </View>
   );
 };
@@ -208,11 +267,16 @@ const styles = StyleSheet.create({
   menuIcon:         { fontSize: 18, width: 28 },
   menuLabel:        { flex: 1, fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   menuValue:        { fontSize: 14, color: colors.textMuted },
-  // ── Help Modal
+  // ── Modals shared
   modalOverlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet:       { backgroundColor: colors.background, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40 },
   modalHandle:      { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 20 },
   modalTitle:       { fontSize: 20, fontWeight: '800', color: colors.textPrimary, textAlign: 'center', marginBottom: 20 },
+  // ── Empty / Error state
+  emptyState:       { alignItems: 'center', paddingVertical: 40 },
+  emptyIcon:        { fontSize: 40, marginBottom: 12 },
+  emptyText:        { fontSize: 14, color: colors.textMuted, textAlign: 'center', fontWeight: '500' },
+  // ── FAQ
   faqSection:       { marginBottom: 16 },
   faqSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   faqSectionIcon:   { fontSize: 16 },
@@ -222,6 +286,12 @@ const styles = StyleSheet.create({
   faqQ:             { fontSize: 13, fontWeight: '600', color: colors.textPrimary, flex: 1 },
   faqChevron:       { fontSize: 10, color: colors.textMuted, marginTop: 2 },
   faqA:             { fontSize: 13, color: colors.textSecondary, lineHeight: 20, marginTop: 10 },
+  // ── Article
+  articleItem:      { backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 12, marginBottom: 8 },
+  articleHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
+  articleTitle:     { fontSize: 13, fontWeight: '700', color: colors.textPrimary, flex: 1 },
+  articleContent:   { fontSize: 13, color: colors.textSecondary, lineHeight: 20, marginTop: 10 },
+  // ── Close button
   closeBtnContainer: { marginTop: 8, paddingVertical: 12, alignItems: 'center' },
   closeBtnText:     { fontSize: 14, color: colors.textMuted, fontWeight: '600' },
 });

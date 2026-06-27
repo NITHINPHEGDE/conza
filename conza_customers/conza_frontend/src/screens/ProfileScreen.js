@@ -19,7 +19,7 @@ import { SectionLoader } from '../components/LoadingState';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 import SavedAddressSheet from '../components/SavedAddressSheet';
-import { fetchCustomerFAQs } from '../api/faqHelpAPI';
+import { fetchCustomerFAQs, fetchCustomerHelpArticles } from '../api/faqHelpAPI';
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -42,27 +42,6 @@ const MenuItem = React.memo(({ icon, label, sub, danger, onPress }) => (
     {!danger && <Text style={styles.menuArrow}>›</Text>}
   </TouchableOpacity>
 ));
-
-// ── FAQ data fetched dynamically; static array is offline fallback ─────────────
-
-const FAQ_FALLBACK_SECTIONS = [
-  {
-    title: 'Booking',
-    icon: '📅',
-    items: [
-      { q: 'How do I book a service?', a: 'Go to the Home tab, select a service category (Labour, Materials, or Rental), choose your provider, and follow the checkout steps.' },
-      { q: 'How do I track my booking?', a: 'Open the Status tab to see all active bookings and their real-time status updates.' },
-    ],
-  },
-  {
-    title: 'Account',
-    icon: '👤',
-    items: [
-      { q: 'How do I update my profile?', a: 'Tap Edit Profile on your Profile page to update your name, email, or location.' },
-      { q: 'How do I contact support?', a: 'Use the Chat With Us option in your Profile to send us a support email directly.' },
-    ],
-  },
-];
 
 // ── Orders Modal ──────────────────────────────────────────────────────────────
 
@@ -123,28 +102,28 @@ const OrdersModal = React.memo(({ visible, onClose }) => {
   );
 });
 
-// ── FAQ Modal ─────────────────────────────────────────────────────────────────
+// ── FAQs Modal ────────────────────────────────────────────────────────────────
 
-const FAQModal = React.memo(({ visible, onClose }) => {
-  const [expanded, setExpanded]     = useState(null);
-  const [sections, setSections]     = useState(FAQ_FALLBACK_SECTIONS);
-  const [loadingFAQ, setLoadingFAQ] = useState(false);
+const FAQsModal = React.memo(({ visible, onClose }) => {
+  const [expanded, setExpanded] = useState(null);
+  const [sections, setSections] = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
   const fetchedRef = useRef(false);
 
   useEffect(() => {
     if (!visible || fetchedRef.current) return;
     fetchedRef.current = true;
-    setLoadingFAQ(true);
+    setLoading(true);
+    setError(null);
     fetchCustomerFAQs()
       .then((data) => {
-        if (data.sections && data.sections.length > 0) {
-          setSections(data.sections);
-        }
+        setSections(data.sections || []);
       })
       .catch(() => {
-        // Silently fall back to static data already set as default
+        setError('Failed to load FAQs. Please try again.');
       })
-      .finally(() => setLoadingFAQ(false));
+      .finally(() => setLoading(false));
   }, [visible]);
 
   const toggle = useCallback((key) => {
@@ -156,9 +135,19 @@ const FAQModal = React.memo(({ visible, onClose }) => {
       <View style={styles.modalOverlay}>
         <View style={[styles.modalSheet, { maxHeight: '90%' }]}>
           <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>Help & FAQ</Text>
-          {loadingFAQ ? (
+          <Text style={styles.modalTitle}>FAQs</Text>
+          {loading ? (
             <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 32 }} />
+          ) : error ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>⚠️</Text>
+              <Text style={styles.emptyStateText}>{error}</Text>
+            </View>
+          ) : sections.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>❓</Text>
+              <Text style={styles.emptyStateText}>No FAQs available yet.</Text>
+            </View>
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
               {sections.map((section) => (
@@ -198,15 +187,91 @@ const FAQModal = React.memo(({ visible, onClose }) => {
   );
 });
 
+// ── Help Articles Modal ───────────────────────────────────────────────────────
+
+const HelpArticlesModal = React.memo(({ visible, onClose }) => {
+  const [articles, setArticles] = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (!visible || fetchedRef.current) return;
+    fetchedRef.current = true;
+    setLoading(true);
+    setError(null);
+    fetchCustomerHelpArticles()
+      .then((data) => {
+        setArticles(data.articles || []);
+      })
+      .catch(() => {
+        setError('Failed to load help articles. Please try again.');
+      })
+      .finally(() => setLoading(false));
+  }, [visible]);
+
+  const toggle = useCallback((id) => {
+    setExpanded((prev) => (prev === id ? null : id));
+  }, []);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { maxHeight: '90%' }]}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>Help Articles</Text>
+          {loading ? (
+            <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 32 }} />
+          ) : error ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>⚠️</Text>
+              <Text style={styles.emptyStateText}>{error}</Text>
+            </View>
+          ) : articles.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>📖</Text>
+              <Text style={styles.emptyStateText}>No help articles available yet.</Text>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
+              {articles.map((article) => {
+                const open = expanded === article._id;
+                return (
+                  <TouchableOpacity
+                    key={article._id}
+                    style={styles.articleItem}
+                    activeOpacity={0.75}
+                    onPress={() => toggle(article._id)}
+                  >
+                    <View style={styles.articleHeader}>
+                      <Text style={styles.articleTitle}>{article.title}</Text>
+                      <Text style={styles.faqChevron}>{open ? '▲' : '▼'}</Text>
+                    </View>
+                    {open && <Text style={styles.articleContent}>{article.content}</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+          <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
+            <Text style={styles.cancelBtnText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+});
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 const ProfileScreen = () => {
-  const userProfile            = useAppStore((s) => s.userProfile);
-  const profileLoading         = useAppStore((s) => s.profileLoading);
-  const derivedCompletedCount  = useAppStore((s) => s.derivedCompletedCount);
+  const userProfile             = useAppStore((s) => s.userProfile);
+  const profileLoading          = useAppStore((s) => s.profileLoading);
+  const derivedCompletedCount   = useAppStore((s) => s.derivedCompletedCount);
   const derivedActiveSitesCount = useAppStore((s) => s.derivedActiveSitesCount);
-  const fetchCompletedOrders   = useAppStore((s) => s.fetchCompletedOrders);
-  const insets                 = useSafeAreaInsets();
+  const fetchCompletedOrders    = useAppStore((s) => s.fetchCompletedOrders);
+  const insets                  = useSafeAreaInsets();
   const { logout, updateProfile, loading } = useAuth();
 
   const userLat          = useAppStore((s) => s.userLat);
@@ -217,10 +282,11 @@ const ProfileScreen = () => {
     if (userProfile) fetchCompletedOrders();
   }, [userProfile?._id]);
 
-  const [editVisible,    setEditVisible]    = useState(false);
-  const [ordersVisible,  setOrdersVisible]  = useState(false);
-  const [faqVisible,     setFaqVisible]     = useState(false);
-  const [addressVisible, setAddressVisible] = useState(false);
+  const [editVisible,         setEditVisible]         = useState(false);
+  const [ordersVisible,       setOrdersVisible]       = useState(false);
+  const [faqsVisible,         setFaqsVisible]         = useState(false);
+  const [helpArticlesVisible, setHelpArticlesVisible] = useState(false);
+  const [addressVisible,      setAddressVisible]      = useState(false);
   const [form, setForm] = useState({ fullName: '', email: '', locationText: '' });
   const [updateError, setUpdateError] = useState(null);
 
@@ -314,8 +380,9 @@ const ProfileScreen = () => {
         {/* Support Menu */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support</Text>
-          <MenuItem icon="❓" label="Help & FAQ"   sub="Browse common questions" onPress={() => setFaqVisible(true)} />
-          <MenuItem icon="💬" label="Chat With Us" sub="Email our support team"  onPress={handleChatWithUs} />
+          <MenuItem icon="❓" label="FAQs"          sub="Browse common questions"  onPress={() => setFaqsVisible(true)} />
+          <MenuItem icon="📖" label="Help Articles" sub="Guides and how-to articles" onPress={() => setHelpArticlesVisible(true)} />
+          <MenuItem icon="💬" label="Chat With Us"  sub="Email our support team"    onPress={handleChatWithUs} />
         </View>
 
         <View style={styles.section}>
@@ -337,8 +404,11 @@ const ProfileScreen = () => {
       {/* My Orders Modal */}
       <OrdersModal visible={ordersVisible} onClose={() => setOrdersVisible(false)} />
 
-      {/* FAQ Modal */}
-      <FAQModal visible={faqVisible} onClose={() => setFaqVisible(false)} />
+      {/* FAQs Modal */}
+      <FAQsModal visible={faqsVisible} onClose={() => setFaqsVisible(false)} />
+
+      {/* Help Articles Modal */}
+      <HelpArticlesModal visible={helpArticlesVisible} onClose={() => setHelpArticlesVisible(false)} />
 
       {/* Edit Profile Modal */}
       <Modal visible={editVisible} animationType="slide" transparent>
@@ -682,6 +752,18 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontWeight: '400',
   },
+  // ── Empty / Error state
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateIcon: { fontSize: 40, marginBottom: 12 },
+  emptyStateText: {
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
   // ── FAQ
   faqSection: {
     marginBottom: 20,
@@ -724,6 +806,34 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   faqAnswer: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginTop: 10,
+    fontWeight: '400',
+  },
+  // ── Help Articles
+  articleItem: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginBottom: 8,
+  },
+  articleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  articleTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  articleContent: {
     fontSize: 13,
     color: colors.textSecondary,
     lineHeight: 20,
