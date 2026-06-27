@@ -45,7 +45,8 @@ sellerSchema.pre('save', async function (next) {
 });
 
 sellerSchema.methods.matchPassword = async function (entered) {
-  return bcrypt.compare(entered, this.password);
+  if (!entered || !this.password) return false;
+  return bcrypt.compare(String(entered), this.password);
 };
 
 module.exports = mongoose.model('Seller', sellerSchema);

@@ -15,9 +15,11 @@ const initialBanners = [
 ]
 
 const positions = ['home_top', 'customer_app', 'worker_app', 'vendor_dashboard', 'bp_portal']
+const categories = ['All', ...positions]
 
 export default function Banners() {
   const [banners, setBanners] = useState(initialBanners)
+  const [activeCategory, setActiveCategory] = useState('All')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editBanner, setEditBanner] = useState(null)
 
@@ -38,6 +40,8 @@ export default function Banners() {
   const toggleStatus = (id) => {
     setBanners(banners.map(b => b.id === id ? { ...b, status: b.status === 'active' ? 'inactive' : 'active' } : b))
   }
+
+  const filtered = banners.filter(b => activeCategory === 'All' || b.position === activeCategory)
 
   const columns = [
     { key: 'title', label: 'Title' },
@@ -63,7 +67,23 @@ export default function Banners() {
           <Button onClick={() => { setEditBanner(null); setIsModalOpen(true) }}>Add Banner</Button>
         </div>
 
-        <Table columns={columns} data={banners} />
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap border transition-colors ${
+                activeCategory === cat
+                  ? 'bg-accentYellow text-accentAmber border-accentAmber font-medium'
+                  : 'bg-surface text-textSecondary border-border hover:bg-surfaceElevated'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        <Table columns={columns} data={filtered} />
 
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editBanner ? 'Edit Banner' : 'Add Banner'}>
           <BannerForm banner={editBanner} onSave={handleSave} onCancel={() => setIsModalOpen(false)} />

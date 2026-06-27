@@ -108,11 +108,10 @@ import Cashback from '../pages/promotions/Cashback'
 import Referrals from '../pages/promotions/Referrals'
 import SeasonalOffers from '../pages/promotions/SeasonalOffers'
 
-import FAQs from '../pages/content/FAQs'
+import FAQsHelpCenter from '../pages/content/FAQsHelpCenter'
 import Terms from '../pages/content/Terms'
 import Privacy from '../pages/content/Privacy'
 import AboutUs from '../pages/content/AboutUs'
-import HelpCenter from '../pages/content/HelpCenter'
 import Banners from '../pages/content/Banners'
 
 import UserAnalytics from '../pages/analytics/UserAnalytics'
@@ -301,11 +300,12 @@ export default function AppRoutes() {
 
           {/* Content */}
           <Route element={<PermissionRoute permission="content" />}>
-            <Route path="/content/faqs" element={<FAQs />} />
+            <Route path="/content/faqs-help" element={<FAQsHelpCenter />} />
+            <Route path="/content/faqs" element={<FAQsHelpCenter />} />
+            <Route path="/content/help" element={<FAQsHelpCenter />} />
             <Route path="/content/terms" element={<Terms />} />
             <Route path="/content/privacy" element={<Privacy />} />
             <Route path="/content/about" element={<AboutUs />} />
-            <Route path="/content/help" element={<HelpCenter />} />
             <Route path="/content/banners" element={<Banners />} />
           </Route>
 

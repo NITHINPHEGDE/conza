@@ -93,12 +93,11 @@ const menuGroups = [
   {
     title: 'Content',
     items: [
-      { icon: FileText, label: 'FAQs',        path: '/content/faqs',    permission: 'content' },
-      { icon: FileText, label: 'Terms',       path: '/content/terms',   permission: 'content' },
-      { icon: FileText, label: 'Privacy',     path: '/content/privacy', permission: 'content' },
-      { icon: FileText, label: 'About Us',    path: '/content/about',   permission: 'content' },
-      { icon: FileText, label: 'Help Center', path: '/content/help',    permission: 'content' },
-      { icon: FileText, label: 'Banners',     path: '/content/banners', permission: 'content' },
+      { icon: FileText, label: 'FAQ & Help Center', path: '/content/faqs-help', permission: 'content' },
+      { icon: FileText, label: 'Terms',             path: '/content/terms',     permission: 'content' },
+      { icon: FileText, label: 'Privacy',           path: '/content/privacy',   permission: 'content' },
+      { icon: FileText, label: 'About Us',          path: '/content/about',     permission: 'content' },
+      { icon: FileText, label: 'Banners',           path: '/content/banners',   permission: 'content' },
     ]
   },
   {

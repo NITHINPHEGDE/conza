@@ -14,7 +14,7 @@ const protect = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'conza_vendor_jwt_secret_fallback_2026');
     req.seller = await Seller.findById(decoded.id).select('-password');
     if (!req.seller) {
       return res.status(401).json({ success: false, message: 'Seller not found' });

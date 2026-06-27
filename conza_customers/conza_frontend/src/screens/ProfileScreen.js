@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { SectionLoader } from '../components/LoadingState';
 import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 import SavedAddressSheet from '../components/SavedAddressSheet';
+import { fetchCustomerFAQs } from '../api/faqHelpAPI';
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -42,41 +43,15 @@ const MenuItem = React.memo(({ icon, label, sub, danger, onPress }) => (
   </TouchableOpacity>
 ));
 
-// ── FAQ data ──────────────────────────────────────────────────────────────────
+// ── FAQ data fetched dynamically; static array is offline fallback ─────────────
 
-const FAQ_SECTIONS = [
+const FAQ_FALLBACK_SECTIONS = [
   {
     title: 'Booking',
     icon: '📅',
     items: [
       { q: 'How do I book a service?', a: 'Go to the Home tab, select a service category (Labour, Materials, or Rental), choose your provider, and follow the checkout steps.' },
       { q: 'How do I track my booking?', a: 'Open the Status tab to see all active bookings and their real-time status updates.' },
-      { q: 'Can I cancel a booking?', a: 'Yes. Open the Status tab, tap on your active booking, and use the Cancel option. Cancellations are only allowed before the worker has started.' },
-      { q: 'What happens after booking confirmation?', a: 'You will receive a real-time status update when the worker accepts and travels to your location.' },
-    ],
-  },
-  {
-    title: 'Orders',
-    icon: '📋',
-    items: [
-      { q: 'Where can I see completed orders?', a: 'Tap My Orders in your Profile. It shows all bookings and orders that have been successfully completed.' },
-      { q: 'How do I view booking details?', a: 'Tap any order in My Orders to see full details including date, service, location, and status history.' },
-    ],
-  },
-  {
-    title: 'Payments',
-    icon: '💳',
-    items: [
-      { q: 'When am I charged?', a: 'Payment is collected at checkout before the booking is confirmed. For labour bookings, the amount is agreed upon before work begins.' },
-      { q: 'What if payment succeeds but booking fails?', a: 'In such cases, your payment will be automatically refunded within 5–7 business days. Contact support if it takes longer.' },
-    ],
-  },
-  {
-    title: 'Addresses',
-    icon: '📍',
-    items: [
-      { q: 'How do saved addresses work?', a: 'Saved addresses let you quickly select a delivery or service location at checkout without re-entering your address every time.' },
-      { q: 'Can I edit or delete saved addresses?', a: 'Yes. Go to Saved Addresses in your Profile to add, edit, or remove any address.' },
     ],
   },
   {
@@ -151,7 +126,26 @@ const OrdersModal = React.memo(({ visible, onClose }) => {
 // ── FAQ Modal ─────────────────────────────────────────────────────────────────
 
 const FAQModal = React.memo(({ visible, onClose }) => {
-  const [expanded, setExpanded] = useState(null);
+  const [expanded, setExpanded]     = useState(null);
+  const [sections, setSections]     = useState(FAQ_FALLBACK_SECTIONS);
+  const [loadingFAQ, setLoadingFAQ] = useState(false);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (!visible || fetchedRef.current) return;
+    fetchedRef.current = true;
+    setLoadingFAQ(true);
+    fetchCustomerFAQs()
+      .then((data) => {
+        if (data.sections && data.sections.length > 0) {
+          setSections(data.sections);
+        }
+      })
+      .catch(() => {
+        // Silently fall back to static data already set as default
+      })
+      .finally(() => setLoadingFAQ(false));
+  }, [visible]);
 
   const toggle = useCallback((key) => {
     setExpanded((prev) => (prev === key ? null : key));
@@ -163,34 +157,38 @@ const FAQModal = React.memo(({ visible, onClose }) => {
         <View style={[styles.modalSheet, { maxHeight: '90%' }]}>
           <View style={styles.modalHandle} />
           <Text style={styles.modalTitle}>Help & FAQ</Text>
-          <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
-            {FAQ_SECTIONS.map((section) => (
-              <View key={section.title} style={styles.faqSection}>
-                <View style={styles.faqSectionHeader}>
-                  <Text style={styles.faqSectionIcon}>{section.icon}</Text>
-                  <Text style={styles.faqSectionTitle}>{section.title}</Text>
+          {loadingFAQ ? (
+            <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 32 }} />
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
+              {sections.map((section) => (
+                <View key={section.title} style={styles.faqSection}>
+                  <View style={styles.faqSectionHeader}>
+                    <Text style={styles.faqSectionIcon}>{section.icon}</Text>
+                    <Text style={styles.faqSectionTitle}>{section.title}</Text>
+                  </View>
+                  {section.items.map((item, idx) => {
+                    const key = `${section.title}-${idx}`;
+                    const open = expanded === key;
+                    return (
+                      <TouchableOpacity
+                        key={key}
+                        style={styles.faqItem}
+                        activeOpacity={0.75}
+                        onPress={() => toggle(key)}
+                      >
+                        <View style={styles.faqQuestion}>
+                          <Text style={styles.faqQuestionText}>{item.q}</Text>
+                          <Text style={styles.faqChevron}>{open ? '▲' : '▼'}</Text>
+                        </View>
+                        {open && <Text style={styles.faqAnswer}>{item.a}</Text>}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
-                {section.items.map((item, idx) => {
-                  const key = `${section.title}-${idx}`;
-                  const open = expanded === key;
-                  return (
-                    <TouchableOpacity
-                      key={key}
-                      style={styles.faqItem}
-                      activeOpacity={0.75}
-                      onPress={() => toggle(key)}
-                    >
-                      <View style={styles.faqQuestion}>
-                        <Text style={styles.faqQuestionText}>{item.q}</Text>
-                        <Text style={styles.faqChevron}>{open ? '▲' : '▼'}</Text>
-                      </View>
-                      {open && <Text style={styles.faqAnswer}>{item.a}</Text>}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ))}
-          </ScrollView>
+              ))}
+            </ScrollView>
+          )}
           <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
             <Text style={styles.cancelBtnText}>Close</Text>
           </TouchableOpacity>

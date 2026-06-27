@@ -13,9 +13,12 @@ const routes = require('./routes')
 const app = express()
 
 // Security middleware
-app.use(helmet())
+app.use(helmet({ crossOriginResourcePolicy: false }))
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, native fetch, postman) or any web origin
+    callback(null, true)
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],

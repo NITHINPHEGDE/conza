@@ -1,13 +1,15 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  StatusBar, Linking, Alert,
+  StatusBar, Linking, Alert, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import usePartnerStore from '../store/usePartnerStore';
 import { colors } from '../theme/colors';
+import { fetchWorkerFAQs } from '../services/faqHelpService';
 
-const FAQ_SECTIONS = [
+// Static fallback FAQs used when API is unreachable
+const FAQ_FALLBACK_SECTIONS = [
   {
     title: 'Getting Started',
     icon: '🚀',
@@ -20,68 +22,6 @@ const FAQ_SECTIONS = [
         q: 'How do I accept a booking?',
         a: 'When a new request appears, tap on it to view the details. Then tap "Accept Job" to confirm. The job will move to your Active tab.',
       },
-      {
-        q: 'What happens after accepting a booking?',
-        a: 'After accepting, head to the customer location. Use "Mark As Arrived" when you reach there, then "Start Work" to begin, and "Complete Work" when done.',
-      },
-    ],
-  },
-  {
-    title: 'Work Flow',
-    icon: '⚒️',
-    items: [
-      {
-        q: 'What does Mark As Arrived do?',
-        a: '"Mark As Arrived" notifies the customer that you have reached their location. It records your check-in time and signals you are ready to start.',
-      },
-      {
-        q: 'When should I start work?',
-        a: 'Tap "Start Work" only after you have arrived at the customer\'s location and are ready to begin the job. This updates the booking status to In Progress.',
-      },
-      {
-        q: 'When should I mark work completed?',
-        a: 'Tap "Complete Work" only after the job is fully done. This sends a confirmation request to the customer.',
-      },
-      {
-        q: 'How does customer confirmation work?',
-        a: 'After you mark the work as complete, the customer receives a prompt to confirm. Once the customer confirms, the booking is marked Completed and your earnings are updated.',
-      },
-    ],
-  },
-  {
-    title: 'Payments & Earnings',
-    icon: '💰',
-    items: [
-      {
-        q: 'How are earnings calculated?',
-        a: 'Your earnings are the job total minus the Conza platform commission (3%). For online payments, the net amount is credited to your account. For cash jobs, you collect the full amount and owe the 3% commission to Conza.',
-      },
-      {
-        q: 'When are earnings updated?',
-        a: 'Earnings are updated as soon as the customer confirms job completion. You can see all earnings in the Earnings tab.',
-      },
-      {
-        q: 'Where can I see completed jobs?',
-        a: 'Go to the History tab. It shows all your completed jobs with customer name, service, booking ID, dates, address, and earnings.',
-      },
-    ],
-  },
-  {
-    title: 'Profile',
-    icon: '👤',
-    items: [
-      {
-        q: 'How do I update my profile?',
-        a: 'Go to the Profile tab and tap "Edit Profile". You can update your name, phone, email, profile picture, and bio from there.',
-      },
-      {
-        q: 'How do I change my service areas?',
-        a: 'Tap "Edit Profile" on the Profile tab, then update the "Service Areas" field with your preferred locations.',
-      },
-      {
-        q: 'How do I update service categories?',
-        a: 'In the Edit Profile screen, tap your new category under "Service Category". Only one category can be selected at a time.',
-      },
     ],
   },
   {
@@ -91,10 +31,6 @@ const FAQ_SECTIONS = [
       {
         q: 'How do I contact Conza support?',
         a: 'Tap "Chat With Us" on the Profile screen or scroll down on this page. This will open your email app with a pre-filled support request.',
-      },
-      {
-        q: 'What should I do if I face a booking issue?',
-        a: 'Contact Conza support via email with your booking ID, a description of the issue, and your phone number. We will resolve it as soon as possible.',
       },
     ],
   },
@@ -131,8 +67,26 @@ const FAQSection = React.memo(({ section }) => (
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 const HelpFAQScreen = ({ navigation }) => {
-  const insets  = useSafeAreaInsets();
-  const profile = usePartnerStore((s) => s.worker) || {};
+  const insets   = useSafeAreaInsets();
+  const profile  = usePartnerStore((s) => s.worker) || {};
+  const [sections, setSections]     = useState(FAQ_FALLBACK_SECTIONS);
+  const [loadingFAQ, setLoadingFAQ] = useState(true);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    fetchWorkerFAQs()
+      .then((data) => {
+        if (data.sections && data.sections.length > 0) {
+          setSections(data.sections);
+        }
+      })
+      .catch(() => {
+        // Silently fall back to static data already set as default
+      })
+      .finally(() => setLoadingFAQ(false));
+  }, []);
 
   const handleChatWithUs = useCallback(() => {
     const name  = profile.fullName || profile.name || '';
@@ -159,21 +113,27 @@ const HelpFAQScreen = ({ navigation }) => {
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {FAQ_SECTIONS.map((section) => (
-          <FAQSection key={section.title} section={section} />
-        ))}
-
-        {/* Chat With Us */}
-        <View style={styles.chatSection}>
-          <Text style={styles.chatTitle}>Still need help?</Text>
-          <Text style={styles.chatSub}>Our team is ready to assist you.</Text>
-          <TouchableOpacity style={styles.chatBtn} onPress={handleChatWithUs} activeOpacity={0.85}>
-            <Text style={styles.chatBtnIcon}>💬</Text>
-            <Text style={styles.chatBtnText}>Chat With Us</Text>
-          </TouchableOpacity>
+      {loadingFAQ ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.accentAmber} />
         </View>
-      </ScrollView>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+          {sections.map((section) => (
+            <FAQSection key={section.title} section={section} />
+          ))}
+
+          {/* Chat With Us */}
+          <View style={styles.chatSection}>
+            <Text style={styles.chatTitle}>Still need help?</Text>
+            <Text style={styles.chatSub}>Our team is ready to assist you.</Text>
+            <TouchableOpacity style={styles.chatBtn} onPress={handleChatWithUs} activeOpacity={0.85}>
+              <Text style={styles.chatBtnIcon}>💬</Text>
+              <Text style={styles.chatBtnText}>Chat With Us</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 };
@@ -181,6 +141,7 @@ const HelpFAQScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   scroll: { paddingBottom: 40 },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   pageHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

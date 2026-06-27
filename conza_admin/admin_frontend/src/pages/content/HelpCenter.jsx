@@ -70,7 +70,15 @@ export default function HelpCenter() {
 
         <div className="flex gap-2 overflow-x-auto pb-2">
           {categories.map(cat => (
-            <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap ${activeCategory === cat ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap border transition-colors ${
+                activeCategory === cat
+                  ? 'bg-accentYellow text-accentAmber border-accentAmber font-medium'
+                  : 'bg-surface text-textSecondary border-border hover:bg-surfaceElevated'
+              }`}
+            >
               {cat}
             </button>
           ))}

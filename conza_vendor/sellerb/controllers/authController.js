@@ -3,7 +3,7 @@ const jwt    = require('jsonwebtoken');
 const Seller = require('../models/Seller');
 
 const generateToken = (id) =>
-  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE || '30d' });
+  jwt.sign({ id }, process.env.JWT_SECRET || 'conza_vendor_jwt_secret_fallback_2026', { expiresIn: process.env.JWT_EXPIRE || '30d' });
 
 const sellerPublic = (s) => ({
   _id:           s._id,
@@ -77,7 +77,8 @@ const login = async (req, res) => {
       return res.status(400).json({ success: false, message: 'phone and password are required' });
     }
 
-    const seller = await Seller.findOne({ phone });
+    const cleanPhone = String(phone).trim();
+    const seller = await Seller.findOne({ phone: cleanPhone });
     if (!seller || !(await seller.matchPassword(password))) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
@@ -88,7 +89,8 @@ const login = async (req, res) => {
       seller: sellerPublic(seller),
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Vendor Login Error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Server error during login' });
   }
 };
 

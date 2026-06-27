@@ -16,8 +16,11 @@ const aboutData = {
   stats: { customers: '50K+', workers: '8K+', vendors: '1.2K+', cities: '25+' }
 }
 
+const categories = ['Overview', 'Company Info', 'Platform Stats']
+
 export default function AboutUs() {
   const [data, setData] = useState(aboutData)
+  const [activeTab, setActiveTab] = useState('Overview')
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState(data)
 
@@ -30,11 +33,45 @@ export default function AboutUs() {
     <PageWrapper title="About Us" subtitle="Manage platform about information">
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-xl font-semibold text-gray-800">Platform Overview</h2>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setActiveTab(cat)}
+                className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap border transition-colors ${
+                  activeTab === cat
+                    ? 'bg-accentYellow text-accentAmber border-accentAmber font-medium'
+                    : 'bg-surface text-textSecondary border-border hover:bg-surfaceElevated'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
           <Button onClick={() => setIsEditing(true)} variant="primary">Edit Content</Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {activeTab === 'Overview' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-medium text-gray-700 mb-2">Description</h3>
+              <p className="text-gray-600 leading-relaxed">{data.description}</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-medium text-gray-700 mb-2">Mission</h3>
+                <p className="text-gray-600">{data.mission}</p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-medium text-gray-700 mb-2">Vision</h3>
+                <p className="text-gray-600">{data.vision}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'Company Info' && (
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-lg font-medium text-gray-700 mb-4">Company Info</h3>
             <div className="space-y-3">
@@ -56,7 +93,9 @@ export default function AboutUs() {
               </div>
             </div>
           </div>
+        )}
 
+        {activeTab === 'Platform Stats' && (
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-lg font-medium text-gray-700 mb-4">Platform Stats</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -68,23 +107,7 @@ export default function AboutUs() {
               ))}
             </div>
           </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-700 mb-2">Description</h3>
-          <p className="text-gray-600 leading-relaxed">{data.description}</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-700 mb-2">Mission</h3>
-            <p className="text-gray-600">{data.mission}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-700 mb-2">Vision</h3>
-            <p className="text-gray-600">{data.vision}</p>
-          </div>
-        </div>
+        )}
 
         <Modal isOpen={isEditing} onClose={() => setIsEditing(false)} title="Edit About Us">
           <div className="space-y-4">
