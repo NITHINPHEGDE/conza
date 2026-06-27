@@ -2,7 +2,7 @@
 // No auth token required — public read-only endpoints.
 
 const ADMIN_API_BASE_URL =
-  process.env.EXPO_PUBLIC_ADMIN_API_URL || 'http://localhost:5000/api';
+  process.env.EXPO_PUBLIC_ADMIN_API_URL || 'https://conza-production-8ba6.up.railway.app/api';
 
 /**
  * Fetch FAQ sections for the Vendor app.
@@ -10,7 +10,7 @@ const ADMIN_API_BASE_URL =
  */
 export const fetchVendorFAQs = async () => {
   const response = await fetch(
-    `${ADMIN_API_BASE_URL}/faq-help/public/faqs/vendor`,
+    `${ADMIN_API_BASE_URL}/faq-help/public/faqs/vendor`,//
     { method: 'GET', headers: { 'Content-Type': 'application/json' } }
   );
   const data = await response.json();
