@@ -3,11 +3,7 @@ const jwt    = require('jsonwebtoken');
 const Seller = require('../models/Seller');
 
 const generateToken = (id) => {
-  let exp = process.env.JWT_EXPIRE || process.env.JWT_EXPIRES_IN || '30d';
-  if (typeof exp !== 'string' || !exp.trim() || exp === 'undefined' || exp === 'null') {
-    exp = '30d';
-  }
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'conza_vendor_jwt_secret_fallback_2026', { expiresIn: exp });
+  return jwt.sign({ id }, process.env.JWT_SECRET || 'conza_vendor_jwt_secret_fallback_2026', { expiresIn: '30d' });
 };
 
 const sellerPublic = (s) => ({
