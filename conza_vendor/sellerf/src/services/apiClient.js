@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Seller backend runs on port 5001
 // Change IP to your machine's LAN IP for physical device testing
 export const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || 'http://conza-production-ad4a.up.railway.app/api';
+  process.env.EXPO_PUBLIC_API_URL || 'https://conza-production-ad4a.up.railway.app/api';
 
 const getToken = () => AsyncStorage.getItem('vendor_token');
 
