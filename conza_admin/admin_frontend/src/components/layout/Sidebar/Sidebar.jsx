@@ -7,110 +7,116 @@ import {
   ScrollText, ChevronDown, ChevronRight, Menu, X, DollarSign
 } from 'lucide-react'
 import useAuthStore from '../../../store/auth/useAuthStore'
+import { usePermission } from '../../../hooks/usePermission'
 
+// permission: the permission key required to see this item/group.
+// null means always visible (e.g. Dashboard for super_admin).
 const menuGroups = [
   {
     title: 'Main',
     items: [
-      { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
+      { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', permission: 'dashboard' },
     ]
   },
   {
     title: 'Users',
     items: [
-      { icon: Users, label: 'Customers', path: '/customers' },
-      { icon: HardHat, label: 'Workers', path: '/workers' },
-      { icon: Store, label: 'Vendors', path: '/vendors' },
-      { icon: Handshake, label: 'Business Partners', path: '/business-partners' },
+      { icon: Users,     label: 'Customers',        path: '/customers',         permission: 'customers' },
+      { icon: HardHat,   label: 'Workers',           path: '/workers',           permission: 'workers' },
+      { icon: Store,     label: 'Vendors',           path: '/vendors',           permission: 'vendors' },
+      { icon: Handshake, label: 'Business Partners', path: '/business-partners', permission: 'bp' },
     ]
   },
   {
     title: 'Operations',
     items: [
-      { icon: CalendarCheck, label: 'Bookings', path: '/bookings', children: [
-        { label: 'Labour', path: '/bookings/labour' },
-        { label: 'Materials', path: '/bookings/materials' },
-        { label: 'Rentals', path: '/bookings/rentals' },
-      ]},
-      { icon: ShoppingCart, label: 'Orders', path: '/orders' },
-      { icon: Map, label: 'Live Tracking', path: '/maps/live-tracking' },
+      {
+        icon: CalendarCheck, label: 'Bookings', path: '/bookings', permission: 'bookings',
+        children: [
+          { label: 'Labour',    path: '/bookings/labour' },
+          { label: 'Materials', path: '/bookings/materials' },
+          { label: 'Rentals',   path: '/bookings/rentals' },
+        ]
+      },
+      { icon: ShoppingCart, label: 'Orders',        path: '/orders',             permission: 'orders' },
+      { icon: Map,          label: 'Live Tracking', path: '/maps/live-tracking', permission: 'maps' },
     ]
   },
   {
     title: 'Catalog',
     items: [
-      { icon: Package, label: 'Materials', path: '/materials' },
-      { icon: Truck, label: 'Rentals', path: '/rentals' },
-      { icon: Boxes, label: 'Inventory', path: '/inventory' },
-      { icon: Wrench, label: 'Services', path: '/services' },
+      { icon: Package, label: 'Materials',  path: '/materials',  permission: 'materials' },
+      { icon: Truck,   label: 'Rentals',    path: '/rentals',    permission: 'rentals' },
+      { icon: Boxes,   label: 'Inventory',  path: '/inventory',  permission: 'inventory' },
+      { icon: Wrench,  label: 'Services',   path: '/services',   permission: 'services' },
     ]
   },
   {
     title: 'Finance',
     items: [
-      { icon: BarChart3, label: 'Revenue', path: '/finance/revenue' },
-      { icon: CreditCard, label: 'Transactions', path: '/finance/transactions' },
-      { icon: Wallet, label: 'Payouts', path: '/finance/payouts' },
-      { icon: ScrollText, label: 'Reports', path: '/finance/reports' },
-      { icon: Gift, label: 'Commissions', path: '/finance/commissions' },
-      { icon: DollarSign, label: 'Pricing', path: '/pricing-management' },
+      { icon: BarChart3,  label: 'Revenue',      path: '/finance/revenue',      permission: 'finance' },
+      { icon: CreditCard, label: 'Transactions', path: '/finance/transactions', permission: 'finance' },
+      { icon: Wallet,     label: 'Payouts',      path: '/finance/payouts',      permission: 'finance' },
+      { icon: ScrollText, label: 'Reports',      path: '/finance/reports',      permission: 'finance' },
+      { icon: Gift,       label: 'Commissions',  path: '/finance/commissions',  permission: 'finance' },
+      { icon: DollarSign, label: 'Pricing',      path: '/pricing-management',   permission: 'pricing' },
     ]
   },
   {
     title: 'Payments',
     items: [
-      { icon: CreditCard, label: 'Razorpay', path: '/payments/razorpay' },
-      { icon: CreditCard, label: 'UPI', path: '/payments/upi' },
-      { icon: CreditCard, label: 'Failed', path: '/payments/failed' },
-      { icon: CreditCard, label: 'Refunds', path: '/payments/refunds' },
-      { icon: CreditCard, label: 'Cash', path: '/payments/cash' },
+      { icon: CreditCard, label: 'Razorpay', path: '/payments/razorpay', permission: 'payments' },
+      { icon: CreditCard, label: 'UPI',      path: '/payments/upi',      permission: 'payments' },
+      { icon: CreditCard, label: 'Failed',   path: '/payments/failed',   permission: 'payments' },
+      { icon: CreditCard, label: 'Refunds',  path: '/payments/refunds',  permission: 'payments' },
+      { icon: CreditCard, label: 'Cash',     path: '/payments/cash',     permission: 'payments' },
     ]
   },
   {
     title: 'Wallets',
     items: [
-      { icon: Wallet, label: 'Customers', path: '/wallets/customers' },
-      { icon: Wallet, label: 'Workers', path: '/wallets/workers' },
-      { icon: Wallet, label: 'Vendors', path: '/wallets/vendors' },
-      { icon: Wallet, label: 'BP Wallets', path: '/wallets/business-partners' },
+      { icon: Wallet, label: 'Customers',  path: '/wallets/customers',         permission: 'wallets' },
+      { icon: Wallet, label: 'Workers',    path: '/wallets/workers',           permission: 'wallets' },
+      { icon: Wallet, label: 'Vendors',    path: '/wallets/vendors',           permission: 'wallets' },
+      { icon: Wallet, label: 'BP Wallets', path: '/wallets/business-partners', permission: 'wallets' },
     ]
   },
   {
     title: 'Engagement',
     items: [
-      { icon: Bell, label: 'Notifications', path: '/notifications/push' },
-      { icon: TicketCheck, label: 'Complaints', path: '/complaints' },
-      { icon: Star, label: 'Reviews', path: '/reviews/workers' },
-      { icon: Gift, label: 'Promotions', path: '/promotions/coupons' },
+      { icon: Bell,        label: 'Notifications', path: '/notifications/push', permission: 'notifications' },
+      { icon: TicketCheck, label: 'Complaints',    path: '/complaints',         permission: 'complaints' },
+      { icon: Star,        label: 'Reviews',       path: '/reviews/workers',    permission: 'reviews' },
+      { icon: Gift,        label: 'Promotions',    path: '/promotions/coupons', permission: 'promotions' },
     ]
   },
   {
     title: 'Content',
     items: [
-      { icon: FileText, label: 'FAQs', path: '/content/faqs' },
-      { icon: FileText, label: 'Terms', path: '/content/terms' },
-      { icon: FileText, label: 'Privacy', path: '/content/privacy' },
-      { icon: FileText, label: 'About Us', path: '/content/about' },
-      { icon: FileText, label: 'Help Center', path: '/content/help' },
-      { icon: FileText, label: 'Banners', path: '/content/banners' },
+      { icon: FileText, label: 'FAQs',        path: '/content/faqs',    permission: 'content' },
+      { icon: FileText, label: 'Terms',       path: '/content/terms',   permission: 'content' },
+      { icon: FileText, label: 'Privacy',     path: '/content/privacy', permission: 'content' },
+      { icon: FileText, label: 'About Us',    path: '/content/about',   permission: 'content' },
+      { icon: FileText, label: 'Help Center', path: '/content/help',    permission: 'content' },
+      { icon: FileText, label: 'Banners',     path: '/content/banners', permission: 'content' },
     ]
   },
   {
     title: 'Analytics',
     items: [
-      { icon: BarChart3, label: 'Users', path: '/analytics/users' },
-      { icon: BarChart3, label: 'Revenue', path: '/analytics/revenue' },
-      { icon: BarChart3, label: 'Bookings', path: '/analytics/bookings' },
-      { icon: BarChart3, label: 'Vendors', path: '/analytics/vendors' },
-      { icon: BarChart3, label: 'Conversion', path: '/analytics/conversion' },
+      { icon: BarChart3, label: 'Users',      path: '/analytics/users',      permission: 'analytics' },
+      { icon: BarChart3, label: 'Revenue',    path: '/analytics/revenue',    permission: 'analytics' },
+      { icon: BarChart3, label: 'Bookings',   path: '/analytics/bookings',   permission: 'analytics' },
+      { icon: BarChart3, label: 'Vendors',    path: '/analytics/vendors',    permission: 'analytics' },
+      { icon: BarChart3, label: 'Conversion', path: '/analytics/conversion', permission: 'analytics' },
     ]
   },
   {
     title: 'Administration',
     items: [
-      { icon: ShieldCheck, label: 'Roles', path: '/roles' },
-      { icon: Users, label: 'Admin Management', path: '/admin-management' },
-      { icon: ScrollText, label: 'Audit Logs', path: '/audit-logs' },
+      { icon: ShieldCheck, label: 'Roles',            path: '/roles',            permission: 'roles' },
+      { icon: Users,       label: 'Admin Management', path: '/admin-management', permission: null, superAdminOnly: true },
+      { icon: ScrollText,  label: 'Audit Logs',       path: '/audit-logs',       permission: 'audit' },
     ]
   },
 ]
@@ -123,10 +129,24 @@ export default function Sidebar({ open, setOpen }) {
   })
   const location = useLocation()
   const logout = useAuthStore((s) => s.logout)
+  const user = useAuthStore((s) => s.user)
+  const can = usePermission()
 
   const toggleGroup = (idx) => {
     setExpandedGroups((prev) => ({ ...prev, [idx]: !prev[idx] }))
   }
+
+  // Filter menu items the current admin has permission for
+  const visibleGroups = menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (item.superAdminOnly) return user?.role === 'super_admin'
+        if (!item.permission) return true
+        return can(item.permission)
+      }),
+    }))
+    .filter((group) => group.items.length > 0)
 
   return (
     <>
@@ -148,7 +168,7 @@ export default function Sidebar({ open, setOpen }) {
 
         {/* Nav - Scrollable */}
         <nav className="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
-          {menuGroups.map((group, gIdx) => (
+          {visibleGroups.map((group, gIdx) => (
             <div key={group.title}>
               {open && (
                 <button

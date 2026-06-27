@@ -10,13 +10,43 @@ const seed = async () => {
     await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/conza_admin')
     console.log('Connected to MongoDB')
 
-    // Seed Roles
+    // Seed Roles — permissions are the single source of truth for all admins with that role
     const roles = [
-      { name: 'Super Admin', description: 'Full access to all features', permissions: ['all'], status: 'active', isSystem: true },
-      { name: 'Operations Manager', description: 'Manage users, workers, vendors, bookings, orders', permissions: ['customers', 'workers', 'vendors', 'bp', 'bookings', 'orders', 'dashboard'], status: 'active', isSystem: true },
-      { name: 'Finance Manager', description: 'Manage payments, wallets, revenue, payouts', permissions: ['finance', 'payments', 'wallets', 'dashboard'], status: 'active', isSystem: true },
-      { name: 'Support Manager', description: 'Manage tickets, complaints, reviews', permissions: ['complaints', 'reviews', 'dashboard'], status: 'active', isSystem: true },
-      { name: 'Content Manager', description: 'Manage banners, FAQ, content, promotions', permissions: ['content', 'promotions', 'dashboard'], status: 'inactive', isSystem: true },
+      {
+        name: 'Super Admin',
+        description: 'Full access to all features',
+        permissions: ['all'],
+        status: 'active',
+        isSystem: true,
+      },
+      {
+        name: 'Operations Manager',
+        description: 'Manage users, workers, vendors, bookings, orders, services, maps',
+        permissions: ['dashboard', 'customers', 'workers', 'vendors', 'bp', 'bookings', 'orders', 'maps', 'services'],
+        status: 'active',
+        isSystem: true,
+      },
+      {
+        name: 'Finance Manager',
+        description: 'Manage payments, wallets, revenue, payouts, pricing',
+        permissions: ['dashboard', 'finance', 'payments', 'wallets', 'pricing', 'analytics'],
+        status: 'active',
+        isSystem: true,
+      },
+      {
+        name: 'Support Manager',
+        description: 'Manage tickets, complaints, reviews, notifications',
+        permissions: ['dashboard', 'complaints', 'reviews', 'notifications'],
+        status: 'active',
+        isSystem: true,
+      },
+      {
+        name: 'Content Manager',
+        description: 'Manage banners, FAQ, content, promotions, materials, rentals',
+        permissions: ['dashboard', 'content', 'promotions', 'materials', 'rentals', 'inventory'],
+        status: 'active',
+        isSystem: true,
+      },
     ]
 
     for (const roleData of roles) {

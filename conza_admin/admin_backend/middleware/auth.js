@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken')
 const Admin = require('../models/Admin')
+const Role = require('../models/Role')
 const { createError } = require('../utils/error')
 
 const protect = async (req, res, next) => {
@@ -27,7 +28,37 @@ const protect = async (req, res, next) => {
       return next(createError(403, 'Your account has been suspended or deactivated.'))
     }
 
+    // Super admin always gets all permissions regardless of role doc
+    if (admin.role === 'super_admin') {
+      req.admin = admin
+      req.effectivePermissions = ['all']
+      return next()
+    }
+
+    // Resolve effective permissions from the Role document (database-driven RBAC)
+    // The Role name in the DB uses display names (e.g. "Operations Manager")
+    // but admin.role stores snake_case. We map both.
+    const roleNameMap = {
+      super_admin: 'Super Admin',
+      operations_manager: 'Operations Manager',
+      finance_manager: 'Finance Manager',
+      support_manager: 'Support Manager',
+      content_manager: 'Content Manager',
+    }
+
+    const roleName = roleNameMap[admin.role] || admin.role
+    const roleDoc = await Role.findOne({ name: roleName, status: 'active' })
+
+    // Effective permissions = role-level permissions (from DB) merged with any
+    // individual overrides stored on the admin document itself.
+    const rolePermissions = roleDoc ? roleDoc.permissions : []
+    const adminPermissions = admin.permissions || []
+
+    // Union: admin-level permissions supplement role-level ones
+    const effectivePermissions = Array.from(new Set([...rolePermissions, ...adminPermissions]))
+
     req.admin = admin
+    req.effectivePermissions = effectivePermissions
     next()
   } catch (err) {
     if (err.name === 'JsonWebTokenError') {
@@ -46,10 +77,11 @@ const requirePermission = (...permissions) => {
       return next(createError(401, 'Authentication required.'))
     }
 
-    if (req.admin.role === 'super_admin') return next()
-    if (req.admin.permissions.includes('all')) return next()
+    const effective = req.effectivePermissions || []
 
-    const hasPermission = permissions.some(p => req.admin.permissions.includes(p))
+    if (effective.includes('all')) return next()
+
+    const hasPermission = permissions.some(p => effective.includes(p))
 
     if (!hasPermission) {
       return next(createError(403, `Access denied. Required permission: ${permissions.join(' or ')}`))

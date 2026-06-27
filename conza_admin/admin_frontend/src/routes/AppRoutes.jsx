@@ -3,6 +3,7 @@ import AdminLayout from '../layouts/AdminLayout'
 import AuthLayout from '../layouts/AuthLayout'
 import ProtectedRoute from './ProtectedRoute'
 import RoleRoute from './RoleRoute'
+import PermissionRoute from './PermissionRoute'
 
 import Login from '../pages/auth/Login'
 import ForgotPassword from '../pages/auth/ForgotPassword'
@@ -140,127 +141,206 @@ export default function AppRoutes() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AdminLayout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/dashboard" element={<Dashboard />} />
 
-          <Route path="/customers" element={<CustomerList />} />
-          <Route path="/customers/:id" element={<CustomerDetails />} />
-          <Route path="/customers/:id/bookings" element={<CustomerBookings />} />
-          <Route path="/customers/:id/payments" element={<CustomerPayments />} />
-          <Route path="/customers/:id/complaints" element={<CustomerComplaints />} />
+          {/* Dashboard */}
+          <Route element={<PermissionRoute permission="dashboard" />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+          </Route>
 
-          <Route path="/workers" element={<WorkerList />} />
-          <Route path="/workers/:id" element={<WorkerDetails />} />
-          <Route path="/workers/verification" element={<WorkerVerification />} />
-          <Route path="/workers/ratings" element={<WorkerRatings />} />
-          <Route path="/workers/earnings" element={<WorkerEarnings />} />
-          <Route path="/workers/tracking" element={<WorkerTracking />} />
+          {/* Customers */}
+          <Route element={<PermissionRoute permission="customers" />}>
+            <Route path="/customers" element={<CustomerList />} />
+            <Route path="/customers/:id" element={<CustomerDetails />} />
+            <Route path="/customers/:id/bookings" element={<CustomerBookings />} />
+            <Route path="/customers/:id/payments" element={<CustomerPayments />} />
+            <Route path="/customers/:id/complaints" element={<CustomerComplaints />} />
+          </Route>
 
-          <Route path="/vendors" element={<VendorList />} />
-          <Route path="/vendors/:id" element={<VendorDetails />} />
-          <Route path="/vendors/verification" element={<VendorVerification />} />
-          <Route path="/vendors/:id/orders" element={<VendorOrders />} />
-          <Route path="/vendors/:id/earnings" element={<VendorEarnings />} />
-          <Route path="/vendors/:id/reviews" element={<VendorReviews />} />
+          {/* Workers */}
+          <Route element={<PermissionRoute permission="workers" />}>
+            <Route path="/workers" element={<WorkerList />} />
+            <Route path="/workers/:id" element={<WorkerDetails />} />
+            <Route path="/workers/verification" element={<WorkerVerification />} />
+            <Route path="/workers/ratings" element={<WorkerRatings />} />
+            <Route path="/workers/earnings" element={<WorkerEarnings />} />
+            <Route path="/workers/tracking" element={<WorkerTracking />} />
+          </Route>
 
-          <Route path="/materials" element={<MaterialList />} />
-          <Route path="/materials/:id" element={<MaterialDetails />} />
-          <Route path="/materials/categories" element={<MaterialCategories />} />
-          <Route path="/materials/featured" element={<FeaturedProducts />} />
+          {/* Vendors */}
+          <Route element={<PermissionRoute permission="vendors" />}>
+            <Route path="/vendors" element={<VendorList />} />
+            <Route path="/vendors/:id" element={<VendorDetails />} />
+            <Route path="/vendors/verification" element={<VendorVerification />} />
+            <Route path="/vendors/:id/orders" element={<VendorOrders />} />
+            <Route path="/vendors/:id/earnings" element={<VendorEarnings />} />
+            <Route path="/vendors/:id/reviews" element={<VendorReviews />} />
+          </Route>
 
-          <Route path="/rentals" element={<RentalList />} />
-          <Route path="/rentals/:id" element={<RentalDetails />} />
-          <Route path="/rentals/categories" element={<RentalCategories />} />
-          <Route path="/rentals/featured" element={<FeaturedRentals />} />
+          {/* Materials */}
+          <Route element={<PermissionRoute permission="materials" />}>
+            <Route path="/materials" element={<MaterialList />} />
+            <Route path="/materials/:id" element={<MaterialDetails />} />
+            <Route path="/materials/categories" element={<MaterialCategories />} />
+            <Route path="/materials/featured" element={<FeaturedProducts />} />
+          </Route>
 
-          <Route path="/inventory" element={<InventoryOverview />} />
-          <Route path="/inventory/low-stock" element={<LowStock />} />
-          <Route path="/inventory/out-of-stock" element={<OutOfStock />} />
-          <Route path="/inventory/analytics" element={<InventoryAnalytics />} />
+          {/* Rentals */}
+          <Route element={<PermissionRoute permission="rentals" />}>
+            <Route path="/rentals" element={<RentalList />} />
+            <Route path="/rentals/:id" element={<RentalDetails />} />
+            <Route path="/rentals/categories" element={<RentalCategories />} />
+            <Route path="/rentals/featured" element={<FeaturedRentals />} />
+          </Route>
 
-          <Route path="/business-partners" element={<BPList />} />
-          <Route path="/business-partners/:id" element={<BPDetails />} />
-          <Route path="/business-partners/:id/referrals" element={<BPReferrals />} />
-          <Route path="/business-partners/:id/commissions" element={<BPCommissions />} />
-          <Route path="/business-partners/territories" element={<BPTerritories />} />
+          {/* Inventory */}
+          <Route element={<PermissionRoute permission="inventory" />}>
+            <Route path="/inventory" element={<InventoryOverview />} />
+            <Route path="/inventory/low-stock" element={<LowStock />} />
+            <Route path="/inventory/out-of-stock" element={<OutOfStock />} />
+            <Route path="/inventory/analytics" element={<InventoryAnalytics />} />
+          </Route>
 
-          <Route path="/bookings" element={<BookingList />} />
-          <Route path="/bookings/:id" element={<BookingDetails />} />
-          <Route path="/bookings/:id/timeline" element={<BookingTimeline />} />
-          <Route path="/bookings/disputes" element={<Disputes />} />
-          <Route path="/bookings/labour" element={<LabourBookings />} />
-          <Route path="/bookings/materials" element={<MaterialBookings />} />
-          <Route path="/bookings/rentals" element={<RentalBookings />} />
+          {/* Business Partners */}
+          <Route element={<PermissionRoute permission="bp" />}>
+            <Route path="/business-partners" element={<BPList />} />
+            <Route path="/business-partners/:id" element={<BPDetails />} />
+            <Route path="/business-partners/:id/referrals" element={<BPReferrals />} />
+            <Route path="/business-partners/:id/commissions" element={<BPCommissions />} />
+            <Route path="/business-partners/territories" element={<BPTerritories />} />
+          </Route>
 
-          <Route path="/orders" element={<OrderList />} />
-          <Route path="/orders/:id" element={<OrderDetails />} />
-          <Route path="/orders/tracking" element={<OrderTracking />} />
-          <Route path="/orders/disputes" element={<OrderDisputes />} />
+          {/* Bookings */}
+          <Route element={<PermissionRoute permission="bookings" />}>
+            <Route path="/bookings" element={<BookingList />} />
+            <Route path="/bookings/:id" element={<BookingDetails />} />
+            <Route path="/bookings/:id/timeline" element={<BookingTimeline />} />
+            <Route path="/bookings/disputes" element={<Disputes />} />
+            <Route path="/bookings/labour" element={<LabourBookings />} />
+            <Route path="/bookings/materials" element={<MaterialBookings />} />
+            <Route path="/bookings/rentals" element={<RentalBookings />} />
+          </Route>
 
-          <Route path="/services" element={<Categories />} />
-          <Route path="/services/add" element={<AddCategory />} />
-          <Route path="/services/edit/:id" element={<EditCategory />} />
+          {/* Orders */}
+          <Route element={<PermissionRoute permission="orders" />}>
+            <Route path="/orders" element={<OrderList />} />
+            <Route path="/orders/:id" element={<OrderDetails />} />
+            <Route path="/orders/tracking" element={<OrderTracking />} />
+            <Route path="/orders/disputes" element={<OrderDisputes />} />
+          </Route>
 
-          <Route path="/finance/revenue" element={<Revenue />} />
-          <Route path="/finance/transactions" element={<Transactions />} />
-          <Route path="/finance/payouts" element={<Payouts />} />
-          <Route path="/finance/reports" element={<Reports />} />
-          <Route path="/finance/commissions" element={<Commissions />} />
+          {/* Services */}
+          <Route element={<PermissionRoute permission="services" />}>
+            <Route path="/services" element={<Categories />} />
+            <Route path="/services/add" element={<AddCategory />} />
+            <Route path="/services/edit/:id" element={<EditCategory />} />
+          </Route>
 
-          <Route path="/wallets/customers" element={<CustomerWallets />} />
-          <Route path="/wallets/workers" element={<WorkerWallets />} />
-          <Route path="/wallets/vendors" element={<VendorWallets />} />
-          <Route path="/wallets/business-partners" element={<BPWallets />} />
+          {/* Finance */}
+          <Route element={<PermissionRoute permission="finance" />}>
+            <Route path="/finance/revenue" element={<Revenue />} />
+            <Route path="/finance/transactions" element={<Transactions />} />
+            <Route path="/finance/payouts" element={<Payouts />} />
+            <Route path="/finance/reports" element={<Reports />} />
+            <Route path="/finance/commissions" element={<Commissions />} />
+          </Route>
 
-          <Route path="/payments/razorpay" element={<RazorpayPayments />} />
-          <Route path="/payments/failed" element={<FailedPayments />} />
-          <Route path="/payments/refunds" element={<RefundRequests />} />
-          <Route path="/payments/cash" element={<CashPayments />} />
-          <Route path="/payments/upi" element={<UPIPayments />} />
+          {/* Wallets */}
+          <Route element={<PermissionRoute permission="wallets" />}>
+            <Route path="/wallets/customers" element={<CustomerWallets />} />
+            <Route path="/wallets/workers" element={<WorkerWallets />} />
+            <Route path="/wallets/vendors" element={<VendorWallets />} />
+            <Route path="/wallets/business-partners" element={<BPWallets />} />
+          </Route>
 
-          <Route path="/maps/live-tracking" element={<LiveTracking />} />
+          {/* Payments */}
+          <Route element={<PermissionRoute permission="payments" />}>
+            <Route path="/payments/razorpay" element={<RazorpayPayments />} />
+            <Route path="/payments/failed" element={<FailedPayments />} />
+            <Route path="/payments/refunds" element={<RefundRequests />} />
+            <Route path="/payments/cash" element={<CashPayments />} />
+            <Route path="/payments/upi" element={<UPIPayments />} />
+          </Route>
 
-          <Route path="/notifications/push" element={<PushNotifications />} />
-          <Route path="/notifications/sms" element={<SMSNotifications />} />
-          <Route path="/notifications/email" element={<EmailNotifications />} />
-          <Route path="/notifications/history" element={<NotificationHistory />} />
+          {/* Maps */}
+          <Route element={<PermissionRoute permission="maps" />}>
+            <Route path="/maps/live-tracking" element={<LiveTracking />} />
+          </Route>
 
-          <Route path="/complaints/tickets" element={<Tickets />} />
-          <Route path="/complaints" element={<Complaints />} />
-          <Route path="/complaints/escalations" element={<Escalations />} />
-          <Route path="/complaints/refunds" element={<RefundCases />} />
+          {/* Notifications */}
+          <Route element={<PermissionRoute permission="notifications" />}>
+            <Route path="/notifications/push" element={<PushNotifications />} />
+            <Route path="/notifications/sms" element={<SMSNotifications />} />
+            <Route path="/notifications/email" element={<EmailNotifications />} />
+            <Route path="/notifications/history" element={<NotificationHistory />} />
+          </Route>
 
-          <Route path="/reviews/workers" element={<WorkerReviews />} />
-          <Route path="/reviews/vendors" element={<VendorReviewsPage />} />
-          <Route path="/reviews/products" element={<ProductReviews />} />
-          <Route path="/reviews/analytics" element={<Analytics />} />
+          {/* Complaints */}
+          <Route element={<PermissionRoute permission="complaints" />}>
+            <Route path="/complaints/tickets" element={<Tickets />} />
+            <Route path="/complaints" element={<Complaints />} />
+            <Route path="/complaints/escalations" element={<Escalations />} />
+            <Route path="/complaints/refunds" element={<RefundCases />} />
+          </Route>
 
-          <Route path="/promotions/coupons" element={<Coupons />} />
-          <Route path="/promotions/cashback" element={<Cashback />} />
-          <Route path="/promotions/referrals" element={<Referrals />} />
-          <Route path="/promotions/seasonal" element={<SeasonalOffers />} />
+          {/* Reviews */}
+          <Route element={<PermissionRoute permission="reviews" />}>
+            <Route path="/reviews/workers" element={<WorkerReviews />} />
+            <Route path="/reviews/vendors" element={<VendorReviewsPage />} />
+            <Route path="/reviews/products" element={<ProductReviews />} />
+            <Route path="/reviews/analytics" element={<Analytics />} />
+          </Route>
 
-          <Route path="/content/faqs" element={<FAQs />} />
-          <Route path="/content/terms" element={<Terms />} />
-          <Route path="/content/privacy" element={<Privacy />} />
-          <Route path="/content/about" element={<AboutUs />} />
-          <Route path="/content/help" element={<HelpCenter />} />
-          <Route path="/content/banners" element={<Banners />} />
+          {/* Promotions */}
+          <Route element={<PermissionRoute permission="promotions" />}>
+            <Route path="/promotions/coupons" element={<Coupons />} />
+            <Route path="/promotions/cashback" element={<Cashback />} />
+            <Route path="/promotions/referrals" element={<Referrals />} />
+            <Route path="/promotions/seasonal" element={<SeasonalOffers />} />
+          </Route>
 
-          <Route path="/analytics/users" element={<UserAnalytics />} />
-          <Route path="/analytics/revenue" element={<RevenueAnalytics />} />
-          <Route path="/analytics/bookings" element={<BookingAnalytics />} />
-          <Route path="/analytics/vendors" element={<VendorAnalytics />} />
-          <Route path="/analytics/conversion" element={<ConversionAnalytics />} />
+          {/* Content */}
+          <Route element={<PermissionRoute permission="content" />}>
+            <Route path="/content/faqs" element={<FAQs />} />
+            <Route path="/content/terms" element={<Terms />} />
+            <Route path="/content/privacy" element={<Privacy />} />
+            <Route path="/content/about" element={<AboutUs />} />
+            <Route path="/content/help" element={<HelpCenter />} />
+            <Route path="/content/banners" element={<Banners />} />
+          </Route>
 
-          <Route path="/roles" element={<RoleManagement />} />
-          <Route path="/roles/permissions" element={<Permissions />} />
+          {/* Analytics */}
+          <Route element={<PermissionRoute permission="analytics" />}>
+            <Route path="/analytics/users" element={<UserAnalytics />} />
+            <Route path="/analytics/revenue" element={<RevenueAnalytics />} />
+            <Route path="/analytics/bookings" element={<BookingAnalytics />} />
+            <Route path="/analytics/vendors" element={<VendorAnalytics />} />
+            <Route path="/analytics/conversion" element={<ConversionAnalytics />} />
+          </Route>
 
-          <Route path="/audit-logs" element={<AuditLogs />} />
-          <Route path="/admin-management" element={<AdminManagement />} />
-          <Route path="/pricing-management" element={<PricingManagement />} />
-          <Route path="/audit-logs/login-history" element={<LoginHistory />} />
-          <Route path="/audit-logs/admin-actions" element={<AdminActions />} />
+          {/* Roles & Permissions — super_admin only on frontend (backend also enforces) */}
+          <Route element={<PermissionRoute permission="roles" />}>
+            <Route path="/roles" element={<RoleManagement />} />
+            <Route path="/roles/permissions" element={<Permissions />} />
+          </Route>
+
+          {/* Audit Logs */}
+          <Route element={<PermissionRoute permission="audit" />}>
+            <Route path="/audit-logs" element={<AuditLogs />} />
+            <Route path="/audit-logs/login-history" element={<LoginHistory />} />
+            <Route path="/audit-logs/admin-actions" element={<AdminActions />} />
+          </Route>
+
+          {/* Pricing */}
+          <Route element={<PermissionRoute permission="pricing" />}>
+            <Route path="/pricing-management" element={<PricingManagement />} />
+          </Route>
+
+          {/* Admin Management — super_admin only */}
+          <Route element={<RoleRoute allowedRoles={['super_admin']} />}>
+            <Route path="/admin-management" element={<AdminManagement />} />
+          </Route>
+
         </Route>
       </Route>
     </Routes>

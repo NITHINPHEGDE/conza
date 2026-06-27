@@ -67,8 +67,24 @@ exports.login = async (req, res, next) => {
     admin.lastLogin = new Date()
     await admin.save({ validateBeforeSave: false })
 
-    const token = generateToken(admin._id, admin.role)
+   const token = generateToken(admin._id, admin.role)
     setTokenCookie(res, token)
+
+    // Resolve role-level permissions from DB for the login response
+    let effectivePermissions = admin.permissions || []
+    if (admin.role !== 'super_admin') {
+      const Role = require('../models/Role')
+      const roleNameMap = {
+        operations_manager: 'Operations Manager',
+        finance_manager: 'Finance Manager',
+        support_manager: 'Support Manager',
+        content_manager: 'Content Manager',
+      }
+      const roleName = roleNameMap[admin.role] || admin.role
+      const roleDoc = await Role.findOne({ name: roleName, status: 'active' })
+      const rolePermissions = roleDoc ? roleDoc.permissions : []
+      effectivePermissions = Array.from(new Set([...rolePermissions, ...(admin.permissions || [])]))
+    }
 
     sendSuccess(res, 200, 'Login successful', {
       token,
@@ -78,7 +94,7 @@ exports.login = async (req, res, next) => {
         email: admin.email,
         role: admin.role,
         avatar: admin.avatar,
-        permissions: admin.permissions,
+        permissions: effectivePermissions,
       },
     })
   } catch (err) {
@@ -100,6 +116,9 @@ exports.getMe = async (req, res, next) => {
     const admin = await Admin.findById(req.admin._id).select('+permissions')
     if (!admin) return next(createError(404, 'Admin not found.'))
 
+    // Return effective permissions (role-level from DB, already resolved in protect middleware)
+    const effectivePermissions = req.effectivePermissions || admin.permissions || []
+
     sendSuccess(res, 200, 'Admin fetched', {
       admin: {
         id: admin._id,
@@ -107,7 +126,7 @@ exports.getMe = async (req, res, next) => {
         email: admin.email,
         role: admin.role,
         avatar: admin.avatar,
-        permissions: admin.permissions,
+        permissions: effectivePermissions,
         lastLogin: admin.lastLogin,
       },
     })

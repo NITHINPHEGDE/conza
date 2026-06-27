@@ -39,14 +39,13 @@ exports.createAdmin = async (req, res, next) => {
     const existing = await Admin.findOne({ email })
     if (existing) return next(createError(409, 'An admin with this email already exists.'))
 
-    const defaultPermissions = getDefaultPermissions(role)
-
+    // Individual override permissions only — role-level permissions come from Role doc at runtime
     const admin = await Admin.create({
       name,
       email,
       password,
       role: role || 'operations_manager',
-      permissions: permissions || defaultPermissions,
+      permissions: permissions || [],
       status: 'active',
     })
 
@@ -70,14 +69,14 @@ exports.updateAdmin = async (req, res, next) => {
     const admin = await Admin.findById(id)
     if (!admin) return next(createError(404, 'Admin not found.'))
 
-    // Prevent modifying super admin unless you are super admin
     if (admin.role === 'super_admin' && req.admin.role !== 'super_admin') {
       return next(createError(403, 'Cannot modify a super admin account.'))
     }
 
     if (name) admin.name = name
     if (role) admin.role = role
-    if (permissions) admin.permissions = permissions
+    // Only update individual-level override permissions if explicitly provided
+    if (Array.isArray(permissions)) admin.permissions = permissions
     if (status) admin.status = status
 
     await admin.save()
@@ -125,13 +124,5 @@ exports.getAdminById = async (req, res, next) => {
   }
 }
 
-function getDefaultPermissions(role) {
-  const map = {
-    super_admin: ['all'],
-    operations_manager: ['customers', 'workers', 'vendors', 'bp', 'bookings', 'orders'],
-    finance_manager: ['finance', 'payments', 'wallets', 'payouts'],
-    support_manager: ['complaints', 'tickets', 'reviews'],
-    content_manager: ['content', 'banners', 'promotions'],
-  }
-  return map[role] || []
-}
+// Permissions are now fully managed through the Role collection (database-driven RBAC).
+// The Admin.permissions field is reserved for individual-level permission overrides only.

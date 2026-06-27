@@ -1,54 +1,137 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { RefreshCw } from 'lucide-react'
 import PageWrapper from '../../components/layout/PageWrapper/PageWrapper'
 import SearchBar from '../../components/common/SearchBar/SearchBar'
 import Table from '../../components/common/Table/Table'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
+import { useDebounce } from '../../hooks/useDebounce'
+import auditLogService from '../../services/auditLogService'
 
-const loginData = [
-  { id: 1, user: 'Rahul Sharma', email: 'rahul@conza.in', role: 'Super Admin', ip: '103.45.67.89', device: 'Chrome / Windows', location: 'Bangalore, IN', timestamp: '2024-06-21 10:23:45', status: 'success' },
-  { id: 2, user: 'Priya Patel', email: 'priya@conza.in', role: 'Operations Manager', ip: '103.45.68.12', device: 'Safari / macOS', location: 'Mumbai, IN', timestamp: '2024-06-21 09:15:22', status: 'success' },
-  { id: 3, user: 'Amit Kumar', email: 'amit@conza.in', role: 'Finance Manager', ip: '103.45.69.45', device: 'Firefox / Linux', location: 'Delhi, IN', timestamp: '2024-06-21 08:45:10', status: 'success' },
-  { id: 4, user: 'Unknown', email: '-', role: '-', ip: '185.220.101.22', device: 'Chrome / Windows', location: 'Unknown', timestamp: '2024-06-21 08:30:00', status: 'failed' },
-  { id: 5, user: 'Sneha Gupta', email: 'sneha@conza.in', role: 'Support Manager', ip: '103.45.70.78', device: 'Chrome / Android', location: 'Hyderabad, IN', timestamp: '2024-06-20 17:30:00', status: 'success' },
-  { id: 6, user: 'Rahul Sharma', email: 'rahul@conza.in', role: 'Super Admin', ip: '103.45.67.89', device: 'Chrome / Windows', location: 'Bangalore, IN', timestamp: '2024-06-20 09:00:00', status: 'success' },
-  { id: 7, user: 'Unknown', email: '-', role: '-', ip: '192.168.1.1', device: 'Bot / Unknown', location: 'Unknown', timestamp: '2024-06-20 03:45:22', status: 'failed' },
-  { id: 8, user: 'Priya Patel', email: 'priya@conza.in', role: 'Operations Manager', ip: '103.45.68.12', device: 'Safari / macOS', location: 'Mumbai, IN', timestamp: '2024-06-19 18:20:10', status: 'success' }
-]
+const LIMIT = 20
 
 export default function LoginHistory() {
+  const [history, setHistory] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const filtered = loginData.filter(l => {
-    const matchSearch = l.user.toLowerCase().includes(search.toLowerCase()) || l.email.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = status === 'all' || l.status === status
-    return matchSearch && matchStatus
-  })
+  const debouncedSearch = useDebounce(search, 400)
+
+  const fetchHistory = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await auditLogService.getLoginHistory({
+        search: debouncedSearch,
+        status,
+        page,
+        limit: LIMIT,
+      })
+      if (res.success) {
+        setHistory(res.data || [])
+        setTotal(res.pagination?.total || 0)
+      } else {
+        setError(res.message || 'Failed to load login history.')
+      }
+    } catch {
+      setError('Unable to connect to server.')
+    } finally {
+      setLoading(false)
+    }
+  }, [debouncedSearch, status, page])
+
+  useEffect(() => { setPage(1) }, [debouncedSearch, status])
+  useEffect(() => { fetchHistory() }, [fetchHistory])
+
+  const totalPages = Math.ceil(total / LIMIT)
 
   const columns = [
-    { key: 'timestamp', label: 'Timestamp' },
-    { key: 'user', label: 'User' },
-    { key: 'email', label: 'Email' },
-    { key: 'role', label: 'Role' },
-    { key: 'ip', label: 'IP Address' },
-    { key: 'device', label: 'Device' },
-    { key: 'location', label: 'Location' },
-    { key: 'status', label: 'Status', render: (row) => <StatusBadge status={row.status} /> }
+    {
+      key: 'timestamp', title: 'Timestamp',
+      render: (row) => (
+        <span className="text-xs text-textMuted whitespace-nowrap">
+          {row.createdAt ? new Date(row.createdAt).toLocaleString() : '—'}
+        </span>
+      )
+    },
+    { key: 'user',     title: 'User' },
+    { key: 'email',    title: 'Email' },
+    { key: 'role',     title: 'Role' },
+    { key: 'ip',       title: 'IP Address' },
+    { key: 'device',   title: 'Device' },
+    { key: 'location', title: 'Location' },
+    {
+      key: 'status', title: 'Status',
+      render: (row) => <StatusBadge status={row.status} />
+    },
   ]
 
   return (
-    <PageWrapper title="Login History" subtitle="Track admin login attempts">
+    <PageWrapper title="Login History" subtitle="Real-time admin login attempts from database">
       <div className="space-y-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <SearchBar value={search} onChange={setSearch} placeholder="Search by user or email..." />
-          <select className="px-3 py-2 border border-gray-300 rounded-lg" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="flex-1">
+            <SearchBar value={search} onChange={setSearch} placeholder="Search by user or email..." />
+          </div>
+          <select
+            className="px-3 py-2 border border-border rounded-lg bg-surface text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accentAmber"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
             <option value="all">All Status</option>
             <option value="success">Success</option>
             <option value="failed">Failed</option>
           </select>
+          <button
+            onClick={fetchHistory}
+            disabled={loading}
+            className="p-2 border border-border rounded-lg hover:bg-surfaceElevated transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin text-textMuted' : 'text-textMuted'} />
+          </button>
         </div>
 
-        <Table columns={columns} data={filtered} />
+        {error && (
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-textMuted">
+            <RefreshCw size={20} className="animate-spin mr-2" /> Loading login history...
+          </div>
+        ) : (
+          <>
+            <Table columns={columns} data={history} rowKey="_id" />
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between text-sm text-textMuted pt-2">
+                <span>Showing {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} of {total} entries</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="px-3 py-1 border border-border rounded-lg disabled:opacity-40 hover:bg-surfaceElevated"
+                  >
+                    Previous
+                  </button>
+                  <span className="px-3 py-1 bg-accentYellowSoft text-accentAmber rounded-lg font-medium">
+                    {page} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="px-3 py-1 border border-border rounded-lg disabled:opacity-40 hover:bg-surfaceElevated"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </PageWrapper>
   )
