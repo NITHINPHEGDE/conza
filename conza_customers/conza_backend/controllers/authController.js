@@ -3,8 +3,13 @@ const User = require('../models/User');
 const { invalidateCache } = require('../utils/cacheHelpers');
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
-const generateToken = (id) =>
-  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE });
+const generateToken = (id) => {
+  let exp = process.env.JWT_EXPIRE || process.env.JWT_EXPIRES_IN || '30d';
+  if (typeof exp !== 'string' || !exp.trim() || exp === 'undefined' || exp === 'null') {
+    exp = '30d';
+  }
+  return jwt.sign({ id }, process.env.JWT_SECRET || 'conza_jwt_secret_fallback_2026', { expiresIn: exp });
+};
 
 // ── POST /api/auth/signup ──────────────────────────────────────────────────────
 const signup = async (req, res) => {
