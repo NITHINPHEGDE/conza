@@ -77,24 +77,27 @@ function StatusBadge({ status, activeValue = 'active' }) {
 
 function FAQsTab() {
   const addToast = useToastStore((s) => s.addToast)
-  const [faqs, setFaqs] = useState([])
+  const [faqs, setFaqs]       = useState([])
   const [loading, setLoading] = useState(true)
   const [filterApp, setFilterApp] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState(FAQ_DEFAULT_FORM)
-  const [saving, setSaving] = useState(false)
+  const [editing, setEditing]   = useState(null)
+  const [form, setForm]         = useState(FAQ_DEFAULT_FORM)
+  const [saving, setSaving]     = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
+  // ── api.js returns the raw parsed JSON body directly (no axios wrapper).
+  // sendPaginated shape: { success, data: [...], pagination: {...} }
+  // So: res.data is the faqs array.
   const loadFAQs = useCallback(async () => {
     setLoading(true)
     try {
       const params = filterApp !== 'all' ? { appTarget: filterApp } : {}
       const res = await getFAQs({ ...params, limit: 200 })
-      // res is the parsed JSON directly: { success, data: [...], pagination: {...} }
-      setFaqs(res.data || [])
+      setFaqs(Array.isArray(res.data) ? res.data : [])
     } catch {
       addToast('Failed to load FAQs.', 'error')
+      setFaqs([])
     } finally {
       setLoading(false)
     }
@@ -203,14 +206,12 @@ function FAQsTab() {
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Select
-            options={APP_TARGET_FILTER}
-            value={filterApp}
-            onChange={(e) => setFilterApp(e.target.value)}
-            className="w-40"
-          />
-        </div>
+        <Select
+          options={APP_TARGET_FILTER}
+          value={filterApp}
+          onChange={(e) => setFilterApp(e.target.value)}
+          className="w-40"
+        />
         <Button onClick={openAdd}>
           <Plus size={15} /> Add FAQ
         </Button>
@@ -222,7 +223,11 @@ function FAQsTab() {
           <Loader size={24} className="text-accentAmber animate-spin" />
         </div>
       ) : (
-        <Table columns={columns} data={faqs} emptyText="No FAQs found. Click 'Add FAQ' to create one." />
+        <Table
+          columns={columns}
+          data={faqs}
+          emptyText="No FAQs found. Click 'Add FAQ' to create one."
+        />
       )}
 
       {/* Add / Edit Modal */}
@@ -235,7 +240,7 @@ function FAQsTab() {
           <>
             <Button variant="ghost" onClick={() => setModalOpen(false)} disabled={saving}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? <Loader size={14} className="animate-spin" /> : null}
+              {saving ? <Loader size={14} className="animate-spin mr-1" /> : null}
               {saving ? 'Saving…' : 'Save'}
             </Button>
           </>
@@ -308,7 +313,10 @@ function FAQsTab() {
         }
       >
         <p className="text-sm text-textSecondary">
-          Are you sure you want to delete the FAQ: <span className="font-semibold text-textPrimary">"{deleteTarget?.question?.substring(0, 80)}"</span>? This action cannot be undone.
+          Are you sure you want to delete:{' '}
+          <span className="font-semibold text-textPrimary">
+            "{deleteTarget?.question?.substring(0, 80)}"
+          </span>? This action cannot be undone.
         </p>
       </Modal>
     </div>
@@ -328,15 +336,17 @@ function HelpArticlesTab() {
   const [saving, setSaving]     = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
+  // sendPaginated shape: { success, data: [...], pagination: {...} }
+  // api.js returns parsed JSON directly → res.data is the articles array.
   const loadArticles = useCallback(async () => {
     setLoading(true)
     try {
       const params = filterApp !== 'all' ? { appTarget: filterApp } : {}
       const res = await getHelpArticles({ ...params, limit: 200 })
-      // res is the parsed JSON directly: { success, data: [...], pagination: {...} }
-      setArticles(res.data || [])
+      setArticles(Array.isArray(res.data) ? res.data : [])
     } catch {
       addToast('Failed to load help articles.', 'error')
+      setArticles([])
     } finally {
       setLoading(false)
     }
@@ -456,7 +466,11 @@ function HelpArticlesTab() {
           <Loader size={24} className="text-accentAmber animate-spin" />
         </div>
       ) : (
-        <Table columns={columns} data={articles} emptyText="No help articles found. Click 'Add Article' to create one." />
+        <Table
+          columns={columns}
+          data={articles}
+          emptyText="No help articles found. Click 'Add Article' to create one."
+        />
       )}
 
       {/* Add / Edit Modal */}
@@ -469,7 +483,7 @@ function HelpArticlesTab() {
           <>
             <Button variant="ghost" onClick={() => setModalOpen(false)} disabled={saving}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? <Loader size={14} className="animate-spin" /> : null}
+              {saving ? <Loader size={14} className="animate-spin mr-1" /> : null}
               {saving ? 'Saving…' : 'Save'}
             </Button>
           </>
@@ -528,7 +542,10 @@ function HelpArticlesTab() {
         }
       >
         <p className="text-sm text-textSecondary">
-          Are you sure you want to delete: <span className="font-semibold text-textPrimary">"{deleteTarget?.title}"</span>? This action cannot be undone.
+          Are you sure you want to delete:{' '}
+          <span className="font-semibold text-textPrimary">
+            "{deleteTarget?.title}"
+          </span>? This action cannot be undone.
         </p>
       </Modal>
     </div>
