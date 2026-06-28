@@ -20,7 +20,7 @@ export default function AboutUs() {
         setTitle(res.about?.title || 'About Conza')
         setContent(res.about?.content || '')
       } catch (err) {
-        addToast({ type: 'error', message: err.message || 'Failed to load About Us content.' })
+        addToast(err.message || 'Failed to load About Us content.', 'error')
       } finally {
         setLoading(false)
       }
@@ -31,9 +31,9 @@ export default function AboutUs() {
     setSaving(true)
     try {
       await saveAboutContent({ title, content })
-      addToast({ type: 'success', message: 'About Us content saved.' })
+      addToast('About Us content saved.', 'success')
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Failed to save About Us content.' })
+      addToast(err.message || 'Failed to save About Us content.', 'error')
     } finally {
       setSaving(false)
     }

@@ -27,7 +27,7 @@ export default function Terms() {
       setTitles((prev) => ({ ...prev, [appTarget]: terms?.title || 'Terms & Conditions' }))
       setBodies((prev) => ({ ...prev, [appTarget]: terms?.content || '' }))
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Failed to load terms.' })
+      addToast(err.message || 'Failed to load terms.', 'error')
     } finally {
       setLoading(false)
     }
@@ -44,9 +44,9 @@ export default function Terms() {
         title: titles[activeTab] || 'Terms & Conditions',
         content: bodies[activeTab] || '',
       })
-      addToast({ type: 'success', message: 'Terms & Conditions saved.' })
+      addToast('Terms & Conditions saved.', 'success')
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Failed to save terms.' })
+      addToast(err.message || 'Failed to save terms.', 'error')
     } finally {
       setSaving(false)
     }

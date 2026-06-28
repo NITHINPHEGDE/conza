@@ -27,7 +27,7 @@ export default function Privacy() {
       setTitles((prev) => ({ ...prev, [appTarget]: privacy?.title || 'Privacy Policy' }))
       setBodies((prev) => ({ ...prev, [appTarget]: privacy?.content || '' }))
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Failed to load privacy policy.' })
+      addToast(err.message || 'Failed to load privacy policy.', 'error')
     } finally {
       setLoading(false)
     }
@@ -44,9 +44,9 @@ export default function Privacy() {
         title: titles[activeTab] || 'Privacy Policy',
         content: bodies[activeTab] || '',
       })
-      addToast({ type: 'success', message: 'Privacy Policy saved.' })
+      addToast('Privacy Policy saved.', 'success')
     } catch (err) {
-      addToast({ type: 'error', message: err.message || 'Failed to save privacy policy.' })
+      addToast(err.message || 'Failed to save privacy policy.', 'error')
     } finally {
       setSaving(false)
     }
