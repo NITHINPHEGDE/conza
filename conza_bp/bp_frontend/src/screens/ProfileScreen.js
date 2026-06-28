@@ -230,8 +230,8 @@ const ProfileScreen = ({ navigation }) => {
     navigation.navigate('HelpFAQ');
   }, [navigation]);
 
-  const handleLegal = useCallback(() => {
-    navigation.navigate('Legal');
+  const handleLegal = useCallback((tab) => {
+    navigation.navigate('Legal', { tab });
   }, [navigation]);
 
   return (
@@ -291,7 +291,9 @@ const ProfileScreen = ({ navigation }) => {
         {/* Legal */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Legal</Text>
-          <MenuItem icon="📃" label="Terms, Privacy & About" sub="View legal information" onPress={handleLegal} />
+          <MenuItem icon="📃" label="Terms & Conditions" onPress={() => handleLegal('terms')} />
+          <MenuItem icon="🔐" label="Privacy Policy"     onPress={() => handleLegal('privacy')} />
+          <MenuItem icon="ℹ️" label="About Us"            onPress={() => handleLegal('about')} />
         </View>
 
         {/* Support */}

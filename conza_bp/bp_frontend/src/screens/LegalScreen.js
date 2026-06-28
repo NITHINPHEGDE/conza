@@ -64,9 +64,9 @@ const LegalTabContent = ({ fetcher, fieldKey }) => {
   );
 };
 
-const LegalScreen = ({ navigation }) => {
+const LegalScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState('terms');
+  const [activeTab, setActiveTab] = useState(route?.params?.tab || 'terms');
   const activeMeta = TABS.find((t) => t.key === activeTab);
 
   return (
