@@ -2,6 +2,7 @@ const mongoose = require('mongoose')
 
 const contentSchema = new mongoose.Schema({
   type: { type: String, enum: ['faq', 'terms', 'privacy', 'about', 'help', 'banner'], required: true },
+  appTarget: { type: String, enum: ['customer', 'worker', 'vendor', 'all'], default: 'all', index: true },
   title: { type: String, default: '' },
   content: { type: String, default: '' },
   status: { type: String, enum: ['published', 'draft', 'archived'], default: 'draft' },

@@ -20,6 +20,7 @@ import { useAuth } from '../hooks/useAuth';
 import { colors } from '../theme/colors';
 import SavedAddressSheet from '../components/SavedAddressSheet';
 import { fetchCustomerFAQs, fetchCustomerHelpArticles } from '../api/faqHelpAPI';
+import { fetchCustomerLegal, fetchAboutUs } from '../api/legalAPI';
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -187,6 +188,57 @@ const FAQsModal = React.memo(({ visible, onClose }) => {
   );
 });
 
+// ── Legal Content Modal (Terms / Privacy / About Us) ─────────────────────────
+
+const LegalModal = React.memo(({ visible, onClose, title, icon, fetcher, fieldKey }) => {
+  const [doc, setDoc]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(null);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (!visible || fetchedRef.current) return;
+    fetchedRef.current = true;
+    setLoading(true);
+    setError(null);
+    fetcher()
+      .then((data) => setDoc(data[fieldKey] || null))
+      .catch(() => setError('Failed to load content. Please try again.'))
+      .finally(() => setLoading(false));
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { maxHeight: '90%' }]}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>{title}</Text>
+          {loading ? (
+            <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 32 }} />
+          ) : error ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>⚠️</Text>
+              <Text style={styles.emptyStateText}>{error}</Text>
+            </View>
+          ) : !doc ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>{icon}</Text>
+              <Text style={styles.emptyStateText}>Content not available yet.</Text>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
+              <Text style={styles.faqAnswer}>{doc.content}</Text>
+            </ScrollView>
+          )}
+          <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
+            <Text style={styles.cancelBtnText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+});
+
 // ── Help Articles Modal ───────────────────────────────────────────────────────
 
 const HelpArticlesModal = React.memo(({ visible, onClose }) => {
@@ -286,6 +338,9 @@ const ProfileScreen = () => {
   const [ordersVisible,       setOrdersVisible]       = useState(false);
   const [faqsVisible,         setFaqsVisible]         = useState(false);
   const [helpArticlesVisible, setHelpArticlesVisible] = useState(false);
+  const [termsVisible,        setTermsVisible]        = useState(false);
+  const [privacyVisible,      setPrivacyVisible]      = useState(false);
+  const [aboutVisible,        setAboutVisible]        = useState(false);
   const [addressVisible,      setAddressVisible]      = useState(false);
   const [form, setForm] = useState({ fullName: '', email: '', locationText: '' });
   const [updateError, setUpdateError] = useState(null);
@@ -385,6 +440,14 @@ const ProfileScreen = () => {
           <MenuItem icon="💬" label="Chat With Us"  sub="Email our support team"    onPress={handleChatWithUs} />
         </View>
 
+        {/* Legal Menu */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Legal</Text>
+          <MenuItem icon="📃" label="Terms & Conditions" sub="Customer terms of use"   onPress={() => setTermsVisible(true)} />
+          <MenuItem icon="🔐" label="Privacy Policy"     sub="How we handle your data" onPress={() => setPrivacyVisible(true)} />
+          <MenuItem icon="ℹ️" label="About Us"            sub="Learn more about Conza"  onPress={() => setAboutVisible(true)} />
+        </View>
+
         <View style={styles.section}>
           <MenuItem icon="🚪" label="Logout" danger onPress={handleLogout} />
         </View>
@@ -409,6 +472,32 @@ const ProfileScreen = () => {
 
       {/* Help Articles Modal */}
       <HelpArticlesModal visible={helpArticlesVisible} onClose={() => setHelpArticlesVisible(false)} />
+
+      {/* Legal Modals */}
+      <LegalModal
+        visible={termsVisible}
+        onClose={() => setTermsVisible(false)}
+        title="Terms & Conditions"
+        icon="📃"
+        fieldKey="terms"
+        fetcher={fetchCustomerLegal}
+      />
+      <LegalModal
+        visible={privacyVisible}
+        onClose={() => setPrivacyVisible(false)}
+        title="Privacy Policy"
+        icon="🔐"
+        fieldKey="privacy"
+        fetcher={fetchCustomerLegal}
+      />
+      <LegalModal
+        visible={aboutVisible}
+        onClose={() => setAboutVisible(false)}
+        title="About Us"
+        icon="ℹ️"
+        fieldKey="about"
+        fetcher={fetchAboutUs}
+      />
 
       {/* Edit Profile Modal */}
       <Modal visible={editVisible} animationType="slide" transparent>

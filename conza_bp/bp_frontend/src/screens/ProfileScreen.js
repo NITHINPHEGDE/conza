@@ -230,6 +230,10 @@ const ProfileScreen = ({ navigation }) => {
     navigation.navigate('HelpFAQ');
   }, [navigation]);
 
+  const handleLegal = useCallback(() => {
+    navigation.navigate('Legal');
+  }, [navigation]);
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 10 }]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
@@ -283,6 +287,12 @@ const ProfileScreen = ({ navigation }) => {
             )}
           </View>
         )}
+
+        {/* Legal */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Legal</Text>
+          <MenuItem icon="📃" label="Terms, Privacy & About" sub="View legal information" onPress={handleLegal} />
+        </View>
 
         {/* Support */}
         <View style={styles.section}>

@@ -11,6 +11,7 @@ import ModeToggle      from '../components/ModeToggle';
 import { colors }      from '../theme/colors';
 import { logoutSeller } from '../services/authService';
 import { fetchVendorFAQs, fetchVendorHelpArticles } from '../services/faqHelpService';
+import { fetchVendorLegal, fetchAboutUs } from '../services/legalService';
 
 // ── FAQ Item ──────────────────────────────────────────────────────────────────
 const FAQItem = React.memo(({ q, a }) => {
@@ -156,6 +157,56 @@ const HelpArticlesModal = React.memo(({ visible, onClose }) => {
   );
 });
 
+// ── Legal Content Modal (Terms / Privacy / About Us) ─────────────────────────
+const LegalModal = React.memo(({ visible, onClose, title, icon, fetcher, fieldKey }) => {
+  const [doc, setDoc]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(null);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (!visible || fetchedRef.current) return;
+    fetchedRef.current = true;
+    setLoading(true);
+    setError(null);
+    fetcher()
+      .then((data) => setDoc(data[fieldKey] || null))
+      .catch(() => setError('Failed to load content. Please try again.'))
+      .finally(() => setLoading(false));
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { maxHeight: '90%' }]}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>{title}</Text>
+          {loading ? (
+            <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 32 }} />
+          ) : error ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>⚠️</Text>
+              <Text style={styles.emptyText}>{error}</Text>
+            </View>
+          ) : !doc ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>{icon}</Text>
+              <Text style={styles.emptyText}>Content not available yet.</Text>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
+              <Text style={styles.faqA}>{doc.content}</Text>
+            </ScrollView>
+          )}
+          <TouchableOpacity onPress={onClose} style={styles.closeBtnContainer}>
+            <Text style={styles.closeBtnText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+});
+
 // ── MenuItem ──────────────────────────────────────────────────────────────────
 const MenuItem = ({ icon, label, value, onPress }) => (
   <TouchableOpacity style={styles.menuItem} onPress={onPress}>
@@ -172,6 +223,9 @@ const ProfileScreen = () => {
   const { seller, clearSeller } = useVendorStore();
   const [faqsVisible,         setFaqsVisible]         = useState(false);
   const [helpArticlesVisible, setHelpArticlesVisible] = useState(false);
+  const [termsVisible,        setTermsVisible]        = useState(false);
+  const [privacyVisible,      setPrivacyVisible]      = useState(false);
+  const [aboutVisible,        setAboutVisible]        = useState(false);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -226,9 +280,20 @@ const ProfileScreen = () => {
         {/* Support / Logout */}
         <View style={styles.menuCard}>
           <MenuItem icon="🔔" label="Notifications" />
-          <MenuItem icon="🔒" label="Privacy"       />
           <MenuItem icon="❓" label="FAQs"          onPress={() => setFaqsVisible(true)} />
           <MenuItem icon="📖" label="Help Articles" onPress={() => setHelpArticlesVisible(true)} />
+        </View>
+
+        {/* Legal */}
+        <View style={styles.menuCard}>
+          <Text style={styles.menuSection}>Legal</Text>
+          <MenuItem icon="📃" label="Terms & Conditions" onPress={() => setTermsVisible(true)} />
+          <MenuItem icon="🔒" label="Privacy Policy"     onPress={() => setPrivacyVisible(true)} />
+          <MenuItem icon="ℹ️" label="About Us"           onPress={() => setAboutVisible(true)} />
+        </View>
+
+        {/* Account Actions */}
+        <View style={styles.menuCard}>
           <TouchableOpacity
             style={styles.menuItem}
             onPress={async () => {
@@ -246,6 +311,32 @@ const ProfileScreen = () => {
 
       <FAQsModal         visible={faqsVisible}         onClose={() => setFaqsVisible(false)} />
       <HelpArticlesModal visible={helpArticlesVisible} onClose={() => setHelpArticlesVisible(false)} />
+
+      {/* Legal Modals */}
+      <LegalModal
+        visible={termsVisible}
+        onClose={() => setTermsVisible(false)}
+        title="Terms & Conditions"
+        icon="📃"
+        fieldKey="terms"
+        fetcher={fetchVendorLegal}
+      />
+      <LegalModal
+        visible={privacyVisible}
+        onClose={() => setPrivacyVisible(false)}
+        title="Privacy Policy"
+        icon="🔒"
+        fieldKey="privacy"
+        fetcher={fetchVendorLegal}
+      />
+      <LegalModal
+        visible={aboutVisible}
+        onClose={() => setAboutVisible(false)}
+        title="About Us"
+        icon="ℹ️"
+        fieldKey="about"
+        fetcher={fetchAboutUs}
+      />
     </View>
   );
 };
