@@ -160,10 +160,10 @@ const HelpArticlesTab = () => {
 };
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
-const HelpFAQScreen = ({ navigation }) => {
+const HelpFAQScreen = ({ navigation, route }) => {
   const insets  = useSafeAreaInsets();
   const profile = usePartnerStore((s) => s.worker) || {};
-  const [activeTab, setActiveTab] = useState('faqs');
+  const [activeTab, setActiveTab] = useState(route?.params?.tab || 'faqs');
 
   const handleChatWithUs = useCallback(() => {
     const name  = profile.fullName || profile.name || '';

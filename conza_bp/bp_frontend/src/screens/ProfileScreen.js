@@ -226,8 +226,8 @@ const ProfileScreen = ({ navigation }) => {
     await updateProfile(updates);
   }, [updateProfile]);
 
-  const handleHelpFAQ = useCallback(() => {
-    navigation.navigate('HelpFAQ');
+  const handleHelpFAQ = useCallback((tab) => {
+    navigation.navigate('HelpFAQ', { tab });
   }, [navigation]);
 
   const handleLegal = useCallback((tab) => {
@@ -299,7 +299,8 @@ const ProfileScreen = ({ navigation }) => {
         {/* Support */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support</Text>
-          <MenuItem icon="❓" label="Help & FAQ" onPress={handleHelpFAQ} />
+          <MenuItem icon="❓" label="FAQs"          onPress={() => handleHelpFAQ('faqs')} />
+          <MenuItem icon="📖" label="Help Articles" onPress={() => handleHelpFAQ('articles')} />
           <MenuItem
             icon="💬"
             label="Chat With Us"
