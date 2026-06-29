@@ -33,9 +33,13 @@ exports.getCustomers = async (req, res, next) => {
 exports.getCustomerById = async (req, res, next) => {
   try {
     const customer = await Customer.findById(req.params.id)
-    if (!customer) return next(createError(404, 'Customer not found.'))
+    if (!customer) {
+      console.warn(`[CustomerController] Customer not found for id: ${req.params.id}`)
+      return next(createError(404, 'Customer not found.'))
+    }
     sendSuccess(res, 200, 'Customer fetched', { customer })
   } catch (err) {
+    console.error(`[CustomerController] getCustomerById error:`, err.message)
     next(err)
   }
 }

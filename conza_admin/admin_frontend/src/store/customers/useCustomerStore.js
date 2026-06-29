@@ -31,11 +31,19 @@ const useCustomerStore = create((set, get) => ({
   },
 
   fetchCustomerById: async (id) => {
+    // If we already have this customer in the list, use it immediately
+    const existing = get().customers.find((c) => c.id === id)
+    if (existing) {
+      set({ selectedCustomer: existing, loading: false, error: null })
+      return
+    }
     set({ loading: true, error: null, selectedCustomer: null })
     try {
       const res = await customerService.getById(id)
-      if (res.success && res.customer) {
-        set({ selectedCustomer: mapCustomer(res.customer), loading: false })
+      // sendSuccess spreads data into root: { success, message, customer }
+      const customer = res.customer || res.data?.customer
+      if (res.success && customer) {
+        set({ selectedCustomer: mapCustomer(customer), loading: false })
       } else {
         set({ loading: false, error: res.message || 'Customer not found' })
       }
