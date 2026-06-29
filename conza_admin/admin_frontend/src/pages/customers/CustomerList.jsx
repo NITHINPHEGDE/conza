@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Eye, Ban, CheckCircle, Trash2, User } from 'lucide-react'
 import useCustomerStore from '../../store/customers/useCustomerStore'
 import Table from '../../components/common/Table/Table'
@@ -15,6 +15,7 @@ export default function CustomerList() {
     filters, setFilters, fetchCustomers, getFilteredCustomers,
     updateCustomerStatus, deleteCustomer, loading, error,
   } = useCustomerStore()
+  const navigate = useNavigate()
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalAction, setModalAction] = useState('')
@@ -97,7 +98,7 @@ export default function CustomerList() {
       )}
 
       {!loading && filtered.length > 0 && (
-        <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/customers/${row.id}`} />
+        <Table columns={columns} data={filtered} onRowClick={(row) => navigate(`/customers/${row.id}`)} />
       )}
 
       <Modal
