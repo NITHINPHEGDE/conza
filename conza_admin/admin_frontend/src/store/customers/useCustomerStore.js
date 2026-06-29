@@ -34,8 +34,8 @@ const useCustomerStore = create((set, get) => ({
     set({ loading: true, error: null, selectedCustomer: null })
     try {
       const res = await customerService.getById(id)
-      if (res.success) {
-        set({ selectedCustomer: mapCustomer(res.data.customer), loading: false })
+      if (res.success && res.customer) {
+        set({ selectedCustomer: mapCustomer(res.customer), loading: false })
       } else {
         set({ loading: false, error: res.message || 'Customer not found' })
       }
