@@ -5,7 +5,7 @@ import Button from '../../components/common/Button/Button'
 import Modal from '../../components/common/Modal/Modal'
 import Input from '../../components/common/Input/Input'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
-import api from '../../services/apiClient'
+import api from '../../services/api'
 
 export default function CustomerWallets() {
   const [wallets, setWallets]     = useState([])
@@ -24,9 +24,11 @@ export default function CustomerWallets() {
     setError(null)
     try {
       const res = await api.get(`/wallets/customers?search=${encodeURIComponent(q)}&limit=100`)
-      setWallets(res.data?.data || [])
+      // api.js uses fetch and returns parsed JSON directly (not axios).
+      // sendPaginated puts the items array in res.data
+      setWallets(res?.data || [])
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load wallets')
+      setError('Failed to load wallets')
     } finally {
       setLoading(false)
     }
@@ -57,7 +59,7 @@ export default function CustomerWallets() {
       await fetchWallets(search)
       setModalOpen(false)
     } catch (err) {
-      alert(err.response?.data?.message || 'Action failed')
+      alert(err?.message || 'Action failed')
     } finally {
       setSaving(false)
     }
