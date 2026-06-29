@@ -7,6 +7,8 @@ const cookieParser = require('cookie-parser')
 const rateLimit = require('express-rate-limit')
 require('dotenv').config()
 
+require('./config/customersDb')
+
 const errorHandler = require('./middleware/errorHandler')
 const routes = require('./routes')
 

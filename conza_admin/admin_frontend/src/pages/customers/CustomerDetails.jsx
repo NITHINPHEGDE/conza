@@ -1,5 +1,6 @@
+import { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, User, MapPin, Phone, Mail, Calendar, Wallet, ShoppingCart, CalendarCheck, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, User, MapPin, Phone, Mail, Calendar, Wallet, ShoppingCart, CalendarCheck } from 'lucide-react'
 import useCustomerStore from '../../store/customers/useCustomerStore'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Button from '../../components/common/Button/Button'
@@ -7,15 +8,21 @@ import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function CustomerDetails() {
   const { id } = useParams()
-  const { customers, updateCustomerStatus } = useCustomerStore()
-  const customer = customers.find((c) => c.id === id)
+  const { selectedCustomer: customer, fetchCustomerById, updateCustomerStatus, loading, error } = useCustomerStore()
 
-  if (!customer) return <div className="text-center py-12 text-textMuted">Customer not found</div>
+  useEffect(() => {
+    fetchCustomerById(id)
+  }, [id])
+
+  if (loading) return <div className="text-center py-12 text-textMuted">Loading customer...</div>
+  if (error || !customer) return <div className="text-center py-12 text-textMuted">Customer not found</div>
+
+  const addresses = customer.savedAddresses || []
 
   return (
     <div className="space-y-6">
       <Breadcrumb items={[{ label: 'Customers', path: '/customers' }, { label: customer.fullName }]} />
-      
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link to="/customers">
@@ -85,11 +92,11 @@ export default function CustomerDetails() {
 
           <div className="bg-surface rounded-xl border border-border p-6">
             <h3 className="text-lg font-semibold text-textPrimary mb-4">Saved Addresses</h3>
-            {customer.savedAddresses.length === 0 ? (
+            {addresses.length === 0 ? (
               <p className="text-sm text-textMuted">No saved addresses</p>
             ) : (
               <div className="space-y-3">
-                {customer.savedAddresses.map((addr, idx) => (
+                {addresses.map((addr, idx) => (
                   <div key={idx} className="p-3 rounded-lg bg-surfaceElevated">
                     <div className="flex items-center gap-2 mb-1">
                       <MapPin size={14} className="text-accentAmber" />

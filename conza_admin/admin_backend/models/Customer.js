@@ -1,4 +1,5 @@
 const mongoose = require('mongoose')
+const customersDB = require('../config/customersDb')
 
 const addressSchema = new mongoose.Schema({
   label: String,
@@ -7,11 +8,15 @@ const addressSchema = new mongoose.Schema({
   pincode: String,
 }, { _id: false })
 
+// Schema mirrors conza_customers/conza_backend/models/User.js, bound to the
+// SEPARATE customers MongoDB connection (CUSTOMERS_MONGO_URI), reading the
+// real "users" collection created by the customer app.
 const customerSchema = new mongoose.Schema({
-  fullName: { type: String, required: true, trim: true },
-  username: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
-  phone: { type: String, required: true },
+  fullName: { type: String, trim: true },
+  username: { type: String, lowercase: true, trim: true },
+  phone: { type: String },
   email: { type: String, lowercase: true, trim: true },
+  password: { type: String, select: false },
   profileImage: { type: String, default: null },
   locationText: { type: String, default: '' },
   status: { type: String, enum: ['active', 'suspended', 'inactive'], default: 'active' },
@@ -20,8 +25,11 @@ const customerSchema = new mongoose.Schema({
   totalOrders: { type: Number, default: 0 },
   walletBalance: { type: Number, default: 0 },
   savedAddresses: { type: [addressSchema], default: [] },
-}, { timestamps: true })
+}, {
+  timestamps: true,
+  collection: 'users',
+  strict: false,
+  autoIndex: false,
+})
 
-customerSchema.index({ fullName: 'text', phone: 1, email: 1 })
-
-module.exports = mongoose.model('Customer', customerSchema)
+module.exports = customersDB.model('Customer', customerSchema)

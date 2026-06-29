@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Eye, Ban, CheckCircle, Trash2, User } from 'lucide-react'
 import useCustomerStore from '../../store/customers/useCustomerStore'
@@ -11,11 +11,17 @@ import Select from '../../components/common/Select/Select'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function CustomerList() {
-  const { customers, updateCustomerStatus, deleteCustomer, getFilteredCustomers } = useCustomerStore()
-  const [filters, setFilters] = useState({ status: 'all', search: '' })
+  const {
+    filters, setFilters, fetchCustomers, getFilteredCustomers,
+    updateCustomerStatus, deleteCustomer, loading, error,
+  } = useCustomerStore()
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalAction, setModalAction] = useState('')
+
+  useEffect(() => {
+    fetchCustomers()
+  }, [filters.status, filters.search])
 
   const filtered = getFilteredCustomers()
 
@@ -83,7 +89,16 @@ export default function CustomerList() {
           />
         </div>
       </div>
-      <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/customers/${row.id}`} />
+
+      {loading && <p className="text-sm text-textMuted">Loading customers...</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
+      {!loading && !error && filtered.length === 0 && (
+        <p className="text-sm text-textMuted">No registered customers found.</p>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/customers/${row.id}`} />
+      )}
 
       <Modal
         isOpen={modalOpen}
