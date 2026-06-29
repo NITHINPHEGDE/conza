@@ -11,6 +11,7 @@ import * as Location from 'expo-location';
 import { workerAPI  } from '../api/workerAPI';
 import { bookingAPI } from '../api/bookingAPI';
 import { authAPI    } from '../api/authAPI';
+import { walletAPI  } from '../api/walletAPI';
 
 import { socket, connectSocket } from '../utils/socket';
 
@@ -33,6 +34,7 @@ const useAppStore = create((set, get) => ({
       get().fetchMaterials(),
       get().fetchRentalData(),
       get().fetchUserProfile(),
+      get().fetchWalletBalance(),
     ]);
 
     // 2. If no location from profile, try to get from device
@@ -80,6 +82,22 @@ const useAppStore = create((set, get) => ({
     }
 
     set({ initialized: true });
+  },
+
+  // ── Wallet ───────────────────────────────────────────────────────────────────
+  walletBalance:        0,
+  walletLoading:        false,
+
+  fetchWalletBalance: async () => {
+    try {
+      set({ walletLoading: true });
+      const data = await walletAPI.getBalance();
+      set({ walletBalance: data.balance ?? 0 });
+    } catch {
+      // ignore
+    } finally {
+      set({ walletLoading: false });
+    }
   },
 
   // ── User / Auth ─────────────────────────────────────────────────────────────

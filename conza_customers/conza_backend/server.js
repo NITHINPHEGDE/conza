@@ -54,6 +54,7 @@ app.use(express.json({ limit: '1mb' }));
 
 // ── Customer routes ──
 app.use('/api/auth',     authLimiter, authRoutes);
+app.use('/api/wallet',   require('./routes/walletRoutes'));
 app.use('/api/workers',  apiLimiter,  workerRoutes);
 app.use('/api/bookings', apiLimiter,  bookingRoutes);
 

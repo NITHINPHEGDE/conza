@@ -83,6 +83,17 @@ const createBooking = async (req, res) => {
     }
 
     try {
+      // Deduct from wallet if payment method is wallet
+      if ((paymentMethod === 'wallet') && total > 0) {
+        const User = require('../models/User');
+        const freshUser = await User.findById(req.user._id).select('walletBalance');
+        if (!freshUser) throw new Error('User not found');
+        if ((freshUser.walletBalance || 0) < total) {
+          return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
+        }
+        await User.findByIdAndUpdate(req.user._id, { $inc: { walletBalance: -total } });
+      }
+
       booking = await Booking.create({
         user:           req.user._id,
         bookingType,

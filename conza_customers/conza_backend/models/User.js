@@ -56,6 +56,8 @@ const userSchema = new mongoose.Schema(
       default: [],
     },
 
+    walletBalance: { type: Number, default: 0 },
+
     memberSince: {
       type: String,
       default: () =>

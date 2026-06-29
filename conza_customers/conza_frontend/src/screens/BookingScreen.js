@@ -562,6 +562,7 @@ const BookingScreen = () => {
   const rentalCartCount = useAppStore((s) => s.getRentalCartCount());
   const materialCartCount = useAppStore((s) => s.getCartItemCount());
   const totalCartCount = rentalCartCount + materialCartCount;
+  const walletBalance = useAppStore((s) => s.walletBalance);
 
   const header = useMemo(() => (
     <View style={styles.header}>
@@ -573,6 +574,13 @@ const BookingScreen = () => {
         <Text style={styles.headerMeta}>📍 Deliver to</Text>
         <Text style={styles.headerLocation} numberOfLines={1}>{displayLocation}</Text>
       </TouchableOpacity>
+
+      {/* Wallet balance chip */}
+      <TouchableOpacity style={styles.walletChip} activeOpacity={0.8}>
+        <Text style={styles.walletIcon}>👛</Text>
+        <Text style={styles.walletAmount}>₹{walletBalance}</Text>
+      </TouchableOpacity>
+
       {activeCategory === 'Labour' ? null : (
         <TouchableOpacity
           style={styles.notifBtn}
@@ -588,7 +596,7 @@ const BookingScreen = () => {
         </TouchableOpacity>
       )}
     </View>
-  ), [displayLocation, activeCategory, totalCartCount, navigation]);
+  ), [displayLocation, activeCategory, totalCartCount, navigation, walletBalance]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -682,6 +690,19 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     letterSpacing: 0.1,
   },
+  walletChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  walletIcon: { fontSize: 15, marginRight: 4 },
+  walletAmount: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
   notifBtn: {
     width: 42,
     height: 42,

@@ -1,53 +1,93 @@
-import { useState } from 'react'
-import { Eye, Plus, Minus, Wallet } from 'lucide-react'
-import { mockCustomers } from '../../mock/customers'
+import { useState, useEffect, useCallback } from 'react'
+import { Plus, Minus, Wallet, Search } from 'lucide-react'
 import Table from '../../components/common/Table/Table'
 import Button from '../../components/common/Button/Button'
 import Modal from '../../components/common/Modal/Modal'
 import Input from '../../components/common/Input/Input'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import api from '../../services/apiClient'
 
 export default function CustomerWallets() {
-  const [customers, setCustomers] = useState(mockCustomers)
-  const [selected, setSelected] = useState(null)
+  const [wallets, setWallets]     = useState([])
+  const [search, setSearch]       = useState('')
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState(null)
+  const [selected, setSelected]   = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalAction, setModalAction] = useState('')
-  const [amount, setAmount] = useState('')
+  const [amount, setAmount]       = useState('')
+  const [saving, setSaving]       = useState(false)
+  const [description, setDescription] = useState('')
 
-  const handleAction = (customer, action) => {
-    setSelected(customer)
+  const fetchWallets = useCallback(async (q = '') => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await api.get(`/wallets/customers?search=${encodeURIComponent(q)}&limit=100`)
+      setWallets(res.data?.data || [])
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load wallets')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchWallets() }, [fetchWallets])
+
+  const handleSearch = (e) => {
+    const q = e.target.value
+    setSearch(q)
+    fetchWallets(q)
+  }
+
+  const handleAction = (wallet, action) => {
+    setSelected(wallet)
     setModalAction(action)
     setAmount('')
+    setDescription('')
     setModalOpen(true)
   }
 
-  const confirmAction = () => {
-    const amt = parseFloat(amount) || 0
-    if (modalAction === 'credit') {
-      setCustomers(customers.map((c) => c.id === selected.id ? { ...c, walletBalance: c.walletBalance + amt } : c))
-    } else if (modalAction === 'debit') {
-      setCustomers(customers.map((c) => c.id === selected.id ? { ...c, walletBalance: Math.max(0, c.walletBalance - amt) } : c))
+  const confirmAction = async () => {
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) return
+    setSaving(true)
+    try {
+      await api.put(`/wallets/${selected._id}/${modalAction}`, { amount: amt, description })
+      await fetchWallets(search)
+      setModalOpen(false)
+    } catch (err) {
+      alert(err.response?.data?.message || 'Action failed')
+    } finally {
+      setSaving(false)
     }
-    setModalOpen(false)
   }
 
   const columns = [
-    { key: 'fullName', title: 'Customer', render: (row) => (
+    { key: 'ownerName', title: 'Customer', render: (row) => (
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
           <Wallet size={14} className="text-blue-700" />
         </div>
         <div>
-          <p className="font-medium text-textPrimary">{row.fullName}</p>
-          <p className="text-xs text-textMuted">{row.phone}</p>
+          <p className="font-medium text-textPrimary">{row.ownerName}</p>
+          <p className="text-xs text-textMuted">ID: {row.ownerId}</p>
         </div>
       </div>
     )},
-    { key: 'walletBalance', title: 'Balance', render: (row) => `₹${row.walletBalance}` },
+    { key: 'balance', title: 'Balance', render: (row) => (
+      <span className="font-bold text-green-600">₹{row.balance ?? 0}</span>
+    )},
+    { key: 'totalCredit', title: 'Total Credited', render: (row) => `₹${row.totalCredit ?? 0}` },
+    { key: 'totalDebit',  title: 'Total Debited',  render: (row) => `₹${row.totalDebit ?? 0}`  },
     { key: 'actions', title: 'Actions', render: (row) => (
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={() => handleAction(row, 'credit')}><Plus size={14} className="text-success" /></Button>
-        <Button variant="ghost" size="sm" onClick={() => handleAction(row, 'debit')}><Minus size={14} className="text-danger" /></Button>
+        <Button variant="ghost" size="sm" onClick={() => handleAction(row, 'credit')}>
+          <Plus size={14} className="text-success" />
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => handleAction(row, 'debit')}>
+          <Minus size={14} className="text-danger" />
+        </Button>
       </div>
     )},
   ]
@@ -55,8 +95,25 @@ export default function CustomerWallets() {
   return (
     <div className="space-y-4">
       <Breadcrumb items={[{ label: 'Wallets' }, { label: 'Customers' }]} />
-      <h1 className="text-2xl font-bold text-textPrimary">Customer Wallets</h1>
-      <Table columns={columns} data={customers} />
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-textPrimary">Customer Wallets</h1>
+        <div className="relative w-64">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
+          <input
+            className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg bg-inputBg text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="Search customer…"
+            value={search}
+            onChange={handleSearch}
+          />
+        </div>
+      </div>
+
+      {error && <p className="text-danger text-sm">{error}</p>}
+      {loading ? (
+        <p className="text-textMuted text-sm">Loading…</p>
+      ) : (
+        <Table columns={columns} data={wallets} />
+      )}
 
       <Modal
         isOpen={modalOpen}
@@ -65,11 +122,16 @@ export default function CustomerWallets() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button onClick={confirmAction}>Confirm</Button>
+            <Button onClick={confirmAction} disabled={saving}>
+              {saving ? 'Processing…' : 'Confirm'}
+            </Button>
           </>
         }
       >
-        <p className="text-textSecondary mb-4">Customer: <strong>{selected?.fullName}</strong></p>
+        <p className="text-textSecondary mb-4">
+          Customer: <strong>{selected?.ownerName}</strong><br />
+          Current Balance: <strong className="text-green-600">₹{selected?.balance ?? 0}</strong>
+        </p>
         <Input
           label="Amount (₹)"
           type="number"
@@ -77,6 +139,15 @@ export default function CustomerWallets() {
           onChange={(e) => setAmount(e.target.value)}
           placeholder="Enter amount"
         />
+        <div className="mt-3">
+          <Input
+            label="Description (optional)"
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="e.g. Promotional credit"
+          />
+        </div>
       </Modal>
     </div>
   )

@@ -1,4 +1,5 @@
-const Wallet = require('../models/Wallet')
+const Wallet   = require('../models/Wallet')
+const Customer = require('../models/Customer')
 const { sendSuccess, sendPaginated } = require('../utils/response')
 const { createError } = require('../utils/error')
 
@@ -32,6 +33,12 @@ exports.creditWallet = async (req, res, next) => {
     }, { new: true })
 
     if (!wallet) return next(createError(404, 'Wallet not found.'))
+
+    // Sync walletBalance on the actual customer user document
+    if (wallet.ownerType === 'customer') {
+      await Customer.findByIdAndUpdate(wallet.ownerId, { $inc: { walletBalance: amount } })
+    }
+
     req.auditTarget = `Wallet #${req.params.id} - ${wallet.ownerName}`
     req.auditDetails = `Credited ₹${amount}: ${description}`
     sendSuccess(res, 200, 'Wallet credited', { wallet })
@@ -53,6 +60,11 @@ exports.debitWallet = async (req, res, next) => {
     wallet.totalDebit += amount
     wallet.transactions.push({ type: 'debit', amount, description: description || 'Admin debit' })
     await wallet.save()
+
+    // Sync walletBalance on the actual customer user document
+    if (wallet.ownerType === 'customer') {
+      await Customer.findByIdAndUpdate(wallet.ownerId, { $inc: { walletBalance: -amount } })
+    }
 
     req.auditTarget = `Wallet #${req.params.id} - ${wallet.ownerName}`
     req.auditDetails = `Debited ₹${amount}: ${description}`

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { reverseGeocodeFullAddress } from '../hooks/useAuth';
+import useAppStore from '../store/useAppStore';
 import {
   View,
   Text,
@@ -24,6 +25,12 @@ import SavedAddressSheet from '../components/SavedAddressSheet';
 const PLATFORM_FEE_RATE = 0.05;
 
 const PAYMENT_METHODS = [
+  {
+    id: 'wallet',
+    label: 'Conza Wallet',
+    sub: 'Pay instantly using wallet balance',
+    icon: '👛',
+  },
   {
     id: 'cod',
     label: 'Cash on Delivery',
@@ -123,7 +130,8 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const [district,    setDistrict]    = useState('');
   const [state,       setState]       = useState('');
   const [pincode,     setPincode]     = useState('');
-  const [paymentMethod, setPayment]   = useState('cod');
+  const [paymentMethod, setPayment]   = useState('wallet');
+  const walletBalance                 = useAppStore((s) => s.walletBalance);
 
   const [lat,         setLat]         = useState(null);
   const [lng,         setLng]         = useState(null);
@@ -490,6 +498,10 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payment Method</Text>
+          <View style={styles.walletBalanceRow}>
+            <Text style={styles.walletBalanceLabel}>👛 Wallet Balance</Text>
+            <Text style={styles.walletBalanceValue}>₹{walletBalance}</Text>
+          </View>
           {PAYMENT_METHODS.map((method) => (
             <PaymentOption
               key={method.id}
@@ -741,6 +753,20 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
 
+  walletBalanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F0F4FF',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#C7D2F0',
+  },
+  walletBalanceLabel: { fontSize: 13, fontWeight: '600', color: '#3B4A7A' },
+  walletBalanceValue: { fontSize: 14, fontWeight: '800', color: '#2D3E8C' },
   paymentOption: {
     flexDirection: 'row',
     alignItems: 'center',
