@@ -71,7 +71,7 @@ export default function CustomerWallets() {
         </div>
         <div>
           <p className="font-medium text-textPrimary">{row.ownerName}</p>
-          <p className="text-xs text-textMuted">ID: {row.ownerId}</p>
+          <p className="text-xs text-textMuted">{row.ownerPhone || '—'}</p>
         </div>
       </div>
     )},
