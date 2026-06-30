@@ -6,10 +6,10 @@ const {
   updateOrderStatus, getDashboard, getMyOrders,
 } = require('../controllers/sellerOrderController');
 const { protectSeller } = require('../middleware/sellerAuthMiddleware');
-const { protect }       = require('../middleware/authMiddleware');
+const { protect, checkSuspended } = require('../middleware/authMiddleware');
 
 // Customer
-router.post('/',       protect, placeOrder);
+router.post('/',       protect, checkSuspended, placeOrder);
 router.get('/my',      protect, getMyOrders);
 
 // Seller

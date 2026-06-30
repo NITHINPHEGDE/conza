@@ -5,6 +5,7 @@ const Complaint = require('../models/Complaint')
 const Order = require('../models/Order')
 const { sendSuccess, sendPaginated } = require('../utils/response')
 const { createError } = require('../utils/error')
+const { bustCustomerSessionCache } = require('../config/customersRedis')
 
 exports.getCustomers = async (req, res, next) => {
   try {
@@ -51,6 +52,11 @@ exports.updateCustomerStatus = async (req, res, next) => {
     const customer = await Customer.findByIdAndUpdate(req.params.id, { status }, { new: true, runValidators: true })
     if (!customer) return next(createError(404, 'Customer not found.'))
 
+    // Immediately bust the Redis session cache in the customer backend so
+    // the status change (e.g. suspended) takes effect on the very next request
+    // instead of waiting up to 60 s for the cache TTL to expire.
+    await bustCustomerSessionCache(req.params.id)
+
     req.auditTarget = `Customer #${req.params.id} - ${customer.fullName}`
     req.auditDetails = `Status changed to ${status}`
 
@@ -76,7 +82,11 @@ exports.deleteCustomer = async (req, res, next) => {
 
 exports.getCustomerBookings = async (req, res, next) => {
   try {
-    const bookings = await Booking.find({ userId: req.params.id }).sort({ createdAt: -1 })
+    // The real Booking collection uses 'user' (ObjectId) — query as string since
+    // the admin model binds to customersDB with strict:false.
+    const bookings = await Booking.find({
+      $or: [{ user: req.params.id }, { userId: req.params.id }],
+    }).sort({ createdAt: -1 })
     sendSuccess(res, 200, 'Customer bookings fetched', { bookings })
   } catch (err) {
     next(err)
@@ -103,7 +113,8 @@ exports.getCustomerComplaints = async (req, res, next) => {
 
 exports.getCustomerOrders = async (req, res, next) => {
   try {
-    const orders = await Order.find({ customerId: req.params.id }).sort({ createdAt: -1 })
+    // The real SellerOrder collection uses 'customer' (ObjectId)
+    const orders = await Order.find({ customer: req.params.id }).sort({ createdAt: -1 })
     sendSuccess(res, 200, 'Customer orders fetched', { orders })
   } catch (err) {
     next(err)

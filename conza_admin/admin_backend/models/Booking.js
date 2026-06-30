@@ -1,4 +1,5 @@
 const mongoose = require('mongoose')
+const customersDB = require('../config/customersDb')
 
 const workerSnapshotSchema = new mongoose.Schema({
   name: String,
@@ -11,10 +12,10 @@ const issueReportSchema = new mongoose.Schema({
 }, { _id: false })
 
 const bookingSchema = new mongoose.Schema({
-  user: { type: String, required: true },
-  userId: { type: String, required: true },
-  workers: { type: [String], default: [] },
-  workerSnapshot: { type: [workerSnapshotSchema], default: [] },
+  user:     { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },      // ObjectId ref to Customer
+  userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },      // kept for back-compat
+  workers:  { type: [String], default: [] },
+  workerSnapshot: { type: mongoose.Schema.Types.Mixed, default: [] },
   category: { type: String, required: true },
   bookingType: { type: String, enum: ['labour', 'material', 'rental'], default: 'labour' },
   houseNumber: { type: String, default: '' },
@@ -45,8 +46,8 @@ const bookingSchema = new mongoose.Schema({
   description: { type: String, default: '' },
   issueReport: { type: issueReportSchema, default: {} },
   disputeResolution: { type: String, default: '' },
-}, { timestamps: true })
+}, { timestamps: true, strict: false })
 
-bookingSchema.index({ userId: 1, status: 1, bookingType: 1 })
+bookingSchema.index({ user: 1, status: 1, bookingType: 1 })
 
-module.exports = mongoose.model('Booking', bookingSchema)
+module.exports = customersDB.model('Booking', bookingSchema)
