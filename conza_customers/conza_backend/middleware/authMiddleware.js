@@ -2,7 +2,7 @@ const jwt          = require('jsonwebtoken');
 const User         = require('../models/User');
 const { getRedis } = require('../config/redis');
 
-const USER_CACHE_TTL = 300; // 5 minutes
+const USER_CACHE_TTL = 60; // 1 minute (kept short so admin suspend/delete actions take effect quickly)
 
 const protect = async (req, res, next) => {
   let token;
@@ -65,4 +65,19 @@ const revokeToken = async (token) => {
   } catch (_) {}
 };
 
-module.exports = { protect, revokeToken };
+// ── Blocks suspended accounts from performing any action ────────────────────
+// Apply this AFTER `protect` on every route except auth/me (so a suspended
+// user can still fetch their profile and learn they are suspended), login,
+// and signup. Returns a stable error code the mobile app checks for.
+const checkSuspended = (req, res, next) => {
+  if (req.user && req.user.status === 'suspended') {
+    return res.status(403).json({
+      success: false,
+      code: 'SUSPENDED',
+      message: 'Your account has been suspended. Please contact nr.conza@gmail.com for further assistance.',
+    });
+  }
+  next();
+};
+
+module.exports = { protect, revokeToken, checkSuspended };

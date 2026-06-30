@@ -2,6 +2,7 @@ const Customer = require('../models/Customer')
 const Booking = require('../models/Booking')
 const Transaction = require('../models/Transaction')
 const Complaint = require('../models/Complaint')
+const Order = require('../models/Order')
 const { sendSuccess, sendPaginated } = require('../utils/response')
 const { createError } = require('../utils/error')
 
@@ -95,6 +96,15 @@ exports.getCustomerComplaints = async (req, res, next) => {
   try {
     const complaints = await Complaint.find({ userId: req.params.id }).sort({ createdAt: -1 })
     sendSuccess(res, 200, 'Customer complaints fetched', { complaints })
+  } catch (err) {
+    next(err)
+  }
+}
+
+exports.getCustomerOrders = async (req, res, next) => {
+  try {
+    const orders = await Order.find({ customerId: req.params.id }).sort({ createdAt: -1 })
+    sendSuccess(res, 200, 'Customer orders fetched', { orders })
   } catch (err) {
     next(err)
   }

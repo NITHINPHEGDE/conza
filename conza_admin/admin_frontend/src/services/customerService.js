@@ -8,6 +8,7 @@ const customerService = {
   getBookings: (id) => api.get(`/customers/${id}/bookings`),
   getPayments: (id) => api.get(`/customers/${id}/payments`),
   getComplaints: (id) => api.get(`/customers/${id}/complaints`),
+  getOrders: (id) => api.get(`/customers/${id}/orders`),
 }
 
 export default customerService

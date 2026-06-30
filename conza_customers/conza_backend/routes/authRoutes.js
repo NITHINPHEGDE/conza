@@ -12,19 +12,19 @@ const {
   updateSavedAddress,
   deleteSavedAddress,
 } = require('../controllers/authController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, checkSuspended } = require('../middleware/authMiddleware');
 
 router.post('/signup',          signup);
 router.post('/login',           login);
 router.get('/me',               protect, getMe);
 router.get('/reverse-geocode',  reverseGeocode);
-router.put('/update-location',  protect, updateLocation);
-router.put('/update-profile',   protect, updateProfile);
+router.put('/update-location',  protect, checkSuspended, updateLocation);
+router.put('/update-profile',   protect, checkSuspended, updateProfile);
 
 // ── Saved Addresses ──────────────────────────────────────────────────────────
 router.get   ('/addresses',              protect, getSavedAddresses);
-router.post  ('/addresses',              protect, addSavedAddress);
-router.put   ('/addresses/:addressId',   protect, updateSavedAddress);
-router.delete('/addresses/:addressId',   protect, deleteSavedAddress);
+router.post  ('/addresses',              protect, checkSuspended, addSavedAddress);
+router.put   ('/addresses/:addressId',   protect, checkSuspended, updateSavedAddress);
+router.delete('/addresses/:addressId',   protect, checkSuspended, deleteSavedAddress);
 
 module.exports = router;

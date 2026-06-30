@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import TabNavigator, { AuthStack } from './src/navigation/TabNavigator';
 import SplashScreen from './src/screens/SplashScreen';
+import SuspendedScreen from './src/screens/SuspendedScreen';
 import './src/hooks/useAuth';
 import { useAuth } from './src/hooks/useAuth';
 import useAppStore from './src/store/useAppStore';
@@ -43,7 +44,9 @@ export default function App() {
       <StatusBar style="dark" backgroundColor="#FAFAF7" />
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {userProfile ? (
+          {userProfile?.status === 'suspended' ? (
+            <Stack.Screen name="Suspended" component={SuspendedScreen} />
+          ) : userProfile ? (
             <>
               <Stack.Screen name="Main" component={TabNavigator} />
             </>

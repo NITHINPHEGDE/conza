@@ -95,6 +95,7 @@ const login = async (req, res) => {
         profileImage:   user.profileImage,
         location:       user.location,
         savedAddresses: user.savedAddresses,
+        status:         user.status,
       },
     });
   } catch (err) {

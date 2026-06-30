@@ -1,14 +1,17 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, User, MapPin, Phone, Mail, Calendar, Wallet, ShoppingCart, CalendarCheck } from 'lucide-react'
 import useCustomerStore from '../../store/customers/useCustomerStore'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Button from '../../components/common/Button/Button'
+import Modal from '../../components/common/Modal/Modal'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function CustomerDetails() {
   const { id } = useParams()
-  const { selectedCustomer: customer, fetchCustomerById, updateCustomerStatus, loading, error } = useCustomerStore()
+  const { selectedCustomer: customer, fetchCustomerById, updateCustomerStatus, deleteCustomer, loading, error } = useCustomerStore()
+  const [modalOpen, setModalOpen] = useState(false)
+  const [modalAction, setModalAction] = useState('')
 
   useEffect(() => {
     fetchCustomerById(id)
@@ -18,6 +21,12 @@ export default function CustomerDetails() {
   if (error || !customer) return <div className="text-center py-12 text-textMuted">Customer not found</div>
 
   const addresses = customer.savedAddresses || []
+
+  const confirmAction = () => {
+    if (modalAction === 'suspend') updateCustomerStatus(id, 'suspended')
+    if (modalAction === 'activate') updateCustomerStatus(id, 'active')
+    setModalOpen(false)
+  }
 
   return (
     <div className="space-y-6">
@@ -33,9 +42,9 @@ export default function CustomerDetails() {
         </div>
         <div className="flex gap-2">
           {customer.status === 'active' ? (
-            <Button variant="outline" onClick={() => updateCustomerStatus(id, 'suspended')}>Suspend</Button>
+            <Button variant="outline" onClick={() => { setModalAction('suspend'); setModalOpen(true) }}>Suspend</Button>
           ) : (
-            <Button onClick={() => updateCustomerStatus(id, 'active')}>Activate</Button>
+            <Button onClick={() => { setModalAction('activate'); setModalOpen(true) }}>Activate</Button>
           )}
         </div>
       </div>
@@ -148,13 +157,31 @@ export default function CustomerDetails() {
               <Link to={`/customers/${id}/payments`}>
                 <Button variant="outline" className="w-full justify-start">Payment History</Button>
               </Link>
-              <Link to={`/customers/${id}/complaints`}>
-                <Button variant="outline" className="w-full justify-start">Complaints</Button>
+              <Link to={`/customers/${id}/orders`}>
+                <Button variant="outline" className="w-full justify-start">View Orders</Button>
               </Link>
             </div>
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={`${modalAction.charAt(0).toUpperCase() + modalAction.slice(1)} Customer`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button variant={modalAction === 'suspend' ? 'danger' : 'primary'} onClick={confirmAction}>
+              Confirm
+            </Button>
+          </>
+        }
+      >
+        <p className="text-textSecondary">
+          Are you sure you want to {modalAction} <strong>{customer.fullName}</strong>?
+        </p>
+      </Modal>
     </div>
   )
 }

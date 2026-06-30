@@ -16,6 +16,7 @@ import CustomerDetails from '../pages/customers/CustomerDetails'
 import CustomerBookings from '../pages/customers/CustomerBookings'
 import CustomerPayments from '../pages/customers/CustomerPayments'
 import CustomerComplaints from '../pages/customers/CustomerComplaints'
+import CustomerOrders from '../pages/customers/CustomerOrders'
 
 import WorkerList from '../pages/workers/WorkerList'
 import WorkerDetails from '../pages/workers/WorkerDetails'
@@ -154,6 +155,7 @@ export default function AppRoutes() {
             <Route path="/customers/:id/bookings" element={<CustomerBookings />} />
             <Route path="/customers/:id/payments" element={<CustomerPayments />} />
             <Route path="/customers/:id/complaints" element={<CustomerComplaints />} />
+            <Route path="/customers/:id/orders" element={<CustomerOrders />} />
           </Route>
 
           {/* Workers */}
