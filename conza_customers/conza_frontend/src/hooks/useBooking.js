@@ -118,7 +118,7 @@ export const useBooking = (type) => {
           }
         }
 
-        if (lastOrderId) await setActiveBookingId(lastOrderId);
+
         clearCart();
         setSuccess(true);
         return true;
@@ -158,7 +158,6 @@ export const useBooking = (type) => {
         const result = await bookingAPI.placeSellerOrder(payload);
         if (result.success) {
           addSellerOrder(result.order);
-          await setActiveBookingId(result.order._id);
         }
         setSuccess(true);
         return true;

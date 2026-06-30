@@ -35,7 +35,15 @@ export default function CustomerOrders() {
 
   const columns = [
     { key: 'id', title: 'Order ID', render: (row) => <span className="text-xs text-textMuted">{row.id}</span> },
-    { key: 'vendor', title: 'Vendor' },
+    { key: 'vendor', title: 'Vendor', render: (row) => row.seller?.shopName || row.seller?.name || '—' },
+    {
+      key: 'products',
+      title: 'Products',
+      render: (row) => {
+        const itemNames = (row.items || []).map((i) => i.title || i.name).filter(Boolean);
+        return itemNames.join(', ') || '—';
+      }
+    },
     { key: 'total', title: 'Total', render: (row) => `₹${row.total}` },
     { key: 'paymentMethod', title: 'Payment', render: (row) => <span className="uppercase">{row.paymentMethod}</span> },
     { key: 'status', title: 'Status', render: (row) => <StatusBadge status={row.status} /> },

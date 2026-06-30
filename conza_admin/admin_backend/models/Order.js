@@ -4,7 +4,7 @@ const customersDB = require('../config/customersDb')
 // Reads from the real 'sellerorders' collection in the customers MongoDB.
 // Field names mirror conza_customers/conza_backend/models/SellerOrder.js.
 const orderSchema = new mongoose.Schema({
-  seller:   { type: String },   // ObjectId ref to Seller
+  seller:   { type: mongoose.Schema.Types.ObjectId, ref: 'Seller' },   // ObjectId ref to Seller
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },   // ObjectId ref to Customer
   orderType: { type: String, enum: ['material', 'rental'] },
   items: { type: mongoose.Schema.Types.Mixed, default: [] },

@@ -3,6 +3,7 @@ const Booking = require('../models/Booking')
 const Transaction = require('../models/Transaction')
 const Complaint = require('../models/Complaint')
 const Order = require('../models/Order')
+const Seller = require('../models/Seller')
 const { sendSuccess, sendPaginated } = require('../utils/response')
 const { createError } = require('../utils/error')
 const { bustCustomerSessionCache } = require('../config/customersRedis')
@@ -114,7 +115,9 @@ exports.getCustomerComplaints = async (req, res, next) => {
 exports.getCustomerOrders = async (req, res, next) => {
   try {
     // The real SellerOrder collection uses 'customer' (ObjectId)
-    const orders = await Order.find({ customer: req.params.id }).sort({ createdAt: -1 })
+    const orders = await Order.find({ customer: req.params.id })
+      .populate('seller', 'name shopName')
+      .sort({ createdAt: -1 })
     sendSuccess(res, 200, 'Customer orders fetched', { orders })
   } catch (err) {
     next(err)
