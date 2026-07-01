@@ -2,6 +2,7 @@ const Worker = require('../models/Worker')
 const Review = require('../models/Review')
 const { sendSuccess, sendPaginated } = require('../utils/response')
 const { createError } = require('../utils/error')
+const { bustWorkerSessionCache } = require('../config/workersRedis')
 
 exports.getWorkers = async (req, res, next) => {
   try {
@@ -37,8 +38,25 @@ exports.getWorkerById = async (req, res, next) => {
 exports.updateWorkerStatus = async (req, res, next) => {
   try {
     const { status } = req.body
-    const worker = await Worker.findByIdAndUpdate(req.params.id, { status }, { new: true, runValidators: true })
+    const update = { status }
+
+    // Suspending a worker must immediately take them off the app and hide
+    // them from customers. Activating restores their availability.
+    if (status === 'suspended') {
+      update.isAvailable = false
+      update.isOnline = false
+    } else if (status === 'active') {
+      update.isAvailable = true
+      update.isOnline = true}
+
+    const worker = await Worker.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true })
     if (!worker) return next(createError(404, 'Worker not found.'))
+
+    // Bust the worker's cached session + customer-facing nearby/category
+    // caches so the change (suspend/activate) applies on the very next
+    // request instead of waiting for the cache TTL to expire.
+    await bustWorkerSessionCache(req.params.id, worker.category)
+
     req.auditTarget = `Worker #${req.params.id} - ${worker.fullName}`
     req.auditDetails = `Status changed to ${status}`
     sendSuccess(res, 200, 'Worker status updated', { worker })
@@ -65,6 +83,7 @@ exports.verifyWorker = async (req, res, next) => {
     }
 
     await worker.save()
+    await bustWorkerSessionCache(req.params.id, worker.category)
     req.auditTarget = `Worker #${req.params.id} - ${worker.fullName}`
     req.auditDetails = `Verification updated: ${JSON.stringify(worker.verification)}`
     sendSuccess(res, 200, 'Worker verification updated', { worker })

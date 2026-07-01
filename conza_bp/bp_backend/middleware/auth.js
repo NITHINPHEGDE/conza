@@ -53,6 +53,17 @@ const protect = asyncHandler(async (req, res, next) => {
   next();
 });
 
+// ── Block suspended workers from using the app ─────────────────────────────
+// Must run AFTER `protect` (needs req.worker). GET /workers/me is intentionally
+// NOT guarded by this so the app can still fetch the worker's current status
+// and show the "You have been suspended" screen.
+const requireActive = (req, res, next) => {
+  if (req.worker?.status === 'suspended') {
+    throw new AppError('Your account has been suspended. Contact nr.conza@gmail.com for assistance.', 403);
+  }
+  next();
+};
+
 const revokeToken = async (token) => {
   try {
     const decoded    = jwt.decode(token);
@@ -65,4 +76,4 @@ const revokeToken = async (token) => {
   } catch (_) {}
 };
 
-module.exports = { protect, revokeToken };
+module.exports = { protect, revokeToken, requireActive };

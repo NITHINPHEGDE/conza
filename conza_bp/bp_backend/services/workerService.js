@@ -175,8 +175,11 @@ const loginWorker = async (identifier, password) => {
     throw new AppError('Incorrect password.', 401);
   }
 
-  // Ensure worker is always online on login
-  if (!worker.isOnline) {
+  // Ensure worker is always online on login — but never for a suspended
+  // worker; suspended workers must stay offline/unavailable so they don't
+  // appear to customers, and they're only allowed to log in to see the
+  // "You have been suspended" screen.
+  if (worker.status !== 'suspended' && !worker.isOnline) {
     worker.isOnline = true;
     await worker.save();
     try {

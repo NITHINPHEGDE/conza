@@ -20,9 +20,11 @@ import LoginScreen          from '../screens/auth/LoginScreen';
 import SignUpScreen         from '../screens/auth/SignUpScreen';
 import HelpFAQScreen      from '../screens/HelpFAQScreen';
 import LegalScreen        from '../screens/LegalScreen';
+import SuspendedScreen    from '../screens/SuspendedScreen';
+import VerificationBanner from '../components/VerificationBanner';
 
 import usePartnerStore, { selectActiveJob, selectJobStatus } from '../store/usePartnerStore';
-import { getLoggedInUser } from '../services/authService';
+import { getLoggedInUser, getMe } from '../services/authService';
 import { socket } from '../utils/socket';
 import { colors } from '../theme/colors';
 import {
@@ -97,6 +99,7 @@ const tabScreenOptions = ({ route }) => ({
 
 const MainTabs = ({ navigation }) => (
   <View style={styles.flex}>
+    <VerificationBanner />
     <Tab.Navigator initialRouteName="Home" screenOptions={tabScreenOptions}>
       <Tab.Screen name="Home"     component={LabourHomeScreen} options={{ title: 'Home'     }} />
       <Tab.Screen name="Earnings" component={PaymentScreen}    options={{ title: 'Earnings' }} />
@@ -108,15 +111,31 @@ const MainTabs = ({ navigation }) => (
   </View>
 );
 
-const MainAppStack = () => (
-  <Stack.Navigator screenOptions={STACK_OPTS}>
-    <Stack.Screen name="Tabs"           component={MainTabs}             />
-    <Stack.Screen name="RequestDetails" component={RequestDetailsScreen} options={CARD_OPTS} />
-    <Stack.Screen name="ActiveJob"      component={ActiveJobScreen}      options={CARD_OPTS} />
-    <Stack.Screen name="HelpFAQ"        component={HelpFAQScreen}        options={CARD_OPTS} />
-    <Stack.Screen name="Legal"          component={LegalScreen}          options={CARD_OPTS} />
-  </Stack.Navigator>
-);
+const MainAppStack = () => {
+  // Reactively re-renders the moment worker.status flips to 'suspended'
+  // (e.g. after a background getMe() refresh), regardless of which screen
+  // the worker was on — they're dropped straight to the suspended screen
+  // and every other screen/route becomes unreachable.
+  const isSuspended = usePartnerStore((s) => s.worker?.status === 'suspended');
+
+  if (isSuspended) {
+    return (
+      <Stack.Navigator screenOptions={STACK_OPTS}>
+        <Stack.Screen name="Suspended" component={SuspendedScreen} />
+      </Stack.Navigator>
+    );
+  }
+
+  return (
+    <Stack.Navigator screenOptions={STACK_OPTS}>
+      <Stack.Screen name="Tabs"           component={MainTabs}             />
+      <Stack.Screen name="RequestDetails" component={RequestDetailsScreen} options={CARD_OPTS} />
+      <Stack.Screen name="ActiveJob"      component={ActiveJobScreen}      options={CARD_OPTS} />
+      <Stack.Screen name="HelpFAQ"        component={HelpFAQScreen}        options={CARD_OPTS} />
+      <Stack.Screen name="Legal"          component={LegalScreen}          options={CARD_OPTS} />
+    </Stack.Navigator>
+  );
+};
 
 const AuthStack = () => (
   <Stack.Navigator screenOptions={STACK_OPTS}>
@@ -191,6 +210,11 @@ useEffect(() => {
         });
 
         setInitialRoute('MainApp');
+
+        // The cached worker (from AsyncStorage) may be stale — refresh from
+        // the server right away so a suspension applied since the last
+        // login is picked up immediately instead of showing stale data.
+        getMe().then((fresh) => { if (mounted && fresh) setWorker(fresh); });
       } else {
         setInitialRoute('Auth');
       }
@@ -199,6 +223,17 @@ useEffect(() => {
     });
     return () => { mounted = false; };
   }, []);
+
+  // ── Poll worker status while the app is open ─────────────────────────────
+  // Catches a suspension applied mid-session (e.g. admin suspends the worker
+  // while they're actively using the app) without requiring a re-login.
+  useEffect(() => {
+    if (initialRoute !== 'MainApp') return;
+    const interval = setInterval(() => {
+      getMe().then((fresh) => { if (fresh) setWorker(fresh); });
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [initialRoute]);
 
   if (!initialRoute) {
     return (
