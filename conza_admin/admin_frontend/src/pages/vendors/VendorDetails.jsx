@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Store, Phone, Mail, MapPin, Star, Calendar, Wallet, ShoppingCart, FileText, ShieldCheck } from 'lucide-react'
 import useVendorStore from '../../store/vendors/useVendorStore'
@@ -7,9 +8,15 @@ import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function VendorDetails() {
   const { id } = useParams()
-  const { vendors, updateVendorStatus, verifyVendor } = useVendorStore()
-  const vendor = vendors.find((v) => v.id === id)
+  const { vendors, updateVendorStatus, verifyVendor, fetchVendorById, loading, selectedVendor } = useVendorStore()
+  
+  useEffect(() => {
+    fetchVendorById(id)
+  }, [id])
 
+  const vendor = vendors.find((v) => v.id === id) || selectedVendor
+
+  if (loading) return <div className="text-center py-12 text-textMuted">Loading vendor...</div>
   if (!vendor) return <div className="text-center py-12 text-textMuted">Vendor not found</div>
 
   return (

@@ -6,7 +6,7 @@ const mapVendor = (v) => ({ ...v, id: v._id || v.id })
 const useVendorStore = create((set, get) => ({
   vendors: [],
   selectedVendor: null,
-  loading: false,
+  loading: true,
   error: null,
   filters: { status: 'all', type: 'all', search: '' },
 

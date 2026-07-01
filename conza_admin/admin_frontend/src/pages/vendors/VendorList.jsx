@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Eye, Ban, CheckCircle, Store, ShieldCheck, ShieldX } from 'lucide-react'
 import useVendorStore from '../../store/vendors/useVendorStore'
 import Table from '../../components/common/Table/Table'
@@ -12,6 +12,7 @@ import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function VendorList() {
   const { vendors, fetchVendors, updateVendorStatus, loading, error } = useVendorStore()
+  const navigate = useNavigate()
   const [filters, setFilters] = useState({ status: 'all', type: 'all', search: '' })
   const [activeTab, setActiveTab] = useState('verified')
   const [selectedVendor, setSelectedVendor] = useState(null)
@@ -132,7 +133,14 @@ export default function VendorList() {
         </button>
       </div>
 
-      <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/vendors/${row.id}`} />
+      {loading && <p className="text-sm text-textMuted">Loading vendors...</p>}
+      {!loading && error && <p className="text-sm text-danger">{error}</p>}
+      {!loading && !error && filtered.length === 0 && (
+        <p className="text-sm text-textMuted">No registered vendors found.</p>
+      )}
+      {!loading && filtered.length > 0 && (
+        <Table columns={columns} data={filtered} onRowClick={(row) => navigate(`/vendors/${row.id}`)} />
+      )}
 
       <Modal
         isOpen={modalOpen}
