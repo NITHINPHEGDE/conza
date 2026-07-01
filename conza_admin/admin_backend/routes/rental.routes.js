@@ -11,6 +11,7 @@ router.get('/featured', c.getFeaturedRentals)
 router.get('/categories', c.getCategories)
 router.get('/:id', c.getRentalById)
 router.put('/:id', c.updateRental)
+router.put('/:id/feature', c.toggleFeatured)
 router.delete('/:id', c.deleteRental)
 
 module.exports = router

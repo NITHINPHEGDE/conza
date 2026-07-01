@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Eye, CheckCircle, XCircle, Truck } from 'lucide-react'
+import useRentalStore from '../../store/rentals/useRentalStore'
 import Table from '../../components/common/Table/Table'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Button from '../../components/common/Button/Button'
@@ -8,23 +9,21 @@ import Modal from '../../components/common/Modal/Modal'
 import SearchBar from '../../components/common/SearchBar/SearchBar'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
-const mockRentals = [
-  { id: '1', title: 'Concrete Mixer', vendor: 'RentEquip Bangalore', category: 'Equipment', price: 800, stock: 3, status: 'active', deposit: 5000 },
-  { id: '2', title: 'Scaffolding Set', vendor: 'BuildMart Pro', category: 'Safety', price: 1200, stock: 5, status: 'active', deposit: 3000 },
-  { id: '3', title: 'Power Generator 5KVA', vendor: 'QuickBuild Supply', category: 'Power', price: 1500, stock: 1, status: 'low_stock', deposit: 8000 },
-  { id: '4', title: 'Jackhammer', vendor: 'RentEquip Bangalore', category: 'Tools', price: 600, stock: 0, status: 'out_of_stock', deposit: 2000 },
-]
-
 export default function RentalList() {
-  const [rentals, setRentals] = useState(mockRentals)
+  const { rentals, fetchRentals, updateRental, deleteRental, loading, error } = useRentalStore()
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalAction, setModalAction] = useState('')
 
-  const filtered = rentals.filter((r) => 
-    r.title.toLowerCase().includes(search.toLowerCase()) || 
-    r.vendor.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    fetchRentals()
+  }, [])
+
+  const filtered = rentals.filter((r) =>
+    r.title?.toLowerCase().includes(search.toLowerCase()) ||
+    r.vendor?.toLowerCase().includes(search.toLowerCase())
   )
 
   const handleAction = (rental, action) => {
@@ -33,9 +32,9 @@ export default function RentalList() {
     setModalOpen(true)
   }
 
-  const confirmAction = () => {
-    if (modalAction === 'approve') setRentals(rentals.map((r) => r.id === selected.id ? { ...r, status: 'active' } : r))
-    if (modalAction === 'remove') setRentals(rentals.filter((r) => r.id !== selected.id))
+  const confirmAction = async () => {
+    if (modalAction === 'approve') await updateRental(selected.id, { isAvailable: true })
+    if (modalAction === 'remove') await deleteRental(selected.id)
     setModalOpen(false)
   }
 
@@ -47,11 +46,16 @@ export default function RentalList() {
         </div>
         <div>
           <p className="font-medium text-textPrimary">{row.title}</p>
-          <p className="text-xs text-textMuted">{row.vendor}</p>
+          <p className="text-xs text-textMuted">{row.category}</p>
         </div>
       </div>
     )},
-    { key: 'category', title: 'Category' },
+    { key: 'vendor', title: 'Vendor', render: (row) => (
+      <div>
+        <p className="text-sm text-textPrimary">{row.vendor}</p>
+        {row.vendorCity && <p className="text-xs text-textMuted">{row.vendorCity}</p>}
+      </div>
+    )},
     { key: 'price', title: 'Price/Day', render: (row) => `₹${row.price}` },
     { key: 'deposit', title: 'Deposit', render: (row) => `₹${row.deposit}` },
     { key: 'stock', title: 'Available' },
@@ -72,7 +76,12 @@ export default function RentalList() {
         <h1 className="text-2xl font-bold text-textPrimary">Rentals</h1>
         <SearchBar placeholder="Search rentals..." onSearch={setSearch} />
       </div>
-      <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/rentals/${row.id}`} />
+
+      {loading && <p className="text-sm text-textMuted">Loading rentals...</p>}
+      {!loading && error && <p className="text-sm text-danger">{error}</p>}
+      {!loading && !error && (
+        <Table columns={columns} data={filtered} onRowClick={(row) => navigate(`/rentals/${row.id}`)} />
+      )}
 
       <Modal
         isOpen={modalOpen}

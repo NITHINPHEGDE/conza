@@ -25,6 +25,8 @@ const statusStyles = {
   both: 'bg-purple-100 text-purple-700 border-purple-200',
   material: 'bg-amber-100 text-amber-700 border-amber-200',
   rental: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+  out_of_stock: 'bg-orange-100 text-orange-700 border-orange-200',
+  inactive: 'bg-gray-100 text-gray-600 border-gray-200',
   labour: 'bg-violet-100 text-violet-700 border-violet-200',
   default: 'bg-gray-100 text-gray-600 border-gray-200',
 }

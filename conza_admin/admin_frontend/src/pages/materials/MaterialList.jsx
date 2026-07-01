@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Eye, CheckCircle, XCircle, Package } from 'lucide-react'
+import useMaterialStore from '../../store/materials/useMaterialStore'
 import Table from '../../components/common/Table/Table'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Button from '../../components/common/Button/Button'
@@ -8,24 +9,21 @@ import Modal from '../../components/common/Modal/Modal'
 import SearchBar from '../../components/common/SearchBar/SearchBar'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
-const mockMaterials = [
-  { id: '1', title: 'Portland Cement 50kg', vendor: 'BuildMart Pro', category: 'Cement', price: 380, stock: 45, status: 'active', type: 'material' },
-  { id: '2', title: 'TMT Steel Bars 12mm', vendor: 'SteelWorld India', category: 'Steel', price: 62, stock: 120, status: 'active', type: 'material' },
-  { id: '3', title: 'AAC Blocks 600×200×150', vendor: 'QuickBuild Supply', category: 'Blocks', price: 45, stock: 0, status: 'out_of_stock', type: 'material' },
-  { id: '4', title: 'River Sand (Fine)', vendor: 'NatureMats Co.', category: 'Sand', price: 1200, stock: 8, status: 'low_stock', type: 'material' },
-  { id: '5', title: 'Concrete Mixer Rental', vendor: 'RentEquip Bangalore', category: 'Equipment', price: 800, stock: 3, status: 'active', type: 'rental' },
-]
-
 export default function MaterialList() {
-  const [materials, setMaterials] = useState(mockMaterials)
+  const { materials, fetchMaterials, updateMaterial, deleteMaterial, loading, error } = useMaterialStore()
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalAction, setModalAction] = useState('')
 
-  const filtered = materials.filter((m) => 
-    m.title.toLowerCase().includes(search.toLowerCase()) || 
-    m.vendor.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    fetchMaterials()
+  }, [])
+
+  const filtered = materials.filter((m) =>
+    m.title?.toLowerCase().includes(search.toLowerCase()) ||
+    m.vendor?.toLowerCase().includes(search.toLowerCase())
   )
 
   const handleAction = (mat, action) => {
@@ -34,10 +32,9 @@ export default function MaterialList() {
     setModalOpen(true)
   }
 
-  const confirmAction = () => {
-    if (modalAction === 'approve') setMaterials(materials.map((m) => m.id === selected.id ? { ...m, status: 'active' } : m))
-    if (modalAction === 'reject') setMaterials(materials.map((m) => m.id === selected.id ? { ...m, status: 'rejected' } : m))
-    if (modalAction === 'remove') setMaterials(materials.filter((m) => m.id !== selected.id))
+  const confirmAction = async () => {
+    if (modalAction === 'approve') await updateMaterial(selected.id, { isAvailable: true })
+    if (modalAction === 'remove') await deleteMaterial(selected.id)
     setModalOpen(false)
   }
 
@@ -49,14 +46,18 @@ export default function MaterialList() {
         </div>
         <div>
           <p className="font-medium text-textPrimary">{row.title}</p>
-          <p className="text-xs text-textMuted">{row.vendor}</p>
+          <p className="text-xs text-textMuted">{row.category}</p>
         </div>
       </div>
     )},
-    { key: 'category', title: 'Category' },
+    { key: 'vendor', title: 'Vendor', render: (row) => (
+      <div>
+        <p className="text-sm text-textPrimary">{row.vendor}</p>
+        {row.vendorCity && <p className="text-xs text-textMuted">{row.vendorCity}</p>}
+      </div>
+    )},
     { key: 'price', title: 'Price', render: (row) => `₹${row.price}` },
     { key: 'stock', title: 'Stock' },
-    { key: 'type', title: 'Type', render: (row) => <StatusBadge status={row.type} label={row.type} /> },
     { key: 'status', title: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'actions', title: 'Actions', render: (row) => (
       <div className="flex items-center gap-2">
@@ -74,7 +75,12 @@ export default function MaterialList() {
         <h1 className="text-2xl font-bold text-textPrimary">Materials & Products</h1>
         <SearchBar placeholder="Search materials..." onSearch={setSearch} />
       </div>
-      <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/materials/${row.id}`} />
+
+      {loading && <p className="text-sm text-textMuted">Loading materials...</p>}
+      {!loading && error && <p className="text-sm text-danger">{error}</p>}
+      {!loading && !error && (
+        <Table columns={columns} data={filtered} onRowClick={(row) => navigate(`/materials/${row.id}`)} />
+      )}
 
       <Modal
         isOpen={modalOpen}
