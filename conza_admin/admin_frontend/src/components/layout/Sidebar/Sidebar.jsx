@@ -30,14 +30,7 @@ const menuGroups = [
   {
     title: 'Operations',
     items: [
-      {
-        icon: CalendarCheck, label: 'Bookings', path: '/bookings', permission: 'bookings',
-        children: [
-          { label: 'Labour',    path: '/bookings/labour' },
-          { label: 'Materials', path: '/bookings/materials' },
-          { label: 'Rentals',   path: '/bookings/rentals' },
-        ]
-      },
+      { icon: CalendarCheck, label: 'Bookings', path: '/bookings', permission: 'bookings' },
       { icon: ShoppingCart, label: 'Orders',        path: '/orders',             permission: 'orders' },
       { icon: Map,          label: 'Live Tracking', path: '/maps/live-tracking', permission: 'maps' },
     ]
