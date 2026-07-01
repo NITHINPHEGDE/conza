@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Eye, ShoppingCart } from 'lucide-react'
+import { Eye } from 'lucide-react'
+import useOrderStore from '../../store/orders/useOrderStore'
 import Table from '../../components/common/Table/Table'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Button from '../../components/common/Button/Button'
@@ -8,24 +9,14 @@ import SearchBar from '../../components/common/SearchBar/SearchBar'
 import Select from '../../components/common/Select/Select'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
-const mockOrders = [
-  { id: 'ORD001', customer: 'Rahul Sharma', vendor: 'BuildMart Pro', type: 'material', total: 4560, status: 'delivered', date: '2024-06-20T12:00:00Z' },
-  { id: 'ORD002', customer: 'Priya Patel', vendor: 'SteelWorld India', type: 'material', total: 3200, status: 'out_for_delivery', date: '2024-06-20T11:30:00Z' },
-  { id: 'ORD003', customer: 'Ananya R', vendor: 'QuickBuild Supply', type: 'rental', total: 1800, status: 'packed', date: '2024-06-20T10:00:00Z' },
-  { id: 'ORD004', customer: 'Nithin S', vendor: 'NatureMats Co.', type: 'material', total: 2400, status: 'confirmed', date: '2024-06-19T16:00:00Z' },
-  { id: 'ORD005', customer: 'Meena T', vendor: 'RentEquip Bangalore', type: 'rental', total: 5600, status: 'active', date: '2024-06-18T10:00:00Z' },
-]
-
 export default function OrderList() {
-  const [orders] = useState(mockOrders)
-  const [filters, setFilters] = useState({ status: 'all', type: 'all', search: '' })
+  const { loading, error, filters, setFilters, fetchOrders, getFilteredOrders } = useOrderStore()
 
-  const filtered = orders.filter((o) => {
-    if (filters.status !== 'all' && o.status !== filters.status) return false
-    if (filters.type !== 'all' && o.type !== filters.type) return false
-    if (filters.search && !o.id.toLowerCase().includes(filters.search.toLowerCase())) return false
-    return true
-  })
+  useEffect(() => {
+    fetchOrders()
+  }, [])
+
+  const filtered = getFilteredOrders()
 
   const columns = [
     { key: 'id', title: 'Order ID' },
@@ -62,18 +53,24 @@ export default function OrderList() {
             options={[
               { value: 'all', label: 'All Status' },
               { value: 'new', label: 'New' },
-              { value: 'confirmed', label: 'Confirmed' },
-              { value: 'packed', label: 'Packed' },
+              { value: 'accepted', label: 'Accepted' },
               { value: 'out_for_delivery', label: 'Out for Delivery' },
               { value: 'delivered', label: 'Delivered' },
               { value: 'active', label: 'Active' },
+              { value: 'overdue', label: 'Overdue' },
               { value: 'returned', label: 'Returned' },
               { value: 'cancelled', label: 'Cancelled' },
             ]}
           />
         </div>
       </div>
-      <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/orders/${row.id}`} />
+      {loading ? (
+        <div className="text-center py-12 text-textMuted">Loading orders...</div>
+      ) : error ? (
+        <div className="text-center py-12 text-danger">{error}</div>
+      ) : (
+        <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/orders/${row.id}`} />
+      )}
     </div>
   )
 }

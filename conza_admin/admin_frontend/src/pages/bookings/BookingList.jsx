@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Eye, CalendarCheck } from 'lucide-react'
 import useBookingStore from '../../store/bookings/useBookingStore'
@@ -10,8 +10,12 @@ import Select from '../../components/common/Select/Select'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function BookingList() {
-  const { bookings, getFilteredBookings } = useBookingStore()
-  const [filters, setFilters] = useState({ status: 'all', type: 'all', search: '' })
+  const { loading, error, filters, setFilters, fetchBookings, getFilteredBookings } = useBookingStore()
+
+  useEffect(() => {
+    fetchBookings()
+  }, [])
+
   const filtered = getFilteredBookings()
 
   const columns = [
@@ -62,7 +66,13 @@ export default function BookingList() {
           />
         </div>
       </div>
-      <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/bookings/${row.id}`} />
+      {loading ? (
+        <div className="text-center py-12 text-textMuted">Loading bookings...</div>
+      ) : error ? (
+        <div className="text-center py-12 text-danger">{error}</div>
+      ) : (
+        <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/bookings/${row.id}`} />
+      )}
     </div>
   )
 }

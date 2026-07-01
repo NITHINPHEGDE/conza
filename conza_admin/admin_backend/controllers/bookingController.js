@@ -6,12 +6,16 @@ exports.getBookings = async (req, res, next) => {
   try {
     const { search = '', status, type, page = 1, limit = 20 } = req.query
     const query = {}
-    if (search) query.$or = [{ user: { $regex: search, $options: 'i' } }, { category: { $regex: search, $options: 'i' } }]
+    if (search) query.category = { $regex: search, $options: 'i' }
     if (status && status !== 'all') query.status = status
     if (type && type !== 'all') query.bookingType = type
 
     const total = await Booking.countDocuments(query)
-    const bookings = await Booking.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(parseInt(limit))
+    const bookings = await Booking.find(query)
+      .populate('user', 'fullName phone')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
     sendPaginated(res, bookings, total, page, limit)
   } catch (err) {
     next(err)
@@ -20,7 +24,7 @@ exports.getBookings = async (req, res, next) => {
 
 exports.getBookingById = async (req, res, next) => {
   try {
-    const booking = await Booking.findById(req.params.id)
+    const booking = await Booking.findById(req.params.id).populate('user', 'fullName phone')
     if (!booking) return next(createError(404, 'Booking not found.'))
     sendSuccess(res, 200, 'Booking fetched', { booking })
   } catch (err) {

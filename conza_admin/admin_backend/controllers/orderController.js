@@ -6,11 +6,16 @@ exports.getOrders = async (req, res, next) => {
   try {
     const { search = '', status, page = 1, limit = 20 } = req.query
     const query = {}
-    if (search) query.$or = [{ customer: { $regex: search, $options: 'i' } }, { vendor: { $regex: search, $options: 'i' } }]
+    if (search) query.customerName = { $regex: search, $options: 'i' }
     if (status && status !== 'all') query.status = status
 
     const total = await Order.countDocuments(query)
-    const orders = await Order.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(parseInt(limit))
+    const orders = await Order.find(query)
+      .populate('customer', 'fullName phone')
+      .populate('seller', 'name shopName')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
     sendPaginated(res, orders, total, page, limit)
   } catch (err) {
     next(err)
@@ -20,6 +25,8 @@ exports.getOrders = async (req, res, next) => {
 exports.getOrderById = async (req, res, next) => {
   try {
     const order = await Order.findById(req.params.id)
+      .populate('customer', 'fullName phone')
+      .populate('seller', 'name shopName')
     if (!order) return next(createError(404, 'Order not found.'))
     sendSuccess(res, 200, 'Order fetched', { order })
   } catch (err) {
