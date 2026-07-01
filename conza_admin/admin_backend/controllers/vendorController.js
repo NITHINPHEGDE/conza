@@ -39,11 +39,31 @@ exports.getVendorById = async (req, res, next) => {
 exports.updateVendorStatus = async (req, res, next) => {
   try {
     const { status } = req.body
-    const vendor = await Vendor.findByIdAndUpdate(req.params.id, { status }, { new: true })
+    const vendor = await Vendor.findByIdAndUpdate(req.params.id, { status }, { new: true, runValidators: true })
     if (!vendor) return next(createError(404, 'Vendor not found.'))
     req.auditTarget = `Vendor #${req.params.id} - ${vendor.name}`
     req.auditDetails = `Status changed to ${status}`
     sendSuccess(res, 200, 'Vendor status updated', { vendor })
+  } catch (err) {
+    next(err)
+  }
+}
+
+exports.verifyVendor = async (req, res, next) => {
+  try {
+    const { isVerified } = req.body
+    const vendor = await Vendor.findById(req.params.id)
+    if (!vendor) return next(createError(404, 'Vendor not found.'))
+
+    vendor.isVerified = isVerified !== undefined ? !!isVerified : true
+    if (vendor.isVerified && vendor.status === 'pending_verification') {
+      vendor.status = 'active'
+    }
+
+    await vendor.save()
+    req.auditTarget = `Vendor #${req.params.id} - ${vendor.name}`
+    req.auditDetails = `Verification set to ${vendor.isVerified}`
+    sendSuccess(res, 200, 'Vendor verification updated', { vendor })
   } catch (err) {
     next(err)
   }

@@ -13,7 +13,7 @@ const authRoutes         = require('./routes/authRoutes');
 const productRoutes      = require('./routes/productRoutes');
 const orderRoutes        = require('./routes/orderRoutes');
 const { getDashboard }   = require('./controllers/dashboardController');
-const { protect }        = require('./middleware/authMiddleware');
+const { protect, requireActive } = require('./middleware/authMiddleware');
 const { errorHandler }   = require('./middleware/errorMiddleware');
 const { initSocket }     = require('./services/socketService');
 
@@ -49,7 +49,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders',   orderRoutes);
 
 // Dashboard (seller only)
-app.get('/api/dashboard', protect, getDashboard);
+app.get('/api/dashboard', protect, requireActive, getDashboard);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));

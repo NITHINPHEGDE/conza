@@ -9,6 +9,7 @@ require('dotenv').config()
 
 require('./config/customersDb')
 require('./config/workersDb')
+require('./config/sellersDb')
 
 const errorHandler = require('./middleware/errorHandler')
 const routes = require('./routes')

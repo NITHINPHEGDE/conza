@@ -79,6 +79,14 @@ const HomeScreen = ({ navigation }) => {
         </View>
       </View>
 
+      {/* ── Verification Status ── */}
+      <View style={[styles.verifyBar, vendor.isVerified ? styles.verifyBarOk : styles.verifyBarPending]}>
+        <Text style={styles.verifyIcon}>{vendor.isVerified ? '✅' : '⏳'}</Text>
+        <Text style={[styles.verifyText, vendor.isVerified ? styles.verifyTextOk : styles.verifyTextPending]}>
+          {vendor.isVerified ? 'Verified Vendor' : 'Verification Pending — awaiting admin approval'}
+        </Text>
+      </View>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
@@ -152,6 +160,13 @@ const styles = StyleSheet.create({
   walletAmount:  { fontSize: 13, fontWeight: '900', color: colors.accentAmber },
   notifBtn:      { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
   notifIcon:     { fontSize: 16 },
+  verifyBar:        { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 6, borderBottomWidth: 1 },
+  verifyBarOk:      { backgroundColor: colors.greenSoft, borderBottomColor: colors.border },
+  verifyBarPending: { backgroundColor: colors.orangeSoft, borderBottomColor: colors.border },
+  verifyIcon:       { fontSize: 12 },
+  verifyText:       { fontSize: 11, fontWeight: '700' },
+  verifyTextOk:      { color: colors.green },
+  verifyTextPending: { color: colors.orange },
   scroll:        { paddingBottom: 40 },
   earningsCard:  { marginHorizontal: 16, marginVertical: 14, borderRadius: 20, padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   earningsLeft:  { flex: 1 },

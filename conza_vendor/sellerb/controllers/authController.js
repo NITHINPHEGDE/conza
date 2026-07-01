@@ -21,6 +21,8 @@ const sellerPublic = (s) => ({
   gstNumber:     s.gstNumber,
   licenseNo:     s.licenseNo,
   memberSince:   s.memberSince,
+  status:        s.status,
+  isVerified:    s.isVerified,
 });
 
 // ── POST /api/auth/register ───────────────────────────────────────────────────

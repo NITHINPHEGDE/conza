@@ -29,6 +29,15 @@ const sellerSchema = new mongoose.Schema(
     walletBalance: { type: Number, default: 0 },
     pushToken:     { type: String, default: null },
 
+    // Admin-managed — controls whether this vendor can use the app and
+    // whether their products are visible to customers.
+    status: {
+      type:    String,
+      enum:    ['active', 'suspended', 'inactive', 'pending_verification'],
+      default: 'pending_verification',
+    },
+    isVerified: { type: Boolean, default: false },
+
     memberSince: {
       type:    String,
       default: () =>

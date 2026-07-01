@@ -25,4 +25,17 @@ const protect = async (req, res, next) => {
   }
 };
 
-module.exports = { protect };
+// Blocks suspended vendors from using anything except /auth/me (so the app
+// can still detect the suspended status and show the notice screen).
+const requireActive = (req, res, next) => {
+  if (req.seller?.status === 'suspended') {
+    return res.status(403).json({
+      success: false,
+      suspended: true,
+      message: 'You have been suspended. Contact nr.conza@gmail.com',
+    });
+  }
+  next();
+};
+
+module.exports = { protect, requireActive };

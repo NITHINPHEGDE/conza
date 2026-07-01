@@ -1,5 +1,6 @@
 // conzasb/controllers/productController.js
 const Product = require('../models/Product');
+const Seller  = require('../models/Seller');
 const {
   generateUploadSignature,
   deleteFromCloudinary,
@@ -51,7 +52,11 @@ const getPublicProducts = async (req, res) => {
   try {
     const { type, search, category, page = 1, limit = 20 } = req.query;
 
-    const query = { isAvailable: true, stock: { $gt: 0 } };
+    // Only show products from vendors who haven't been suspended
+    const activeSellers = await Seller.find({ status: { $ne: 'suspended' } }).select('_id');
+    const activeSellerIds = activeSellers.map((s) => s._id);
+
+    const query = { isAvailable: true, stock: { $gt: 0 }, seller: { $in: activeSellerIds } };
     if (type)     query.type     = type;
     if (category) query.category = category;
     if (search)   query.$text    = { $search: search };
@@ -60,7 +65,7 @@ const getPublicProducts = async (req, res) => {
 
     const [products, total] = await Promise.all([
       Product.find(query)
-        .populate('seller', 'name shopName phone city profileImage')
+        .populate('seller', 'name shopName phone city profileImage status isVerified')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(Number(limit)),
@@ -83,9 +88,9 @@ const getPublicProducts = async (req, res) => {
 const getProductById = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id)
-      .populate('seller', 'name shopName phone city profileImage address');
+      .populate('seller', 'name shopName phone city profileImage address status isVerified');
 
-    if (!product) {
+    if (!product || !product.seller || product.seller.status === 'suspended') {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 

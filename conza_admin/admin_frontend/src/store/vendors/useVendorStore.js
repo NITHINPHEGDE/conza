@@ -1,37 +1,85 @@
 import { create } from 'zustand'
-import { mockVendors } from '../../mock/vendors'
+import vendorService from '../../services/vendorService'
+
+const mapVendor = (v) => ({ ...v, id: v._id || v.id })
 
 const useVendorStore = create((set, get) => ({
-  vendors: mockVendors,
+  vendors: [],
   selectedVendor: null,
   loading: false,
+  error: null,
   filters: { status: 'all', type: 'all', search: '' },
+
   setFilters: (filters) => set({ filters }),
-  selectVendor: (id) => set({ selectedVendor: mockVendors.find((v) => v.id === id) }),
-  updateVendorStatus: (id, status) => set((state) => ({
-    vendors: state.vendors.map((v) => v.id === id ? { ...v, status } : v)
+
+  fetchVendors: async () => {
+    set({ loading: true, error: null })
+    try {
+      const res = await vendorService.getAll({ page: 1, limit: 100 })
+      if (res.success) {
+        set({ vendors: (res.data || []).map(mapVendor), loading: false })
+      } else {
+        set({ loading: false, error: res.message || 'Failed to load vendors' })
+      }
+    } catch (err) {
+      set({ loading: false, error: 'Failed to load vendors' })
+    }
+  },
+
+  fetchVendorById: async (id) => {
+    const existing = get().vendors.find((v) => v.id === id)
+    if (existing) {
+      set({ selectedVendor: existing, loading: false, error: null })
+      return
+    }
+    set({ loading: true, error: null, selectedVendor: null })
+    try {
+      const res = await vendorService.getById(id)
+      const vendor = res.vendor || res.data?.vendor
+      if (res.success && vendor) {
+        set({ selectedVendor: mapVendor(vendor), loading: false })
+      } else {
+        set({ loading: false, error: res.message || 'Vendor not found' })
+      }
+    } catch (err) {
+      set({ loading: false, error: 'Failed to load vendor' })
+    }
+  },
+
+  selectVendor: (id) => set((state) => ({
+    selectedVendor: state.vendors.find((v) => v.id === id) || null
   })),
-  deleteVendor: (id) => {
-    set((state) => ({
-      vendors: state.vendors.filter((v) => v.id !== id),
-    }))
+
+  updateVendorStatus: async (id, status) => {
+    const res = await vendorService.updateStatus(id, status)
+    if (res.success) {
+      set((state) => ({
+        vendors: state.vendors.map((v) => v.id === id ? { ...v, status } : v),
+        selectedVendor: state.selectedVendor && state.selectedVendor.id === id
+          ? { ...state.selectedVendor, status }
+          : state.selectedVendor,
+      }))
+    }
+    return res
   },
-  verifyVendor: (id) => {
-    set((state) => ({
-      vendors: state.vendors.map((v) =>
-        v.id === id ? { ...v, isVerified: true, status: v.status === 'pending_verification' ? 'active' : v.status } : v
-      ),
-    }))
+
+  verifyVendor: async (id, isVerified = true) => {
+    const res = await vendorService.verify(id, isVerified)
+    if (res.success) {
+      const vendor = res.vendor
+      set((state) => ({
+        vendors: state.vendors.map((v) => v.id === id
+          ? { ...v, isVerified: vendor?.isVerified ?? isVerified, status: vendor?.status || v.status }
+          : v),
+        selectedVendor: state.selectedVendor && state.selectedVendor.id === id
+          ? { ...state.selectedVendor, isVerified: vendor?.isVerified ?? isVerified, status: vendor?.status || state.selectedVendor.status }
+          : state.selectedVendor,
+      }))
+    }
+    return res
   },
-  getFilteredVendors: () => {
-    const { vendors, filters } = get()
-    return vendors.filter((v) => {
-      if (filters.status !== 'all' && v.status !== filters.status) return false
-      if (filters.type !== 'all' && v.sellerType !== filters.type) return false
-      if (filters.search && !v.name.toLowerCase().includes(filters.search.toLowerCase()) && !v.shopName.toLowerCase().includes(filters.search.toLowerCase())) return false
-      return true
-    })
-  }
+
+  getFilteredVendors: () => get().vendors,
 }))
 
 export default useVendorStore

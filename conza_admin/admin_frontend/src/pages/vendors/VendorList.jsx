@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Eye, Ban, CheckCircle, Store, ShieldCheck, ShieldX } from 'lucide-react'
 import useVendorStore from '../../store/vendors/useVendorStore'
@@ -11,12 +11,16 @@ import Select from '../../components/common/Select/Select'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function VendorList() {
-  const { vendors, updateVendorStatus } = useVendorStore()
+  const { vendors, fetchVendors, updateVendorStatus, loading, error } = useVendorStore()
   const [filters, setFilters] = useState({ status: 'all', type: 'all', search: '' })
   const [activeTab, setActiveTab] = useState('verified')
   const [selectedVendor, setSelectedVendor] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalAction, setModalAction] = useState('')
+
+  useEffect(() => {
+    fetchVendors()
+  }, [])
 
   const verifiedVendors = vendors.filter(v => v.isVerified === true)
   const unverifiedVendors = vendors.filter(v => v.isVerified !== true)
