@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Eye, Ban, CheckCircle, Trash2, HardHat, ShieldCheck, ShieldX } from 'lucide-react'
+import { Eye, Ban, CheckCircle, HardHat, ShieldCheck, ShieldX } from 'lucide-react'
 import useWorkerStore from '../../store/workers/useWorkerStore'
 import Table from '../../components/common/Table/Table'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
@@ -11,12 +11,16 @@ import Select from '../../components/common/Select/Select'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function WorkerList() {
-  const { workers, updateWorkerStatus, deleteCustomer } = useWorkerStore()
+  const { workers, fetchWorkers, updateWorkerStatus, deleteCustomer, loading, error } = useWorkerStore()
   const [filters, setFilters] = useState({ status: 'all', category: 'all', search: '', verification: 'all' })
   const [activeTab, setActiveTab] = useState('verified')
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalAction, setModalAction] = useState('')
+
+  useEffect(() => {
+    fetchWorkers()
+  }, [])
 
   const verifiedWorkers = workers.filter(w => w.isVerified === true)
   const unverifiedWorkers = workers.filter(w => w.isVerified !== true)
@@ -26,7 +30,7 @@ export default function WorkerList() {
     return displayedWorkers.filter((w) => {
       if (filters.status !== 'all' && w.status !== filters.status) return false
       if (filters.category !== 'all' && w.category !== filters.category) return false
-      if (filters.search && !w.fullName.toLowerCase().includes(filters.search.toLowerCase()) && !w.phone.includes(filters.search)) return false
+      if (filters.search && !w.fullName?.toLowerCase().includes(filters.search.toLowerCase()) && !w.phone?.includes(filters.search)) return false
       return true
     })
   }
@@ -61,13 +65,13 @@ export default function WorkerList() {
     { key: 'category', title: 'Category' },
     { key: 'skills', title: 'Skills', render: (row) => (
       <div className="flex flex-wrap gap-1">
-        {row.skills.slice(0, 2).map((s) => (
+        {(row.skills || []).slice(0, 2).map((s) => (
           <span key={s} className="px-2 py-0.5 bg-surfaceElevated rounded text-xs text-textSecondary">{s}</span>
         ))}
-        {row.skills.length > 2 && <span className="text-xs text-textMuted">+{row.skills.length - 2}</span>}
+        {(row.skills || []).length > 2 && <span className="text-xs text-textMuted">+{row.skills.length - 2}</span>}
       </div>
     )},
-    { key: 'minCharge', title: 'Min Charge', render: (row) => `₹${row.minCharge}` },
+    { key: 'minCharge', title: 'Min Charge', render: (row) => `₹${row.minCharge ?? 0}` },
     { key: 'rating', title: 'Rating', render: (row) => `⭐ ${row.rating}` },
     { key: 'totalJobs', title: 'Jobs' },
     { key: 'status', title: 'Status', render: (row) => <StatusBadge status={row.status} /> },
@@ -138,7 +142,15 @@ export default function WorkerList() {
         </button>
       </div>
 
-      <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/workers/${row.id}`} />
+      {loading && <p className="text-sm text-textMuted">Loading workers...</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
+      {!loading && !error && filtered.length === 0 && (
+        <p className="text-sm text-textMuted">No registered workers found.</p>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/workers/${row.id}`} />
+      )}
 
       <Modal
         isOpen={modalOpen}

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, HardHat, Phone, Mail, MapPin, Star, Calendar, CheckCircle, XCircle, Wallet, Briefcase, ShieldCheck } from 'lucide-react'
 import useWorkerStore from '../../store/workers/useWorkerStore'
@@ -7,10 +8,18 @@ import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function WorkerDetails() {
   const { id } = useParams()
-  const { workers, updateWorkerStatus, verifyWorker } = useWorkerStore()
-  const worker = workers.find((w) => w.id === id)
+  const { selectedWorker: worker, fetchWorkerById, updateWorkerStatus, verifyWorker, loading, error } = useWorkerStore()
 
-  if (!worker) return <div className="text-center py-12 text-textMuted">Worker not found</div>
+  useEffect(() => {
+    fetchWorkerById(id)
+  }, [id])
+
+  if (loading) return <div className="text-center py-12 text-textMuted">Loading worker...</div>
+  if (error || !worker) return <div className="text-center py-12 text-textMuted">Worker not found</div>
+
+  const verification = worker.verification || { aadhaar: false, pan: false, bank: false, documents: false }
+  const earnings = worker.earnings || { total: 0, thisMonth: 0, pending: 0 }
+  const skills = worker.skills || []
 
   return (
     <div className="space-y-6">
@@ -35,7 +44,6 @@ export default function WorkerDetails() {
           ) : (
             <Button onClick={() => updateWorkerStatus(id, 'active')}>Activate</Button>
           )}
-          <Button variant="outline" onClick={() => updateWorkerStatus(id, 'active')}>Force Offline</Button>
         </div>
       </div>
 
@@ -62,7 +70,7 @@ export default function WorkerDetails() {
               </div>
               <div className="flex items-center gap-3">
                 <Calendar size={18} className="text-textMuted" />
-                <div><p className="text-xs text-textMuted">Experience</p><p className="text-sm font-medium text-textPrimary">{worker.experience} years</p></div>
+                <div><p className="text-xs text-textMuted">Experience</p><p className="text-sm font-medium text-textPrimary">{worker.experience ?? 'N/A'} years</p></div>
               </div>
               <div className="flex items-center gap-3">
                 <Star size={18} className="text-textMuted" />
@@ -71,12 +79,12 @@ export default function WorkerDetails() {
             </div>
             <div className="mt-4">
               <p className="text-xs text-textMuted mb-1">Bio</p>
-              <p className="text-sm text-textSecondary">{worker.bio}</p>
+              <p className="text-sm text-textSecondary">{worker.bio || 'N/A'}</p>
             </div>
             <div className="mt-4">
               <p className="text-xs text-textMuted mb-2">Skills</p>
               <div className="flex flex-wrap gap-2">
-                {worker.skills.map((skill) => (
+                {skills.map((skill) => (
                   <span key={skill} className="px-3 py-1 bg-accentYellowSoft rounded-full text-xs font-medium text-accentAmber">{skill}</span>
                 ))}
               </div>
@@ -86,7 +94,7 @@ export default function WorkerDetails() {
           <div className="bg-surface rounded-xl border border-border p-6">
             <h3 className="text-lg font-semibold text-textPrimary mb-4">Verification Status</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {Object.entries(worker.verification).map(([key, value]) => (
+              {Object.entries(verification).map(([key, value]) => (
                 <div key={key} className={`p-4 rounded-lg border ${value ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                   <div className="flex items-center gap-2">
                     {value ? <CheckCircle size={16} className="text-success" /> : <XCircle size={16} className="text-danger" />}
@@ -107,21 +115,21 @@ export default function WorkerDetails() {
                   <Wallet size={16} className="text-accentAmber" />
                   <span className="text-sm text-textSecondary">Total Earnings</span>
                 </div>
-                <span className="text-lg font-bold text-textPrimary">₹{worker.earnings.total.toLocaleString()}</span>
+                <span className="text-lg font-bold text-textPrimary">₹{earnings.total.toLocaleString()}</span>
               </div>
               <div className="flex items-center justify-between p-3 rounded-lg bg-surfaceElevated">
                 <div className="flex items-center gap-2">
                   <Briefcase size={16} className="text-blue-500" />
                   <span className="text-sm text-textSecondary">This Month</span>
                 </div>
-                <span className="text-lg font-bold text-textPrimary">₹{worker.earnings.thisMonth.toLocaleString()}</span>
+                <span className="text-lg font-bold text-textPrimary">₹{earnings.thisMonth.toLocaleString()}</span>
               </div>
               <div className="flex items-center justify-between p-3 rounded-lg bg-surfaceElevated">
                 <div className="flex items-center gap-2">
                   <Wallet size={16} className="text-green-500" />
                   <span className="text-sm text-textSecondary">Pending</span>
                 </div>
-                <span className="text-lg font-bold text-textPrimary">₹{worker.earnings.pending.toLocaleString()}</span>
+                <span className="text-lg font-bold text-textPrimary">₹{earnings.pending.toLocaleString()}</span>
               </div>
             </div>
           </div>

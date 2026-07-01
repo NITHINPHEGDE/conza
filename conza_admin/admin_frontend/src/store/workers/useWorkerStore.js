@@ -1,39 +1,102 @@
 import { create } from 'zustand'
-import { mockWorkers } from '../../mock/workers'
+import workerService from '../../services/workerService'
+
+const mapWorker = (w) => ({ ...w, id: w._id || w.id })
 
 const useWorkerStore = create((set, get) => ({
-  workers: mockWorkers,
+  workers: [],
   selectedWorker: null,
   loading: false,
+  error: null,
   filters: { status: 'all', category: 'all', search: '' },
+
   setFilters: (filters) => set({ filters }),
-  selectWorker: (id) => set({ selectedWorker: mockWorkers.find((w) => w.id === id) }),
-  updateWorkerStatus: (id, status) => set((state) => ({
-    workers: state.workers.map((w) => w.id === id ? { ...w, status } : w)
+
+  fetchWorkers: async () => {
+    set({ loading: true, error: null })
+    try {
+      const { filters } = get()
+      const params = { page: 1, limit: 200 }
+      if (filters.status !== 'all') params.status = filters.status
+      if (filters.category !== 'all') params.category = filters.category
+      if (filters.search) params.search = filters.search
+      const res = await workerService.getAll(params)
+      if (res.success) {
+        set({ workers: (res.data || []).map(mapWorker), loading: false })
+      } else {
+        set({ loading: false, error: res.message || 'Failed to load workers' })
+      }
+    } catch (err) {
+      set({ loading: false, error: 'Failed to load workers' })
+    }
+  },
+
+  fetchWorkerById: async (id) => {
+    const existing = get().workers.find((w) => w.id === id)
+    if (existing) {
+      set({ selectedWorker: existing, loading: false, error: null })
+      return
+    }
+    set({ loading: true, error: null, selectedWorker: null })
+    try {
+      const res = await workerService.getById(id)
+      const worker = res.worker || res.data?.worker
+      if (res.success && worker) {
+        set({ selectedWorker: mapWorker(worker), loading: false })
+      } else {
+        set({ loading: false, error: res.message || 'Worker not found' })
+      }
+    } catch (err) {
+      set({ loading: false, error: 'Failed to load worker' })
+    }
+  },
+
+  selectWorker: (id) => set((state) => ({
+    selectedWorker: state.workers.find((w) => w.id === id) || null
   })),
-  verifyWorkerField: (id, field, value) => set((state) => ({
-    workers: state.workers.map((w) => w.id === id ? { ...w, verification: { ...w.verification, [field]: value } } : w)
-  })),
+
+  updateWorkerStatus: async (id, status) => {
+    const res = await workerService.updateStatus(id, status)
+    if (res.success) {
+      set((state) => ({
+        workers: state.workers.map((w) => w.id === id ? { ...w, status } : w),
+        selectedWorker: state.selectedWorker && state.selectedWorker.id === id
+          ? { ...state.selectedWorker, status }
+          : state.selectedWorker,
+      }))
+    }
+  },
+
+  verifyWorkerField: async (id, field, value) => {
+    const res = await workerService.verify(id, { [field]: value })
+    if (res.success) {
+      set((state) => ({
+        workers: state.workers.map((w) => w.id === id ? { ...w, verification: { ...w.verification, [field]: value } } : w)
+      }))
+    }
+  },
+
+  verifyWorker: async (id) => {
+    const res = await workerService.verify(id, { aadhaar: true, pan: true, bank: true, documents: true })
+    if (res.success && res.worker) {
+      set((state) => ({
+        workers: state.workers.map((w) => w.id === id ? mapWorker(res.worker) : w),
+        selectedWorker: state.selectedWorker && state.selectedWorker.id === id
+          ? mapWorker(res.worker)
+          : state.selectedWorker,
+      }))
+    }
+  },
+
   deleteCustomer: (id) => {
     set((state) => ({
       workers: state.workers.filter((w) => w.id !== id),
     }))
   },
-  verifyWorker: (id) => {
-    set((state) => ({
-      workers: state.workers.map((w) =>
-        w.id === id ? { ...w, isVerified: true, status: w.status === 'pending_verification' ? 'active' : w.status } : w
-      ),
-    }))
-  },
+
   getFilteredWorkers: () => {
-    const { workers, filters } = get()
-    return workers.filter((w) => {
-      if (filters.status !== 'all' && w.status !== filters.status) return false
-      if (filters.category !== 'all' && w.category !== filters.category) return false
-      if (filters.search && !w.fullName.toLowerCase().includes(filters.search.toLowerCase()) && !w.phone.includes(filters.search)) return false
-      return true
-    })
+    const { workers } = get()
+    return workers
   }
 }))
 

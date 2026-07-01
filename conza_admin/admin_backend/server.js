@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit')
 require('dotenv').config()
 
 require('./config/customersDb')
+require('./config/workersDb')
 
 const errorHandler = require('./middleware/errorHandler')
 const routes = require('./routes')
