@@ -62,7 +62,11 @@ exports.getCustomerById = async (req, res, next) => {
       console.warn(`[CustomerController] Customer not found for id: ${req.params.id}`)
       return next(createError(404, 'Customer not found.'))
     }
-    sendSuccess(res, 200, 'Customer fetched', { customer })
+    const [totalBookings, totalOrders] = await Promise.all([
+      Booking.countDocuments({ $or: [{ user: customer._id }, { userId: customer._id }] }),
+      Order.countDocuments({ customer: customer._id }),
+    ])
+    sendSuccess(res, 200, 'Customer fetched', { customer: { ...customer.toObject(), totalBookings, totalOrders } })
   } catch (err) {
     console.error(`[CustomerController] getCustomerById error:`, err.message)
     next(err)

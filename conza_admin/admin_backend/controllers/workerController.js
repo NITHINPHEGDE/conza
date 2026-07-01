@@ -23,16 +23,16 @@ exports.getWorkers = async (req, res, next) => {
 
     // totalJobs on the Worker doc is a stale stored counter that's never
     // incremented, so compute the real "times booked" count from the actual
-    // Booking documents (Booking.workers stores worker IDs as strings) for
+    // Booking documents (Booking.workers stores real ObjectId values) for
     // the workers on this page.
-    const workerIds = workers.map((w) => String(w._id))
+    const workerIds = workers.map((w) => w._id)
     const jobStats = await Booking.aggregate([
       { $match: { workers: { $in: workerIds } } },
       { $unwind: '$workers' },
       { $match: { workers: { $in: workerIds } } },
       { $group: { _id: '$workers', count: { $sum: 1 } } },
     ])
-    const jobMap = jobStats.reduce((acc, j) => ({ ...acc, [j._id]: j.count }), {})
+    const jobMap = jobStats.reduce((acc, j) => ({ ...acc, [String(j._id)]: j.count }), {})
     const workersWithJobs = workers.map((w) => ({
       ...w.toObject(),
       totalJobs: jobMap[String(w._id)] || 0,
@@ -48,7 +48,7 @@ exports.getWorkerById = async (req, res, next) => {
   try {
     const worker = await Worker.findById(req.params.id)
     if (!worker) return next(createError(404, 'Worker not found.'))
-    const totalJobs = await Booking.countDocuments({ workers: String(worker._id) })
+    const totalJobs = await Booking.countDocuments({ workers: worker._id })
     sendSuccess(res, 200, 'Worker fetched', { worker: { ...worker.toObject(), totalJobs } })
   } catch (err) {
     next(err)

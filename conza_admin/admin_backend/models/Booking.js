@@ -14,7 +14,7 @@ const issueReportSchema = new mongoose.Schema({
 const bookingSchema = new mongoose.Schema({
   user:     { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },      // ObjectId ref to Customer
   userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },      // kept for back-compat
-  workers:  { type: [String], default: [] },
+  workers:  { type: [mongoose.Schema.Types.ObjectId], ref: 'Worker', default: [] }, // real docs store ObjectId, not String
   workerSnapshot: { type: mongoose.Schema.Types.Mixed, default: [] },
   category: { type: String, required: true },
   bookingType: { type: String, enum: ['labour', 'material', 'rental'], default: 'labour' },
