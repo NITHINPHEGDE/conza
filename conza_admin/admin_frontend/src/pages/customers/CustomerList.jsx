@@ -55,6 +55,7 @@ export default function CustomerList() {
     { key: 'locationText', title: 'Location' },
     { key: 'memberSince', title: 'Member Since' },
     { key: 'totalBookings', title: 'Bookings' },
+    { key: 'totalOrders', title: 'Orders' },
     { key: 'walletBalance', title: 'Wallet', render: (row) => `₹${row.walletBalance}` },
     { key: 'status', title: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'actions', title: 'Actions', render: (row) => (

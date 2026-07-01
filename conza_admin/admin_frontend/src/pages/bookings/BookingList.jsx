@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Eye, CalendarCheck } from 'lucide-react'
 import useBookingStore from '../../store/bookings/useBookingStore'
 import Table from '../../components/common/Table/Table'
@@ -10,6 +10,7 @@ import Select from '../../components/common/Select/Select'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function BookingList() {
+  const navigate = useNavigate()
   const { loading, error, filters, setFilters, fetchBookings, getFilteredBookings } = useBookingStore()
 
   useEffect(() => {
@@ -71,7 +72,7 @@ export default function BookingList() {
       ) : error ? (
         <div className="text-center py-12 text-danger">{error}</div>
       ) : (
-        <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/bookings/${row.id}`} />
+        <Table columns={columns} data={filtered} onRowClick={(row) => navigate(`/bookings/${row.id}`)} />
       )}
     </div>
   )

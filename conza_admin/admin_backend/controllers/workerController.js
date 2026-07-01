@@ -1,5 +1,6 @@
 const Worker = require('../models/Worker')
 const Review = require('../models/Review')
+const Booking = require('../models/Booking')
 const { sendSuccess, sendPaginated } = require('../utils/response')
 const { createError } = require('../utils/error')
 const { bustWorkerSessionCache } = require('../config/workersRedis')
@@ -19,7 +20,25 @@ exports.getWorkers = async (req, res, next) => {
 
     const total = await Worker.countDocuments(query)
     const workers = await Worker.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(parseInt(limit))
-    sendPaginated(res, workers, total, page, limit)
+
+    // totalJobs on the Worker doc is a stale stored counter that's never
+    // incremented, so compute the real "times booked" count from the actual
+    // Booking documents (Booking.workers stores worker IDs as strings) for
+    // the workers on this page.
+    const workerIds = workers.map((w) => String(w._id))
+    const jobStats = await Booking.aggregate([
+      { $match: { workers: { $in: workerIds } } },
+      { $unwind: '$workers' },
+      { $match: { workers: { $in: workerIds } } },
+      { $group: { _id: '$workers', count: { $sum: 1 } } },
+    ])
+    const jobMap = jobStats.reduce((acc, j) => ({ ...acc, [j._id]: j.count }), {})
+    const workersWithJobs = workers.map((w) => ({
+      ...w.toObject(),
+      totalJobs: jobMap[String(w._id)] || 0,
+    }))
+
+    sendPaginated(res, workersWithJobs, total, page, limit)
   } catch (err) {
     next(err)
   }
@@ -29,7 +48,8 @@ exports.getWorkerById = async (req, res, next) => {
   try {
     const worker = await Worker.findById(req.params.id)
     if (!worker) return next(createError(404, 'Worker not found.'))
-    sendSuccess(res, 200, 'Worker fetched', { worker })
+    const totalJobs = await Booking.countDocuments({ workers: String(worker._id) })
+    sendSuccess(res, 200, 'Worker fetched', { worker: { ...worker.toObject(), totalJobs } })
   } catch (err) {
     next(err)
   }

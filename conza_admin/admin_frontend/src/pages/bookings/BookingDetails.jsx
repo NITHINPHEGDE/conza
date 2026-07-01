@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, User, HardHat, MapPin, DollarSign, Clock, FileText } from 'lucide-react'
+import bookingService from '../../services/bookingService'
 import useBookingStore from '../../store/bookings/useBookingStore'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Button from '../../components/common/Button/Button'
@@ -7,9 +9,26 @@ import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function BookingDetails() {
   const { id } = useParams()
-  const { bookings, updateBookingStatus } = useBookingStore()
-  const booking = bookings.find((b) => b.id === id)
+  const { updateBookingStatus } = useBookingStore()
+  const [booking, setBooking] = useState(null)
+  const [loading, setLoading] = useState(true)
 
+  useEffect(() => {
+    setLoading(true)
+    bookingService.getById(id).then((res) => {
+      const doc = res.booking
+      if (doc) {
+        setBooking({
+          ...doc,
+          id: doc._id,
+          user: doc.user?.fullName || doc.user?.phone || 'N/A',
+        })
+      }
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [id])
+
+  if (loading) return <div className="text-center py-12 text-textMuted">Loading booking...</div>
   if (!booking) return <div className="text-center py-12 text-textMuted">Booking not found</div>
 
   return (
@@ -22,10 +41,10 @@ export default function BookingDetails() {
           <StatusBadge status={booking.status} />
         </div>
         <div className="flex gap-2">
-          {booking.status === 'pending' && <Button onClick={() => updateBookingStatus(id, 'accepted')}>Accept</Button>}
-          {booking.status === 'accepted' && <Button onClick={() => updateBookingStatus(id, 'in_progress')}>Start Job</Button>}
-          {booking.status === 'in_progress' && <Button onClick={() => updateBookingStatus(id, 'completed')}>Complete</Button>}
-          <Button variant="outline" onClick={() => updateBookingStatus(id, 'cancelled')}>Cancel</Button>
+          {booking.status === 'pending' && <Button onClick={() => updateBookingStatus(id, 'accepted').then(() => setBooking({ ...booking, status: 'accepted' }))}>Accept</Button>}
+          {booking.status === 'accepted' && <Button onClick={() => updateBookingStatus(id, 'in_progress').then(() => setBooking({ ...booking, status: 'in_progress' }))}>Start Job</Button>}
+          {booking.status === 'in_progress' && <Button onClick={() => updateBookingStatus(id, 'completed').then(() => setBooking({ ...booking, status: 'completed' }))}>Complete</Button>}
+          <Button variant="outline" onClick={() => updateBookingStatus(id, 'cancelled').then(() => setBooking({ ...booking, status: 'cancelled' }))}>Cancel</Button>
         </div>
       </div>
 

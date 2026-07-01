@@ -20,7 +20,26 @@ exports.getVendors = async (req, res, next) => {
 
     const total = await Vendor.countDocuments(query)
     const vendors = await Vendor.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(parseInt(limit))
-    sendPaginated(res, vendors, total, page, limit)
+
+    // totalOrders/totalRevenue on the Vendor doc are stale stored counters,
+    // so compute the real figures from the actual Order (sellerorders)
+    // collection for the vendors on this page.
+    const vendorIds = vendors.map((v) => v._id)
+    const orderStats = await Order.aggregate([
+      { $match: { seller: { $in: vendorIds } } },
+      { $group: { _id: '$seller', orders: { $sum: 1 }, revenue: { $sum: '$total' } } },
+    ])
+    const statsMap = orderStats.reduce((acc, s) => ({ ...acc, [String(s._id)]: s }), {})
+    const vendorsWithStats = vendors.map((v) => {
+      const stats = statsMap[String(v._id)]
+      return {
+        ...v.toObject(),
+        totalOrders: stats?.orders || 0,
+        totalRevenue: stats?.revenue || 0,
+      }
+    })
+
+    sendPaginated(res, vendorsWithStats, total, page, limit)
   } catch (err) {
     next(err)
   }
@@ -71,7 +90,7 @@ exports.verifyVendor = async (req, res, next) => {
 
 exports.getVendorOrders = async (req, res, next) => {
   try {
-    const orders = await Order.find({ vendorId: req.params.id }).sort({ createdAt: -1 })
+    const orders = await Order.find({ seller: req.params.id }).sort({ createdAt: -1 })
     sendSuccess(res, 200, 'Vendor orders fetched', { orders })
   } catch (err) {
     next(err)

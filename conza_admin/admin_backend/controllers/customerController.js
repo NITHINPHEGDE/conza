@@ -27,7 +27,29 @@ exports.getCustomers = async (req, res, next) => {
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
 
-    sendPaginated(res, customers, total, page, limit)
+    // totalBookings on the Customer doc is a stale stored counter that's
+    // never incremented, so compute the real booking + order counts from
+    // the actual Booking / Order collections for the customers on this page.
+    const customerIds = customers.map((c) => c._id)
+    const [bookingStats, orderStats] = await Promise.all([
+      Booking.aggregate([
+        { $match: { $or: [{ user: { $in: customerIds } }, { userId: { $in: customerIds } }] } },
+        { $group: { _id: { $ifNull: ['$user', '$userId'] }, count: { $sum: 1 } } },
+      ]),
+      Order.aggregate([
+        { $match: { customer: { $in: customerIds } } },
+        { $group: { _id: '$customer', count: { $sum: 1 } } },
+      ]),
+    ])
+    const bookingMap = bookingStats.reduce((acc, b) => ({ ...acc, [String(b._id)]: b.count }), {})
+    const orderMap = orderStats.reduce((acc, o) => ({ ...acc, [String(o._id)]: o.count }), {})
+    const customersWithStats = customers.map((c) => ({
+      ...c.toObject(),
+      totalBookings: bookingMap[String(c._id)] || 0,
+      totalOrders: orderMap[String(c._id)] || 0,
+    }))
+
+    sendPaginated(res, customersWithStats, total, page, limit)
   } catch (err) {
     next(err)
   }

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Eye } from 'lucide-react'
 import useOrderStore from '../../store/orders/useOrderStore'
 import Table from '../../components/common/Table/Table'
@@ -10,6 +10,7 @@ import Select from '../../components/common/Select/Select'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function OrderList() {
+  const navigate = useNavigate()
   const { loading, error, filters, setFilters, fetchOrders, getFilteredOrders } = useOrderStore()
 
   useEffect(() => {
@@ -69,7 +70,7 @@ export default function OrderList() {
       ) : error ? (
         <div className="text-center py-12 text-danger">{error}</div>
       ) : (
-        <Table columns={columns} data={filtered} onRowClick={(row) => window.location.href = `/orders/${row.id}`} />
+        <Table columns={columns} data={filtered} onRowClick={(row) => navigate(`/orders/${row.id}`)} />
       )}
     </div>
   )

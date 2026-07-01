@@ -1,17 +1,41 @@
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, User, Store, Package, DollarSign, Truck, Calendar } from 'lucide-react'
+import orderService from '../../services/orderService'
 import Button from '../../components/common/Button/Button'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
-const mockOrders = [
-  { id: 'ORD001', customer: 'Rahul Sharma', vendor: 'BuildMart Pro', type: 'material', total: 4560, subtotal: 4200, deliveryCharge: 360, status: 'delivered', date: '2024-06-20T12:00:00Z', items: [{ title: 'Portland Cement 50kg', qty: 10, price: 380 }], address: '403, Prestige Shantiniketan, Whitefield, Bangalore' },
-]
-
 export default function OrderDetails() {
   const { id } = useParams()
-  const order = mockOrders.find((o) => o.id === id)
+  const [order, setOrder] = useState(null)
+  const [loading, setLoading] = useState(true)
 
+  useEffect(() => {
+    setLoading(true)
+    orderService.getById(id).then((res) => {
+      const doc = res.order
+      if (doc) {
+        setOrder({
+          ...doc,
+          id: doc._id,
+          customer: doc.customer?.fullName || doc.customerName || 'N/A',
+          vendor: doc.seller?.shopName || doc.seller?.name || 'N/A',
+          type: doc.orderType,
+          date: doc.createdAt,
+          address: doc.customerAddress,
+          items: Array.isArray(doc.items) ? doc.items : [],
+        })
+      }
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [id])
+
+  const updateStatus = (status) => {
+    orderService.updateStatus(id, status).then(() => setOrder({ ...order, status }))
+  }
+
+  if (loading) return <div className="text-center py-12 text-textMuted">Loading order...</div>
   if (!order) return <div className="text-center py-12 text-textMuted">Order not found</div>
 
   return (
@@ -24,11 +48,10 @@ export default function OrderDetails() {
           <StatusBadge status={order.status} />
         </div>
         <div className="flex gap-2">
-          {order.status === 'new' && <Button onClick={() => {}}>Confirm</Button>}
-          {order.status === 'confirmed' && <Button onClick={() => {}}>Mark Packed</Button>}
-          {order.status === 'packed' && <Button onClick={() => {}}>Out for Delivery</Button>}
-          {order.status === 'out_for_delivery' && <Button onClick={() => {}}>Mark Delivered</Button>}
-          <Button variant="outline" onClick={() => {}}>Cancel</Button>
+          {order.status === 'new' && <Button onClick={() => updateStatus('accepted')}>Accept</Button>}
+          {order.status === 'accepted' && <Button onClick={() => updateStatus('out_for_delivery')}>Out for Delivery</Button>}
+          {order.status === 'out_for_delivery' && <Button onClick={() => updateStatus('delivered')}>Mark Delivered</Button>}
+          <Button variant="outline" onClick={() => updateStatus('cancelled')}>Cancel</Button>
         </div>
       </div>
 
