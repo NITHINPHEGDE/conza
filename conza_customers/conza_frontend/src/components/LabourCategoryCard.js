@@ -1,27 +1,51 @@
 import React, { useCallback, useMemo, useState, useRef } from 'react';
-import { TouchableOpacity, Text, View, Animated, StyleSheet } from 'react-native';
+import {
+  TouchableOpacity,
+  Text,
+  View,
+  Animated,
+  StyleSheet,
+  Easing,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 
-// ── Shimmer skeleton shown while the category image is loading ─────────────────
+// ── Diagonal sweep skeleton ────────────────────────────────────────────────────
 const ImageSkeleton = () => {
-  const shimmer = useRef(new Animated.Value(0)).current;
+  const shimmer = useRef(new Animated.Value(-1)).current;
 
   React.useEffect(() => {
     Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmer, { toValue: 1, duration: 800, useNativeDriver: true }),
-        Animated.timing(shimmer, { toValue: 0, duration: 800, useNativeDriver: true }),
-      ])
+      Animated.timing(shimmer, {
+        toValue: 1,
+        duration: 1600,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      })
     ).start();
   }, [shimmer]);
 
-  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.9] });
+  const translateX = shimmer.interpolate({
+    inputRange: [-1, 1],
+    outputRange: ['-120%', '120%'],
+  });
 
-  return <Animated.View style={[styles.imageSkeleton, { opacity }]} />;
+  return (
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1a1a1a' }]}>
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            transform: [{ translateX }, { skewX: '-15deg' }],
+            backgroundColor: 'rgba(255,255,255,0.08)',
+          },
+        ]}
+      />
+    </View>
+  );
 };
 
-// ── Image with fade-in on load ─────────────────────────────────────────────────
+// ── Image with fade-in ─────────────────────────────────────────────────────────
 const FadingImage = ({ uri }) => {
   const [loaded, setLoaded] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -30,7 +54,8 @@ const FadingImage = ({ uri }) => {
     setLoaded(true);
     Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 300,
+      duration: 500,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: true,
     }).start();
   }, [fadeAnim]);
@@ -48,29 +73,77 @@ const FadingImage = ({ uri }) => {
   );
 };
 
+// ── Pulsing availability dot ───────────────────────────────────────────────────
+const LiveDot = () => {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [pulse]);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 3.2] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
+
+  return (
+    <View style={styles.dotWrap}>
+      <Animated.View style={[styles.pulseRing, { transform: [{ scale }], opacity }]} />
+      <View style={styles.liveDot} />
+    </View>
+  );
+};
+
 // ── Category Card ──────────────────────────────────────────────────────────────
-// Full-bleed photo card: the photo IS the card (no inset/padding), with the
-// label + live stats overlaid on a bottom scrim — same pattern used by
-// service-marketplace apps (Urban Company, Housejoy) so a grid of these
-// reads instantly as "browse a pro", not as a generic icon tile.
 const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const selectAnim = useRef(new Animated.Value(0)).current;
 
   const handlePressIn = useCallback(() => {
-    Animated.spring(scaleAnim, { toValue: 0.96, useNativeDriver: true, speed: 40, bounciness: 4 }).start();
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: 4,
+    }).start();
   }, [scaleAnim]);
 
   const handlePressOut = useCallback(() => {
-    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 4 }).start();
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: 4,
+    }).start();
   }, [scaleAnim]);
 
   const handlePress = useCallback(() => {
     onPress && onPress(item);
   }, [onPress, item]);
 
+  React.useEffect(() => {
+    Animated.timing(selectAnim, {
+      toValue: isSelected ? 1 : 0,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [isSelected, selectAnim]);
+
   const gradientColors = useMemo(() => [colors.gradientStart, colors.gradientEnd], []);
   const cardStyle = useMemo(() => [styles.card, isSelected && styles.cardSelected], [isSelected]);
-
   const hasPhoto = !!item.image;
 
   return (
@@ -82,36 +155,65 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
         onPressOut={handlePressOut}
         activeOpacity={0.92}
       >
-        {/* ── Background: photo fills the card edge-to-edge, or an emoji sits on a soft tinted field ── */}
+        {/* ── Background ── */}
         {hasPhoto ? (
           <FadingImage uri={item.image} />
         ) : (
           <LinearGradient
-            colors={[colors.surfaceElevated, colors.borderLight]}
+            colors={['#2a2a2a', '#1a1a1a']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
           >
             <View style={styles.emojiWrap}>
-              <Text style={styles.emoji}>{item.emoji}</Text>
+              <View style={styles.emojiOrb}>
+                <Text style={styles.emoji}>{item.emoji}</Text>
+              </View>
             </View>
           </LinearGradient>
         )}
 
-        {/* ── Bottom scrim: only needed to keep white overlay text legible on a photo ── */}
+        {/* ── Top vignette ── */}
         {hasPhoto && (
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.72)']}
-            locations={[0, 0.85]}
-            style={styles.scrim}
+            colors={['rgba(0,0,0,0.35)', 'transparent']}
+            locations={[0, 0.5]}
+            style={styles.topVignette}
             pointerEvents="none"
           />
         )}
 
-        {/* ── Selected ring + check badge ── */}
+        {/* ── Bottom panel ── */}
+        {hasPhoto && (
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.65)', 'rgba(0,0,0,0.9)']}
+            locations={[0, 0.4, 1]}
+            style={styles.bottomPanel}
+            pointerEvents="none"
+          />
+        )}
+
+        {/* ── Selection glow ── */}
         {isSelected && (
           <>
-            <View style={styles.selectedRing} pointerEvents="none" />
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.selectGlow,
+                {
+                  opacity: selectAnim,
+                  transform: [
+                    {
+                      scale: selectAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.92, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            />
+            <View style={styles.selectRing} pointerEvents="none" />
             <LinearGradient
               colors={gradientColors}
               start={{ x: 0, y: 0 }}
@@ -123,22 +225,27 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
           </>
         )}
 
-        {/* ── Overlaid label + live stats ── */}
-        <View style={styles.footer}>
-          <Text
-            style={[styles.label, hasPhoto ? styles.labelOnPhoto : styles.labelOnTint]}
-            numberOfLines={1}
-          >
-            {item.label}
-          </Text>
+        {/* ── Floating rating chip ── */}
+        <View style={styles.floatingRating}>
+          <Text style={styles.ratingText}>★ {item.rating}</Text>
+        </View>
 
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaText, hasPhoto ? styles.metaTextOnPhoto : styles.metaTextOnTint]}>
-              ⭐ {item.rating}
+        {/* ── Footer with HIGHLIGHTED text ── */}
+        <View style={styles.footer}>
+          {/* Label with frosted highlight backdrop */}
+          <View style={styles.labelHighlight}>
+            <Text
+              style={[styles.label, hasPhoto ? styles.labelOnPhoto : styles.labelOnTint]}
+              numberOfLines={1}
+            >
+              {item.label}
             </Text>
-            <View style={[styles.metaDivider, hasPhoto ? styles.metaDividerOnPhoto : styles.metaDividerOnTint]} />
-            <View style={styles.availabilityGroup}>
-              <View style={styles.liveDot} />
+          </View>
+
+          {/* Availability chip */}
+          <View style={styles.metaRow}>
+            <View style={styles.availabilityChip}>
+              <LiveDot />
               <Text
                 style={[styles.metaText, hasPhoto ? styles.metaTextOnPhoto : styles.metaTextOnTint]}
                 numberOfLines={1}
@@ -154,153 +261,214 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
 });
 
 const styles = StyleSheet.create({
+  // ── Card ──
   card: {
-    aspectRatio: 0.85,
-    borderRadius: 20,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
+    aspectRatio: 0.8,
+    borderRadius: 28,
+    backgroundColor: '#1e1e1e',
     overflow: 'hidden',
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.2,
+    shadowRadius: 28,
+    elevation: 10,
   },
   cardSelected: {
-    borderColor: colors.accentYellow,
-    shadowColor: colors.accentAmber,
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowColor: colors.accentYellow,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 24,
+    elevation: 14,
   },
 
-  // ── Photo: identical sizing/crop logic to before — just no longer inset by padding ──
+  // ── Image ──
   categoryImage: {
     position: 'absolute',
     top: 0,
     left: 0,
     width: '100%',
-    // Taller than the box on purpose: resizeMode="cover" fits/crops this
-    // oversized image centered within itself, then the extra bottom portion
-    // gets clipped by the card's overflow:hidden — since the image is
-    // pinned to top:0, the top (cap/face) is what always stays visible and
-    // any cropping happens at the bottom instead.
-    height: '135%',
+    height: '140%',
     resizeMode: 'cover',
   },
-  imageSkeleton: {
-    ...StyleSheet.absoluteFillObject,
-  },
 
+  // ── Emoji fallback ──
   emojiWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 36, // keeps emoji visually centered above the footer text
+  },
+  emojiOrb: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emoji: {
-    fontSize: 30,
+    fontSize: 32,
   },
 
-  scrim: {
+  // ── Vignettes ──
+  topVignette: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '35%',
+  },
+  bottomPanel: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '58%',
+    height: '70%',
   },
 
-  selectedRing: {
+  // ── Selection ──
+  selectGlow: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 20,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: colors.accentYellow,
+    backgroundColor: 'rgba(255, 193, 7, 0.12)',
+  },
+  selectRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 28,
     borderWidth: 2.5,
     borderColor: colors.accentYellow,
   },
   checkBadge: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    top: 14,
+    right: 14,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 2,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    elevation: 8,
   },
   checkBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '900',
     color: colors.textPrimary,
+    includeFontPadding: false,
   },
 
-  // ── Overlaid footer content ──
+  // ── Floating rating ──
+  floatingRating: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    backgroundColor: 'rgba(255, 215, 0, 0.18)',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.35)',
+  },
+  ratingText: {
+    color: '#FFD700',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+
+  // ── Footer ──
   footer: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    paddingTop: 8,
+  },
+
+  // ── HIGHLIGHTED LABEL ──
+  labelHighlight: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 10,
     paddingHorizontal: 10,
-    paddingBottom: 10,
-    paddingTop: 4,
+    paddingVertical: 6,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   label: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.1,
-    marginBottom: 4,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   labelOnPhoto: {
     color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.35)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
   labelOnTint: {
-    color: colors.textPrimary,
+    color: '#f0f0f0',
   },
 
+  // ── Meta ──
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  metaText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  metaTextOnPhoto: {
-    color: 'rgba(255,255,255,0.92)',
-  },
-  metaTextOnTint: {
-    color: colors.textSecondary,
-  },
-  metaDivider: {
-    width: 1,
-    height: 9,
-    marginHorizontal: 6,
-  },
-  metaDividerOnPhoto: {
-    backgroundColor: 'rgba(255,255,255,0.4)',
-  },
-  metaDividerOnTint: {
-    backgroundColor: colors.borderLight,
-  },
-  availabilityGroup: {
+  availabilityChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 1,
+    backgroundColor: 'rgba(52, 211, 153, 0.15)',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.3)',
+    alignSelf: 'flex-start',
+  },
+  metaText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  metaTextOnPhoto: {
+    color: '#34D399',
+  },
+  metaTextOnTint: {
+    color: '#34D399',
+  },
+
+  // ── Live dot ──
+  dotWrap: {
+    position: 'relative',
+    width: 12,
+    height: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
   },
   liveDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#4ADE80',
-    marginRight: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#34D399',
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#34D399',
   },
 });
 
