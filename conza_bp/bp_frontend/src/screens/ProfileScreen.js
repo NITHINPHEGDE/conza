@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, StatusBar, ScrollView,
   Image, Modal, TextInput, ActivityIndicator, Alert, Platform,
@@ -12,7 +12,8 @@ import { stopLocationTracking } from '../services/locationService';
 import { uploadImageToCloudinary } from '../utils/cloudinary';
 import { colors } from '../theme/colors';
 
-const CATEGORIES = ['Plumber', 'Carpenter', 'Mason', 'Electrician', 'Painter', 'Builder'];
+import { getCategoriesAPI } from '../services/workerService';
+// CATEGORIES is now fetched dynamically inside CategoryPicker below.
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 const StatCard = React.memo(({ value, label }) => (
@@ -41,23 +42,47 @@ const FieldRow = React.memo(({ label, value, onChangeText, placeholder, keyboard
 ));
 
 // ── Category Picker ───────────────────────────────────────────────────────────
-const CategoryPicker = React.memo(({ selected, onSelect }) => (
-  <View style={styles.fieldRow}>
-    <Text style={styles.fieldLabel}>Service Category</Text>
-    <View style={styles.categoryGrid}>
-      {CATEGORIES.map((cat) => (
-        <TouchableOpacity
-          key={cat}
-          style={[styles.catChip, selected === cat && styles.catChipActive]}
-          onPress={() => onSelect(cat)}
-          activeOpacity={0.75}
-        >
-          <Text style={[styles.catChipText, selected === cat && styles.catChipTextActive]}>{cat}</Text>
-        </TouchableOpacity>
-      ))}
+const CategoryPicker = React.memo(({ selected, onSelect }) => {
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const res = await getCategoriesAPI();
+        if (isMounted) setCategories(res.categories || []);
+      } catch (err) {
+        console.error('[Profile] Failed to load categories:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    })();
+    return () => { isMounted = false; };
+  }, []);
+
+  return (
+    <View style={styles.fieldRow}>
+      <Text style={styles.fieldLabel}>Service Category</Text>
+      {loading ? (
+        <ActivityIndicator color={colors.accentAmber} />
+      ) : (
+        <View style={styles.categoryGrid}>
+          {categories.map((cat) => (
+            <TouchableOpacity
+              key={cat.id}
+              style={[styles.catChip, selected === cat.name && styles.catChipActive]}
+              onPress={() => onSelect(cat.name)}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.catChipText, selected === cat.name && styles.catChipTextActive]}>{cat.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </View>
-  </View>
-));
+  );
+});
 
 // ── Edit Profile Modal ────────────────────────────────────────────────────────
 const EditProfileModal = React.memo(({ visible, profile, onClose, onSave }) => {

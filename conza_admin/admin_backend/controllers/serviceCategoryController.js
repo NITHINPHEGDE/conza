@@ -1,6 +1,7 @@
 const ServiceCategory = require('../models/ServiceCategory')
 const { sendSuccess, sendPaginated } = require('../utils/response')
 const { createError } = require('../utils/error')
+const { uploadToCloudinary, deleteFromCloudinary, extractPublicId } = require('../middleware/cloudinaryUpload')
 
 exports.getCategories = async (req, res, next) => {
   try {
@@ -18,12 +19,24 @@ exports.getCategories = async (req, res, next) => {
 
 exports.createCategory = async (req, res, next) => {
   try {
-    const { name, baseCharge, commission, radius } = req.body
-    if (!name || !baseCharge) return next(createError(400, 'Name and base charge are required.'))
+    const { name, image, commission, radius, description } = req.body
+    if (!name || !image) return next(createError(400, 'Name and service image are required.'))
 
-    const category = await ServiceCategory.create({ name, baseCharge, commission: commission || 15, radius: radius || 5 })
+    // If the frontend sent a base64 data-URI, upload it to Cloudinary.
+    // If it already sent a Cloudinary URL (e.g. re-submitting), just use it as-is.
+    const imageUrl = image.startsWith('data:')
+      ? await uploadToCloudinary(image, 'conza/services')
+      : image
+
+    const category = await ServiceCategory.create({
+      name,
+      image: imageUrl,
+      commission: commission || 15,
+      radius: radius || 5,
+      description: description || '',
+    })
     req.auditTarget = `Service Category - ${name}`
-    req.auditDetails = `Created service category with base charge ₹${baseCharge}`
+    req.auditDetails = `Created service category`
     sendSuccess(res, 201, 'Category created', { category })
   } catch (err) {
     next(err)
@@ -32,8 +45,23 @@ exports.createCategory = async (req, res, next) => {
 
 exports.updateCategory = async (req, res, next) => {
   try {
-    const category = await ServiceCategory.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
-    if (!category) return next(createError(404, 'Category not found.'))
+    const existing = await ServiceCategory.findById(req.params.id)
+    if (!existing) return next(createError(404, 'Category not found.'))
+
+    const updates = { ...req.body }
+
+    if (updates.image && updates.image.startsWith('data:')) {
+      const newImageUrl = await uploadToCloudinary(updates.image, 'conza/services')
+      const oldPublicId = extractPublicId(existing.image)
+      if (oldPublicId) {
+        deleteFromCloudinary(oldPublicId).catch(() => {}) // best-effort, don't block the response
+      }
+      updates.image = newImageUrl
+    }
+
+    delete updates.baseCharge // no longer a valid field
+
+    const category = await ServiceCategory.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true })
     req.auditTarget = `Service Category #${req.params.id} - ${category.name}`
     req.auditDetails = `Updated category`
     sendSuccess(res, 200, 'Category updated', { category })
@@ -46,6 +74,8 @@ exports.deleteCategory = async (req, res, next) => {
   try {
     const category = await ServiceCategory.findByIdAndDelete(req.params.id)
     if (!category) return next(createError(404, 'Category not found.'))
+    const publicId = extractPublicId(category.image)
+    if (publicId) deleteFromCloudinary(publicId).catch(() => {})
     req.auditTarget = `Service Category #${req.params.id}`
     req.auditDetails = `Category deleted`
     sendSuccess(res, 200, 'Category deleted')

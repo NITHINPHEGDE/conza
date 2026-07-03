@@ -1,41 +1,54 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { Edit, Trash2, Plus, Wrench } from 'lucide-react'
+import { Edit, Trash2, Plus } from 'lucide-react'
 import Table from '../../components/common/Table/Table'
 import Button from '../../components/common/Button/Button'
-import Modal from '../../components/common/Modal/Modal'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
-
-const mockCategories = [
-  { id: '1', name: 'Plumber', baseCharge: 500, commission: 15, radius: 5, workers: 342, bookings: 1256, active: true },
-  { id: '2', name: 'Electrician', baseCharge: 600, commission: 15, radius: 5, workers: 298, bookings: 980, active: true },
-  { id: '3', name: 'Carpenter', baseCharge: 550, commission: 15, radius: 5, workers: 245, bookings: 820, active: true },
-  { id: '4', name: 'Mason', baseCharge: 700, commission: 15, radius: 5, workers: 198, bookings: 650, active: true },
-  { id: '5', name: 'Painter', baseCharge: 450, commission: 15, radius: 5, workers: 156, bookings: 480, active: true },
-  { id: '6', name: 'Builder', baseCharge: 800, commission: 15, radius: 5, workers: 87, bookings: 320, active: true },
-  { id: '7', name: 'AC Repair', baseCharge: 400, commission: 15, radius: 5, workers: 120, bookings: 450, active: true },
-  { id: '8', name: 'Appliance Repair', baseCharge: 350, commission: 15, radius: 5, workers: 95, bookings: 380, active: true },
-]
+import serviceCategoryService from '../../services/serviceCategoryService'
 
 export default function Categories() {
-  const [categories, setCategories] = useState(mockCategories)
-  const [modalOpen, setModalOpen] = useState(false)
-  const [selected, setSelected] = useState(null)
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  const handleDelete = (id) => {
-    setCategories(categories.filter((c) => c.id !== id))
+  const loadCategories = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const res = await serviceCategoryService.getAll({ limit: 100 })
+      setCategories(res.data || [])
+    } catch (err) {
+      setError(err.message || 'Failed to load categories')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadCategories()
+  }, [loadCategories])
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this category? This cannot be undone.')) return
+    try {
+      await serviceCategoryService.remove(id)
+      setCategories((prev) => prev.filter((c) => c._id !== id))
+    } catch (err) {
+      alert(err.message || 'Failed to delete category')
+    }
   }
 
   const columns = [
     { key: 'name', title: 'Category', render: (row) => (
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-accentYellowSoft flex items-center justify-center">
-          <Wrench size={14} className="text-accentAmber" />
-        </div>
+        <img
+          src={row.image}
+          alt={row.name}
+          className="w-8 h-8 rounded-lg object-cover border border-border"
+        />
         <span className="font-medium text-textPrimary">{row.name}</span>
       </div>
     )},
-    { key: 'baseCharge', title: 'Base Charge', render: (row) => `₹${row.baseCharge}` },
     { key: 'commission', title: 'Commission', render: (row) => `${row.commission}%` },
     { key: 'radius', title: 'Radius', render: (row) => `${row.radius} km` },
     { key: 'workers', title: 'Workers' },
@@ -43,8 +56,8 @@ export default function Categories() {
     { key: 'active', title: 'Active', render: (row) => row.active ? 'Yes' : 'No' },
     { key: 'actions', title: 'Actions', render: (row) => (
       <div className="flex items-center gap-2">
-        <Link to={`/services/edit/${row.id}`}><Button variant="ghost" size="sm"><Edit size={14} /></Button></Link>
-        <Button variant="ghost" size="sm" onClick={() => handleDelete(row.id)}><Trash2 size={14} className="text-danger" /></Button>
+        <Link to={`/services/edit/${row._id}`}><Button variant="ghost" size="sm"><Edit size={14} /></Button></Link>
+        <Button variant="ghost" size="sm" onClick={() => handleDelete(row._id)}><Trash2 size={14} className="text-danger" /></Button>
       </div>
     )},
   ]
@@ -58,7 +71,8 @@ export default function Categories() {
           <Button><Plus size={16} /> Add Category</Button>
         </Link>
       </div>
-      <Table columns={columns} data={categories} />
+      {error && <div className="text-sm text-danger">{error}</div>}
+      <Table columns={columns} data={loading ? [] : categories} rowKey="_id" emptyText={loading ? 'Loading...' : 'No categories found'} />
     </div>
   )
 }

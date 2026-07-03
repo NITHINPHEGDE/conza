@@ -11,11 +11,9 @@ const workerSchema = new mongoose.Schema(
 
     profileImage: { type: String, default: null },
 
-    category:     {
-      type: String,
-      required: true,
-      enum: ['Plumber', 'Carpenter', 'Mason', 'Electrician', 'Painter', 'Builder'],
-    },
+    // Category is now dynamic — validated against ServiceCategory collection
+    // in workerService.signUpWorker() instead of a hardcoded enum.
+    category:     { type: String, required: true, trim: true },
     skills:       { type: [String], default: [] },
     minCharge:    { type: Number, default: null },
     locationText: { type: String, default: '' },   // human-readable city/area

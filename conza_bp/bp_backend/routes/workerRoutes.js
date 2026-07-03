@@ -1,10 +1,11 @@
 const router = require('express').Router();
-const { toggleOnline, updateLocation, updateProfileImage, getUploadSignature, updateProfile } = require('../controllers/workerController');
+const { toggleOnline, updateLocation, updateProfileImage, getUploadSignature, updateProfile, getCategories } = require('../controllers/workerController');
 const { protect, requireActive } = require('../middleware/auth');
 const { locationRules }  = require('../validators/workerValidators');
 const { upload }         = require('../config/cloudinary');
 
 router.get('/upload-signature', getUploadSignature);
+router.get('/categories',       getCategories);
 
 // All routes below require authentication
 router.use(protect);

@@ -12,10 +12,9 @@ const workerSchema = new mongoose.Schema(
     phone:     { type: String, required: true, unique: true, trim: true },
     email:     { type: String, unique: true, sparse: true, trim: true, lowercase: true },
     profileImage: { type: String, default: null },
-    category:  {
-      type: String, required: true,
-      enum: ['Plumber','Carpenter','Mason','Electrician','Painter','Builder'],
-    },
+    // Category is now dynamic, sourced from the admin-managed ServiceCategory
+    // collection instead of a hardcoded enum.
+    category:  { type: String, required: true, trim: true },
     skills:       { type: [String], default: [] },
     minCharge:    { type: Number, default: null },
     locationText: { type: String, default: '' },

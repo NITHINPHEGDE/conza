@@ -1,5 +1,6 @@
 // conza_backend/controllers/workerController.js
 const Worker             = require('../models/Worker');
+const ServiceCategory    = require('../models/ServiceCategory');
 const { withCache }      = require('../utils/cacheHelpers');
 
 // ── Coordinate rounding helper (groups nearby users into same bucket) ─────────
@@ -111,15 +112,6 @@ const getCategories = async (req, res) => {
   try {
     const { lat, lng } = req.query;
 
-    const emojiMap = {
-      Plumber:     '🔧',
-      Carpenter:   '🪚',
-      Mason:       '🧱',
-      Electrician: '⚡',
-      Painter:     '🎨',
-      Builder:     '🏗️',
-    };
-
     const parsedLat = parseFloat(lat);
     const parsedLng = parseFloat(lng);
 
@@ -131,9 +123,11 @@ const getCategories = async (req, res) => {
 
       const categories = await withCache(cacheKey, TTL, async () => {
         const RADIUS_KM = 5;
-        const workers   = await Worker.find({ isAvailable: { $ne: false } })
-          .select('category rating location')
-          .lean();
+
+        const [serviceCategories, workers] = await Promise.all([
+          ServiceCategory.find({ active: true }).select('name image').sort({ name: 1 }).lean(),
+          Worker.find({ isAvailable: { $ne: false } }).select('category rating location').lean(),
+        ]);
 
         const withinRadius = workers.filter((w) => {
           const [wLng, wLat] = w.location.coordinates;
@@ -150,15 +144,15 @@ const getCategories = async (req, res) => {
           return distKm <= RADIUS_KM;
         });
 
-        return Object.keys(emojiMap).map((label) => {
-          const matching = withinRadius.filter((w) => w.category === label);
+        return serviceCategories.map((sc) => {
+          const matching = withinRadius.filter((w) => w.category === sc.name);
           const avgRating = matching.length
             ? matching.reduce((s, w) => s + w.rating, 0) / matching.length
             : 0;
           return {
-            id:        label.toLowerCase(),
-            label,
-            emoji:     emojiMap[label],
+            id:        sc._id,
+            label:     sc.name,
+            image:     sc.image,
             available: matching.length,
             rating:    parseFloat(avgRating.toFixed(1)),
           };
@@ -168,10 +162,15 @@ const getCategories = async (req, res) => {
       return res.json({ success: true, categories });
     }
 
-    const categories = Object.keys(emojiMap).map((label, i) => ({
-      id:        String(i + 1),
-      label,
-      emoji:     emojiMap[label],
+    const serviceCategories = await ServiceCategory.find({ active: true })
+      .select('name image')
+      .sort({ name: 1 })
+      .lean();
+
+    const categories = serviceCategories.map((sc) => ({
+      id:        sc._id,
+      label:     sc.name,
+      image:     sc.image,
       available: 0,
       rating:    0,
     }));

@@ -25,9 +25,11 @@ const signupRules = [
     .trim().notEmpty().withMessage('Phone number is required.')
     .matches(/^[6-9]\d{9}$/).withMessage('Enter a valid 10-digit Indian mobile number.'),
   body('category')
-    .notEmpty().withMessage('Category is required.')
-    .isIn(['Plumber', 'Carpenter', 'Mason', 'Electrician', 'Painter', 'Builder'])
-    .withMessage('Invalid category.'),
+    .trim()
+    .notEmpty().withMessage('Category is required.'),
+  // Existence of the category is checked against the live ServiceCategory
+  // collection in workerService.signUpWorker() — the list is admin-managed
+  // and changes over time, so it can no longer be a static enum here.
   body('locationText').trim().notEmpty().withMessage('Location is required.'),
   body('email').optional({ nullable: true, checkFalsy: true }).isEmail().withMessage('Invalid email address.'),
   body('minCharge').optional({ nullable: true }).isNumeric().withMessage('Min charge must be a number.'),

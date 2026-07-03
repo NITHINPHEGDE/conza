@@ -1,8 +1,9 @@
 // bp_backend/services/workerService.js
-const Worker        = require('../models/Worker');
-const AppError      = require('../utils/AppError');
-const generateToken = require('../utils/generateToken');
-const { getRedis }  = require('../config/redis');
+const Worker           = require('../models/Worker');
+const ServiceCategory  = require('../models/ServiceCategory');
+const AppError         = require('../utils/AppError');
+const generateToken    = require('../utils/generateToken');
+const { getRedis }     = require('../config/redis');
 
 // ── GPS Write Buffer ────────────────────────────────────────────────────────
 // Workers ping location every 10-15 sec. Instead of hitting MongoDB each time,
@@ -131,6 +132,11 @@ const signUpWorker = async (data) => {
       throw new AppError('Username is already taken.', 400);
     if (email && existing.email === email.toLowerCase())
       throw new AppError('Email is already registered.', 400);
+  }
+
+  const categoryExists = await ServiceCategory.exists({ name: category, active: true });
+  if (!categoryExists) {
+    throw new AppError('Selected category is not available.', 400);
   }
 
   const worker = await Worker.create({

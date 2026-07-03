@@ -3,7 +3,25 @@ const workerService  = require('../services/workerService');
 const AppError       = require('../utils/AppError');
 const { cloudinary } = require('../config/cloudinary');
 const logger         = require('../utils/logger');
-const Worker         = require('../models/Worker');
+const Worker           = require('../models/Worker');
+const ServiceCategory  = require('../models/ServiceCategory');
+
+// GET /api/workers/categories — public, used on the sign-up / edit-profile screens
+const getCategories = asyncHandler(async (req, res) => {
+  const categories = await ServiceCategory.find({ active: true })
+    .select('name image commission radius description')
+    .sort({ name: 1 })
+    .lean();
+
+  res.status(200).json({
+    success: true,
+    categories: categories.map((c) => ({
+      id:    c._id,
+      name:  c.name,
+      image: c.image,
+    })),
+  });
+});
 
 const toggleOnline = asyncHandler(async (req, res) => {
   const worker = await workerService.toggleOnlineStatus(req.worker._id);
@@ -101,4 +119,4 @@ const updateProfile = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, worker });
 });
 
-module.exports = { toggleOnline, updateLocation, updateProfileImage, getUploadSignature, updateProfile };
+module.exports = { toggleOnline, updateLocation, updateProfileImage, getUploadSignature, updateProfile, getCategories };

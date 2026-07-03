@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { TouchableOpacity, Text, View, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, View, Image, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 
@@ -38,11 +38,19 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
           end={{ x: 1, y: 1 }}
           style={styles.emojiContainerSelected}
         >
-          <Text style={styles.emoji}>{item.emoji}</Text>
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={styles.categoryImage} />
+          ) : (
+            <Text style={styles.emoji}>{item.emoji}</Text>
+          )}
         </LinearGradient>
       ) : (
         <View style={styles.emojiContainer}>
-          <Text style={styles.emoji}>{item.emoji}</Text>
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={styles.categoryImage} />
+          ) : (
+            <Text style={styles.emoji}>{item.emoji}</Text>
+          )}
         </View>
       )}
 
@@ -112,6 +120,11 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 24,
+  },
+  categoryImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
   },
   label: {
     fontSize: 13,

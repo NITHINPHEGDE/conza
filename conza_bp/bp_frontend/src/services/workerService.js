@@ -1,6 +1,8 @@
 // src/services/workerService.js
 import { api } from './apiClient';
 
+export const getCategoriesAPI = () => api.get('/workers/categories');
+
 export const toggleOnlineAPI = () => api.patch('/workers/toggle-online');
 
 export const updateLocationAPI = (latitude, longitude) =>

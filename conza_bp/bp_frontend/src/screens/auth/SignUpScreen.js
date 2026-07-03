@@ -1,5 +1,5 @@
 // src/screens/auth/SignUpScreen.js
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   StatusBar, ScrollView, ActivityIndicator, KeyboardAvoidingView,
@@ -11,14 +11,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { signUp } from '../../services/authService';
 import usePartnerStore from '../../store/usePartnerStore';
-import { updateProfileImageAPI } from '../../services/workerService';
+import { updateProfileImageAPI, getCategoriesAPI } from '../../services/workerService';
 import { uploadImageToCloudinary } from '../../utils/cloudinary';
 import { colors } from '../../theme/colors';
 
 const GRAD_START = { x: 0, y: 0 };
 const GRAD_END   = { x: 1, y: 0 };
-
-const CATEGORIES = ['Plumber','Carpenter','Mason','Electrician','Painter','Builder'];
 
 // ── Field component ───────────────────────────────────────────────────────────
 const Field = React.memo(({
@@ -103,6 +101,24 @@ const SignUpScreen = ({ navigation }) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [skillInput, setSkillInput]   = useState('');
   const [imgUploading, setImgUploading] = useState(false);
+
+  const [categories, setCategories]         = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const res = await getCategoriesAPI();
+        if (isMounted) setCategories(res.categories || []);
+      } catch (err) {
+        console.error('[SignUp] Failed to load categories:', err);
+      } finally {
+        if (isMounted) setCategoriesLoading(false);
+      }
+    })();
+    return () => { isMounted = false; };
+  }, []);
 
   const set = useCallback((key) => (val) =>
     setForm((prev) => ({ ...prev, [key]: val })),
@@ -321,20 +337,30 @@ const SignUpScreen = ({ navigation }) => {
           {/* Category */}
           <View style={fStyles.wrap}>
             <Text style={fStyles.label}>Category</Text>
-            <View style={styles.categoryGrid}>
-              {CATEGORIES.map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  onPress={() => setForm((prev) => ({ ...prev, category: cat }))}
-                  style={[styles.catChip, form.category === cat && styles.catChipActive]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.catChipText, form.category === cat && styles.catChipTextActive]}>
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {categoriesLoading ? (
+              <ActivityIndicator color={colors.accentAmber} style={{ marginTop: 8 }} />
+            ) : (
+              <View style={styles.categoryGrid}>
+                {categories.map((cat) => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    onPress={() => setForm((prev) => ({ ...prev, category: cat.name }))}
+                    style={[styles.catChip, form.category === cat.name && styles.catChipActive]}
+                    activeOpacity={0.8}
+                  >
+                    {cat.image ? (
+                      <Image source={{ uri: cat.image }} style={styles.catChipImage} />
+                    ) : null}
+                    <Text style={[styles.catChipText, form.category === cat.name && styles.catChipTextActive]}>
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            {!categoriesLoading && categories.length === 0 && (
+              <Text style={fStyles.errorText}>No categories available yet. Please check back later.</Text>
+            )}
             {errors.category && <Text style={fStyles.errorText}>{errors.category}</Text>}
           </View>
 
@@ -455,8 +481,9 @@ const styles = StyleSheet.create({
   eyeBtn:         { padding: 8 },
   eyeText:        { fontSize: 18 },
   categoryGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
-  catChip:        { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface },
+  catChip:        { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface },
   catChipActive:  { borderColor: colors.accentYellow, backgroundColor: colors.accentYellowSoft },
+  catChipImage:   { width: 22, height: 22, borderRadius: 11 },
   catChipText:    { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   catChipTextActive:{ color: colors.accentAmber, fontWeight: '700' },
   addSkillBtn:    { backgroundColor: colors.accentYellowSoft, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: colors.accentYellow, marginLeft: 8 },
