@@ -65,9 +65,16 @@ exports.updateWorkerStatus = async (req, res, next) => {
     if (status === 'suspended') {
       update.isAvailable = false
       update.isOnline = false
+      update.isVerified = false
     } else if (status === 'active') {
       update.isAvailable = true
-      update.isOnline = true}
+      update.isOnline = true
+      // isVerified must be true for the worker to appear on the customer
+      // app — the customer query filters by BOTH status:'active' AND
+      // isVerified:true. Activating without setting isVerified would leave
+      // the worker permanently invisible.
+      update.isVerified = true
+    }
 
     const worker = await Worker.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true })
     if (!worker) return next(createError(404, 'Worker not found.'))

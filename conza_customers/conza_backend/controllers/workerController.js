@@ -23,9 +23,15 @@ const getNearbyWorkers = async (req, res) => {
     }
 
     if (!lat || !lng) {
-      const query = { isAvailable: { $ne: false }, status: 'active', isVerified: true };
-      if (category) query.category = category;
-      const workers = await Worker.find(query).select(
+      // Match active workers OR legacy documents that predate the status/isVerified
+      // fields (no field at all in MongoDB). Only hard-exclude 'suspended'.
+      const safeQuery = {
+        isAvailable: { $ne: false },
+        status:      { $not: { $eq: 'suspended' } },
+        $or:         [{ isVerified: true }, { isVerified: { $exists: false } }],
+      };
+      if (category) safeQuery.category = category;
+      const workers = await Worker.find(safeQuery).select(
         'fullName username profileImage category skills minCharge locationText experience bio isOnline rating totalJobs memberSince location'
       ).lean();
       const mapped = workers.map((w) => ({
@@ -59,7 +65,11 @@ const getNearbyWorkers = async (req, res) => {
     const TTL      = 8;
 
     const workersWithDistance = await withCache(cacheKey, TTL, async () => {
-      const query = { isAvailable: { $ne: false }, status: 'active', isVerified: true };
+      const query = {
+        isAvailable: { $ne: false },
+        status:      { $not: { $eq: 'suspended' } },
+        $or:         [{ isVerified: true }, { isVerified: { $exists: false } }],
+      };
       if (category) query.category = category;
 
       const [workers, serviceCategories] = await Promise.all([
@@ -145,7 +155,11 @@ const getCategories = async (req, res) => {
       const categories = await withCache(cacheKey, TTL, async () => {
         const [serviceCategories, workers] = await Promise.all([
           ServiceCategory.find({ active: true }).select('name image radius').sort({ name: 1 }).lean(),
-          Worker.find({ isAvailable: { $ne: false }, status: 'active', isVerified: true }).select('category rating location').lean(),
+          Worker.find({
+            isAvailable: { $ne: false },
+            status:      { $not: { $eq: 'suspended' } },
+            $or:         [{ isVerified: true }, { isVerified: { $exists: false } }],
+          }).select('category rating location').lean(),
         ]);
 
         const categoryRadiusKm = serviceCategories.reduce((acc, sc) => {
@@ -224,8 +238,8 @@ const searchWorkers = async (req, res) => {
       const filter = {
         $text:       { $search: q },
         isAvailable: { $ne: false },
-        status:      'active',
-        isVerified:  true,
+        status:      { $not: { $eq: 'suspended' } },
+        $or:         [{ isVerified: true }, { isVerified: { $exists: false } }],
       };
 
       if (lat && lng) {
