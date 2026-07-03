@@ -23,6 +23,11 @@ const workerSchema = new mongoose.Schema(
     isOnline:     { type: Boolean, default: true },
     isAvailable:  { type: Boolean, default: true },   // false while worker has an active job
     lastLocationAt: { type: Date, default: null },
+
+    // Admin-managed — must match conza_bp/bp_backend and conza_admin field
+    // names exactly since all three read/write the same shared collection.
+    status:     { type: String, enum: ['active', 'suspended', 'pending_verification'], default: 'pending_verification' },
+    isVerified: { type: Boolean, default: false },
     location: {
       type:        { type: String, enum: ['Point'], default: 'Point' },
       coordinates: { type: [Number], default: [0, 0] },
@@ -40,13 +45,13 @@ const workerSchema = new mongoose.Schema(
 
 // Compound geo index — covers all $near and $geoNear queries
 // (single-field 2dsphere is redundant when compound exists)
-workerSchema.index({ location: '2dsphere', category: 1, isAvailable: 1 });
+workerSchema.index({ location: '2dsphere', category: 1, isAvailable: 1, status: 1 });
 
 // category listing + online status (getCategories aggregation $match)
-workerSchema.index({ category: 1, isOnline: 1, isAvailable: 1 });
+workerSchema.index({ category: 1, isOnline: 1, isAvailable: 1, status: 1 });
 
 // general availability filter
-workerSchema.index({ category: 1, isAvailable: 1 });
+workerSchema.index({ category: 1, isAvailable: 1, status: 1 });
 
 // text search across name/category/skills/bio
 workerSchema.index({ fullName: 'text', category: 'text', skills: 'text', bio: 'text' });

@@ -243,11 +243,12 @@ const useAppStore = create((set, get) => ({
     const { userLat, userLng } = get();
     try {
       set({ labourLoading: true, labourError: null });
+      // No radius passed — the backend resolves it from this category's own
+      // admin-configured "Service Radius (km)" (ServiceCategory.radius).
       const data = await workerAPI.getNearbyWorkers({
         category,
         lat:    userLat,
         lng:    userLng,
-        radius: 5000,
       });
       set((state) => ({
         workersByCategory: { ...state.workersByCategory, [category]: data.workers || EMPTY_ARRAY },

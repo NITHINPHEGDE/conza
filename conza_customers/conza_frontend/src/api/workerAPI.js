@@ -7,9 +7,11 @@ export const workerAPI = {
     return res.data;
   },
 
-  getNearbyWorkers: async ({ category, lat, lng, radius = 5000 }) => {
+  getNearbyWorkers: async ({ category, lat, lng, radius }) => {
+    // radius is optional — when omitted, the backend uses the category's own
+    // admin-configured service radius instead of a fixed default.
     const res = await api.get('/workers/nearby', {
-      params: { category, lat, lng, radius },
+      params: { category, lat, lng, ...(radius ? { radius } : {}) },
     });
     return res.data;
   },

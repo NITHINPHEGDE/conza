@@ -9,10 +9,21 @@ const round3 = (n) => Math.round(parseFloat(n) * 1000) / 1000;
 // ── GET /api/workers/nearby ────────────────────────────────────────────────────
 const getNearbyWorkers = async (req, res) => {
   try {
-    const { category, lat, lng, radius = 5000 } = req.query;
+    const { category, lat, lng } = req.query;
+
+    // The category's admin-configured "Service Radius (km)" is the source of
+    // truth for how far a worker can be to count as "nearby" for that category.
+    // A client-supplied radius is only used as a fallback when no category is given.
+    let radius = req.query.radius ? parseInt(req.query.radius) : 5000;
+    if (category) {
+      const serviceCategory = await ServiceCategory.findOne({ name: category }).select('radius').lean();
+      if (serviceCategory && serviceCategory.radius) {
+        radius = serviceCategory.radius * 1000; // km → meters
+      }
+    }
 
     if (!lat || !lng) {
-      const query = { isAvailable: { $ne: false } };
+      const query = { isAvailable: { $ne: false }, status: 'active', isVerified: true };
       if (category) query.category = category;
       const workers = await Worker.find(query).select(
         'fullName username profileImage category skills minCharge locationText experience bio isOnline rating totalJobs memberSince location'
@@ -48,21 +59,31 @@ const getNearbyWorkers = async (req, res) => {
     const TTL      = 8;
 
     const workersWithDistance = await withCache(cacheKey, TTL, async () => {
-      const query = { isAvailable: { $ne: false } };
+      const query = { isAvailable: { $ne: false }, status: 'active', isVerified: true };
       if (category) query.category = category;
 
-      const workers = await Worker.find(query).select(
-        'fullName username profileImage category skills minCharge locationText experience bio isOnline rating totalJobs memberSince location'
-      ).lean();
+      const [workers, serviceCategories] = await Promise.all([
+        Worker.find(query).select(
+          'fullName username profileImage category skills minCharge locationText experience bio isOnline rating totalJobs memberSince location'
+        ).lean(),
+        ServiceCategory.find({ active: true }).select('name radius').lean(),
+      ]);
+      const categoryRadiusKm = serviceCategories.reduce((acc, sc) => {
+        acc[sc.name] = sc.radius;
+        return acc;
+      }, {});
 
       const userLat = parseFloat(lat);
       const userLng = parseFloat(lng);
-      const maxKm   = parseInt(radius) / 1000;
 
       const mapped = workers
         .map((w) => {
           const [wLng, wLat] = w.location.coordinates;
           if (wLng === 0 && wLat === 0) return null;
+          // Visibility radius is the admin-configured value for this
+          // worker's category, not an arbitrary client-supplied radius.
+          const maxKm = categoryRadiusKm[w.category];
+          if (maxKm === undefined) return null;
           const R      = 6371;
           const dLat   = ((wLat - userLat) * Math.PI) / 180;
           const dLng   = ((wLng - userLng) * Math.PI) / 180;
@@ -122,16 +143,21 @@ const getCategories = async (req, res) => {
       const TTL      = 10;
 
       const categories = await withCache(cacheKey, TTL, async () => {
-        const RADIUS_KM = 5;
-
         const [serviceCategories, workers] = await Promise.all([
-          ServiceCategory.find({ active: true }).select('name image').sort({ name: 1 }).lean(),
-          Worker.find({ isAvailable: { $ne: false } }).select('category rating location').lean(),
+          ServiceCategory.find({ active: true }).select('name image radius').sort({ name: 1 }).lean(),
+          Worker.find({ isAvailable: { $ne: false }, status: 'active', isVerified: true }).select('category rating location').lean(),
         ]);
+
+        const categoryRadiusKm = serviceCategories.reduce((acc, sc) => {
+          acc[sc.name] = sc.radius;
+          return acc;
+        }, {});
 
         const withinRadius = workers.filter((w) => {
           const [wLng, wLat] = w.location.coordinates;
           if (wLng === 0 && wLat === 0) return false;
+          const maxKm = categoryRadiusKm[w.category];
+          if (maxKm === undefined) return false;
           const R    = 6371;
           const dLat = ((wLat - parsedLat) * Math.PI) / 180;
           const dLng = ((wLng - parsedLng) * Math.PI) / 180;
@@ -141,7 +167,7 @@ const getCategories = async (req, res) => {
               Math.cos((wLat * Math.PI) / 180) *
               Math.sin(dLng / 2) ** 2;
           const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          return distKm <= RADIUS_KM;
+          return distKm <= maxKm;
         });
 
         return serviceCategories.map((sc) => {
@@ -198,6 +224,8 @@ const searchWorkers = async (req, res) => {
       const filter = {
         $text:       { $search: q },
         isAvailable: { $ne: false },
+        status:      'active',
+        isVerified:  true,
       };
 
       if (lat && lng) {

@@ -153,6 +153,11 @@ const signUpWorker = async (data) => {
     experience:   experience || null,
     bio:          bio || '',
     isOnline:     true,
+    // New sign-ups always start pending admin verification — they only
+    // become visible to customers once the admin panel verifies them and
+    // flips status to 'active' (conza_admin verifyWorker controller).
+    status:       'pending_verification',
+    isVerified:   false,
   });
 
   // Bust category cache so newly registered worker appears when they go online

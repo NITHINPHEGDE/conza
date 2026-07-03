@@ -41,7 +41,7 @@ const workerSchema = new mongoose.Schema(
     // ── Admin-managed fields (written by conza_admin) ───────────────────────
     // status: controls whether this worker can use the app at all.
     // 'suspended' blocks all protected actions — see middleware/auth.js requireActive.
-    status:     { type: String, enum: ['active', 'suspended', 'pending_verification'], default: 'active' },
+    status:     { type: String, enum: ['active', 'suspended', 'pending_verification'], default: 'pending_verification' },
     isVerified: { type: Boolean, default: false },
 
     // ── Stats ──────────────────────────────────────────────────────────────
