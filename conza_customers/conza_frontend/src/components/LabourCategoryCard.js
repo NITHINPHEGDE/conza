@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState, useRef } from 'react';
-import { TouchableOpacity, Text, View, Image, Animated, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, View, Animated, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 
@@ -20,9 +20,9 @@ const ImageSkeleton = () => {
 
   return <Animated.View style={[styles.imageSkeleton, { opacity }]} />;
 };
-//
+
 // ── Image with fade-in on load ─────────────────────────────────────────────────
-const FadingImage = ({ uri, style }) => {
+const FadingImage = ({ uri }) => {
   const [loaded, setLoaded] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -36,117 +36,147 @@ const FadingImage = ({ uri, style }) => {
   }, [fadeAnim]);
 
   return (
-    <View style={style}>
+    <>
       {!loaded && <ImageSkeleton />}
       <Animated.Image
         source={{ uri }}
-        style={[StyleSheet.absoluteFill, { borderRadius: style.borderRadius ?? 0, opacity: fadeAnim }]}
+        style={[styles.categoryImage, { opacity: fadeAnim }]}
         onLoad={onLoad}
         resizeMode="cover"
       />
-    </View>
+    </>
   );
 };
 
 // ── Category Card ──────────────────────────────────────────────────────────────
+// Full-bleed photo card: the photo IS the card (no inset/padding), with the
+// label + live stats overlaid on a bottom scrim — same pattern used by
+// service-marketplace apps (Urban Company, Housejoy) so a grid of these
+// reads instantly as "browse a pro", not as a generic icon tile.
 const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = useCallback(() => {
+    Animated.spring(scaleAnim, { toValue: 0.96, useNativeDriver: true, speed: 40, bounciness: 4 }).start();
+  }, [scaleAnim]);
+
+  const handlePressOut = useCallback(() => {
+    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 4 }).start();
+  }, [scaleAnim]);
+
   const handlePress = useCallback(() => {
     onPress && onPress(item);
   }, [onPress, item]);
 
   const gradientColors = useMemo(() => [colors.gradientStart, colors.gradientEnd], []);
+  const cardStyle = useMemo(() => [styles.card, isSelected && styles.cardSelected], [isSelected]);
 
-  const cardStyle    = useMemo(() => [styles.card,      isSelected && styles.cardSelected],     [isSelected]);
-  const labelStyle   = useMemo(() => [styles.label,     isSelected && styles.labelSelected],    [isSelected]);
-  const availStyle   = useMemo(() => [styles.available, isSelected && styles.availableSelected],[isSelected]);
-
-  const iconContent = item.image
-    ? <FadingImage uri={item.image} style={styles.categoryImage} />
-    : <Text style={styles.emoji}>{item.emoji}</Text>;
+  const hasPhoto = !!item.image;
 
   return (
-    <TouchableOpacity style={cardStyle} onPress={handlePress} activeOpacity={0.75}>
-      {isSelected ? (
-        <LinearGradient
-          colors={gradientColors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.emojiContainerSelected}
-        >
-          {iconContent}
-        </LinearGradient>
-      ) : (
-        <View style={styles.emojiContainer}>
-          {iconContent}
+    <Animated.View style={{ width: '47%', margin: 6, transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={cardStyle}
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.92}
+      >
+        {/* ── Background: photo fills the card edge-to-edge, or an emoji sits on a soft tinted field ── */}
+        {hasPhoto ? (
+          <FadingImage uri={item.image} />
+        ) : (
+          <LinearGradient
+            colors={[colors.surfaceElevated, colors.borderLight]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          >
+            <View style={styles.emojiWrap}>
+              <Text style={styles.emoji}>{item.emoji}</Text>
+            </View>
+          </LinearGradient>
+        )}
+
+        {/* ── Bottom scrim: only needed to keep white overlay text legible on a photo ── */}
+        {hasPhoto && (
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.72)']}
+            locations={[0, 0.85]}
+            style={styles.scrim}
+            pointerEvents="none"
+          />
+        )}
+
+        {/* ── Selected ring + check badge ── */}
+        {isSelected && (
+          <>
+            <View style={styles.selectedRing} pointerEvents="none" />
+            <LinearGradient
+              colors={gradientColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.checkBadge}
+            >
+              <Text style={styles.checkBadgeText}>✓</Text>
+            </LinearGradient>
+          </>
+        )}
+
+        {/* ── Overlaid label + live stats ── */}
+        <View style={styles.footer}>
+          <Text
+            style={[styles.label, hasPhoto ? styles.labelOnPhoto : styles.labelOnTint]}
+            numberOfLines={1}
+          >
+            {item.label}
+          </Text>
+
+          <View style={styles.metaRow}>
+            <Text style={[styles.metaText, hasPhoto ? styles.metaTextOnPhoto : styles.metaTextOnTint]}>
+              ⭐ {item.rating}
+            </Text>
+            <View style={[styles.metaDivider, hasPhoto ? styles.metaDividerOnPhoto : styles.metaDividerOnTint]} />
+            <View style={styles.availabilityGroup}>
+              <View style={styles.liveDot} />
+              <Text
+                style={[styles.metaText, hasPhoto ? styles.metaTextOnPhoto : styles.metaTextOnTint]}
+                numberOfLines={1}
+              >
+                {item.available} free
+              </Text>
+            </View>
+          </View>
         </View>
-      )}
-
-      <Text style={labelStyle}>{item.label}</Text>
-
-      <View style={styles.metaRow}>
-        <Text style={styles.rating}>⭐ {item.rating}</Text>
-        <View style={styles.dot} />
-        <Text style={availStyle}>{item.available} free</Text>
-      </View>
-
-      {isSelected && <View style={styles.selectedIndicator} />}
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </Animated.View>
   );
 });
 
 const styles = StyleSheet.create({
   card: {
-    width: '47%',
-    margin: 6,
-    backgroundColor: colors.surface,
+    aspectRatio: 0.85,
     borderRadius: 20,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    alignItems: 'center',
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1.5,
     borderColor: colors.border,
     shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12,
-    shadowRadius: 6,
+    shadowRadius: 8,
     elevation: 3,
-    position: 'relative',
     overflow: 'hidden',
+    position: 'relative',
   },
   cardSelected: {
     borderColor: colors.accentYellow,
-    backgroundColor: '#FFFDF0',
     shadowColor: colors.accentAmber,
-    shadowOpacity: 0.22,
-    shadowRadius: 10,
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
     elevation: 6,
   },
-  emojiContainer: {
-    width: '100%',
-    aspectRatio: 0.85,
-    borderRadius: 16,
-    backgroundColor: colors.surfaceElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  emojiContainerSelected: {
-    width: '100%',
-    aspectRatio: 0.85,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  emoji: {
-    fontSize: 24,
-  },
+
+  // ── Photo: identical sizing/crop logic to before — just no longer inset by padding ──
   categoryImage: {
     position: 'absolute',
     top: 0,
@@ -154,7 +184,7 @@ const styles = StyleSheet.create({
     width: '100%',
     // Taller than the box on purpose: resizeMode="cover" fits/crops this
     // oversized image centered within itself, then the extra bottom portion
-    // gets clipped by the container's overflow:hidden — since the image is
+    // gets clipped by the card's overflow:hidden — since the image is
     // pinned to top:0, the top (cap/face) is what always stays visible and
     // any cropping happens at the bottom instead.
     height: '135%',
@@ -162,53 +192,115 @@ const styles = StyleSheet.create({
   },
   imageSkeleton: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 15,
+  },
+
+  emojiWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 36, // keeps emoji visually centered above the footer text
+  },
+  emoji: {
+    fontSize: 30,
+  },
+
+  scrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '58%',
+  },
+
+  selectedRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
+    borderWidth: 2.5,
+    borderColor: colors.accentYellow,
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    elevation: 4,
+  },
+  checkBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+
+  // ── Overlaid footer content ──
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    paddingTop: 4,
   },
   label: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 5,
     letterSpacing: 0.1,
-    textAlign: 'center',
+    marginBottom: 4,
   },
-  labelSelected: {
+  labelOnPhoto: {
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  labelOnTint: {
     color: colors.textPrimary,
   },
+
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
   },
-  rating: {
+  metaText: {
     fontSize: 10,
-    color: colors.textMuted,
-    fontWeight: '500',
+    fontWeight: '700',
   },
-  dot: {
-    width: 2.5,
-    height: 2.5,
-    borderRadius: 2,
-    backgroundColor: colors.textMuted,
+  metaTextOnPhoto: {
+    color: 'rgba(255,255,255,0.92)',
   },
-  available: {
-    fontSize: 10,
+  metaTextOnTint: {
     color: colors.textSecondary,
-    fontWeight: '600',
   },
-  availableSelected: {
-    color: colors.accentAmber,
+  metaDivider: {
+    width: 1,
+    height: 9,
+    marginHorizontal: 6,
   },
-  selectedIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: colors.accentYellow,
-    borderTopLeftRadius: 2,
-    borderTopRightRadius: 2,
+  metaDividerOnPhoto: {
+    backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  metaDividerOnTint: {
+    backgroundColor: colors.borderLight,
+  },
+  availabilityGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  liveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#4ADE80',
+    marginRight: 4,
   },
 });
 
