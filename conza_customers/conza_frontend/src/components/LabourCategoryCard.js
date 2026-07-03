@@ -96,7 +96,7 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
 
 const styles = StyleSheet.create({
   card: {
-    flex: 1,
+    width: '47%',
     margin: 6,
     backgroundColor: colors.surface,
     borderRadius: 18,
