@@ -20,7 +20,7 @@ const ImageSkeleton = () => {
 
   return <Animated.View style={[styles.imageSkeleton, { opacity }]} />;
 };
-
+//
 // ── Image with fade-in on load ─────────────────────────────────────────────────
 const FadingImage = ({ uri, style }) => {
   const [loaded, setLoaded] = useState(false);
@@ -99,8 +99,8 @@ const styles = StyleSheet.create({
     width: '47%',
     margin: 6,
     backgroundColor: colors.surface,
-    borderRadius: 18,
-    paddingVertical: 18,
+    borderRadius: 20,
+    paddingVertical: 12,
     paddingHorizontal: 10,
     alignItems: 'center',
     borderWidth: 1.5,
@@ -122,9 +122,9 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   emojiContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 15,
+    width: '100%',
+    aspectRatio: 0.85,
+    borderRadius: 16,
     backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
@@ -132,24 +132,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight,
     overflow: 'hidden',
+    position: 'relative',
   },
   emojiContainerSelected: {
-    width: 52,
-    height: 52,
-    borderRadius: 15,
+    width: '100%',
+    aspectRatio: 0.85,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
     overflow: 'hidden',
+    position: 'relative',
   },
   emoji: {
     fontSize: 24,
   },
   categoryImage: {
-    width: 52,
-    height: 52,
-    borderRadius: 15,
-    overflow: 'hidden',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    // Taller than the box on purpose: resizeMode="cover" fits/crops this
+    // oversized image centered within itself, then the extra bottom portion
+    // gets clipped by the container's overflow:hidden — since the image is
+    // pinned to top:0, the top (cap/face) is what always stays visible and
+    // any cropping happens at the bottom instead.
+    height: '135%',
+    resizeMode: 'cover',
   },
   imageSkeleton: {
     ...StyleSheet.absoluteFillObject,
