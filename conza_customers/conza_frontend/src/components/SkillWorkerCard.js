@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
 const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
@@ -75,7 +76,10 @@ const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
 
         {/* Distance + Price */}
         <View style={styles.metaRow}>
-          <Text style={styles.distance}>📍 {worker.distance}</Text>
+          <View style={styles.distanceRow}>
+            <MaterialCommunityIcons name="map-marker" size={12} color={colors.textMuted} />
+            <Text style={styles.distance}>{worker.distance}</Text>
+          </View>
           <Text style={priceStyle}>
             ₹{Number(worker.pricePerDay) || 0}/day
           </Text>
@@ -213,6 +217,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   distance: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
+  distanceRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   price: { fontSize: 13, fontWeight: '800', color: colors.textSecondary },
   priceSelected: { color: colors.accentAmber },
 });

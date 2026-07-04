@@ -9,6 +9,7 @@ import SectionHeader from '../components/SectionHeader';
 import useAppStore from '../store/useAppStore';
 import { ErrorState, EmptyState } from '../components/LoadingState';
 import { SkeletonList, ProjectCardSkeleton } from '../components/Skeleton';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
 const ProgressBar = React.memo(({ progress }) => {
@@ -64,7 +65,10 @@ const ProjectCard = React.memo(({ item, onPress }) => {
       </View>
 
       <Text style={styles.projectName}>{item.name}</Text>
-      <Text style={styles.location}>📍 {item.location}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16 }}>
+        <MaterialCommunityIcons name="map-marker" size={13} color={colors.textMuted} />
+        <Text style={[styles.location, { marginBottom: 0 }]}>{item.location}</Text>
+      </View>
 
       <View style={styles.progressSection}>
         <View style={styles.progressLabel}>

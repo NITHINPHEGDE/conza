@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import useAppStore from '../store/useAppStore';
 import { SectionLoader } from '../components/LoadingState';
 import { useAuth } from '../hooks/useAuth';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import SavedAddressSheet from '../components/SavedAddressSheet';
 import { fetchCustomerFAQs, fetchCustomerHelpArticles } from '../api/faqHelpAPI';
@@ -34,7 +35,11 @@ const StatCard = React.memo(({ value, label }) => (
 const MenuItem = React.memo(({ icon, label, sub, danger, onPress }) => (
   <TouchableOpacity style={styles.menuItem} activeOpacity={0.75} onPress={onPress}>
     <View style={[styles.menuIcon, danger && styles.menuIconDanger]}>
-      <Text style={{ fontSize: 18 }}>{icon}</Text>
+      {icon === '📍' ? (
+        <MaterialCommunityIcons name="map-marker" size={18} color={colors.accentAmber} />
+      ) : (
+        <Text style={{ fontSize: 18 }}>{icon}</Text>
+      )}
     </View>
     <View style={{ flex: 1 }}>
       <Text style={[styles.menuLabel, danger && { color: colors.danger }]}>{label}</Text>
@@ -86,10 +91,17 @@ const OrdersModal = React.memo(({ visible, onClose }) => {
                       <Text style={styles.orderBadgeText}>✓ Completed</Text>
                     </View>
                   </View>
-                  <Text style={styles.orderMeta}>
-                    {b.city ? `📍 ${b.city}  ` : ''}
-                    🗓 {new Date(b.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                    {b.city && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                        <MaterialCommunityIcons name="map-marker" size={11} color={colors.textMuted} />
+                        <Text style={styles.orderMeta}>{b.city}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.orderMeta}>
+                      🗓 {new Date(b.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </Text>
+                  </View>
                 </View>
               ))}
             </ScrollView>

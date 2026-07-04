@@ -35,9 +35,12 @@ const BookingCard = React.memo(({ booking, onPress }) => {
         </View>
         <Text style={styles.serviceName}>{booking.category || 'Booking'}</Text>
         {worker && <Text style={styles.workerName}>👷 {worker.fullName}</Text>}
-        <Text style={styles.locationText} numberOfLines={1}>
-          📍 {booking.area ? `${booking.area}, ` : ''}{booking.city}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 10 }}>
+          <MaterialCommunityIcons name="map-marker" size={13} color="#64748B" />
+          <Text style={[styles.locationText, { marginBottom: 0 }]} numberOfLines={1}>
+            {booking.area ? `${booking.area}, ` : ''}{booking.city}
+          </Text>
+        </View>
         <View style={styles.cardBottom}>
           <Text style={styles.amountText}>₹{booking.total}</Text>
           <View style={styles.viewBtn}>
@@ -80,7 +83,10 @@ const MaterialCard = React.memo(({ order }) => {
           </View>
         </View>
         <Text style={styles.serviceName} numberOfLines={1}>{itemNames || 'Material Order'}</Text>
-        <Text style={styles.locationText}>📍 {order.city}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 10 }}>
+          <MaterialCommunityIcons name="map-marker" size={13} color="#64748B" />
+          <Text style={[styles.locationText, { marginBottom: 0 }]}>{order.city}</Text>
+        </View>
         <View style={styles.cardBottom}>
           <Text style={styles.amountText}>₹{order.total}</Text>
           <Text style={styles.bookingIdText}>#{(order._id || '').slice(-6).toUpperCase()}</Text>

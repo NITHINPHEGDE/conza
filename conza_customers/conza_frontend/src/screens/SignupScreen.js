@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../hooks/useAuth';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
 const GRAD_COLORS = [colors.gradientStart, colors.gradientEnd];
@@ -59,9 +60,10 @@ const SignupScreen = ({ navigation }) => {
           </View>
         ))}
 
-        <View style={styles.locationNote}>
-          <Text style={styles.locationNoteText}>
-            📍 We'll ask for location permission to find nearby workers
+        <View style={[styles.locationNote, { flexDirection: 'row', alignItems: 'flex-start', gap: 6 }]}>
+          <MaterialCommunityIcons name="map-marker" size={14} color={colors.textMuted} style={{ marginTop: 1 }} />
+          <Text style={[styles.locationNoteText, { flex: 1 }]}>
+            We'll ask for location permission to find nearby workers
           </Text>
         </View>
 

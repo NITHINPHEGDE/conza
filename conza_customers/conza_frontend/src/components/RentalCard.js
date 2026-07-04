@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
 const RentalCard = React.memo(({ item, onPress, onAddToCart }) => {
@@ -53,7 +54,8 @@ const RentalCard = React.memo(({ item, onPress, onAddToCart }) => {
         <Text style={styles.seller} numberOfLines={1}>by {item.seller}</Text>
         
         <View style={styles.distanceRow}>
-          <Text style={styles.distanceText}>📍 {item.distance}</Text>
+          <MaterialCommunityIcons name="map-marker" size={12} color={colors.textSecondary} />
+          <Text style={styles.distanceText}>{item.distance}</Text>
         </View>
 
         <View style={styles.priceRow}>
@@ -126,7 +128,7 @@ const styles = StyleSheet.create({
   details: { padding: 11 },
   name: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
   seller: { fontSize: 11, color: colors.textMuted, marginBottom: 4, fontWeight: '500' },
-  distanceRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  distanceRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 4 },
   distanceText: { fontSize: 11, color: colors.textSecondary, fontWeight: '600' },
   priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2, marginBottom: 8 },
   price: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },

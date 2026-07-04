@@ -16,6 +16,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import useAppStore from '../store/useAppStore';
 import { SavedAddressCardSkeleton, SkeletonList } from './Skeleton';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { authAPI } from '../api/authAPI';
 
@@ -252,7 +253,7 @@ const AddressForm = React.memo(({
       <Text style={styles.sectionLabel}>Location</Text>
       <View style={[styles.locationCard, !hasLocation && styles.locationCardEmpty]}>
         <View style={styles.locationCardLeft}>
-          <Text style={styles.locationCardIcon}>📍</Text>
+          <MaterialCommunityIcons name="map-marker" size={20} color={colors.accentAmber} style={styles.locationCardIcon} />
           <View style={{ flex: 1 }}>
             <Text style={styles.locationCardTitle}>
               {hasLocation ? 'Selected Location' : 'No location selected'}

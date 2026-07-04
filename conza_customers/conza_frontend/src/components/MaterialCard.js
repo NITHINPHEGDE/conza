@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TextInput,
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
 const MaterialCard = React.memo(({ 
@@ -86,7 +87,8 @@ const MaterialCard = React.memo(({
         <Text style={styles.seller} numberOfLines={1}>by {seller}</Text>
         
         <View style={styles.distanceRow}>
-          <Text style={styles.distanceText}>📍 {distance}</Text>
+          <MaterialCommunityIcons name="map-marker" size={12} color={colors.textSecondary} />
+          <Text style={styles.distanceText}>{distance}</Text>
         </View>
 
         <View style={styles.priceRow}>
@@ -158,7 +160,7 @@ const styles = StyleSheet.create({
   details: { padding: 11 },
   name: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
   seller: { fontSize: 11, color: colors.textMuted, marginBottom: 4 },
-  distanceRow: { flexDirection: 'row', alignItems: 'center' },
+  distanceRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 4 },
   distanceText: { fontSize: 11, color: colors.textSecondary, fontWeight: '600' },
   priceRow: { flexDirection: 'column', alignItems: 'flex-start', marginTop: 6, gap: 6 },
   price: { fontSize: 15, fontWeight: '800' },

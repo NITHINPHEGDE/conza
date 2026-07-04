@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useBooking } from '../hooks/useBooking';
 import SavedAddressSheet from '../components/SavedAddressSheet';
@@ -213,7 +214,10 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
 
         {/* Delivery Address */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📍  Delivery Address</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+            <MaterialCommunityIcons name="map-marker" size={17} color={colors.textPrimary} />
+            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Delivery Address</Text>
+          </View>
 
           {/* Auto Fetch */}
           <TouchableOpacity

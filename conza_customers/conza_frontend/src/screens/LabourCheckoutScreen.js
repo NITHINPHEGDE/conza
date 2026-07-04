@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useBooking } from '../hooks/useBooking';
 import SavedAddressSheet from '../components/SavedAddressSheet';
@@ -66,7 +67,10 @@ const WorkerRow = React.memo(({ worker }) => (
       <View style={styles.workerMeta}>
         <Text style={styles.workerMetaText}>⭐ {worker.rating}</Text>
         <View style={styles.workerMetaDot} />
-        <Text style={styles.workerMetaText}>📍 {worker.distance}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+          <MaterialCommunityIcons name="map-marker" size={12} color={colors.textMuted} />
+          <Text style={styles.workerMetaText}>{worker.distance}</Text>
+        </View>
       </View>
     </View>
     <Text style={styles.workerPrice}>₹{Number(worker.pricePerDay) || 0}</Text>
@@ -103,7 +107,7 @@ const SelectedAddressCard = React.memo(({ address, onClear }) => {
   return (
     <View style={styles.selectedAddressCard}>
       <View style={styles.selectedAddressCardLeft}>
-        <Text style={styles.selectedAddressCardEmoji}>📍</Text>
+        <MaterialCommunityIcons name="map-marker" size={20} color={colors.accentAmber} style={styles.selectedAddressCardEmoji} />
         <View style={{ flex: 1 }}>
           <Text style={styles.selectedAddressCardLabel}>{address.label || 'Saved Address'}</Text>
           <Text style={styles.selectedAddressCardText} numberOfLines={2}>{address.address}</Text>
@@ -313,7 +317,10 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📍  Work Location</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+            <MaterialCommunityIcons name="map-marker" size={17} color={colors.textPrimary} />
+            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Work Location</Text>
+          </View>
           {showDatePicker && (
             <DateTimePicker
               value={scheduledDate}

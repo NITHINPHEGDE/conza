@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import CategoryButton     from '../components/CategoryButton';
 import LabourCategoryCard from '../components/LabourCategoryCard';
@@ -27,9 +28,9 @@ import { colors } from '../theme/colors';
 import SavedAddressSheet from '../components/SavedAddressSheet';
 
 const CATEGORIES = [
-  { key: 'Labour',   icon: '👷' },
-  { key: 'Material', icon: '🧱' },
-  { key: 'Rental',   icon: '🏗️' },
+  { key: 'Labour',   label: 'Book\nLabour',   icon: 'account-hard-hat',        color: '#F0A500' },
+  { key: 'Material', label: 'Order\nMaterial', icon: 'package-variant', color: '#F0A500' },
+  { key: 'Rental',   label: 'Book\nRental',   icon: 'excavator',       color: '#F0A500' },
 ];
 
 // ─── Skill Search Results View ────────────────────────────────────────────────
@@ -138,7 +139,7 @@ const SkillSearchView = React.memo(({ query, onClear }) => {
 });
 
 // ─── Labour Grid ──────────────────────────────────────────────────────────────
-const LabourView = React.memo(() => {
+const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
   const navigation      = useNavigation();
   const labourCategories = useAppStore((s) => s.labourCategories);
   const labourLoading   = useAppStore((s) => s.labourLoading);
@@ -158,8 +159,25 @@ const LabourView = React.memo(() => {
   ), [handlePress]);
 
   const listHeader = useMemo(() => (
-    <SectionHeader title="Choose Category" actionLabel="View All" onAction={() => {}} />
-  ), []);
+    <View>
+      <SectionHeader title="Choose Category" actionLabel="View All" onAction={() => {}} />
+      <View style={styles.materialSearchWrapper}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.materialSearchInput}
+          placeholder="Search services, skills..."
+          placeholderTextColor={colors.textMuted}
+          value={search}
+          onChangeText={onSearchChange}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={onClearSearch} activeOpacity={0.7}>
+            <Text style={styles.searchClear}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  ), [search, onSearchChange, onClearSearch]);
 
   const listEmpty = useMemo(() => (
     <EmptyState emoji="👷" title="No categories available" />
@@ -571,30 +589,31 @@ const BookingScreen = () => {
         activeOpacity={0.75}
         style={styles.headerLocationBtn}
       >
-        <Text style={styles.headerMeta}>📍 Deliver to</Text>
-        <Text style={styles.headerLocation} numberOfLines={1}>{displayLocation}</Text>
+        <View style={styles.headerMetaRow}>
+          <MaterialCommunityIcons name="map-marker" size={12} color={colors.danger} />
+          <Text style={styles.headerMeta}>Deliver to</Text>
+        </View>
+        <Text style={styles.headerLocation} numberOfLines={2}>{displayLocation}</Text>
       </TouchableOpacity>
 
       {/* Wallet balance chip */}
-      <TouchableOpacity style={styles.walletChip} activeOpacity={0.8}>
+      <TouchableOpacity style={[styles.walletChip, { marginTop: 1 }]} activeOpacity={0.8}>
         <Text style={styles.walletIcon}>👛</Text>
         <Text style={styles.walletAmount}>₹{walletBalance}</Text>
       </TouchableOpacity>
 
-      {activeCategory === 'Labour' ? null : (
-        <TouchableOpacity
-          style={styles.notifBtn}
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('CartTab')}
-        >
-          <Text style={{ fontSize: 19 }}>🛒</Text>
-          {totalCartCount > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{totalCartCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity
+        style={styles.notifBtn}
+        activeOpacity={0.8}
+        onPress={() => navigation.navigate('CartTab')}
+      >
+        <Text style={{ fontSize: 19 }}>🛒</Text>
+        {totalCartCount > 0 && (
+          <View style={styles.cartBadge}>
+            <Text style={styles.cartBadgeText}>{totalCartCount}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
     </View>
   ), [displayLocation, activeCategory, totalCartCount, navigation, walletBalance]);
 
@@ -605,37 +624,23 @@ const BookingScreen = () => {
       {header}
 
       <View style={styles.fixedSection}>
-        {activeCategory === 'Labour' && (
-          <View style={styles.searchBar}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search services, skills..."
-              placeholderTextColor={colors.textMuted}
-              value={search}
-              onChangeText={handleSearchChange}
-            />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={handleClearSearch} activeOpacity={0.7}>
-                <Text style={styles.searchClear}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+        <View style={styles.tabsWrapper}>
+          {!isSearching && (
+            <View style={styles.categoryRow}>
+              {CATEGORIES.map((cat) => (
+                <CategoryButton
+                  key={cat.key}
+                  label={cat.label}
+                  icon={cat.icon}
+                  color={cat.color}
+                  isSelected={activeCategory === cat.key}
+                  onPress={() => handleCategoryPress(cat.key)}
+                />
+              ))}
+            </View>
+          )}
+        </View>
 
-        {!isSearching && (
-          <View style={styles.categoryRow}>
-            {CATEGORIES.map((cat) => (
-              <CategoryButton
-                key={cat.key}
-                label={cat.key}
-                icon={cat.icon}
-                isSelected={activeCategory === cat.key}
-                onPress={() => handleCategoryPress(cat.key)}
-              />
-            ))}
-          </View>
-        )}
       </View>
 
       <View style={styles.dynamicSection}>
@@ -643,7 +648,13 @@ const BookingScreen = () => {
           <SkillSearchView query={activeSearch} onClear={handleClearSearch} />
         ) : (
           <>
-            {activeCategory === 'Labour'   && <LabourView />}
+            {activeCategory === 'Labour'   && (
+              <LabourView
+                search={search}
+                onSearchChange={handleSearchChange}
+                onClearSearch={handleClearSearch}
+              />
+            )}
             {activeCategory === 'Material' && <MaterialView />}
             {activeCategory === 'Rental'   && <RentalView />}
           </>
@@ -663,32 +674,40 @@ const BookingScreen = () => {
 
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  safe: { flex: 1, backgroundColor: colors.accentYellowSoft },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 14,
+    paddingTop: 14,
+    paddingBottom: 18,
+    backgroundColor: colors.accentYellowSoft,
   },
   headerLocationBtn: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 14,
+    paddingTop: 1,
+  },
+  headerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 5,
   },
   headerMeta: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: colors.textMuted,
-    fontWeight: '500',
-    marginBottom: 2,
+    fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   headerLocation: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.textPrimary,
     letterSpacing: 0.1,
+    lineHeight: 19,
   },
   walletChip: {
     flexDirection: 'row',
@@ -729,21 +748,23 @@ const styles = StyleSheet.create({
   cartBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff' },
   fixedSection: {
     paddingHorizontal: 20,
-    paddingBottom: 14,
+    backgroundColor: colors.accentYellowSoft,
+  },
+  tabsWrapper: {
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
-    backgroundColor: colors.background,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.inputBg,
+    backgroundColor: colors.accentYellowSoft,
     borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 12,
+    paddingVertical: 9,
+    marginBottom: 2,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.accentYellowSoft,
   },
   searchIcon: { fontSize: 15, marginRight: 10 },
   searchInput: { flex: 1, fontSize: 14, color: colors.textPrimary },
@@ -791,7 +812,7 @@ const styles = StyleSheet.create({
   checkoutText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
 
   // Labour
-  labourList: { paddingTop: 16, paddingBottom: 30, paddingHorizontal: 14 },
+  labourList: { paddingTop: 10, paddingBottom: 30, paddingHorizontal: 14 },
   gridRow: { justifyContent: 'space-between' },
   continueWrapper: { marginTop: 12, marginHorizontal: 6, marginBottom: 10 },
   continueBtn: { borderRadius: 16, overflow: 'hidden' },
@@ -808,20 +829,20 @@ const styles = StyleSheet.create({
   continueOutlineBtnText: { color: colors.textPrimary, fontSize: 15, fontWeight: '700', letterSpacing: 0.3 },
 
   // Material
-  materialGridList: { paddingTop: 16, paddingBottom: 30, paddingHorizontal: 12 },
+  materialGridList: { paddingTop: 10, paddingBottom: 30, paddingHorizontal: 12 },
   materialGridRow: { justifyContent: 'space-between' },
   materialCardWrapper: { flex: 1, margin: 6 },
   materialSearchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.inputBg,
+    backgroundColor: colors.accentYellowSoft,
     borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 9,
     marginHorizontal: 20,
-    marginBottom: 16,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.accentYellowSoft,
   },
   materialSearchInput: { flex: 1, fontSize: 14, color: colors.textPrimary },
   materialCheckoutBar: {

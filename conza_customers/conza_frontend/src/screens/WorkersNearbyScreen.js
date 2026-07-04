@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import useAppStore, { EMPTY_ARRAY } from '../store/useAppStore';
 import { WorkerListSkeleton, ErrorState, EmptyState } from '../components/LoadingState';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { socket } from '../utils/socket';
 
@@ -61,7 +62,10 @@ const WorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
           <View style={styles.metaRow}>
             <Text style={styles.metaText}>⭐ {worker.rating}</Text>
             <View style={styles.metaDot} />
-            <Text style={styles.metaText}>📍 {worker.distance}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <MaterialCommunityIcons name="map-marker" size={12} color={colors.textMuted} />
+              <Text style={styles.metaText}>{worker.distance}</Text>
+            </View>
           </View>
           <View style={styles.badgeRow}>
             <View style={styles.cardBadge}>
@@ -341,9 +345,12 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
               </TouchableOpacity>
             </View>
             <View style={styles.modalNote}>
-              <Text style={styles.modalNoteText}>
-                📍 Workers with valid Labour Cards will be prioritized for your safety.
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 5 }}>
+                <MaterialCommunityIcons name="map-marker" size={14} color={colors.textMuted} style={{ marginTop: 1 }} />
+                <Text style={[styles.modalNoteText, { flex: 1 }]}>
+                  Workers with valid Labour Cards will be prioritized for your safety.
+                </Text>
+              </View>
             </View>
             <LinearGradient
               colors={[colors.gradientStart, colors.gradientEnd]}
