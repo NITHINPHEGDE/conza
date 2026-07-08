@@ -61,19 +61,21 @@ exports.updateWorkerStatus = async (req, res, next) => {
     const update = { status }
 
     // Suspending a worker must immediately take them off the app and hide
-    // them from customers. Activating restores their availability.
+    // them from customers.
     if (status === 'suspended') {
       update.isAvailable = false
       update.isOnline = false
-      update.isVerified = false
     } else if (status === 'active') {
       update.isAvailable = true
       update.isOnline = true
-      // isVerified must be true for the worker to appear on the customer
-      // app — the customer query filters by BOTH status:'active' AND
-      // isVerified:true. Activating without setting isVerified would leave
-      // the worker permanently invisible.
-      update.isVerified = true
+      // Do NOT force isVerified true here — that bypasses the KYC checklist
+      // and creates "unverified but available" workers. Only carry isVerified
+      // over if their document checklist is already fully complete.
+      const existing = await Worker.findById(req.params.id).select('verification')
+      const v = existing?.verification || {}
+      if (v.aadhaar && v.pan && v.bank && v.documents) {
+        update.isVerified = true
+      }
     }
 
     const worker = await Worker.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true })
@@ -106,7 +108,14 @@ exports.verifyWorker = async (req, res, next) => {
     const allVerified = worker.verification.aadhaar && worker.verification.pan && worker.verification.bank && worker.verification.documents
     if (allVerified) {
       worker.isVerified = true
-      if (worker.status === 'pending_verification') worker.status = 'active'
+      // Completing the checklist must actually make the worker available —
+      // previously this only restored status from 'pending_verification',
+      // so a worker who was suspended and later re-verified stayed hidden
+      // (status still 'suspended', isAvailable/isOnline still false) even
+      // though the admin panel showed them as verified.
+      if (worker.status !== 'active') worker.status = 'active'
+      worker.isAvailable = true
+      worker.isOnline = true
     }
 
     await worker.save()
@@ -153,6 +162,20 @@ exports.getPendingVerifications = async (req, res, next) => {
   try {
     const workers = await Worker.find({ status: 'pending_verification' }).sort({ createdAt: -1 })
     sendSuccess(res, 200, 'Pending verifications fetched', { workers })
+  } catch (err) {
+    next(err)
+  }
+}
+
+exports.deleteWorker = async (req, res, next) => {
+  try {
+    const worker = await Worker.findByIdAndDelete(req.params.id)
+    if (!worker) return next(createError(404, 'Worker not found.'))
+    // Bust session + customer-facing caches so deleted worker vanishes immediately
+    await bustWorkerSessionCache(req.params.id, worker.category)
+    req.auditTarget = `Worker #${req.params.id} - ${worker.fullName}`
+    req.auditDetails = `Worker account permanently deleted`
+    sendSuccess(res, 200, 'Worker deleted successfully', {})
   } catch (err) {
     next(err)
   }

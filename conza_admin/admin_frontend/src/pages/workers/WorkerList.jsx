@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Eye, Ban, CheckCircle, HardHat, ShieldCheck, ShieldX } from 'lucide-react'
+import { Eye, Ban, CheckCircle, HardHat, ShieldCheck, ShieldX, Trash2 } from 'lucide-react'
 import useWorkerStore from '../../store/workers/useWorkerStore'
 import Table from '../../components/common/Table/Table'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
@@ -11,7 +11,7 @@ import Select from '../../components/common/Select/Select'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function WorkerList() {
-  const { workers, fetchWorkers, updateWorkerStatus, deleteCustomer, loading, error } = useWorkerStore()
+  const { workers, fetchWorkers, updateWorkerStatus, deleteWorker, loading, error } = useWorkerStore()
   const [filters, setFilters] = useState({ status: 'all', category: 'all', search: '', verification: 'all' })
   const [activeTab, setActiveTab] = useState('verified')
   const [selectedWorker, setSelectedWorker] = useState(null)
@@ -43,10 +43,10 @@ export default function WorkerList() {
     setModalOpen(true)
   }
 
-  const confirmAction = () => {
+  const confirmAction = async () => {
     if (modalAction === 'suspend') updateWorkerStatus(selectedWorker.id, 'suspended')
     if (modalAction === 'activate') updateWorkerStatus(selectedWorker.id, 'active')
-    if (modalAction === 'delete') deleteCustomer(selectedWorker.id)
+    if (modalAction === 'delete') await deleteWorker(selectedWorker.id)
     setModalOpen(false)
   }
 
@@ -85,6 +85,9 @@ export default function WorkerList() {
         ) : (
           <Button variant="ghost" size="sm" onClick={() => handleAction(row, 'activate')}><CheckCircle size={14} className="text-success" /></Button>
         )}
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleAction(row, 'delete') }}>
+          <Trash2 size={14} className="text-danger" />
+        </Button>
       </div>
     )},
   ]

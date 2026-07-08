@@ -28,7 +28,11 @@ const getNearbyWorkers = async (req, res) => {
       const safeQuery = {
         isAvailable: { $ne: false },
         status:      { $not: { $eq: 'suspended' } },
-        $or:         [{ isVerified: true }, { isVerified: { $exists: false } }],
+        // Strict verification gate — a worker only appears to customers once
+        // the admin panel has explicitly verified them. Do NOT grandfather in
+        // documents missing the field; that loophole let unverified workers
+        // through.
+        isVerified:  true,
       };
       if (category) safeQuery.category = category;
       const workers = await Worker.find(safeQuery).select(
@@ -70,7 +74,11 @@ const getNearbyWorkers = async (req, res) => {
       const query = {
         isAvailable: { $ne: false },
         status:      { $not: { $eq: 'suspended' } },
-        $or:         [{ isVerified: true }, { isVerified: { $exists: false } }],
+        // Strict verification gate — a worker only appears to customers once
+        // the admin panel has explicitly verified them. Do NOT grandfather in
+        // documents missing the field; that loophole let unverified workers
+        // through.
+        isVerified:  true,
       };
       if (category) query.category = category;
 
@@ -243,7 +251,11 @@ const searchWorkers = async (req, res) => {
         $text:       { $search: q },
         isAvailable: { $ne: false },
         status:      { $not: { $eq: 'suspended' } },
-        $or:         [{ isVerified: true }, { isVerified: { $exists: false } }],
+        // Strict verification gate — a worker only appears to customers once
+        // the admin panel has explicitly verified them. Do NOT grandfather in
+        // documents missing the field; that loophole let unverified workers
+        // through.
+        isVerified:  true,
       };
 
       if (lat && lng) {

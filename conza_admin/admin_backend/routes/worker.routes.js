@@ -15,5 +15,6 @@ router.get('/:id/earnings', c.getWorkerEarnings)
 router.get('/:id/ratings', c.getWorkerRatings)
 router.put('/:id/status', logAction('Workers', 'Worker Status Updated', 'suspension', 'high'), c.updateWorkerStatus)
 router.put('/:id/verify', logAction('Workers', 'Worker Verified', 'approval', 'medium'), c.verifyWorker)
+router.delete('/:id', logAction('Workers', 'Worker Deleted', 'deletion', 'high'), c.deleteWorker)
 
 module.exports = router

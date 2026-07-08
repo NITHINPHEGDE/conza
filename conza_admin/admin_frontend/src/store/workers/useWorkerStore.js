@@ -88,10 +88,19 @@ const useWorkerStore = create((set, get) => ({
     }
   },
 
-  deleteCustomer: (id) => {
-    set((state) => ({
-      workers: state.workers.filter((w) => w.id !== id),
-    }))
+  deleteWorker: async (id) => {
+    try {
+      const res = await workerService.delete(id)
+      if (res.success) {
+        set((state) => ({
+          workers: state.workers.filter((w) => w.id !== id),
+          selectedWorker: state.selectedWorker?.id === id ? null : state.selectedWorker,
+        }))
+      }
+    } catch (err) {
+      // surface error if needed — for now silently log
+      console.error('[deleteWorker]', err)
+    }
   },
 
   getFilteredWorkers: () => {

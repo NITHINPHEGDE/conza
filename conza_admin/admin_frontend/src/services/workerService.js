@@ -8,6 +8,7 @@ const workerService = {
   verify: (id, data) => api.put(`/workers/${id}/verify`, data),
   getEarnings: (id) => api.get(`/workers/${id}/earnings`),
   getRatings: (id) => api.get(`/workers/${id}/ratings`),
+  delete: (id) => api.delete(`/workers/${id}`),
 }
 
 export default workerService
