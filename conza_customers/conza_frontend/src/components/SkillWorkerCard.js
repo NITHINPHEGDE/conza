@@ -84,6 +84,22 @@ const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
             ₹{Number(worker.pricePerDay) || 0}/day
           </Text>
         </View>
+
+        {/* Base minimum charge + per day charge */}
+        {(worker.baseCharge || worker.perDayCharge) && (
+          <View style={styles.chargesRow}>
+            {!!worker.baseCharge && (
+              <View style={styles.chargeTag}>
+                <Text style={styles.chargeTagText}>Base ₹{worker.baseCharge}</Text>
+              </View>
+            )}
+            {!!worker.perDayCharge && (
+              <View style={styles.chargeTag}>
+                <Text style={styles.chargeTagText}>₹{worker.perDayCharge}/day (multi-day)</Text>
+              </View>
+            )}
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -220,6 +236,9 @@ const styles = StyleSheet.create({
   distanceRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   price: { fontSize: 13, fontWeight: '800', color: colors.textSecondary },
   priceSelected: { color: colors.accentAmber },
+  chargesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  chargeTag: { backgroundColor: colors.surfaceElevated, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: colors.borderLight },
+  chargeTagText: { fontSize: 10, fontWeight: '700', color: colors.textSecondary },
 });
 
 export default SkillWorkerCard;

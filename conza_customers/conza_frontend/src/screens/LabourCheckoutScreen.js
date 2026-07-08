@@ -147,6 +147,9 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const [scheduledTime, setScheduledTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [multiDay, setMultiDay] = useState(false);
+  const [toDate, setToDate] = useState(new Date());
+  const [showToDatePicker, setShowToDatePicker] = useState(false);
 
   const [savedAddressSheetVisible, setSavedAddressSheetVisible] = useState(false);
   const [selectedSavedAddress, setSelectedSavedAddress] = useState(null);
@@ -159,12 +162,30 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
 
   const { submitBooking, loading: submitting, error: submitError } = useBooking('labour');
 
+  const scheduledDates = useMemo(() => {
+    if (bookingType !== 'scheduled' || !multiDay) return [];
+    const dates = [];
+    const cur = new Date(scheduledDate);
+    cur.setHours(0, 0, 0, 0);
+    const end = new Date(toDate);
+    end.setHours(0, 0, 0, 0);
+    while (cur <= end) {
+      dates.push(new Date(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return dates;
+  }, [bookingType, multiDay, scheduledDate, toDate]);
+
+  const totalDays = bookingType === 'scheduled' && multiDay ? Math.max(scheduledDates.length, 1) : 1;
+
   const { subtotal, platformFee, total } = useMemo(() => {
-    const sub = selectedWorkers.reduce((sum, w) => sum + (Number(w.pricePerDay) || 0), 0);
+    const sub = totalDays > 1
+      ? selectedWorkers.reduce((sum, w) => sum + ((Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * totalDays), 0)
+      : selectedWorkers.reduce((sum, w) => sum + (Number(w.pricePerDay) || 0), 0);
     const fee = Math.round(sub * PLATFORM_FEE_RATE);
     const tot = sub + fee;
     return { subtotal: sub, platformFee: fee, total: tot };
-  }, [selectedWorkers]);
+  }, [selectedWorkers, totalDays]);
 
   const handleSelectPayment = useCallback((id) => setPayment(id), []);
   const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
@@ -259,6 +280,9 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       description,
       isImmediate: bookingType === 'immediate',
       scheduledDate: bookingType === 'scheduled' ? combinedScheduledDate : null,
+      scheduledEndDate: bookingType === 'scheduled' && multiDay ? toDate : null,
+      scheduledDates: bookingType === 'scheduled' && multiDay ? scheduledDates.map((d) => d.toISOString()) : [],
+      totalDays,
       latitude: lat,
       longitude: lng,
     });
@@ -269,7 +293,15 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       });
       navigation.navigate('Status');
     }
-  }, [submitBooking, selectedWorkers, category, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, lat, lng, navigation]);
+  }, [submitBooking, selectedWorkers, category, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, multiDay, toDate, scheduledDates, totalDays, lat, lng, navigation]);
+
+  const handleToDateChange = (event, date) => {
+    setShowToDatePicker(Platform.OS === 'ios');
+    if (date) {
+      setToDate(date);
+      if (Platform.OS === 'android') setShowToDatePicker(false);
+    }
+  };
 
   const handleDateChange = (event, date) => {
     setShowDatePicker(Platform.OS === 'ios');
@@ -479,16 +511,51 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
           </View>
 
           {bookingType === 'scheduled' && (
-            <View style={styles.scheduleRow}>
-              <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowDatePicker(true)}>
-                <Text style={styles.dateTimeLabel}>Date</Text>
-                <Text style={styles.dateTimeValue}>{scheduledDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</Text>
+            <>
+              <View style={styles.scheduleRow}>
+                <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowDatePicker(true)}>
+                  <Text style={styles.dateTimeLabel}>{multiDay ? 'From Date' : 'Date'}</Text>
+                  <Text style={styles.dateTimeValue}>{scheduledDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowTimePicker(true)}>
+                  <Text style={styles.dateTimeLabel}>Time</Text>
+                  <Text style={styles.dateTimeValue}>{scheduledTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.multiDayToggle}
+                onPress={() => setMultiDay((m) => !m)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.checkbox, multiDay && styles.checkboxOn]}>
+                  {multiDay && <Text style={styles.checkboxMark}>✓</Text>}
+                </View>
+                <Text style={styles.multiDayLabel}>Book for multiple days</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowTimePicker(true)}>
-                <Text style={styles.dateTimeLabel}>Time</Text>
-                <Text style={styles.dateTimeValue}>{scheduledTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</Text>
-              </TouchableOpacity>
-            </View>
+
+              {multiDay && (
+                <View style={styles.scheduleRow}>
+                  {showToDatePicker && (
+                    <DateTimePicker
+                      value={toDate}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
+                      onChange={handleToDateChange}
+                      minimumDate={scheduledDate}
+                    />
+                  )}
+                  <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowToDatePicker(true)}>
+                    <Text style={styles.dateTimeLabel}>To Date</Text>
+                    <Text style={styles.dateTimeValue}>{toDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</Text>
+                  </TouchableOpacity>
+                  <View style={styles.dateTimeBtn}>
+                    <Text style={styles.dateTimeLabel}>Total Days</Text>
+                    <Text style={styles.dateTimeValue}>{totalDays} day{totalDays > 1 ? 's' : ''}</Text>
+                  </View>
+                </View>
+              )}
+            </>
           )}
 
           <Text style={styles.inputLabel}>Job Description</Text>
@@ -522,7 +589,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         <View style={styles.billSection}>
           <View style={styles.billRow}>
             <Text style={styles.billLabel}>
-              Subtotal ({selectedWorkers.length} worker{selectedWorkers.length > 1 ? 's' : ''})
+              Subtotal ({selectedWorkers.length} worker{selectedWorkers.length > 1 ? 's' : ''}{totalDays > 1 ? ` × ${totalDays} days` : ''})
             </Text>
             <Text style={styles.billValue}>₹{subtotal.toLocaleString()}</Text>
           </View>
@@ -933,6 +1000,11 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     textAlignVertical: 'top',
   },
+  multiDayToggle: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+  checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  checkboxOn: { backgroundColor: colors.accentAmber, borderColor: colors.accentAmber },
+  checkboxMark: { color: colors.white, fontSize: 12, fontWeight: '800' },
+  multiDayLabel: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   webPickerContainer: {
     backgroundColor: colors.surfaceElevated,
     padding: 16,

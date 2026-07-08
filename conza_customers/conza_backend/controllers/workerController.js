@@ -32,7 +32,7 @@ const getNearbyWorkers = async (req, res) => {
       };
       if (category) safeQuery.category = category;
       const workers = await Worker.find(safeQuery).select(
-        'fullName username profileImage category skills minCharge locationText experience bio isOnline rating totalJobs memberSince location'
+        'fullName username profileImage category skills minCharge baseCharge perDayCharge locationText experience bio isOnline rating totalJobs memberSince location'
       ).lean();
       const mapped = workers.map((w) => ({
         id:           w._id,
@@ -43,6 +43,8 @@ const getNearbyWorkers = async (req, res) => {
         skills:       w.skills,
         pricePerDay:  w.minCharge || 0,
         minCharge:    w.minCharge,
+        baseCharge:   w.baseCharge,
+        perDayCharge: w.perDayCharge,
         rating:       w.rating,
         totalJobs:    w.totalJobs,
         distance:     w.locationText || 'Nearby',
@@ -74,7 +76,7 @@ const getNearbyWorkers = async (req, res) => {
 
       const [workers, serviceCategories] = await Promise.all([
         Worker.find(query).select(
-          'fullName username profileImage category skills minCharge locationText experience bio isOnline rating totalJobs memberSince location'
+          'fullName username profileImage category skills minCharge baseCharge perDayCharge locationText experience bio isOnline rating totalJobs memberSince location'
         ).lean(),
         ServiceCategory.find({ active: true }).select('name radius').lean(),
       ]);
@@ -113,6 +115,8 @@ const getNearbyWorkers = async (req, res) => {
             skills:       w.skills,
             pricePerDay:  w.minCharge || 0,
             minCharge:    w.minCharge,
+            baseCharge:   w.baseCharge,
+            perDayCharge: w.perDayCharge,
             rating:       w.rating,
             totalJobs:    w.totalJobs,
             distance:     `${distKm} km away`,
@@ -253,7 +257,7 @@ const searchWorkers = async (req, res) => {
 
       const workers = await Worker.find(filter)
         .limit(20)
-        .select('fullName username profileImage category skills minCharge locationText isOnline rating totalJobs memberSince location')
+        .select('fullName username profileImage category skills minCharge baseCharge perDayCharge locationText isOnline rating totalJobs memberSince location')
         .lean();
 
       const userLat = lat ? parseFloat(lat) : null;
@@ -281,6 +285,9 @@ const searchWorkers = async (req, res) => {
           category:     w.category,
           skills:       w.skills,
           pricePerDay:  w.minCharge || 0,
+          minCharge:    w.minCharge,
+          baseCharge:   w.baseCharge,
+          perDayCharge: w.perDayCharge,
           rating:       w.rating,
           totalJobs:    w.totalJobs,
           distance:     distanceKm ? `${distanceKm} km away` : '',

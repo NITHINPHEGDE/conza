@@ -23,7 +23,8 @@ export const useBooking = (type) => {
       const {
         houseNumber, houseName, street, area, city, district,
         state, pincode, paymentMethod, description,
-        isImmediate, scheduledDate, latitude, longitude,
+        isImmediate, scheduledDate, scheduledEndDate, scheduledDates, totalDays,
+        latitude, longitude,
       } = bookingData;
 
       if (!city || !pincode) {
@@ -33,7 +34,10 @@ export const useBooking = (type) => {
       // ── Labour booking → unchanged path ─────────────────────────────────
       if (type === 'labour') {
         const { selectedWorkers, category, subtotal, platformFee, total } = bookingData;
-        const sub = (selectedWorkers || []).reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0);
+        const isMultiDay = !isImmediate && totalDays && totalDays > 1;
+        const sub = isMultiDay
+          ? (selectedWorkers || []).reduce((s, w) => s + ((Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * totalDays), 0)
+          : (selectedWorkers || []).reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0);
         const fee = Math.round(sub * 0.05);
         const payload = {
           bookingType:   'labour',
@@ -57,7 +61,10 @@ export const useBooking = (type) => {
           paymentMethod:  paymentMethod || 'cod',
           description:    description   || '',
           isImmediate:    isImmediate !== undefined ? isImmediate : true,
-          scheduledDate:  scheduledDate || null,
+          scheduledDate:    scheduledDate    || null,
+          scheduledEndDate: scheduledEndDate || null,
+          scheduledDates:   scheduledDates   || [],
+          totalDays:        totalDays        || 1,
         };
         const result = await bookingAPI.createBooking(payload);
         if (result.success && result.booking?._id) {

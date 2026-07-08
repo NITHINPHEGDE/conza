@@ -71,7 +71,9 @@ export default function WorkerList() {
         {(row.skills || []).length > 2 && <span className="text-xs text-textMuted">+{row.skills.length - 2}</span>}
       </div>
     )},
-    { key: 'minCharge', title: 'Min Charge', render: (row) => `₹${row.minCharge ?? 0}` },
+    { key: 'minCharge', title: 'Hourly', render: (row) => `₹${row.minCharge ?? 0}` },
+    { key: 'baseCharge', title: 'Base', render: (row) => `₹${row.baseCharge ?? 0}` },
+    { key: 'perDayCharge', title: 'Per Day', render: (row) => `₹${row.perDayCharge ?? 0}` },
     { key: 'rating', title: 'Rating', render: (row) => `⭐ ${row.rating}` },
     { key: 'totalJobs', title: 'Jobs' },
     { key: 'status', title: 'Status', render: (row) => <StatusBadge status={row.status} /> },

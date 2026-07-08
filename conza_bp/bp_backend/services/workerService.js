@@ -113,7 +113,7 @@ const invalidateWorkerCache = async (category) => {
 const signUpWorker = async (data) => {
   const {
     fullName, username, password, phone, email,
-    category, skills, minCharge, locationText,
+    category, skills, minCharge, baseCharge, perDayCharge, locationText,
     experience, bio, profileImage,
   } = data;
 
@@ -149,6 +149,8 @@ const signUpWorker = async (data) => {
     category,
     skills:       skills || [],
     minCharge:    minCharge || null,
+    baseCharge:   baseCharge || null,
+    perDayCharge: perDayCharge || null,
     locationText: locationText || '',
     experience:   experience || null,
     bio:          bio || '',

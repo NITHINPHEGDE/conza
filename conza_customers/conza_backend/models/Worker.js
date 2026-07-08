@@ -17,6 +17,8 @@ const workerSchema = new mongoose.Schema(
     category:  { type: String, required: true, trim: true },
     skills:       { type: [String], default: [] },
     minCharge:    { type: Number, default: null },
+    baseCharge:   { type: Number, default: null },
+    perDayCharge: { type: Number, default: null },
     locationText: { type: String, default: '' },
     experience:   { type: Number, default: null },
     bio:          { type: String, default: '' },

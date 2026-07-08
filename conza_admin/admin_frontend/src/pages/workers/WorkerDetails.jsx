@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, HardHat, Phone, Mail, MapPin, Star, Calendar, CheckCircle, XCircle, Wallet, Briefcase, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, HardHat, Phone, Mail, MapPin, Star, Calendar, CheckCircle, XCircle, Wallet, Briefcase, ShieldCheck, IndianRupee } from 'lucide-react'
 import useWorkerStore from '../../store/workers/useWorkerStore'
+import workerService from '../../services/workerService'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Button from '../../components/common/Button/Button'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
@@ -9,9 +10,15 @@ import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 export default function WorkerDetails() {
   const { id } = useParams()
   const { selectedWorker: worker, fetchWorkerById, updateWorkerStatus, verifyWorker, loading, error } = useWorkerStore()
+  const [bookings, setBookings] = useState([])
+  const [bookingsLoading, setBookingsLoading] = useState(true)
 
   useEffect(() => {
     fetchWorkerById(id)
+    setBookingsLoading(true)
+    workerService.getBookings(id)
+      .then((res) => setBookings(res.bookings || res.data?.bookings || []))
+      .finally(() => setBookingsLoading(false))
   }, [id])
 
   if (loading) return <div className="text-center py-12 text-textMuted">Loading worker...</div>
@@ -76,6 +83,18 @@ export default function WorkerDetails() {
                 <Star size={18} className="text-textMuted" />
                 <div><p className="text-xs text-textMuted">Rating</p><p className="text-sm font-medium text-textPrimary">{worker.rating} ({worker.totalJobs} jobs)</p></div>
               </div>
+              <div className="flex items-center gap-3">
+                <IndianRupee size={18} className="text-textMuted" />
+                <div><p className="text-xs text-textMuted">Per Hour Min Charge</p><p className="text-sm font-medium text-textPrimary">₹{worker.minCharge ?? 'N/A'}</p></div>
+              </div>
+              <div className="flex items-center gap-3">
+                <IndianRupee size={18} className="text-textMuted" />
+                <div><p className="text-xs text-textMuted">Base Minimum Charge</p><p className="text-sm font-medium text-textPrimary">₹{worker.baseCharge ?? 'N/A'}</p></div>
+              </div>
+              <div className="flex items-center gap-3">
+                <IndianRupee size={18} className="text-textMuted" />
+                <div><p className="text-xs text-textMuted">Per Day Charge</p><p className="text-sm font-medium text-textPrimary">₹{worker.perDayCharge ?? 'N/A'}</p></div>
+              </div>
             </div>
             <div className="mt-4">
               <p className="text-xs text-textMuted mb-1">Bio</p>
@@ -89,6 +108,33 @@ export default function WorkerDetails() {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div className="bg-surface rounded-xl border border-border p-6">
+            <h3 className="text-lg font-semibold text-textPrimary mb-4">Bookings & Jobs Done</h3>
+            {bookingsLoading && <p className="text-sm text-textMuted">Loading bookings...</p>}
+            {!bookingsLoading && bookings.length === 0 && (
+              <p className="text-sm text-textMuted">No bookings for this worker yet.</p>
+            )}
+            {!bookingsLoading && bookings.length > 0 && (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {bookings.map((b) => (
+                  <Link key={b._id} to={`/bookings/${b._id}`} className="flex items-center justify-between p-3 rounded-lg bg-surfaceElevated hover:bg-border/40 transition-colors">
+                    <div>
+                      <p className="text-sm font-medium text-textPrimary">{b.category} · ₹{b.total}</p>
+                      <p className="text-xs text-textMuted">
+                        {b.isImmediate
+                          ? 'Immediate'
+                          : b.totalDays > 1 && b.scheduledEndDate
+                            ? `${new Date(b.scheduledDate).toLocaleDateString()} → ${new Date(b.scheduledEndDate).toLocaleDateString()} (${b.totalDays}d)`
+                            : b.scheduledDate ? new Date(b.scheduledDate).toLocaleDateString() : new Date(b.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <StatusBadge status={b.status} />
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="bg-surface rounded-xl border border-border p-6">

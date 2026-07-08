@@ -119,6 +119,17 @@ exports.verifyWorker = async (req, res, next) => {
   }
 }
 
+exports.getWorkerBookings = async (req, res, next) => {
+  try {
+    const worker = await Worker.findById(req.params.id)
+    if (!worker) return next(createError(404, 'Worker not found.'))
+    const bookings = await Booking.find({ workers: worker._id }).sort({ createdAt: -1 })
+    sendSuccess(res, 200, 'Worker bookings fetched', { bookings })
+  } catch (err) {
+    next(err)
+  }
+}
+
 exports.getWorkerEarnings = async (req, res, next) => {
   try {
     const worker = await Worker.findById(req.params.id).select('earnings fullName')

@@ -15,7 +15,9 @@ const workerSchema = new mongoose.Schema(
     // in workerService.signUpWorker() instead of a hardcoded enum.
     category:     { type: String, required: true, trim: true },
     skills:       { type: [String], default: [] },
-    minCharge:    { type: Number, default: null },
+    minCharge:    { type: Number, default: null },   // Per Hour Minimum Charge
+    baseCharge:   { type: Number, default: null },   // Base Minimum Charge (flat call-out fee)
+    perDayCharge: { type: Number, default: null },   // Per Day Charge (multi-day bookings)
     locationText: { type: String, default: '' },   // human-readable city/area
     experience:   { type: Number, default: null },
     bio:          { type: String, default: '' },

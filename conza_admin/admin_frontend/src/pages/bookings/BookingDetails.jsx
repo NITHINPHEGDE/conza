@@ -71,7 +71,16 @@ export default function BookingDetails() {
               </div>
               <div className="flex items-center gap-3">
                 <Clock size={18} className="text-textMuted" />
-                <div><p className="text-xs text-textMuted">Scheduled</p><p className="text-sm font-medium text-textPrimary">{booking.isImmediate ? 'Immediate' : new Date(booking.scheduledDate).toLocaleString()}</p></div>
+                <div>
+                  <p className="text-xs text-textMuted">Scheduled</p>
+                  <p className="text-sm font-medium text-textPrimary">
+                    {booking.isImmediate
+                      ? 'Immediate'
+                      : booking.totalDays > 1 && booking.scheduledEndDate
+                        ? `${new Date(booking.scheduledDate).toLocaleDateString()} → ${new Date(booking.scheduledEndDate).toLocaleDateString()} (${booking.totalDays} days)`
+                        : new Date(booking.scheduledDate).toLocaleString()}
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <FileText size={18} className="text-textMuted" />

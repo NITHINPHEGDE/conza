@@ -56,6 +56,7 @@ const createBooking = async (req, res) => {
       houseNumber, houseName, street, area, city, district, state, pincode,
       address, latitude, longitude,
       subtotal, platformFee, total, paymentMethod, scheduledDate,
+      scheduledEndDate, scheduledDates, totalDays,
       notes, description, isImmediate
     } = req.body;
 
@@ -116,8 +117,11 @@ const createBooking = async (req, res) => {
         platformFee:    platformFee     || 0,
         total,
         paymentMethod:  paymentMethod   || 'cod',
-        scheduledDate:  scheduledDate   || null,
-        isImmediate:    isImmediate !== undefined ? isImmediate : true,
+        scheduledDate:    scheduledDate    || null,
+        scheduledEndDate: scheduledEndDate || null,
+        scheduledDates:   scheduledDates   || [],
+        totalDays:        totalDays        || 1,
+        isImmediate:      isImmediate !== undefined ? isImmediate : true,
         notes:          notes           || '',
         description:    description     || '',
       });

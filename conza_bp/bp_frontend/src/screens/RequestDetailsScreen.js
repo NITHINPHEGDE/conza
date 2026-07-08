@@ -104,6 +104,9 @@ const RequestDetailsScreen = ({ navigation, route }) => {
 
         <SectionBox title="Scheduled Time">
           <InfoRow icon="🕐" label="Time" value={request.scheduledTime} />
+          {request.totalDays > 1 && (
+            <InfoRow icon="📅" label="Booked Days" value={`${request.totalDays} day(s)`} />
+          )}
           {request.scheduledTime === 'Immediate' && (
             <View style={styles.urgentBadge}>
               <Text style={styles.urgentText}>⚡ Immediate Response Needed</Text>

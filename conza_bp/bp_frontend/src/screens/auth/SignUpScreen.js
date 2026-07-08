@@ -90,7 +90,7 @@ const SignUpScreen = ({ navigation }) => {
 
   const [form, setForm] = useState({
     fullName: '', username: '', password: '', confirmPassword: '',
-    phone: '', category: '', skills: [], minCharge: '',
+    phone: '', category: '', skills: [], minCharge: '', baseCharge: '', perDayCharge: '',
     location: '', experience: '', bio: '', availability: true,
     email: '', profileImage: null,
   });
@@ -196,6 +196,12 @@ const SignUpScreen = ({ navigation }) => {
     if (form.minCharge && isNaN(Number(form.minCharge)))
       e.minCharge = 'Enter a valid number.';
 
+    if (form.baseCharge && isNaN(Number(form.baseCharge)))
+      e.baseCharge = 'Enter a valid number.';
+
+    if (form.perDayCharge && isNaN(Number(form.perDayCharge)))
+      e.perDayCharge = 'Enter a valid number.';
+
     if (form.experience && isNaN(Number(form.experience)))
       e.experience = 'Enter a valid number.';
 
@@ -221,7 +227,9 @@ const SignUpScreen = ({ navigation }) => {
         phone:       form.phone.trim(),
         category:    form.category,
         skills:      form.skills,
-        minCharge:   form.minCharge ? Number(form.minCharge) : null,
+        minCharge:    form.minCharge ? Number(form.minCharge) : null,
+        baseCharge:   form.baseCharge ? Number(form.baseCharge) : null,
+        perDayCharge: form.perDayCharge ? Number(form.perDayCharge) : null,
         locationText: form.location.trim(),
         experience:  form.experience ? Number(form.experience) : null,
         bio:         form.bio.trim(),
@@ -405,6 +413,8 @@ const SignUpScreen = ({ navigation }) => {
           </View>
 
           <Field label="Per Hour Minimum Charge (₹)" value={form.minCharge} onChangeText={set('minCharge')} placeholder="e.g. 200" keyboardType="numeric" error={errors.minCharge} optional />
+          <Field label="Base Minimum Charge (₹)" value={form.baseCharge} onChangeText={set('baseCharge')} placeholder="e.g. 150 (flat call-out fee)" keyboardType="numeric" error={errors.baseCharge} optional />
+          <Field label="Per Day Charge (₹)" value={form.perDayCharge} onChangeText={set('perDayCharge')} placeholder="e.g. 800 (for multi-day jobs)" keyboardType="numeric" error={errors.perDayCharge} optional />
           <Field label="Location / Address" value={form.location} onChangeText={set('location')} placeholder="e.g. Whitefield, Bangalore" error={errors.location} />
           <Field label="Experience (in years)" value={form.experience} onChangeText={set('experience')} placeholder="e.g. 5" keyboardType="numeric" error={errors.experience} optional />
           <Field label="Bio / Description" value={form.bio} onChangeText={set('bio')} placeholder="Tell customers about your work and expertise..." multiline numberOfLines={4} optional />

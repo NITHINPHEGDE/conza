@@ -31,6 +31,12 @@ const HistoryCard = React.memo(({ item }) => (
       <Text style={styles.metaItem}>🆔 {String(item.id || item._id || '').slice(-8).toUpperCase()}</Text>
       <Text style={styles.metaDot}>·</Text>
       <Text style={styles.metaItem}>📅 {item.date}</Text>
+      {item.totalDays > 1 && (
+        <>
+          <Text style={styles.metaDot}>·</Text>
+          <Text style={styles.metaItem}>🗓️ {item.totalDays} days</Text>
+        </>
+      )}
     </View>
 
     {!!item.address && (

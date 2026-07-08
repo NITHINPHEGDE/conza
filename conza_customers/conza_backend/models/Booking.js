@@ -44,8 +44,11 @@ const bookingSchema = new mongoose.Schema(
       default: 'pending',
     },
 
-    scheduledDate: { type: Date, default: null },
-    isImmediate:   { type: Boolean, default: true },
+    scheduledDate:    { type: Date, default: null },   // start date (or single date)
+    scheduledEndDate: { type: Date, default: null },   // end date for multi-day bookings
+    scheduledDates:   { type: [Date], default: [] },   // every individual day booked
+    totalDays:        { type: Number, default: 1 },
+    isImmediate:      { type: Boolean, default: true },
     acceptedAt:    { type: Date, default: null },
     checkInTime:   { type: Date, default: null },
     checkOutTime:  { type: Date, default: null },

@@ -118,6 +118,12 @@ const usePartnerStore = create((set, get) => ({
               dateStr = new Date(r.scheduledDate).toLocaleString('en-IN', {
                 day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
               });
+              if (r.totalDays > 1 && r.scheduledEndDate) {
+                const endStr = new Date(r.scheduledEndDate).toLocaleDateString('en-IN', {
+                  day: 'numeric', month: 'short'
+                });
+                dateStr = `${dateStr} → ${endStr} (${r.totalDays} days)`;
+              }
             } catch (e) {
               dateStr = 'Scheduled';
             }
@@ -146,9 +152,12 @@ const usePartnerStore = create((set, get) => ({
             service:         r.category  || r.service || 'Service',
             subService:      r.subService || 'General',
             description:     r.description || r.notes || 'No description provided',
-            scheduledTime:   dateStr,
-            scheduledDate:   r.scheduledDate || null,
-            isImmediate:     r.isImmediate !== false,
+            scheduledTime:    dateStr,
+            scheduledDate:    r.scheduledDate || null,
+            scheduledEndDate: r.scheduledEndDate || null,
+            scheduledDates:   r.scheduledDates || [],
+            totalDays:        r.totalDays || 1,
+            isImmediate:      r.isImmediate !== false,
           };
         });
 

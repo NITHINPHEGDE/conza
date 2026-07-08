@@ -160,9 +160,10 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
 
   const listHeader = useMemo(() => (
     <View>
-      <SectionHeader title="Choose Category" actionLabel="View All" onAction={() => {}} />
-      <View style={styles.materialSearchWrapper}>
-        <Text style={styles.searchIcon}>🔍</Text>
+      <View style={[styles.materialSearchWrapper, { marginTop: 4 }]}>
+        <View style={styles.searchIconBadge}>
+          <MaterialCommunityIcons name="magnify" size={16} color={colors.accentAmber} />
+        </View>
         <TextInput
           style={styles.materialSearchInput}
           placeholder="Search services, skills..."
@@ -277,21 +278,30 @@ const MaterialView = React.memo(() => {
 
   const listHeader = useMemo(() => (
     <View>
-      <SectionHeader title="Browse Materials" actionLabel="Filter ↓" onAction={() => {}} />
-      <View style={styles.materialSearchWrapper}>
-        <Text style={styles.searchIcon}>🔍</Text>
-        <TextInput
-          style={styles.materialSearchInput}
-          placeholder="Search materials, sellers..."
-          placeholderTextColor={colors.textMuted}
-          value={query}
-          onChangeText={setQuery}
-        />
-        {query.length > 0 && (
-          <TouchableOpacity onPress={handleClearQuery} activeOpacity={0.7}>
-            <Text style={styles.searchClear}>✕</Text>
-          </TouchableOpacity>
-        )}
+      <View style={[styles.materialSearchRow, { marginTop: 4 }]}>
+        <View style={[styles.materialSearchWrapper, { flex: 1, marginHorizontal: 0 }]}>
+          <View style={styles.searchIconBadge}>
+            <MaterialCommunityIcons name="magnify" size={16} color={colors.accentAmber} />
+          </View>
+          <TextInput
+            style={styles.materialSearchInput}
+            placeholder="Search materials, sellers..."
+            placeholderTextColor={colors.textMuted}
+            value={query}
+            onChangeText={setQuery}
+          />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={handleClearQuery} activeOpacity={0.7}>
+              <Text style={styles.searchClear}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity style={styles.filterBtn} activeOpacity={0.8}>
+          <View style={styles.filterIconBadge}>
+            <MaterialCommunityIcons name="tune-variant" size={13} color="#16A34A" />
+          </View>
+          <Text style={styles.filterBtnText}>Filter</Text>
+        </TouchableOpacity>
       </View>
     </View>
   ), [query, handleClearQuery]);
@@ -441,7 +451,9 @@ const RentalView = React.memo(() => {
     <View style={{ flex: 1 }}>
       <View style={styles.rentalTopBar}>
         <View style={styles.rentalSearchBar}>
-          <Text style={styles.searchIcon}>🔍</Text>
+          <View style={styles.searchIconBadge}>
+            <MaterialCommunityIcons name="magnify" size={16} color={colors.accentAmber} />
+          </View>
           <TextInput
             style={styles.rentalSearchInput}
             placeholder="Search equipment..."
@@ -460,7 +472,9 @@ const RentalView = React.memo(() => {
           onPress={handleOpenFilter}
           activeOpacity={0.8}
         >
-          <Text style={styles.filterBtnIcon}>⚙️</Text>
+          <View style={styles.filterIconBadge}>
+            <MaterialCommunityIcons name="tune-variant" size={13} color="#16A34A" />
+          </View>
           <Text style={[styles.filterBtnText, selectedCat !== 'all' && styles.filterBtnTextActive]}>
             {selectedCat !== 'all' ? activeCat?.label : 'Filter'}
           </Text>
@@ -598,7 +612,9 @@ const BookingScreen = () => {
 
       {/* Wallet balance chip */}
       <TouchableOpacity style={[styles.walletChip, { marginTop: 1 }]} activeOpacity={0.8}>
-        <Text style={styles.walletIcon}>👛</Text>
+        <View style={styles.walletIconBadge}>
+          <MaterialCommunityIcons name="wallet" size={12} color="#F0A500" />
+        </View>
         <Text style={styles.walletAmount}>₹{walletBalance}</Text>
       </TouchableOpacity>
 
@@ -607,7 +623,9 @@ const BookingScreen = () => {
         activeOpacity={0.8}
         onPress={() => navigation.navigate('CartTab')}
       >
-        <Text style={{ fontSize: 19 }}>🛒</Text>
+        <View style={styles.cartIconBadge}>
+          <MaterialCommunityIcons name="cart" size={18} color="#2F80ED" />
+        </View>
         {totalCartCount > 0 && (
           <View style={styles.cartBadge}>
             <Text style={styles.cartBadgeText}>{totalCartCount}</Text>
@@ -720,7 +738,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  walletIcon: { fontSize: 15, marginRight: 4 },
+
   walletAmount: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
   notifBtn: {
     width: 42,
@@ -758,15 +776,43 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.accentYellowSoft,
+    backgroundColor: colors.surface,
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
     marginBottom: 2,
-    borderWidth: 1,
-    borderColor: colors.accentYellowSoft,
+    borderWidth: 1.3,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  searchIcon: { fontSize: 15, marginRight: 10 },
+  searchIcon: { marginRight: 10 },
+  walletIconBadge: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: 'rgba(240,165,0,0.16)',
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 5,
+  },
+  cartIconBadge: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: 'rgba(47,128,237,0.14)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  searchIconBadge: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: colors.accentYellowSoft,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 8,
+  },
+  filterIconBadge: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: 'rgba(22,163,74,0.14)',
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 4,
+  },
   searchInput: { flex: 1, fontSize: 14, color: colors.textPrimary },
   searchClear: { fontSize: 14, color: colors.textMuted, fontWeight: '700', paddingLeft: 8 },
   categoryRow: { flexDirection: 'row', alignItems: 'center' },
@@ -832,17 +878,27 @@ const styles = StyleSheet.create({
   materialGridList: { paddingTop: 10, paddingBottom: 30, paddingHorizontal: 12 },
   materialGridRow: { justifyContent: 'space-between' },
   materialCardWrapper: { flex: 1, margin: 6 },
+  materialSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 8,
+    gap: 10,
+  },
   materialSearchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.accentYellowSoft,
+    backgroundColor: colors.surface,
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    marginHorizontal: 20,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.accentYellowSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderWidth: 1.3,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   materialSearchInput: { flex: 1, fontSize: 14, color: colors.textPrimary },
   materialCheckoutBar: {
@@ -892,29 +948,34 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.inputBg,
+    backgroundColor: colors.surface,
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderWidth: 1.3,
     borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   rentalSearchInput: { flex: 1, fontSize: 14, color: colors.textPrimary },
   filterBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     borderRadius: 14,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1.3,
     borderColor: colors.border,
   },
-  filterBtnActive: { backgroundColor: colors.accentYellowSoft, borderColor: colors.accentYellow },
-  filterBtnIcon: { fontSize: 14 },
+  filterBtnActive: { backgroundColor: 'rgba(22,163,74,0.08)', borderColor: '#16A34A' },
+
   filterBtnText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
-  filterBtnTextActive: { color: colors.accentAmber },
+  filterBtnTextActive: { color: '#16A34A' },
   activeCatRow: {
     flexDirection: 'row',
     alignItems: 'center',

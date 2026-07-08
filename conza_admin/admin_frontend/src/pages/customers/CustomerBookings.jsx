@@ -38,6 +38,15 @@ export default function CustomerBookings() {
     { key: 'category', title: 'Category' },
     { key: 'bookingType', title: 'Type', render: (row) => <span className="capitalize">{row.bookingType}</span> },
     { key: 'total', title: 'Total', render: (row) => `₹${row.total}` },
+    { key: 'scheduled', title: 'Scheduled', render: (row) => {
+      if (row.isImmediate) return 'Immediate'
+      if (!row.scheduledDate) return '-'
+      const start = new Date(row.scheduledDate).toLocaleDateString()
+      if (row.totalDays > 1 && row.scheduledEndDate) {
+        return `${start} → ${new Date(row.scheduledEndDate).toLocaleDateString()} (${row.totalDays}d)`
+      }
+      return start
+    }},
     { key: 'status', title: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'createdAt', title: 'Date', render: (row) => row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '-' },
   ]

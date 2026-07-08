@@ -186,8 +186,8 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
         {/* ── Bottom panel ── */}
         {hasPhoto && (
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.65)', 'rgba(0,0,0,0.9)']}
-            locations={[0, 0.4, 1]}
+            colors={['transparent', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.55)']}
+            locations={[0, 0.45, 1]}
             style={styles.bottomPanel}
             pointerEvents="none"
           />
@@ -287,8 +287,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    width: '100%',
-    height: '140%',
+    width: '112%',
+    height: '126%',
     resizeMode: 'cover',
   },
 
