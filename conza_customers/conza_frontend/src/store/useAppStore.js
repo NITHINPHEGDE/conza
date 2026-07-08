@@ -502,9 +502,22 @@ const useAppStore = create((set, get) => ({
       if (data.success) {
         set({ activeBooking: data.booking });
         socket.emit('join_booking', bookingId);
+      } else {
+        // Server returned success:false — booking is gone; clear stale ID
+        await AsyncStorage.removeItem('activeBookingId');
+        set({ activeBookingId: null, activeBooking: null });
       }
     } catch (err) {
-      console.error('Failed to fetch active booking:', err.message);
+      // 404 or network error — if it's a 404 the booking no longer exists;
+      // clear the stale ID so we stop polling on every reconnect/init.
+      const status = err?.response?.status;
+      if (status === 404 || status === 410) {
+        console.warn('[fetchActiveBooking] Booking not found — clearing stale ID:', bookingId);
+        await AsyncStorage.removeItem('activeBookingId');
+        set({ activeBookingId: null, activeBooking: null });
+      } else {
+        console.error('Failed to fetch active booking:', err.message);
+      }
     }
   },
 
