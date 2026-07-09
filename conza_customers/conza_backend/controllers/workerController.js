@@ -18,6 +18,69 @@ const getNearbyWorkers = async (req, res) => {
   try {
     const { category, lat, lng, debug } = req.query;
 
+    // ── DIAGNOSTIC MODE — bypasses Redis, tests exact geo-filter live ──────
+    // GET /api/workers/nearby?category=Plumber&lat=12.97&lng=77.49&debug=1
+    if (debug) {
+      const query = {};
+      if (category) query.category = categoryMatcher(category);
+      const workers = await Worker.find(query).lean();
+      const serviceCategories = await ServiceCategory.find({ active: true }).select('name radius').lean();
+
+      // Build both maps so we can show what the lookup would find
+      const radiusMapExact = serviceCategories.reduce((acc, sc) => { acc[sc.name] = sc.radius; return acc; }, {});
+      const radiusMapLower = serviceCategories.reduce((acc, sc) => { acc[sc.name.toLowerCase().trim()] = sc.radius; return acc; }, {});
+
+      const parsedLat = lat ? parseFloat(lat) : null;
+      const parsedLng = lng ? parseFloat(lng) : null;
+
+      const report = workers.map((w) => {
+        const reasons = [];
+        if (w.isAvailable === false)  reasons.push('isAvailable is false');
+        if (w.status === 'suspended') reasons.push('status is suspended');
+        if (w.isVerified !== true)    reasons.push(`isVerified=${w.isVerified} (needs true)`);
+
+        const [wLng, wLat] = w.location?.coordinates || [0, 0];
+        if (wLng === 0 && wLat === 0) reasons.push('location is [0,0]');
+
+        const key = (w.category || '').toLowerCase().trim();
+        const maxKmExact = radiusMapExact[w.category];
+        const maxKmLower = radiusMapLower[key];
+
+        if (maxKmLower === undefined) {
+          reasons.push(`NO ServiceCategory radius for "${w.category}" (exact lookup=${maxKmExact}, lower lookup=${maxKmLower})`);
+        } else if (maxKmLower === 0 || maxKmLower === null) {
+          reasons.push(`ServiceCategory radius is ${maxKmLower} — must be > 0`);
+        }
+
+        let distKm = null;
+        if (parsedLat !== null && parsedLng !== null && !(wLng === 0 && wLat === 0) && maxKmLower > 0) {
+          const R    = 6371;
+          const dLat = ((wLat - parsedLat) * Math.PI) / 180;
+          const dLng = ((wLng - parsedLng) * Math.PI) / 180;
+          const a    = Math.sin(dLat / 2) ** 2 + Math.cos((parsedLat * Math.PI) / 180) * Math.cos((wLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+          distKm     = parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(3));
+          if (distKm > maxKmLower) reasons.push(`TOO FAR: ${distKm}km > radius ${maxKmLower}km`);
+        }
+
+        return {
+          name: w.fullName,
+          category: w.category,
+          isAvailable: w.isAvailable, isVerified: w.isVerified, status: w.status,
+          location: w.location?.coordinates,
+          serviceRadius_km: maxKmLower,
+          distanceFromCustomer_km: distKm,
+          wouldShow: reasons.length === 0,
+          reasons,
+        };
+      });
+
+      return res.json({
+        success: true, debug: true,
+        customer: { lat: parsedLat, lng: parsedLng },
+        serviceCategories: serviceCategories.map((sc) => ({ name: sc.name, radius_km: sc.radius })),
+        workerCount: workers.length, report,
+      });
+    }
 
     // The category's admin-configured "Service Radius (km)" is the source of
     // truth for how far a worker can be to count as "nearby" for that category.
