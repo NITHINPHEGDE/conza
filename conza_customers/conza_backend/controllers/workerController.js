@@ -135,92 +135,82 @@ const getNearbyWorkers = async (req, res) => {
       return res.json({ success: true, count: mapped.length, workers: mapped });
     }
 
-    const rLat = round3(lat);
-    const rLng = round3(lng);
-    const cat  = category || 'all';
-    const cacheKey = `workers:nearby:${cat}:${rLat}:${rLng}:${radius}`;
-    const TTL      = 8;
+    // Query MongoDB directly — no Redis cache. Worker lists must always be
+    // fresh (a stale cached [] is what caused the "no workers" bug). Real-time
+    // socket events (worker_availability_changed) already keep the frontend
+    // state up to date, so caching here provides no benefit.
+    const query = {
+      isAvailable: { $ne: false },
+      status:      { $not: { $eq: 'suspended' } },
+      // Strict verification gate — a worker only appears to customers once
+      // the admin panel has explicitly verified them. Do NOT grandfather in
+      // documents missing the field; that loophole let unverified workers
+      // through.
+      isVerified:  true,
+    };
+    if (category) query.category = categoryMatcher(category);
 
-    const workersWithDistance = await withCache(cacheKey, TTL, async () => {
-      const query = {
-        isAvailable: { $ne: false },
-        status:      { $not: { $eq: 'suspended' } },
-        // Strict verification gate — a worker only appears to customers once
-        // the admin panel has explicitly verified them. Do NOT grandfather in
-        // documents missing the field; that loophole let unverified workers
-        // through.
-        isVerified:  true,
-      };
-      if (category) query.category = categoryMatcher(category);
+    const [workers, serviceCategories] = await Promise.all([
+      Worker.find(query).select(
+        'fullName username profileImage category skills minCharge baseCharge perDayCharge locationText experience bio isOnline rating totalJobs memberSince location'
+      ).lean(),
+      ServiceCategory.find({ active: true }).select('name radius').lean(),
+    ]);
 
-      const [workers, serviceCategories] = await Promise.all([
-        Worker.find(query).select(
-          'fullName username profileImage category skills minCharge baseCharge perDayCharge locationText experience bio isOnline rating totalJobs memberSince location'
-        ).lean(),
-        ServiceCategory.find({ active: true }).select('name radius').lean(),
-      ]);
+    // Build a case-insensitive map so that a worker whose stored category
+    // is "plumber" still matches a ServiceCategory named "Plumber" (or any
+    // other casing combination).
+    const categoryRadiusKm = serviceCategories.reduce((acc, sc) => {
+      acc[sc.name.toLowerCase().trim()] = sc.radius;
+      return acc;
+    }, {});
 
-      // Build a case-insensitive map so that a worker whose stored category
-      // is "plumber" still matches a ServiceCategory named "Plumber" (or any
-      // other casing combination). Without this the radius lookup returns
-      // undefined → worker is silently filtered out.
-      const categoryRadiusKm = serviceCategories.reduce((acc, sc) => {
-        acc[sc.name.toLowerCase().trim()] = sc.radius;
-        return acc;
-      }, {});
+    const userLat = parseFloat(lat);
+    const userLng = parseFloat(lng);
 
-      const userLat = parseFloat(lat);
-      const userLng = parseFloat(lng);
+    const workersWithDistance = workers
+      .map((w) => {
+        const [wLng, wLat] = w.location?.coordinates || [0, 0];
+        if (wLng === 0 && wLat === 0) return null;
+        const maxKm = categoryRadiusKm[w.category?.toLowerCase?.()?.trim?.() ?? ''];
+        if (maxKm === undefined) return null;
+        const R      = 6371;
+        const dLat   = ((wLat - userLat) * Math.PI) / 180;
+        const dLng   = ((wLng - userLng) * Math.PI) / 180;
+        const a      =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos((userLat * Math.PI) / 180) *
+            Math.cos((wLat * Math.PI) / 180) *
+            Math.sin(dLng / 2) ** 2;
+        const distKm = parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1));
+        if (distKm > maxKm) return null;
+        return {
+          id:           w._id,
+          _id:          w._id,
+          name:         w.fullName,
+          initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+          category:     w.category,
+          skills:       w.skills,
+          pricePerDay:  w.minCharge || 0,
+          minCharge:    w.minCharge,
+          baseCharge:   w.baseCharge,
+          perDayCharge: w.perDayCharge,
+          rating:       w.rating,
+          totalJobs:    w.totalJobs,
+          distance:     `${distKm} km away`,
+          distanceKm:   distKm,
+          available:    true,
+          isOnline:     true,
+          bio:          w.bio,
+          experience:   w.experience,
+          locationText: w.locationText,
+          memberSince:  w.memberSince,
+          profileImage: w.profileImage,
+        };
+      })
+      .filter(Boolean);
 
-      const mapped = workers
-        .map((w) => {
-          const [wLng, wLat] = w.location?.coordinates || [0, 0];
-          if (wLng === 0 && wLat === 0) return null;
-          // Visibility radius is the admin-configured value for this worker's
-          // category. If the category has no active ServiceCategory entry,
-          // the worker is not shown (misconfiguration on the admin side).
-          const maxKm = categoryRadiusKm[w.category?.toLowerCase?.()?.trim?.() ?? ''];
-          if (maxKm === undefined) return null;
-          const R      = 6371;
-          const dLat   = ((wLat - userLat) * Math.PI) / 180;
-          const dLng   = ((wLng - userLng) * Math.PI) / 180;
-          const a      =
-            Math.sin(dLat / 2) ** 2 +
-            Math.cos((userLat * Math.PI) / 180) *
-              Math.cos((wLat * Math.PI) / 180) *
-              Math.sin(dLng / 2) ** 2;
-          const distKm = parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1));
-          if (distKm > maxKm) return null;
-          return {
-            id:           w._id,
-            _id:          w._id,
-            name:         w.fullName,
-            initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
-            category:     w.category,
-            skills:       w.skills,
-            pricePerDay:  w.minCharge || 0,
-            minCharge:    w.minCharge,
-            baseCharge:   w.baseCharge,
-            perDayCharge: w.perDayCharge,
-            rating:       w.rating,
-            totalJobs:    w.totalJobs,
-            distance:     `${distKm} km away`,
-            distanceKm:   distKm,
-            available:    true,
-            isOnline:     true,
-            bio:          w.bio,
-            experience:   w.experience,
-            locationText: w.locationText,
-            memberSince:  w.memberSince,
-            profileImage: w.profileImage,
-          };
-        })
-        .filter(Boolean);
-
-      mapped.sort((a, b) => a.distanceKm - b.distanceKm);
-      return mapped;
-    });
-
+    workersWithDistance.sort((a, b) => a.distanceKm - b.distanceKm);
     res.json({ success: true, count: workersWithDistance.length, workers: workersWithDistance });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
