@@ -140,8 +140,12 @@ const getNearbyWorkers = async (req, res) => {
         ).lean(),
         ServiceCategory.find({ active: true }).select('name radius').lean(),
       ]);
+      // Build a case-insensitive map so that a worker whose stored category
+      // is "plumber" still matches a ServiceCategory named "Plumber" (or any
+      // other casing combination). Without this the radius lookup returns
+      // undefined → worker is silently filtered out.
       const categoryRadiusKm = serviceCategories.reduce((acc, sc) => {
-        acc[sc.name] = sc.radius;
+        acc[sc.name.toLowerCase().trim()] = sc.radius;
         return acc;
       }, {});
 
@@ -154,7 +158,7 @@ const getNearbyWorkers = async (req, res) => {
           if (wLng === 0 && wLat === 0) return null;
           // Visibility radius is the admin-configured value for this
           // worker's category, not an arbitrary client-supplied radius.
-          const maxKm = categoryRadiusKm[w.category];
+          const maxKm = categoryRadiusKm[w.category?.toLowerCase?.()?.trim?.() ?? ''];
           if (maxKm === undefined) return null;
           const R      = 6371;
           const dLat   = ((wLat - userLat) * Math.PI) / 180;
@@ -226,15 +230,16 @@ const getCategories = async (req, res) => {
           }).select('category rating location').lean(),
         ]);
 
+        // Case-insensitive map — see comment in getNearbyWorkers above.
         const categoryRadiusKm = serviceCategories.reduce((acc, sc) => {
-          acc[sc.name] = sc.radius;
+          acc[sc.name.toLowerCase().trim()] = sc.radius;
           return acc;
         }, {});
 
         const withinRadius = workers.filter((w) => {
           const [wLng, wLat] = w.location.coordinates;
           if (wLng === 0 && wLat === 0) return false;
-          const maxKm = categoryRadiusKm[w.category];
+          const maxKm = categoryRadiusKm[w.category?.toLowerCase?.()?.trim?.() ?? ''];
           if (maxKm === undefined) return false;
           const R    = 6371;
           const dLat = ((wLat - parsedLat) * Math.PI) / 180;
@@ -249,7 +254,7 @@ const getCategories = async (req, res) => {
         });
 
         return serviceCategories.map((sc) => {
-          const matching = withinRadius.filter((w) => w.category === sc.name);
+          const matching = withinRadius.filter((w) => w.category?.toLowerCase?.()?.trim?.() === sc.name.toLowerCase().trim());
           const avgRating = matching.length
             ? matching.reduce((s, w) => s + w.rating, 0) / matching.length
             : 0;
