@@ -4,12 +4,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
+const VERIFIED_BLUE = '#2E6BE8';
+const VERIFIED_BLUE_SOFT = 'rgba(46,107,232,0.08)';
+
 const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
   const handleToggle = useCallback(() => {
     onToggle(worker);
   }, [onToggle, worker]);
 
-  const gradientColors = useMemo(() => 
+  const gradientColors = useMemo(() =>
     isSelected ? [colors.gradientStart, colors.gradientEnd] : ['#D0CDFF', '#A89CFF'],
     [isSelected]
   );
@@ -24,99 +27,101 @@ const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
     isSelected && styles.checkboxSelected
   ], [isSelected]);
 
-  const priceStyle = useMemo(() => [
-    styles.price,
-    isSelected && styles.priceSelected
-  ], [isSelected]);
+  // Build the pricing segments once — only include the ones the worker
+  // actually has, so the footer never shows empty/duplicate slots.
+  const priceSegments = useMemo(() => {
+    const segs = [{ label: 'Per Day', value: Number(worker.pricePerDay) || 0 }];
+    if (worker.baseCharge) segs.push({ label: 'Base', value: Number(worker.baseCharge) });
+    if (worker.perDayCharge) segs.push({ label: 'Multi-day', value: Number(worker.perDayCharge), suffix: '/day' });
+    return segs;
+  }, [worker.pricePerDay, worker.baseCharge, worker.perDayCharge]);
 
   return (
     <TouchableOpacity
       style={cardStyle}
       onPress={handleToggle}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
     >
-      {/* Checkbox */}
-      <View style={checkboxStyle}>
-        {isSelected && <Text style={styles.checkmark}>✓</Text>}
-      </View>
+      {/* Top row: avatar, name, rating, checkbox */}
+      <View style={styles.topRow}>
+        <LinearGradient
+          colors={gradientColors}
+          style={styles.avatar}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Text style={styles.avatarText}>{worker.initials}</Text>
+        </LinearGradient>
 
-      {/* Avatar */}
-      <LinearGradient
-        colors={gradientColors}
-        style={styles.avatar}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <Text style={styles.avatarText}>{worker.initials}</Text>
-      </LinearGradient>
-
-      {/* Info */}
-      <View style={styles.info}>
-        <View style={styles.nameRow}>
-          <Text style={styles.name}>{worker.name}</Text>
-          <View style={styles.ratingChip}>
-            <Text style={styles.ratingStar}>⭐</Text>
-            <Text style={styles.ratingValue}>{worker.rating}</Text>
+        <View style={styles.identity}>
+          <Text style={styles.name} numberOfLines={1}>{worker.name}</Text>
+          <View style={styles.subRow}>
+            <View style={styles.ratingChip}>
+              <Text style={styles.ratingStar}>⭐</Text>
+              <Text style={styles.ratingValue}>{worker.rating}</Text>
+            </View>
+            <View style={styles.distanceRow}>
+              <MaterialCommunityIcons name="map-marker" size={12} color={colors.textMuted} />
+              <Text style={styles.distance}>{worker.distance}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Category tag */}
-        <View style={styles.categoryTag}>
-          <Text style={styles.categoryTagText}>{worker.category}</Text>
+        <View style={checkboxStyle}>
+          {isSelected && <Text style={styles.checkmark}>✓</Text>}
         </View>
+      </View>
 
-        {/* Matching skills - Replaced FlatList with map for nesting stability */}
+      {/* Verified badge */}
+      {worker.isVerified && (
+        <View style={styles.verifiedBadge}>
+          <MaterialCommunityIcons name="shield-check" size={13} color={VERIFIED_BLUE} />
+          <Text style={styles.verifiedText}>Labour Card Certified</Text>
+        </View>
+      )}
+
+      {/* Category */}
+      <View style={styles.categoryTag}>
+        <Text style={styles.categoryTagText}>{worker.category}</Text>
+      </View>
+
+      {/* Skills */}
+      {(worker.skills || []).length > 0 && (
         <View style={styles.skillsRow}>
-          {(worker.skills || []).map((skill) => (
+          {worker.skills.map((skill) => (
             <View key={skill} style={styles.skillTag}>
               <Text style={styles.skillText}>{skill}</Text>
             </View>
           ))}
         </View>
+      )}
 
-        {/* Distance + Price */}
-        <View style={styles.metaRow}>
-          <View style={styles.distanceRow}>
-            <MaterialCommunityIcons name="map-marker" size={12} color={colors.textMuted} />
-            <Text style={styles.distance}>{worker.distance}</Text>
-          </View>
-          <Text style={priceStyle}>
-            ₹{Number(worker.pricePerDay) || 0}/day
-          </Text>
-        </View>
-
-        {/* Base minimum charge + per day charge */}
-        {(worker.baseCharge || worker.perDayCharge) && (
-          <View style={styles.chargesRow}>
-            {!!worker.baseCharge && (
-              <View style={styles.chargeTag}>
-                <Text style={styles.chargeTagText}>Base ₹{worker.baseCharge}</Text>
-              </View>
-            )}
-            {!!worker.perDayCharge && (
-              <View style={styles.chargeTag}>
-                <Text style={styles.chargeTagText}>₹{worker.perDayCharge}/day (multi-day)</Text>
-              </View>
-            )}
-          </View>
-        )}
+      {/* Pricing footer — a single clean row, no overlapping tags */}
+      <View style={styles.priceFooter}>
+        {priceSegments.map((seg, idx) => (
+          <React.Fragment key={seg.label}>
+            {idx > 0 && <View style={styles.priceDivider} />}
+            <View style={styles.priceSegment}>
+              <Text style={styles.priceLabel}>{seg.label.toUpperCase()}</Text>
+              <Text style={[styles.priceValue, idx === 0 && isSelected && styles.priceValuePrimarySelected]}>
+                ₹{seg.value}{seg.suffix || (idx === 0 ? '/day' : '')}
+              </Text>
+            </View>
+          </React.Fragment>
+        ))}
       </View>
     </TouchableOpacity>
   );
 });
 
-
 const styles = StyleSheet.create({
   card: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1.5,
     borderColor: colors.border,
-    gap: 12,
     shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -131,6 +136,37 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
   },
+
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  avatarText: { fontSize: 15, fontWeight: '800', color: colors.white, letterSpacing: 0.5 },
+
+  identity: { flex: 1, minWidth: 0 },
+  name: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ratingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  ratingStar: { fontSize: 10 },
+  ratingValue: { fontSize: 11, fontWeight: '700', color: colors.textPrimary },
+  distanceRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  distance: { fontSize: 11, color: colors.textMuted, fontWeight: '500' },
+
   checkbox: {
     width: 22,
     height: 22,
@@ -140,59 +176,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
     flexShrink: 0,
   },
-  checkboxSelected: {
-    backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
-  },
-  checkmark: {
-    fontSize: 13,
-    color: colors.white,
-    fontWeight: '800',
-    lineHeight: 16,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  avatarText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.white,
-    letterSpacing: 0.5,
-  },
-  info: { flex: 1 },
-  nameRow: {
+  checkboxSelected: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
+  checkmark: { fontSize: 13, color: colors.white, fontWeight: '800', lineHeight: 16 },
+
+  verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  name: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  ratingChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    alignSelf: 'flex-start',
+    gap: 5,
+    backgroundColor: VERIFIED_BLUE_SOFT,
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: 'rgba(46,107,232,0.2)',
   },
-  ratingStar: { fontSize: 11 },
-  ratingValue: { fontSize: 12, fontWeight: '700', color: colors.textPrimary },
+  verifiedText: { fontSize: 10.5, fontWeight: '700', color: VERIFIED_BLUE, letterSpacing: 0.2 },
+
   categoryTag: {
     alignSelf: 'flex-start',
     backgroundColor: colors.accentYellowSoft,
@@ -203,17 +206,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(245,200,66,0.3)',
   },
-  categoryTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.accentAmber,
-  },
-  skillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 5,
-    marginBottom: 8,
-  },
+  categoryTagText: { fontSize: 11, fontWeight: '700', color: colors.accentAmber },
+
+  skillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 12 },
   skillTag: {
     backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 8,
@@ -222,23 +217,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
-  skillText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  metaRow: {
+  skillText: { fontSize: 10, fontWeight: '600', color: colors.textSecondary },
+
+  // ── Pricing footer — replaces the old overlapping price + charge tags ──
+  priceFooter: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    paddingVertical: 9,
+    paddingHorizontal: 4,
   },
-  distance: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
-  distanceRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  price: { fontSize: 13, fontWeight: '800', color: colors.textSecondary },
-  priceSelected: { color: colors.accentAmber },
-  chargesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-  chargeTag: { backgroundColor: colors.surfaceElevated, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: colors.borderLight },
-  chargeTagText: { fontSize: 10, fontWeight: '700', color: colors.textSecondary },
+  priceSegment: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  priceDivider: { width: 1, backgroundColor: colors.borderLight, marginVertical: 2 },
+  priceLabel: { fontSize: 9, fontWeight: '700', color: colors.textMuted, letterSpacing: 0.4, marginBottom: 2 },
+  priceValue: { fontSize: 13, fontWeight: '800', color: colors.textSecondary },
+  priceValuePrimarySelected: { color: colors.accentAmber },
 });
 
 export default SkillWorkerCard;

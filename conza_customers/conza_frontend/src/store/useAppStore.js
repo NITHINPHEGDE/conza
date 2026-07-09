@@ -24,49 +24,97 @@ const useAppStore = create((set, get) => ({
   // ── App init ────────────────────────────────────────────────────────────────
   initialized: false,
 
+  // Location is mandatory for the customer app. App.js reads this to block
+  // every screen behind LocationRequiredScreen until it's 'granted'.
+  // 'unknown' | 'checking' | 'granted' | 'denied' | 'services_off'
+  locationStatus: 'unknown',
+
+  checkLocationPermission: async () => {
+    set({ locationStatus: 'checking' });
+    try {
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        set({ locationStatus: 'services_off' });
+        return false;
+      }
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        set({ locationStatus: 'denied' });
+        return false;
+      }
+      set({ locationStatus: 'granted' });
+      await get().fetchAndSetDeviceLocation();
+      return true;
+    } catch (e) {
+      set({ locationStatus: 'denied' });
+      return false;
+    }
+  },
+
+  requestLocationPermission: async () => {
+    try {
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        set({ locationStatus: 'services_off' });
+        return false;
+      }
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        set({ locationStatus: 'denied' });
+        return false;
+      }
+      set({ locationStatus: 'granted' });
+      await get().fetchAndSetDeviceLocation();
+      return true;
+    } catch (e) {
+      set({ locationStatus: 'denied' });
+      return false;
+    }
+  },
+
+  fetchAndSetDeviceLocation: async () => {
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+
+      let locationText = '';
+      try {
+        const [place] = await Location.reverseGeocodeAsync({
+          latitude: pos.coords.latitude, longitude: pos.coords.longitude,
+        });
+        locationText = [place.city, place.region].filter(Boolean).join(', ');
+      } catch {
+        const data = await authAPI.reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+        locationText = data.locationText;
+      }
+
+      get().setUserLocation({
+        latitude:  pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        locationText,
+      });
+      await get().fetchLabourData();
+    } catch (e) {
+      console.warn('Could not fetch device location:', e.message);
+    }
+  },
+
   initApp: async () => {
     // 1. Connect Socket
     connectSocket();
     get().initSocketHandlers();
 
-    // 2. Fetch data that doesn't strictly depend on location first
+    // 2. Location gate FIRST — everything else can load in the background,
+    // but App.js will show LocationRequiredScreen and block all real
+    // screens until this resolves to 'granted'.
+    await get().checkLocationPermission();
+
+    // 3. Fetch data that doesn't strictly depend on location
     await Promise.all([
       get().fetchMaterials(),
       get().fetchRentalData(),
       get().fetchUserProfile(),
       get().fetchWalletBalance(),
     ]);
-
-    // 2. If no location from profile, try to get from device
-    const profile = get().userProfile;
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-
-        let locationText = '';
-        try {
-          const [place] = await Location.reverseGeocodeAsync({
-            latitude: pos.coords.latitude, longitude: pos.coords.longitude,
-          });
-          locationText = [place.city, place.region].filter(Boolean).join(', ');
-        } catch {
-          const data = await authAPI.reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-          locationText = data.locationText;
-        }
-
-        get().setUserLocation({
-          latitude:  pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          locationText,
-        });
-      }
-    } catch (e) {
-      console.warn("Could not auto-fetch location:", e.message);
-    }
-
-    // 3. Finally fetch labour data (which needs lat/lng)
-    await get().fetchLabourData();
 
     // Guarantee join_customer after both socket and profile are ready
     const userId = get().userProfile?._id;
@@ -631,6 +679,11 @@ const useAppStore = create((set, get) => ({
       const { workerId, isOnline, isAvailable, category, worker } = data;
       if (!category) return;
 
+      // In-place merge only — this event already carries the full worker
+      // payload, so there is no need to hit the API again. Previously this
+      // also called fetchLabourData() on every event, which flipped
+      // labourLoading true/false and made the whole app appear to
+      // "refresh" any time a nearby worker's status changed.
       set((state) => {
         const current = state.workersByCategory[category] || EMPTY_ARRAY;
 
@@ -667,8 +720,6 @@ const useAppStore = create((set, get) => ({
           };
         }
       });
-
-      get().fetchLabourData();
     });
 
     socket.on('worker_went_offline', ({ workerId, category }) => {
@@ -686,8 +737,41 @@ const useAppStore = create((set, get) => ({
       });
     });
 
-    socket.on('worker_updated', () => {
-      get().fetchLabourData();
+    socket.on('worker_updated', ({ workerId, fullDocument }) => {
+      if (!workerId || !fullDocument) return;
+      // Patch the worker in place wherever they currently appear instead of
+      // refetching every category from the API. If they aren't loaded in
+      // any category yet there's nothing to patch, and no one is looking
+      // at them right now, so there's no need to eagerly fetch.
+      set((state) => {
+        const category = fullDocument.category;
+        if (!category || !state.workersByCategory[category]) return {};
+        const current = state.workersByCategory[category];
+        const exists = current.some(
+          (w) => w._id?.toString() === workerId || w.id?.toString() === workerId
+        );
+        if (!exists) return {};
+        return {
+          workersByCategory: {
+            ...state.workersByCategory,
+            [category]: current.map((w) =>
+              w._id?.toString() === workerId || w.id?.toString() === workerId
+                ? {
+                    ...w,
+                    name: fullDocument.fullName ?? w.name,
+                    skills: fullDocument.skills ?? w.skills,
+                    pricePerDay: fullDocument.minCharge ?? w.pricePerDay,
+                    minCharge: fullDocument.minCharge ?? w.minCharge,
+                    baseCharge: fullDocument.baseCharge ?? w.baseCharge,
+                    perDayCharge: fullDocument.perDayCharge ?? w.perDayCharge,
+                    rating: fullDocument.rating ?? w.rating,
+                    isVerified: fullDocument.isVerified ?? w.isVerified,
+                  }
+                : w
+            ),
+          },
+        };
+      });
     });
 
     socket.on('booking_updated', (data) => {

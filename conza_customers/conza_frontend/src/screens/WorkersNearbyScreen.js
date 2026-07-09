@@ -18,35 +18,41 @@ import { colors } from '../theme/colors';
 import { socket } from '../utils/socket';
 
 // ─── Worker Card ──────────────────────────────────────────────────────────────
+const VERIFIED_BLUE = '#2E6BE8';
+const VERIFIED_BLUE_SOFT = 'rgba(46,107,232,0.08)';
+
 const WorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
   const handleToggle = useCallback(() => onToggle(worker), [onToggle, worker]);
 
-  const gradientColors = useMemo(() => 
+  const gradientColors = useMemo(() =>
     isSelected ? [colors.gradientStart, colors.gradientEnd] : ['#D0CDFF', '#A89CFF'],
     [isSelected]
   );
 
   const cardStyle = useMemo(() => [
-    styles.card, 
+    styles.card,
     isSelected && styles.cardSelected
   ], [isSelected]);
 
   const checkboxStyle = useMemo(() => [
-    styles.checkbox, 
+    styles.checkbox,
     isSelected && styles.checkboxSelected
   ], [isSelected]);
 
-  const priceStyle = useMemo(() => [
-    styles.price, 
-    isSelected && styles.priceSelected
-  ], [isSelected]);
+  const priceSegments = useMemo(() => {
+    const segs = [{ label: 'Per Day', value: Number(worker.pricePerDay) || 0, suffix: '/day' }];
+    if (worker.baseCharge) segs.push({ label: 'Base', value: Number(worker.baseCharge), suffix: '' });
+    if (worker.perDayCharge) segs.push({ label: 'Multi-day', value: Number(worker.perDayCharge), suffix: '/day' });
+    return segs;
+  }, [worker.pricePerDay, worker.baseCharge, worker.perDayCharge]);
 
   return (
     <TouchableOpacity
       style={cardStyle}
       onPress={handleToggle}
-      activeOpacity={0.82}
+      activeOpacity={0.85}
     >
+      {/* Top row: avatar, name, rating, distance, checkbox */}
       <View style={styles.cardTop}>
         <LinearGradient
           colors={gradientColors}
@@ -58,18 +64,15 @@ const WorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
         </LinearGradient>
 
         <View style={styles.nameBlock}>
-          <Text style={styles.name}>{worker.name}</Text>
+          <Text style={styles.name} numberOfLines={1}>{worker.name}</Text>
           <View style={styles.metaRow}>
-            <Text style={styles.metaText}>⭐ {worker.rating}</Text>
-            <View style={styles.metaDot} />
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-              <MaterialCommunityIcons name="map-marker" size={12} color={colors.textMuted} />
-              <Text style={styles.metaText}>{worker.distance}</Text>
+            <View style={styles.ratingChip}>
+              <Text style={styles.ratingStar}>⭐</Text>
+              <Text style={styles.ratingValue}>{worker.rating}</Text>
             </View>
-          </View>
-          <View style={styles.badgeRow}>
-            <View style={styles.cardBadge}>
-              <Text style={styles.cardBadgeText}>🆔 Labour Card Certified</Text>
+            <View style={styles.distanceChip}>
+              <MaterialCommunityIcons name="map-marker" size={11} color={colors.textMuted} />
+              <Text style={styles.metaText}>{worker.distance}</Text>
             </View>
           </View>
         </View>
@@ -79,33 +82,40 @@ const WorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
         </View>
       </View>
 
-      <View style={styles.cardDivider} />
+      {/* Verified badge — its own row, never collides with anything */}
+      {worker.isVerified !== false && (
+        <View style={styles.verifiedBadge}>
+          <MaterialCommunityIcons name="shield-check" size={13} color={VERIFIED_BLUE} />
+          <Text style={styles.verifiedText}>Labour Card Certified</Text>
+        </View>
+      )}
 
-      <View style={styles.cardBottom}>
+      {/* Skills */}
+      {(worker.skills || []).length > 0 && (
         <View style={styles.skillsRow}>
-          {(worker.skills || []).map((skill) => (
+          {worker.skills.map((skill) => (
             <View key={skill} style={styles.skillTag}>
               <Text style={styles.skillText}>{skill}</Text>
             </View>
           ))}
         </View>
-        <Text style={priceStyle}>
-          ₹{Number(worker.pricePerDay) || 0}/day
-        </Text>
-        {(worker.baseCharge || worker.perDayCharge) && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-            {!!worker.baseCharge && (
-              <View style={styles.chargeTag}>
-                <Text style={styles.chargeTagText}>Base ₹{worker.baseCharge}</Text>
-              </View>
-            )}
-            {!!worker.perDayCharge && (
-              <View style={styles.chargeTag}>
-                <Text style={styles.chargeTagText}>₹{worker.perDayCharge}/day (multi-day)</Text>
-              </View>
-            )}
-          </View>
-        )}
+      )}
+
+      <View style={styles.cardDivider} />
+
+      {/* Pricing footer — one clean bar, segments only for charges that exist */}
+      <View style={styles.priceFooter}>
+        {priceSegments.map((seg, idx) => (
+          <React.Fragment key={seg.label}>
+            {idx > 0 && <View style={styles.priceDivider} />}
+            <View style={styles.priceSegment}>
+              <Text style={styles.priceLabel}>{seg.label.toUpperCase()}</Text>
+              <Text style={[styles.priceValue, idx === 0 && isSelected && styles.priceValueSelected]}>
+                ₹{seg.value}{seg.suffix}
+              </Text>
+            </View>
+          </React.Fragment>
+        ))}
       </View>
     </TouchableOpacity>
   );
@@ -485,6 +495,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginBottom: 12,
   },
   avatar: {
     width: 52,
@@ -495,17 +506,30 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   avatarText: { fontSize: 16, fontWeight: '800', color: colors.white, letterSpacing: 0.5 },
-  nameBlock: { flex: 1 },
+  nameBlock: { flex: 1, minWidth: 0 },
   name: {
     fontSize: 16,
     fontWeight: '800',
     color: colors.textPrimary,
-    marginBottom: 5,
+    marginBottom: 6,
     letterSpacing: 0.1,
   },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ratingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  ratingStar: { fontSize: 10 },
+  ratingValue: { fontSize: 11, fontWeight: '700', color: colors.textPrimary },
+  distanceChip: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   metaText: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
-  metaDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.textMuted },
   checkbox: {
     width: 24,
     height: 24,
@@ -523,25 +547,28 @@ const styles = StyleSheet.create({
   },
   checkmark: { fontSize: 13, color: colors.white, fontWeight: '800', lineHeight: 16 },
 
-  // Divider
-  cardDivider: {
-    height: 1,
-    backgroundColor: colors.borderLight,
-    marginVertical: 12,
-  },
-
-  // Bottom row
-  cardBottom: {
+  // Verified badge
+  verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
+    alignSelf: 'flex-start',
+    gap: 5,
+    backgroundColor: VERIFIED_BLUE_SOFT,
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(46,107,232,0.2)',
   },
+  verifiedText: { fontSize: 10.5, fontWeight: '700', color: VERIFIED_BLUE, letterSpacing: 0.2 },
+
+  // Skills
   skillsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    flex: 1,
+    marginBottom: 12,
   },
   skillTag: {
     backgroundColor: colors.surfaceElevated,
@@ -552,15 +579,30 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
   },
   skillText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
-  chargeTag: { backgroundColor: colors.surfaceElevated, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: colors.borderLight },
-  chargeTagText: { fontSize: 10, fontWeight: '700', color: colors.textSecondary },
-  price: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textSecondary,
-    flexShrink: 0,
+
+  // Divider
+  cardDivider: {
+    height: 1,
+    backgroundColor: colors.borderLight,
+    marginBottom: 12,
   },
-  priceSelected: { color: colors.accentAmber },
+
+  // Pricing footer
+  priceFooter: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  priceSegment: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  priceDivider: { width: 1, backgroundColor: colors.borderLight, marginVertical: 2 },
+  priceLabel: { fontSize: 9, fontWeight: '700', color: colors.textMuted, letterSpacing: 0.4, marginBottom: 3 },
+  priceValue: { fontSize: 14, fontWeight: '800', color: colors.textSecondary },
+  priceValueSelected: { color: colors.accentAmber },
 
   // Empty
   emptyState: { alignItems: 'center', paddingTop: 60 },
@@ -703,17 +745,6 @@ const styles = StyleSheet.create({
   },
   autoBookBtnText: { color: colors.textPrimary, fontSize: 12, fontWeight: '800' },
 
-  // Worker Badge
-  badgeRow: { flexDirection: 'row', marginTop: 8 },
-  cardBadge: {
-    backgroundColor: '#F0F9FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-  },
-  cardBadgeText: { fontSize: 10, fontWeight: '700', color: '#0369A1', textTransform: 'uppercase' },
 });
 
 export default WorkersNearbyScreen;

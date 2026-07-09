@@ -76,6 +76,27 @@ const buildWorkerPayload = (doc) => {
   };
 };
 
+// Routine GPS buffer flush only ever touches these fields together, every
+// 10-15s, for every online worker (see workerService.js flushLocationBuffer).
+// Broadcasting a "worker_updated"/"worker_availability_changed" event for
+// every single ping fans out to every connected customer and was causing
+// the whole customer app to visibly "refresh" every few seconds. We still
+// want the location itself to reach anyone actively tracking a specific
+// worker (handled separately, per-booking), so it's safe to skip these on
+// the global watch room.
+const PING_ONLY_FIELDS = new Set(['location', 'lastLocationAt', 'isOnline']);
+
+const isRoutineLocationPing = (c) => {
+  if (c.operationType !== 'update') return false;
+  const updatedFields = c.updateDescription?.updatedFields || {};
+  const keys = Object.keys(updatedFields);
+  if (!keys.length) return false;
+  if (!keys.every((k) => PING_ONLY_FIELDS.has(k))) return false;
+  // An explicit "went offline" flip must still be broadcast so customers
+  // see it immediately — only suppress when the worker stayed/came online.
+  return c.fullDocument?.isOnline !== false;
+};
+
 const watchChanges = () => {
   const db = mongoose.connection;
 
@@ -85,22 +106,26 @@ const watchChanges = () => {
       const workerStream = db.collection('workers').watch([], { fullDocument: 'updateLookup' });
 
       workerStream.on('change', (c) => {
-        const workerId = c.documentKey._id.toString();
-        const doc      = c.fullDocument;
+        const workerId     = c.documentKey._id.toString();
+        const doc          = c.fullDocument;
+        const routinePing  = isRoutineLocationPing(c);
 
         // ── Generic worker_updated (backwards-compat) ──────────────────────
-        // All customers actively browsing workers receive this.
-        io.to('workers_watch_room').emit('worker_updated', {
-          operationType: c.operationType,
-          workerId,
-          fullDocument:  doc,
-        });
+        // All customers actively browsing workers receive this — but skip
+        // routine location-only pings, they carry no meaningful change.
+        if (!routinePing) {
+          io.to('workers_watch_room').emit('worker_updated', {
+            operationType: c.operationType,
+            workerId,
+            fullDocument:  doc,
+          });
+        }
 
         // ── Precise availability event ─────────────────────────────────────
-        // Emitted on every insert or update so the customer frontend can
+        // Emitted on every real insert/update so the customer frontend can
         // add/remove workers from the "Available Now" list in real-time
         // without needing to re-fetch (and hit stale cache).
-        if (c.operationType === 'insert' || c.operationType === 'update') {
+        if ((c.operationType === 'insert' || c.operationType === 'update') && !routinePing) {
           io.to('workers_watch_room').emit('worker_availability_changed', {
             workerId,
             isOnline:  doc ? doc.isOnline  : false,

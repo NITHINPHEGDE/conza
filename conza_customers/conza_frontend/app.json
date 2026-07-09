@@ -27,7 +27,15 @@
     "plugins": [
       "expo-router",
       "expo-splash-screen",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Conzaa needs your location to find nearby workers.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
