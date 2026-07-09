@@ -46,8 +46,13 @@ const withCache = async (key, ttl, fetcher) => {
 
     // Null-cache protection: cache null too (short TTL)
     const storeValue = data !== undefined && data !== null ? data : null;
-    const jitter     = Math.floor(Math.random() * 60); // avalanche prevention
-    const finalTTL   = (storeValue === null ? 30 : ttl) + jitter;
+    const isEmpty    = storeValue === null || (Array.isArray(storeValue) && storeValue.length === 0);
+    // Jitter is capped at 20% of TTL (not a flat 60 s) — otherwise an 8-second
+    // TTL becomes up to 68 seconds, keeping stale empty results far too long.
+    const jitter     = Math.floor(Math.random() * Math.max(1, Math.ceil(ttl * 0.2)));
+    // Empty / null results use a very short TTL so "no workers" fixes itself
+    // within a few seconds rather than persisting for a full cache window.
+    const finalTTL   = (isEmpty ? 5 : ttl) + jitter;
 
     try {
       await redis.set(key, JSON.stringify(storeValue), 'EX', finalTTL);
