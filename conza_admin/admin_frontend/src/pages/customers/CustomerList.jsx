@@ -32,10 +32,10 @@ export default function CustomerList() {
     setModalOpen(true)
   }
 
-  const confirmAction = () => {
-    if (modalAction === 'suspend') updateCustomerStatus(selectedCustomer.id, 'suspended')
-    if (modalAction === 'activate') updateCustomerStatus(selectedCustomer.id, 'active')
-    if (modalAction === 'delete') deleteCustomer(selectedCustomer.id)
+  const confirmAction = async () => {
+    if (modalAction === 'suspend') await updateCustomerStatus(selectedCustomer.id, 'suspended')
+    if (modalAction === 'activate') await updateCustomerStatus(selectedCustomer.id, 'active')
+    if (modalAction === 'delete') await deleteCustomer(selectedCustomer.id)
     setModalOpen(false)
   }
 

@@ -1,14 +1,18 @@
-import { useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Store, Phone, Mail, MapPin, Star, Calendar, Wallet, ShoppingCart, FileText, ShieldCheck } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Trash2, Store, Phone, Mail, MapPin, Star, Calendar, Wallet, ShoppingCart, FileText, ShieldCheck } from 'lucide-react'
 import useVendorStore from '../../store/vendors/useVendorStore'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Button from '../../components/common/Button/Button'
+import Modal from '../../components/common/Modal/Modal'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function VendorDetails() {
   const { id } = useParams()
-  const { vendors, updateVendorStatus, verifyVendor, fetchVendorById, loading, selectedVendor } = useVendorStore()
+  const navigate = useNavigate()
+  const { vendors, updateVendorStatus, verifyVendor, deleteVendor, fetchVendorById, loading, selectedVendor } = useVendorStore()
+  const [modalOpen, setModalOpen] = useState(false)
+  const [modalAction, setModalAction] = useState('')
   
   useEffect(() => {
     fetchVendorById(id)
@@ -18,6 +22,16 @@ export default function VendorDetails() {
 
   if (loading) return <div className="text-center py-12 text-textMuted">Loading vendor...</div>
   if (!vendor) return <div className="text-center py-12 text-textMuted">Vendor not found</div>
+
+  const confirmAction = async () => {
+    if (modalAction === 'suspend') await updateVendorStatus(id, 'suspended')
+    if (modalAction === 'activate') await updateVendorStatus(id, 'active')
+    if (modalAction === 'delete') {
+      const ok = await deleteVendor(id)
+      if (ok) navigate('/vendors')
+    }
+    setModalOpen(false)
+  }
 
   return (
     <div className="space-y-6">
@@ -37,10 +51,13 @@ export default function VendorDetails() {
             </Button>
           )}
           {vendor.status === 'active' ? (
-            <Button variant="outline" onClick={() => updateVendorStatus(id, 'suspended')}>Suspend</Button>
+            <Button variant="outline" onClick={() => { setModalAction('suspend'); setModalOpen(true) }}>Suspend</Button>
           ) : (
-            <Button onClick={() => updateVendorStatus(id, 'active')}>Activate</Button>
+            <Button onClick={() => { setModalAction('activate'); setModalOpen(true) }}>Activate</Button>
           )}
+          <Button variant="danger" onClick={() => { setModalAction('delete'); setModalOpen(true) }}>
+            <Trash2 size={16} className="mr-1" /> Delete
+          </Button>
         </div>
       </div>
 
@@ -115,6 +132,24 @@ export default function VendorDetails() {
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={`${modalAction.charAt(0).toUpperCase() + modalAction.slice(1)} Vendor`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button variant={modalAction === 'delete' || modalAction === 'suspend' ? 'danger' : 'primary'} onClick={confirmAction}>
+              Confirm
+            </Button>
+          </>
+        }
+      >
+        <p className="text-textSecondary">
+          Are you sure you want to {modalAction} <strong>{vendor.shopName}</strong>?
+        </p>
+      </Modal>
     </div>
   )
 }

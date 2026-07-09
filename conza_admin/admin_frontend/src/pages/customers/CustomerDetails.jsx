@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, User, MapPin, Phone, Mail, Calendar, Wallet, ShoppingCart, CalendarCheck } from 'lucide-react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Trash2, User, MapPin, Phone, Mail, Calendar, Wallet, ShoppingCart, CalendarCheck } from 'lucide-react'
 import useCustomerStore from '../../store/customers/useCustomerStore'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Button from '../../components/common/Button/Button'
@@ -9,6 +9,7 @@ import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function CustomerDetails() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const { selectedCustomer: customer, fetchCustomerById, updateCustomerStatus, deleteCustomer, loading, error } = useCustomerStore()
   const [modalOpen, setModalOpen] = useState(false)
   const [modalAction, setModalAction] = useState('')
@@ -22,9 +23,13 @@ export default function CustomerDetails() {
 
   const addresses = customer.savedAddresses || []
 
-  const confirmAction = () => {
-    if (modalAction === 'suspend') updateCustomerStatus(id, 'suspended')
-    if (modalAction === 'activate') updateCustomerStatus(id, 'active')
+  const confirmAction = async () => {
+    if (modalAction === 'suspend') await updateCustomerStatus(id, 'suspended')
+    if (modalAction === 'activate') await updateCustomerStatus(id, 'active')
+    if (modalAction === 'delete') {
+      const ok = await deleteCustomer(id)
+      if (ok) navigate('/customers')
+    }
     setModalOpen(false)
   }
 
@@ -46,6 +51,9 @@ export default function CustomerDetails() {
           ) : (
             <Button onClick={() => { setModalAction('activate'); setModalOpen(true) }}>Activate</Button>
           )}
+          <Button variant="danger" onClick={() => { setModalAction('delete'); setModalOpen(true) }}>
+            <Trash2 size={16} className="mr-1" /> Delete
+          </Button>
         </div>
       </div>
 
@@ -172,7 +180,7 @@ export default function CustomerDetails() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button variant={modalAction === 'suspend' ? 'danger' : 'primary'} onClick={confirmAction}>
+            <Button variant={modalAction === 'delete' || modalAction === 'suspend' ? 'danger' : 'primary'} onClick={confirmAction}>
               Confirm
             </Button>
           </>

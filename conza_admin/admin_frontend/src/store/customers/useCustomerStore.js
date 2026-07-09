@@ -69,11 +69,21 @@ const useCustomerStore = create((set, get) => ({
   },
 
   deleteCustomer: async (id) => {
-    const res = await customerService.delete(id)
-    if (res.success) {
-      set((state) => ({
-        customers: state.customers.filter((c) => c.id !== id)
-      }))
+    try {
+      const res = await customerService.delete(id)
+      if (res.success) {
+        set((state) => ({
+          customers: state.customers.filter((c) => c.id !== id),
+          selectedCustomer: state.selectedCustomer?.id === id ? null : state.selectedCustomer,
+        }))
+        return true
+      } else {
+        set({ error: res.message || 'Failed to delete customer' })
+        return false
+      }
+    } catch (err) {
+      set({ error: 'Failed to delete customer' })
+      return false
     }
   },
 

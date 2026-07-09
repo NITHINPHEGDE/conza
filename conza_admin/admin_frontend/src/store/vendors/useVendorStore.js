@@ -79,6 +79,25 @@ const useVendorStore = create((set, get) => ({
     return res
   },
 
+  deleteVendor: async (id) => {
+    try {
+      const res = await vendorService.delete(id)
+      if (res.success) {
+        set((state) => ({
+          vendors: state.vendors.filter((v) => v.id !== id),
+          selectedVendor: state.selectedVendor?.id === id ? null : state.selectedVendor,
+        }))
+        return true
+      } else {
+        set({ error: res.message || 'Failed to delete vendor' })
+        return false
+      }
+    } catch (err) {
+      set({ error: 'Failed to delete vendor' })
+      return false
+    }
+  },
+
   getFilteredVendors: () => get().vendors,
 }))
 

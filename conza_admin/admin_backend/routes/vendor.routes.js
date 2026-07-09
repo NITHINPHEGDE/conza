@@ -15,5 +15,6 @@ router.get('/:id/earnings', c.getVendorEarnings)
 router.get('/:id/reviews', c.getVendorReviews)
 router.put('/:id/status', logAction('Vendors', 'Vendor Status Updated', 'approval', 'medium'), c.updateVendorStatus)
 router.put('/:id/verify', logAction('Vendors', 'Vendor Verified', 'approval', 'medium'), c.verifyVendor)
+router.delete('/:id', logAction('Vendors', 'Vendor Deleted', 'deletion', 'high'), c.deleteVendor)
 
 module.exports = router

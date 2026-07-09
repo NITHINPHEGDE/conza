@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, Ban, CheckCircle, Store, ShieldCheck, ShieldX } from 'lucide-react'
+import { Eye, Ban, CheckCircle, Trash2, Store, ShieldCheck, ShieldX } from 'lucide-react'
 import useVendorStore from '../../store/vendors/useVendorStore'
 import Table from '../../components/common/Table/Table'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
@@ -11,7 +11,7 @@ import Select from '../../components/common/Select/Select'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
 export default function VendorList() {
-  const { vendors, fetchVendors, updateVendorStatus, loading, error } = useVendorStore()
+  const { vendors, fetchVendors, updateVendorStatus, deleteVendor, loading, error } = useVendorStore()
   const navigate = useNavigate()
   const [filters, setFilters] = useState({ status: 'all', type: 'all', search: '' })
   const [activeTab, setActiveTab] = useState('verified')
@@ -44,10 +44,10 @@ export default function VendorList() {
     setModalOpen(true)
   }
 
-  const confirmAction = () => {
-    if (modalAction === 'suspend') updateVendorStatus(selectedVendor.id, 'suspended')
-    if (modalAction === 'activate') updateVendorStatus(selectedVendor.id, 'active')
-    if (modalAction === 'delete') {/* delete */}
+  const confirmAction = async () => {
+    if (modalAction === 'suspend') await updateVendorStatus(selectedVendor.id, 'suspended')
+    if (modalAction === 'activate') await updateVendorStatus(selectedVendor.id, 'active')
+    if (modalAction === 'delete') await deleteVendor(selectedVendor.id)
     setModalOpen(false)
   }
 
@@ -77,6 +77,7 @@ export default function VendorList() {
         ) : (
           <Button variant="ghost" size="sm" onClick={() => handleAction(row, 'activate')}><CheckCircle size={14} className="text-success" /></Button>
         )}
+        <Button variant="ghost" size="sm" onClick={() => handleAction(row, 'delete')}><Trash2 size={14} className="text-danger" /></Button>
       </div>
     )},
   ]

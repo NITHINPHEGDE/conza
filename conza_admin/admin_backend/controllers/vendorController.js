@@ -124,3 +124,17 @@ exports.getPendingVendors = async (req, res, next) => {
     next(err)
   }
 }
+
+exports.deleteVendor = async (req, res, next) => {
+  try {
+    const vendor = await Vendor.findByIdAndDelete(req.params.id)
+    if (!vendor) return next(createError(404, 'Vendor not found.'))
+
+    req.auditTarget = `Vendor #${req.params.id} - ${vendor.name}`
+    req.auditDetails = `Vendor account deleted`
+
+    sendSuccess(res, 200, 'Vendor deleted successfully')
+  } catch (err) {
+    next(err)
+  }
+}
