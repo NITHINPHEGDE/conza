@@ -6,6 +6,13 @@ const { withCache }      = require('../utils/cacheHelpers');
 // ── Coordinate rounding helper (groups nearby users into same bucket) ─────────
 const round3 = (n) => Math.round(parseFloat(n) * 1000) / 1000;
 
+// Category names must match tolerantly (case/whitespace) — the app sends
+// whatever string it has on hand, and it must still match the worker's
+// stored category even if casing or stray spaces differ slightly.
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const categoryMatcher = (category) =>
+  category ? { $regex: `^${escapeRegex(category.trim())}$`, $options: 'i' } : undefined;
+
 // ── GET /api/workers/nearby ────────────────────────────────────────────────────
 const getNearbyWorkers = async (req, res) => {
   try {
@@ -34,7 +41,7 @@ const getNearbyWorkers = async (req, res) => {
         // through.
         isVerified:  true,
       };
-      if (category) safeQuery.category = category;
+      if (category) safeQuery.category = categoryMatcher(category);
       const workers = await Worker.find(safeQuery).select(
         'fullName username profileImage category skills minCharge baseCharge perDayCharge locationText experience bio isOnline rating totalJobs memberSince location'
       ).lean();
@@ -80,7 +87,7 @@ const getNearbyWorkers = async (req, res) => {
         // through.
         isVerified:  true,
       };
-      if (category) query.category = category;
+      if (category) query.category = categoryMatcher(category);
 
       const [workers, serviceCategories] = await Promise.all([
         Worker.find(query).select(
