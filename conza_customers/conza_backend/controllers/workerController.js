@@ -18,50 +18,6 @@ const getNearbyWorkers = async (req, res) => {
   try {
     const { category, lat, lng, debug } = req.query;
 
-    // ── TEMPORARY DEBUG MODE ────────────────────────────────────────────────
-    // Hit /api/workers/nearby?category=Plumber&lat=..&lng=..&debug=1 (or just
-    // ?debug=1 with no lat/lng) to see exactly why each worker in that
-    // category is included/excluded. Remove this block once the mismatch is
-    // found — it's not meant to stay in production.
-    if (debug) {
-      const all = await Worker.find(category ? { category } : {}).lean();
-      const serviceCategories = await ServiceCategory.find({ active: true }).select('name radius').lean();
-      const categoryRadiusKm = serviceCategories.reduce((acc, sc) => { acc[sc.name] = sc.radius; return acc; }, {});
-      const parsedLat = lat ? parseFloat(lat) : null;
-      const parsedLng = lng ? parseFloat(lng) : null;
-
-      const report = all.map((w) => {
-        const reasons = [];
-        if (w.isAvailable === false) reasons.push('isAvailable is false (worker is on an active job)');
-        if (w.status === 'suspended') reasons.push('status is suspended');
-        if (w.isVerified !== true) reasons.push(`isVerified is ${w.isVerified} (must be exactly true)`);
-        const [wLng, wLat] = w.location?.coordinates || [0, 0];
-        if (wLng === 0 && wLat === 0) reasons.push('location is [0,0] — worker has never sent a real GPS location');
-        const maxKm = categoryRadiusKm[w.category];
-        if (maxKm === undefined) reasons.push(`category "${w.category}" has no matching active ServiceCategory (check exact spelling/case against the ServiceCategory list)`);
-        if (parsedLat !== null && parsedLng !== null && maxKm !== undefined && !(wLng === 0 && wLat === 0)) {
-          const R = 6371;
-          const dLat = ((wLat - parsedLat) * Math.PI) / 180;
-          const dLng = ((wLng - parsedLng) * Math.PI) / 180;
-          const a = Math.sin(dLat / 2) ** 2 + Math.cos((parsedLat * Math.PI) / 180) * Math.cos((wLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-          const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          if (distKm > maxKm) reasons.push(`too far: ${distKm.toFixed(2)}km away, category radius is ${maxKm}km`);
-        }
-        return {
-          name: w.fullName,
-          category: w.category,
-          isAvailable: w.isAvailable,
-          isOnline: w.isOnline,
-          status: w.status,
-          isVerified: w.isVerified,
-          location: w.location?.coordinates,
-          wouldShowToCustomer: reasons.length === 0,
-          exclusionReasons: reasons,
-        };
-      });
-
-      return res.json({ success: true, debug: true, requestedCategory: category || null, workerCount: all.length, report });
-    }
 
     // The category's admin-configured "Service Radius (km)" is the source of
     // truth for how far a worker can be to count as "nearby" for that category.
@@ -134,69 +90,123 @@ const getNearbyWorkers = async (req, res) => {
       };
       if (category) query.category = categoryMatcher(category);
 
-      const [workers, serviceCategories] = await Promise.all([
-        Worker.find(query).select(
-          'fullName username profileImage category skills minCharge baseCharge perDayCharge locationText experience bio isOnline rating totalJobs memberSince location'
-        ).lean(),
-        ServiceCategory.find({ active: true }).select('name radius').lean(),
-      ]);
-      // Build a case-insensitive map so that a worker whose stored category
-      // is "plumber" still matches a ServiceCategory named "Plumber" (or any
-      // other casing combination). Without this the radius lookup returns
-      // undefined → worker is silently filtered out.
-      const categoryRadiusKm = serviceCategories.reduce((acc, sc) => {
-        acc[sc.name.toLowerCase().trim()] = sc.radius;
-        return acc;
-      }, {});
+      const workers = await Worker.find(query).select(
+        'fullName username profileImage category skills minCharge baseCharge perDayCharge locationText experience bio isOnline rating totalJobs memberSince location'
+      ).lean();
 
+      // When a specific category is requested the customer has already chosen
+      // what kind of worker they want — apply NO radius cutoff so that all
+      // available verified workers in that category are shown, sorted nearest
+      // first. Radius filtering is only meaningful on the home-screen badge
+      // count (getCategories), not on the detail worker-list screen.
+      //
+      // When no category is given (browsing all workers) we still need a
+      // radius to keep the list manageable, so we fetch the ServiceCategory
+      // radii and filter by them.
+      let mapped;
       const userLat = parseFloat(lat);
       const userLng = parseFloat(lng);
 
-      const mapped = workers
-        .map((w) => {
-          const [wLng, wLat] = w.location.coordinates;
-          if (wLng === 0 && wLat === 0) return null;
-          // Visibility radius is the admin-configured value for this
-          // worker's category, not an arbitrary client-supplied radius.
-          const maxKm = categoryRadiusKm[w.category?.toLowerCase?.()?.trim?.() ?? ''];
-          if (maxKm === undefined) return null;
-          const R      = 6371;
-          const dLat   = ((wLat - userLat) * Math.PI) / 180;
-          const dLng   = ((wLng - userLng) * Math.PI) / 180;
-          const a      =
-            Math.sin(dLat / 2) ** 2 +
-            Math.cos((userLat * Math.PI) / 180) *
-              Math.cos((wLat * Math.PI) / 180) *
-              Math.sin(dLng / 2) ** 2;
-          const distKm = parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1));
-          if (distKm > maxKm) return null;
-          return {
-            id:           w._id,
-            _id:          w._id,
-            name:         w.fullName,
-            initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
-            category:     w.category,
-            skills:       w.skills,
-            pricePerDay:  w.minCharge || 0,
-            minCharge:    w.minCharge,
-            baseCharge:   w.baseCharge,
-            perDayCharge: w.perDayCharge,
-            rating:       w.rating,
-            totalJobs:    w.totalJobs,
-            distance:     `${distKm} km away`,
-            distanceKm:   distKm,
-            available:    true,
-            isOnline:     true,
-            bio:          w.bio,
-            experience:   w.experience,
-            locationText: w.locationText,
-            memberSince:  w.memberSince,
-            profileImage: w.profileImage,
-          };
-        })
-        .filter(Boolean);
+      if (category) {
+        // No radius cutoff — show every available worker in the category.
+        mapped = workers
+          .map((w) => {
+            const [wLng, wLat] = w.location?.coordinates || [0, 0];
+            let distKm = null;
+            let distanceLabel = w.locationText || 'Nearby';
+            if (wLng !== 0 || wLat !== 0) {
+              const R    = 6371;
+              const dLat = ((wLat - userLat) * Math.PI) / 180;
+              const dLng = ((wLng - userLng) * Math.PI) / 180;
+              const a    =
+                Math.sin(dLat / 2) ** 2 +
+                Math.cos((userLat * Math.PI) / 180) *
+                  Math.cos((wLat * Math.PI) / 180) *
+                  Math.sin(dLng / 2) ** 2;
+              distKm       = parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1));
+              distanceLabel = `${distKm} km away`;
+            }
+            return {
+              id:           w._id,
+              _id:          w._id,
+              name:         w.fullName,
+              initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+              category:     w.category,
+              skills:       w.skills,
+              pricePerDay:  w.minCharge || 0,
+              minCharge:    w.minCharge,
+              baseCharge:   w.baseCharge,
+              perDayCharge: w.perDayCharge,
+              rating:       w.rating,
+              totalJobs:    w.totalJobs,
+              distance:     distanceLabel,
+              distanceKm:   distKm,
+              available:    true,
+              isOnline:     true,
+              bio:          w.bio,
+              experience:   w.experience,
+              locationText: w.locationText,
+              memberSince:  w.memberSince,
+              profileImage: w.profileImage,
+            };
+          });
+      } else {
+        // No category filter — apply radius cutoff to avoid returning every
+        // worker in the database.
+        const serviceCategories = await ServiceCategory.find({ active: true }).select('name radius').lean();
+        // Build a case-insensitive map so that a worker whose stored category
+        // is "plumber" still matches a ServiceCategory named "Plumber" (or any
+        // other casing combination). Without this the radius lookup returns
+        // undefined → worker is silently filtered out.
+        const categoryRadiusKm = serviceCategories.reduce((acc, sc) => {
+          acc[sc.name.toLowerCase().trim()] = sc.radius;
+          return acc;
+        }, {});
 
-      mapped.sort((a, b) => a.distanceKm - b.distanceKm);
+        mapped = workers
+          .map((w) => {
+            const [wLng, wLat] = w.location?.coordinates || [0, 0];
+            if (wLng === 0 && wLat === 0) return null;
+            const maxKm = categoryRadiusKm[w.category?.toLowerCase?.()?.trim?.() ?? ''];
+            if (maxKm === undefined) return null;
+            const R      = 6371;
+            const dLat   = ((wLat - userLat) * Math.PI) / 180;
+            const dLng   = ((wLng - userLng) * Math.PI) / 180;
+            const a      =
+              Math.sin(dLat / 2) ** 2 +
+              Math.cos((userLat * Math.PI) / 180) *
+                Math.cos((wLat * Math.PI) / 180) *
+                Math.sin(dLng / 2) ** 2;
+            const distKm = parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1));
+            if (distKm > maxKm) return null;
+            return {
+              id:           w._id,
+              _id:          w._id,
+              name:         w.fullName,
+              initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+              category:     w.category,
+              skills:       w.skills,
+              pricePerDay:  w.minCharge || 0,
+              minCharge:    w.minCharge,
+              baseCharge:   w.baseCharge,
+              perDayCharge: w.perDayCharge,
+              rating:       w.rating,
+              totalJobs:    w.totalJobs,
+              distance:     `${distKm} km away`,
+              distanceKm:   distKm,
+              available:    true,
+              isOnline:     true,
+              bio:          w.bio,
+              experience:   w.experience,
+              locationText: w.locationText,
+              memberSince:  w.memberSince,
+              profileImage: w.profileImage,
+            };
+          })
+          .filter(Boolean);
+      }
+
+      mapped.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
       return mapped;
     });
 
