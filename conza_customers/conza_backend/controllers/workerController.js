@@ -16,7 +16,52 @@ const categoryMatcher = (category) =>
 // ── GET /api/workers/nearby ────────────────────────────────────────────────────
 const getNearbyWorkers = async (req, res) => {
   try {
-    const { category, lat, lng } = req.query;
+    const { category, lat, lng, debug } = req.query;
+
+    // ── TEMPORARY DEBUG MODE ────────────────────────────────────────────────
+    // Hit /api/workers/nearby?category=Plumber&lat=..&lng=..&debug=1 (or just
+    // ?debug=1 with no lat/lng) to see exactly why each worker in that
+    // category is included/excluded. Remove this block once the mismatch is
+    // found — it's not meant to stay in production.
+    if (debug) {
+      const all = await Worker.find(category ? { category } : {}).lean();
+      const serviceCategories = await ServiceCategory.find({ active: true }).select('name radius').lean();
+      const categoryRadiusKm = serviceCategories.reduce((acc, sc) => { acc[sc.name] = sc.radius; return acc; }, {});
+      const parsedLat = lat ? parseFloat(lat) : null;
+      const parsedLng = lng ? parseFloat(lng) : null;
+
+      const report = all.map((w) => {
+        const reasons = [];
+        if (w.isAvailable === false) reasons.push('isAvailable is false (worker is on an active job)');
+        if (w.status === 'suspended') reasons.push('status is suspended');
+        if (w.isVerified !== true) reasons.push(`isVerified is ${w.isVerified} (must be exactly true)`);
+        const [wLng, wLat] = w.location?.coordinates || [0, 0];
+        if (wLng === 0 && wLat === 0) reasons.push('location is [0,0] — worker has never sent a real GPS location');
+        const maxKm = categoryRadiusKm[w.category];
+        if (maxKm === undefined) reasons.push(`category "${w.category}" has no matching active ServiceCategory (check exact spelling/case against the ServiceCategory list)`);
+        if (parsedLat !== null && parsedLng !== null && maxKm !== undefined && !(wLng === 0 && wLat === 0)) {
+          const R = 6371;
+          const dLat = ((wLat - parsedLat) * Math.PI) / 180;
+          const dLng = ((wLng - parsedLng) * Math.PI) / 180;
+          const a = Math.sin(dLat / 2) ** 2 + Math.cos((parsedLat * Math.PI) / 180) * Math.cos((wLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+          const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          if (distKm > maxKm) reasons.push(`too far: ${distKm.toFixed(2)}km away, category radius is ${maxKm}km`);
+        }
+        return {
+          name: w.fullName,
+          category: w.category,
+          isAvailable: w.isAvailable,
+          isOnline: w.isOnline,
+          status: w.status,
+          isVerified: w.isVerified,
+          location: w.location?.coordinates,
+          wouldShowToCustomer: reasons.length === 0,
+          exclusionReasons: reasons,
+        };
+      });
+
+      return res.json({ success: true, debug: true, requestedCategory: category || null, workerCount: all.length, report });
+    }
 
     // The category's admin-configured "Service Radius (km)" is the source of
     // truth for how far a worker can be to count as "nearby" for that category.
