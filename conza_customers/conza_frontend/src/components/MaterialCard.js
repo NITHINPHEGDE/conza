@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TextInput,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
@@ -27,7 +28,17 @@ const MaterialCard = React.memo(({
 }) => {
   const [cartAdded, setCartAdded] = React.useState(false);
   const imageSource = useMemo(() => ({ uri: image }), [image]);
-  
+
+  const cardStyle = useMemo(() => [
+    styles.card,
+    Number(quantity) > 0 && styles.cardActive,
+  ], [quantity]);
+
+  const stockBadgeStyle = useMemo(() => [
+    styles.stockBadge,
+    { backgroundColor: inStock ? 'rgba(46,139,87,0.12)' : 'rgba(224,59,59,0.12)' }
+  ], [inStock]);
+
   const stockDotStyle = useMemo(() => [
     styles.stockDot, 
     { backgroundColor: inStock ? colors.success : colors.danger }
@@ -68,17 +79,23 @@ const MaterialCard = React.memo(({
   }, [onAddToCart, id, name, seller, price, unit, distance, image, rating, inStock]);
 
   return (
-    <View style={styles.card}>
+    <View style={cardStyle}>
       <TouchableOpacity style={styles.imageWrapper} onPress={handleImagePress} activeOpacity={0.9}>
         <Image source={imageSource} style={styles.image} />
-        <View style={styles.stockBadge}>
+        <LinearGradient
+          colors={['rgba(0,0,0,0.28)', 'transparent']}
+          style={styles.imageTopFade}
+          pointerEvents="none"
+        />
+        <View style={stockBadgeStyle}>
           <View style={stockDotStyle} />
           <Text style={stockTextStyle}>
             {inStock ? 'In Stock' : 'Out'}
           </Text>
         </View>
         <View style={styles.ratingBadge}>
-          <Text style={styles.ratingText}>⭐ {rating}</Text>
+          <MaterialCommunityIcons name="star" size={11} color={colors.accentAmber} />
+          <Text style={styles.ratingText}>{rating}</Text>
         </View>
       </TouchableOpacity>
 
@@ -87,61 +104,83 @@ const MaterialCard = React.memo(({
         <Text style={styles.seller} numberOfLines={1}>by {seller}</Text>
         
         <View style={styles.distanceRow}>
-          <MaterialCommunityIcons name="map-marker" size={12} color={colors.textSecondary} />
+          <MaterialCommunityIcons name="map-marker" size={12} color={colors.textMuted} />
           <Text style={styles.distanceText}>{distance}</Text>
         </View>
 
         <View style={styles.priceRow}>
-          <Text style={styles.price}>
-            ₹{((Number(price) || 0) * (Number(quantity) > 0 ? Number(quantity) : 1)).toLocaleString('en-IN')}
-          </Text>
-          <Text style={styles.unit}>
-            {Number(quantity) > 0 ? `${quantity} ${unit.replace('per ', '')}` : unit}
-          </Text>
+          <View style={styles.priceCol}>
+            <Text style={styles.price} numberOfLines={1}>
+              ₹{((Number(price) || 0) * (Number(quantity) > 0 ? Number(quantity) : 1)).toLocaleString('en-IN')}
+            </Text>
+            <Text style={styles.unit} numberOfLines={1}>
+              {Number(quantity) > 0 ? `${quantity} ${unit.replace('per ', '')}` : unit}
+            </Text>
+          </View>
 
           {(Number(quantity) || 0) > 0 ? (
-            <View style={styles.qtyWrapper}>
-              <View style={styles.qtyControl}>
-                <TouchableOpacity
-                  style={styles.qtyBtnMinus}
-                  onPress={handleMinus}
-                >
-                  <Text style={styles.qtyBtnText}>−</Text>
-                </TouchableOpacity>
-                <TextInput
-                  style={styles.qtyInput}
-                  value={String(quantity)}
-                  onChangeText={handleTextChange}
-                  keyboardType="numeric"
-                  maxLength={5}
-                  selectTextOnFocus
-                />
-                <TouchableOpacity
-                  style={styles.qtyBtnPlus}
-                  onPress={handlePlus}
-                >
-                  <Text style={styles.qtyBtnText}>+</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.qtyControl}>
+              <TouchableOpacity
+                style={styles.qtyBtnMinus}
+                onPress={handleMinus}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.qtyBtnText}>−</Text>
+              </TouchableOpacity>
+              <TextInput
+                style={styles.qtyInput}
+                value={String(quantity)}
+                onChangeText={handleTextChange}
+                keyboardType="numeric"
+                maxLength={5}
+                selectTextOnFocus
+              />
+              <TouchableOpacity
+                style={styles.qtyBtnPlus}
+                onPress={handlePlus}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.qtyBtnText}>+</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity
               style={[styles.addBtn, !inStock && styles.addBtnDisabled]}
               onPress={handleAdd}
+              activeOpacity={0.8}
             >
-              <Text style={styles.addBtnText}>+</Text>
+              <MaterialCommunityIcons name="plus" size={18} color={inStock ? colors.textPrimary : colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
 
         <TouchableOpacity
-          style={[styles.addCartBtn, !inStock && styles.addCartBtnDisabled]}
           onPress={handleAddToCart}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
+          disabled={!inStock}
         >
-          <Text style={styles.addCartBtnText}>
-            {cartAdded ? '✓ Added to Cart' : '🛒 Add to Cart'}
-          </Text>
+          {inStock ? (
+            <LinearGradient
+              colors={cartAdded ? [colors.success, colors.success] : [colors.gradientStart, colors.gradientEnd]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.addCartBtn}
+            >
+              <MaterialCommunityIcons
+                name={cartAdded ? 'check-circle' : 'cart-plus'}
+                size={14}
+                color={colors.textPrimary}
+              />
+              <Text style={styles.addCartBtnText}>
+                {cartAdded ? 'Added to Cart' : 'Add to Cart'}
+              </Text>
+            </LinearGradient>
+          ) : (
+            <View style={[styles.addCartBtn, styles.addCartBtnDisabled]}>
+              <MaterialCommunityIcons name="cart-off" size={14} color={colors.textMuted} />
+              <Text style={styles.addCartBtnTextDisabled}>Unavailable</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -149,40 +188,59 @@ const MaterialCard = React.memo(({
 });
 
 const styles = StyleSheet.create({
-  card: { flex: 1, backgroundColor: colors.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, elevation: 4 },
-  imageWrapper: { width: '100%', height: 120, position: 'relative', backgroundColor: colors.surfaceElevated },
+  card: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: colors.cardShadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  cardActive: {
+    borderColor: colors.accentYellow,
+    shadowColor: colors.accentAmber,
+    shadowOpacity: 0.18,
+  },
+  imageWrapper: { width: '100%', height: 122, position: 'relative', backgroundColor: colors.surfaceElevated },
   image: { width: '100%', height: '100%' },
-  stockBadge: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.93)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 20 },
+  imageTopFade: { position: 'absolute', top: 0, left: 0, right: 0, height: 40 },
+  stockBadge: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, gap: 4 },
   stockDot: { width: 5, height: 5, borderRadius: 3 },
   stockText: { fontSize: 10, fontWeight: '700' },
-  ratingBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255,255,255,0.93)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 20 },
-  ratingText: { fontSize: 10, fontWeight: '700', color: colors.textPrimary },
-  details: { padding: 11 },
-  name: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
-  seller: { fontSize: 11, color: colors.textMuted, marginBottom: 4 },
-  distanceRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 4 },
+  ratingBadge: { position: 'absolute', top: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.95)', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 20 },
+  ratingText: { fontSize: 10, fontWeight: '800', color: colors.textPrimary },
+  details: { padding: 12 },
+  name: { fontSize: 13, fontWeight: '800', color: colors.textPrimary, marginBottom: 2 },
+  seller: { fontSize: 11, color: colors.textMuted, marginBottom: 5, fontWeight: '500' },
+  distanceRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 10 },
   distanceText: { fontSize: 11, color: colors.textSecondary, fontWeight: '600' },
-  priceRow: { flexDirection: 'column', alignItems: 'flex-start', marginTop: 6, gap: 6 },
-  price: { fontSize: 15, fontWeight: '800' },
-  unit: { fontSize: 10, color: colors.textMuted },
-  addBtn: { width: 28, height: 28, borderRadius: 9, backgroundColor: colors.accentYellow, alignItems: 'center', justifyContent: 'center' },
-  addBtnDisabled: { backgroundColor: colors.surfaceElevated },
-  addBtnText: { fontSize: 18, fontWeight: '700' },
+  priceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 6 },
+  priceCol: { flex: 1, minWidth: 0 },
+  price: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
+  unit: { fontSize: 10, color: colors.textMuted, fontWeight: '500' },
+  addBtn: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.accentYellowSoft, borderWidth: 1, borderColor: 'rgba(245,200,66,0.35)', alignItems: 'center', justifyContent: 'center' },
+  addBtnDisabled: { backgroundColor: colors.surfaceElevated, borderColor: colors.borderLight },
   addCartBtn: {
-    marginTop: 8,
-    backgroundColor: colors.accentYellow,
-    borderRadius: 10,
-    paddingVertical: 7,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 11,
+    paddingVertical: 9,
   },
-  addCartBtnDisabled: { backgroundColor: colors.surfaceElevated },
-  addCartBtnText: { fontSize: 12, fontWeight: '800', color: '#111' },
-  qtyWrapper: { alignItems: 'flex-end' },
-  qtyControl: { flexDirection: 'row', alignItems: 'center', borderRadius: 9, borderWidth: 1, borderColor: colors.border },
-  qtyBtnMinus: { width: 24, height: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentYellow, borderTopLeftRadius: 7, borderBottomLeftRadius: 7 },
-  qtyBtnPlus: { width: 24, height: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentYellow, borderTopRightRadius: 7, borderBottomRightRadius: 7 },
-  qtyBtnText: { fontSize: 14, fontWeight: '800' },
-  qtyInput: { fontSize: 13, fontWeight: '800', color: '#111111', backgroundColor: '#FFFFFF', paddingHorizontal: 4, paddingVertical: 0, minWidth: 58, textAlign: 'center', height: 28, textAlignVertical: 'center', includeFontPadding: false },
+  addCartBtnDisabled: { backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.borderLight },
+  addCartBtnText: { fontSize: 12, fontWeight: '800', color: colors.textPrimary },
+  addCartBtnTextDisabled: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  qtyControl: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceElevated, overflow: 'hidden' },
+  qtyBtnMinus: { width: 26, height: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentYellowSoft },
+  qtyBtnPlus: { width: 26, height: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentYellowSoft },
+  qtyBtnText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
+  qtyInput: { fontSize: 13, fontWeight: '800', color: colors.textPrimary, backgroundColor: colors.surface, paddingHorizontal: 4, paddingVertical: 0, minWidth: 42, textAlign: 'center', height: 30, textAlignVertical: 'center', includeFontPadding: false },
 });
 
 export default MaterialCard;

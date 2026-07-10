@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import BookingScreen          from '../screens/BookingScreen';
 import WorkersNearbyScreen    from '../screens/WorkersNearbyScreen';
-import ProjectScreen          from '../screens/ProjectScreen';
+import CivilEngineerScreen    from '../screens/CivilEngineerScreen';
 import ProfileScreen          from '../screens/ProfileScreen';
 import LabourCheckoutScreen   from '../screens/LabourCheckoutScreen';
 import MaterialCheckoutScreen from '../screens/MaterialCheckoutScreen';
@@ -62,11 +62,11 @@ export const AuthStack = () => (
 );
 
 const TAB_ICONS = {
-  Booking:  'home-variant',
-  CartTab:  'cart',
-  Projects: 'clipboard-text',
-  Status:   'bell',
-  Profile:  'account-circle',
+  Booking:      'home-variant',
+  CartTab:      'cart',
+  CivilEngineer:'account-hard-hat',
+  Status:       'bell',
+  Profile:      'account-circle',
 };
 
 const TabIcon = ({ name, focused }) => {
@@ -121,11 +121,11 @@ const TabNavigator = () => {
         tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
       })}
     >
-      <Tab.Screen name="Booking"  component={BookingStack}  options={{ title: 'Home'     }} />
-      <Tab.Screen name="CartTab"  component={CartScreen}    options={{ title: 'Cart'     }} />
-      <Tab.Screen name="Projects" component={ProjectScreen} options={{ title: 'Projects' }} />
-      <Tab.Screen name="Status"   component={StatusStack}   options={{ title: 'Status'   }} />
-      <Tab.Screen name="Profile"  component={ProfileScreen} options={{ title: 'Profile'  }} />
+      <Tab.Screen name="Booking"       component={BookingStack}       options={{ title: 'Home'           }} />
+      <Tab.Screen name="CartTab"       component={CartScreen}         options={{ title: 'Cart'           }} />
+      <Tab.Screen name="CivilEngineer" component={CivilEngineerScreen} options={{ title: 'Civil Engineer' }} />
+      <Tab.Screen name="Status"        component={StatusStack}        options={{ title: 'Status'         }} />
+      <Tab.Screen name="Profile"       component={ProfileScreen}      options={{ title: 'Profile'        }} />
     </Tab.Navigator>
   );
 };

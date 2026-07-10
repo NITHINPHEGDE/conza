@@ -40,9 +40,9 @@ const WorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
   ], [isSelected]);
 
   const priceSegments = useMemo(() => {
-    const segs = [{ label: 'Per Day', value: Number(worker.pricePerDay) || 0, suffix: '/day' }];
+    const segs = [{ label: 'Per Hour', value: Number(worker.pricePerDay) || 0, suffix: '/hr' }];
     if (worker.baseCharge) segs.push({ label: 'Base', value: Number(worker.baseCharge), suffix: '' });
-    if (worker.perDayCharge) segs.push({ label: 'Multi-day', value: Number(worker.perDayCharge), suffix: '/day' });
+    if (worker.perDayCharge) segs.push({ label: 'Per Day', value: Number(worker.perDayCharge), suffix: '/day' });
     return segs;
   }, [worker.pricePerDay, worker.baseCharge, worker.perDayCharge]);
 
@@ -533,19 +533,27 @@ const styles = StyleSheet.create({
   checkbox: {
     width: 24,
     height: 24,
+    minWidth: 24,
+    minHeight: 24,
+    maxWidth: 24,
+    maxHeight: 24,
     borderRadius: 7,
     borderWidth: 2,
     borderColor: colors.border,
     backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
+    flexGrow: 0,
     flexShrink: 0,
+    flexBasis: 24,
+    overflow: 'hidden',
   },
   checkboxSelected: {
     backgroundColor: colors.textPrimary,
     borderColor: colors.textPrimary,
   },
-  checkmark: { fontSize: 13, color: colors.white, fontWeight: '800', lineHeight: 16 },
+  checkmark: { fontSize: 13, color: colors.white, fontWeight: '800', textAlign: 'center', includeFontPadding: false },
 
   // Verified badge
   verifiedBadge: {
