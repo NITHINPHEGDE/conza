@@ -304,12 +304,9 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
 
       {selected.length > 0 && (
         <View style={styles.bottomBar}>
-          <View style={styles.bottomBarInfo}>
-            <Text style={styles.selectedCount}>
-              {selected.length} worker{selected.length > 1 ? 's' : ''} selected
-            </Text>
-            <Text style={styles.totalPrice}>₹{totalPerDay.toLocaleString()}/day</Text>
-          </View>
+          <Text style={styles.selectedCount}>
+            {selected.length} worker{selected.length > 1 ? 's' : ''} selected
+          </Text>
           <LinearGradient
             colors={[colors.gradientStart, colors.gradientEnd]}
             start={{ x: 0, y: 0 }}
@@ -636,14 +633,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 10,
   },
-  bottomBarInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  selectedCount: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-  totalPrice: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
+  selectedCount: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 12 },
   checkoutBtn: { borderRadius: 16, overflow: 'hidden' },
   checkoutTouchable: { paddingVertical: 16, alignItems: 'center' },
   checkoutText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },

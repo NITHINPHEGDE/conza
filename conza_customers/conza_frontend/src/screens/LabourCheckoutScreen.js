@@ -52,30 +52,48 @@ const PAYMENT_METHODS = [
   },
 ];
 
-const WorkerRow = React.memo(({ worker }) => (
-  <View style={styles.workerRow}>
-    <LinearGradient
-      colors={['#D0CDFF', '#A89CFF']}
-      style={styles.workerAvatar}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
-      <Text style={styles.workerAvatarText}>{worker.initials}</Text>
-    </LinearGradient>
-    <View style={styles.workerInfo}>
-      <Text style={styles.workerName}>{worker.name}</Text>
-      <View style={styles.workerMeta}>
-        <Text style={styles.workerMetaText}>⭐ {worker.rating}</Text>
-        <View style={styles.workerMetaDot} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-          <MaterialCommunityIcons name="map-marker" size={12} color={colors.textMuted} />
-          <Text style={styles.workerMetaText}>{worker.distance}</Text>
+const WorkerRow = React.memo(({ worker }) => {
+  const rateSegments = useMemo(() => {
+    const segs = [{ label: 'Per Hr', value: Number(worker.pricePerDay) || 0 }];
+    if (worker.baseCharge) segs.push({ label: 'Base', value: Number(worker.baseCharge) });
+    if (worker.perDayCharge) segs.push({ label: 'Per Day', value: Number(worker.perDayCharge) });
+    return segs;
+  }, [worker.pricePerDay, worker.baseCharge, worker.perDayCharge]);
+
+  return (
+    <View style={styles.workerRow}>
+      <LinearGradient
+        colors={['#D0CDFF', '#A89CFF']}
+        style={styles.workerAvatar}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <Text style={styles.workerAvatarText}>{worker.initials}</Text>
+      </LinearGradient>
+      <View style={styles.workerInfo}>
+        <Text style={styles.workerName}>{worker.name}</Text>
+        <View style={styles.workerMeta}>
+          <Text style={styles.workerMetaText}>⭐ {worker.rating}</Text>
+          <View style={styles.workerMetaDot} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+            <MaterialCommunityIcons name="map-marker" size={12} color={colors.textMuted} />
+            <Text style={styles.workerMetaText}>{worker.distance}</Text>
+          </View>
+        </View>
+        <View style={styles.workerRateRow}>
+          {rateSegments.map((seg, idx) => (
+            <React.Fragment key={seg.label}>
+              {idx > 0 && <View style={styles.workerMetaDot} />}
+              <Text style={styles.workerRateText}>
+                {seg.label}: <Text style={styles.workerRateValue}>₹{seg.value}</Text>
+              </Text>
+            </React.Fragment>
+          ))}
         </View>
       </View>
     </View>
-    <Text style={styles.workerPrice}>₹{Number(worker.pricePerDay) || 0}</Text>
-  </View>
-));
+  );
+});
 
 const PaymentOption = React.memo(({ method, selected, onSelect }) => {
   const handlePress = useCallback(() => {
@@ -695,7 +713,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   workerAvatar: {
     width: 46,
@@ -706,12 +724,14 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   workerAvatarText: { fontSize: 14, fontWeight: '800', color: colors.white },
-  workerInfo: { flex: 1 },
+  workerInfo: { flex: 1, minWidth: 0 },
   workerName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
-  workerMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  workerMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 5 },
   workerMetaText: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
   workerMetaDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.textMuted },
-  workerPrice: { fontSize: 15, fontWeight: '800', color: colors.accentAmber },
+  workerRateRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  workerRateText: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
+  workerRateValue: { fontSize: 11, color: colors.accentAmber, fontWeight: '800' },
 
   autoFetchBtn: {
     flexDirection: 'row',
