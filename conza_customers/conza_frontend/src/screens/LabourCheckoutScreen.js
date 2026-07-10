@@ -34,7 +34,7 @@ const PAYMENT_METHODS = [
   },
   {
     id: 'cod',
-    label: 'Cash on Delivery',
+    label: 'pay after work',
     sub: 'Pay after work completion',
     icon: '💵',
   },
