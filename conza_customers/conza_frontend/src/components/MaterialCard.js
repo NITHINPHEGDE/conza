@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   distanceRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 10 },
   distanceText: { fontSize: 11, color: colors.textSecondary, fontWeight: '600' },
   priceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 6 },
-  priceCol: { flex: 1, minWidth: 0 },
+  priceCol: { flex: 1, minWidth: 0, flexShrink: 1 },
   price: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
   unit: { fontSize: 10, color: colors.textMuted, fontWeight: '500' },
   addBtn: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.accentYellowSoft, borderWidth: 1, borderColor: 'rgba(245,200,66,0.35)', alignItems: 'center', justifyContent: 'center' },
@@ -236,11 +236,11 @@ const styles = StyleSheet.create({
   addCartBtnDisabled: { backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.borderLight },
   addCartBtnText: { fontSize: 12, fontWeight: '800', color: colors.textPrimary },
   addCartBtnTextDisabled: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  qtyControl: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceElevated, overflow: 'hidden' },
-  qtyBtnMinus: { width: 26, height: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentYellowSoft },
-  qtyBtnPlus: { width: 26, height: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentYellowSoft },
+  qtyControl: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceElevated, overflow: 'hidden', alignSelf: 'center', flexGrow: 0, flexShrink: 0 },
+  qtyBtnMinus: { width: 26, height: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentYellowSoft, flexGrow: 0, flexShrink: 0 },
+  qtyBtnPlus: { width: 26, height: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentYellowSoft, flexGrow: 0, flexShrink: 0 },
   qtyBtnText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
-  qtyInput: { fontSize: 13, fontWeight: '800', color: colors.textPrimary, backgroundColor: colors.surface, paddingHorizontal: 4, paddingVertical: 0, minWidth: 42, textAlign: 'center', height: 30, textAlignVertical: 'center', includeFontPadding: false },
+  qtyInput: { fontSize: 13, fontWeight: '800', color: colors.textPrimary, backgroundColor: colors.surface, paddingHorizontal: 4, paddingVertical: 0, width: 42, flexGrow: 0, flexShrink: 0, textAlign: 'center', height: 30, textAlignVertical: 'center', includeFontPadding: false },
 });
 
 export default MaterialCard;
