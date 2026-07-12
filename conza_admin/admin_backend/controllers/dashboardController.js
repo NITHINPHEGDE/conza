@@ -3,8 +3,11 @@ const Worker = require('../models/Worker')
 const Vendor = require('../models/Vendor')
 const Booking = require('../models/Booking')
 const Order = require('../models/Order')
-const Material = require('../models/Material')
-const Rental = require('../models/Rental')
+// Material.js/Rental.js were orphaned models on the default mongoose
+// connection with an empty local collection — real product/material/rental
+// data lives in the sellersDB 'products' collection via the same Product
+// model materialController/rentalController already use.
+const Product = require('../models/Product')
 const BusinessPartner = require('../models/BusinessPartner')
 const Transaction = require('../models/Transaction')
 const Complaint = require('../models/Complaint')
@@ -25,8 +28,8 @@ exports.getStats = async (req, res, next) => {
       Vendor.countDocuments({ status: 'active' }),
       Vendor.countDocuments({ status: 'suspended' }),
       Worker.countDocuments({ status: 'active', isOnline: true }),
-      Material.countDocuments(),
-      Rental.countDocuments(),
+      Product.countDocuments({ type: 'material' }),
+      Product.countDocuments({ type: 'rental' }),
     ])
 
     const today = new Date()
@@ -111,7 +114,22 @@ exports.getRecentData = async (req, res, next) => {
     const recentBookings = await Booking.find().sort({ createdAt: -1 }).limit(5)
     const topWorkers = await Worker.find({ status: 'active' }).sort({ totalJobs: -1 }).limit(5).select('fullName category rating totalJobs earnings')
     const topVendors = await Vendor.find({ status: 'active' }).sort({ totalRevenue: -1 }).limit(5).select('name totalOrders totalRevenue rating')
-    const lowStockAlerts = await Material.find({ $expr: { $lte: ['$stock', '$threshold'] } }).limit(4).populate('vendor', 'name')
+    const lowStockProducts = await Product.find({
+      type: 'material',
+      $expr: { $lte: ['$stock', '$lowStockAt'] },
+      stock: { $gt: 0 },
+    })
+      .limit(4)
+      .populate('seller', 'name shopName')
+      .sort({ stock: 1 })
+
+    const lowStockAlerts = lowStockProducts.map(p => ({
+      id: p._id,
+      product: p.title,
+      vendor: p.seller?.shopName || p.seller?.name || 'Unknown Vendor',
+      stock: p.stock,
+      threshold: p.lowStockAt,
+    }))
     const pendingVerifications = [
       ...await Worker.find({ status: 'pending_verification' }).limit(3).select('fullName category createdAt'),
       ...await Vendor.find({ status: 'pending_verification' }).limit(2).select('name shopName createdAt'),
