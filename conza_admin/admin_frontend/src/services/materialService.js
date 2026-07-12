@@ -6,6 +6,8 @@ const materialService = {
   update: (id, data) => api.put(`/materials/${id}`, data),
   remove: (id) => api.delete(`/materials/${id}`),
   toggleFeatured: (id) => api.put(`/materials/${id}/feature`),
+  getLowStock: () => api.get('/inventory/low-stock'),
+  getOutOfStock: () => api.get('/inventory/out-of-stock'),
 }
 
 export default materialService

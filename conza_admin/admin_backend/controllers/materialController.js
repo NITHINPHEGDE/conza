@@ -10,6 +10,7 @@ const deriveStatus = (p) => {
 
 const mapMaterial = (p) => ({
   id: p._id,
+  product: p.title,
   title: p.title,
   vendor: p.seller?.shopName || p.seller?.name || 'Unknown Vendor',
   vendorId: p.seller?._id || p.seller,
@@ -18,6 +19,8 @@ const mapMaterial = (p) => ({
   price: p.price,
   unit: p.unit,
   stock: p.stock,
+  sold: p.sold,
+  threshold: p.lowStockAt,
   sku: p.sku,
   hsnCode: p.hsnCode,
   minOrder: p.minOrder,

@@ -1,18 +1,39 @@
+import { useEffect, useState } from 'react'
 import { Package, AlertTriangle, XCircle, TrendingUp } from 'lucide-react'
-import { mockLowStockAlerts } from '../../mock/dashboard'
+import inventoryService from '../../services/inventoryService'
+import materialService from '../../services/materialService'
 import Table from '../../components/common/Table/Table'
 import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
 
-const mockInventory = [
-  { id: '1', product: 'Portland Cement 50kg', vendor: 'BuildMart Pro', category: 'Cement', stock: 45, sold: 120, status: 'active' },
-  { id: '2', product: 'TMT Steel Bars 12mm', vendor: 'SteelWorld India', category: 'Steel', stock: 120, sold: 340, status: 'active' },
-  { id: '3', product: 'AAC Blocks 600×200×150', vendor: 'QuickBuild Supply', category: 'Blocks', stock: 0, sold: 89, status: 'out_of_stock' },
-  { id: '4', product: 'River Sand (Fine)', vendor: 'NatureMats Co.', category: 'Sand', stock: 8, sold: 45, status: 'low_stock' },
-  { id: '5', product: 'Premium Paint 20L', vendor: 'ColorWorld', category: 'Paint', stock: 25, sold: 67, status: 'active' },
-]
-
 export default function InventoryOverview() {
+  const [overview, setOverview] = useState({ total: 0, lowStock: 0, outOfStock: 0, active: 0 })
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let mounted = true
+    setLoading(true)
+    Promise.all([
+      inventoryService.getOverview(),
+      materialService.getAll({ page: 1, limit: 50 }),
+    ])
+      .then(([overviewRes, listRes]) => {
+        if (!mounted) return
+        if (overviewRes.success) setOverview(overviewRes.overview)
+        else setError(overviewRes.message || 'Failed to load inventory overview')
+        if (listRes.success) setItems(listRes.data || [])
+      })
+      .catch(() => { if (mounted) setError('Failed to load inventory data') })
+      .finally(() => { if (mounted) setLoading(false) })
+    return () => { mounted = false }
+  }, [])
+
+  const turnoverRate = overview.total > 0
+    ? Math.round(((overview.total - overview.outOfStock) / overview.total) * 100)
+    : 0
+
   const columns = [
     { key: 'product', title: 'Product' },
     { key: 'vendor', title: 'Vendor' },
@@ -27,12 +48,14 @@ export default function InventoryOverview() {
       <Breadcrumb items={[{ label: 'Inventory' }]} />
       <h1 className="text-2xl font-bold text-textPrimary">Inventory Overview</h1>
 
+      {error && <p className="text-sm text-danger">{error}</p>}
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-surface rounded-xl border border-border p-5">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-textMuted">Total Products</p>
-              <p className="text-2xl font-bold text-textPrimary">4,567</p>
+              <p className="text-2xl font-bold text-textPrimary">{overview.total.toLocaleString()}</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
               <Package size={20} className="text-white" />
@@ -43,7 +66,7 @@ export default function InventoryOverview() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-textMuted">Low Stock</p>
-              <p className="text-2xl font-bold text-textPrimary">24</p>
+              <p className="text-2xl font-bold text-textPrimary">{overview.lowStock.toLocaleString()}</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-orange-500 flex items-center justify-center">
               <AlertTriangle size={20} className="text-white" />
@@ -54,7 +77,7 @@ export default function InventoryOverview() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-textMuted">Out of Stock</p>
-              <p className="text-2xl font-bold text-textPrimary">8</p>
+              <p className="text-2xl font-bold text-textPrimary">{overview.outOfStock.toLocaleString()}</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-red-500 flex items-center justify-center">
               <XCircle size={20} className="text-white" />
@@ -65,7 +88,7 @@ export default function InventoryOverview() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-textMuted">Turnover Rate</p>
-              <p className="text-2xl font-bold text-textPrimary">68%</p>
+              <p className="text-2xl font-bold text-textPrimary">{turnoverRate}%</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center">
               <TrendingUp size={20} className="text-white" />
@@ -76,7 +99,11 @@ export default function InventoryOverview() {
 
       <div className="bg-surface rounded-xl border border-border p-6">
         <h3 className="text-lg font-semibold text-textPrimary mb-4">Inventory List</h3>
-        <Table columns={columns} data={mockInventory} />
+        {loading && <p className="text-sm text-textMuted">Loading…</p>}
+        {!loading && items.length === 0 && !error && (
+          <p className="text-sm text-textMuted">No products found.</p>
+        )}
+        {!loading && items.length > 0 && <Table columns={columns} data={items} />}
       </div>
     </div>
   )
