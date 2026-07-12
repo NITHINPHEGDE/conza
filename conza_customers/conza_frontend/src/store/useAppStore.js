@@ -154,7 +154,14 @@ const useAppStore = create((set, get) => ({
 
   setUserProfile: (user) => {
     const newState = { userProfile: user };
-    if (user?.location?.coordinates) {
+    // Only fall back to the saved profile/account location when we don't
+    // already have a live GPS fix — fetchAndSetDeviceLocation() runs before
+    // fetchUserProfile() in initApp, so if userLat/userLng are already set
+    // they came from the device's actual current position and must NOT be
+    // clobbered by a stale saved address. This was why nearby-worker
+    // distances showed wrong even when standing right next to a worker.
+    const { userLat, userLng } = get();
+    if (user?.location?.coordinates && (userLat == null || userLng == null)) {
       const [lng, lat] = user.location.coordinates;
       newState.userLat = lat;
       newState.userLng = lng;
