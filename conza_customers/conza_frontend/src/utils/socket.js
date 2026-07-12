@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 // Use HTTPS — Railway does not expose raw port 5000 publicly
 const SOCKET_URL =
   process.env.EXPO_PUBLIC_SOCKET_URL ||
-  'https://conza-production-50d5.up.railway.app';
+  'https://conza-production-f2c8.up.railway.app';
 
 export const socket = io(SOCKET_URL, {
   autoConnect: false,
