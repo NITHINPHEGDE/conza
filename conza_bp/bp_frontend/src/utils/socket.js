@@ -2,7 +2,7 @@ import { io } from 'socket.io-client';
 
 // ✅ Must match your Render URL (no /api suffix for socket)
 const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL || 'https://conza-production.up.railway.app';
+  process.env.EXPO_PUBLIC_SOCKET_URL || 'https://conza-production-59e4.up.railway.app';
 
 export const socket = io(SOCKET_URL, {
   autoConnect: false,
