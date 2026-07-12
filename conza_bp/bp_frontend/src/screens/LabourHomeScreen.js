@@ -148,7 +148,10 @@ const LabourHomeScreen = ({ navigation }) => {
     fetchRequests();
     let intervalId = null;
     if (isOnline) {
-      intervalId = setInterval(fetchRequests, 10000);
+      // Background polls are silent — they must not toggle requestsLoading
+      // or force a new array reference, which was causing the whole list
+      // to flicker every 10 seconds regardless of whether anything changed.
+      intervalId = setInterval(() => fetchRequests(true), 10000);
     }
     return () => { if (intervalId) clearInterval(intervalId); };
   }, [isOnline, fetchRequests]);

@@ -31,7 +31,17 @@ api.interceptors.response.use(
       } catch (_) {}
     }
     const msg = err.response?.data?.message || err.message || 'Network error';
-    return Promise.reject(new Error(msg));
+    // Preserve the original response/status on the rejected error — callers
+    // like fetchActiveBooking rely on err.response.status (e.g. 404/410) to
+    // detect stale/deleted resources and clean up local state. Rejecting
+    // with a bare `new Error(msg)` stripped this, so 404s never matched and
+    // stale IDs (e.g. activeBookingId) were never cleared, causing repeated
+    // failing requests on every app init.
+    const wrappedErr = new Error(msg);
+    wrappedErr.response = err.response;
+    wrappedErr.status = err.response?.status;
+    wrappedErr.code = code;
+    return Promise.reject(wrappedErr);
   }
 );
 

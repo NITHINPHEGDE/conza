@@ -103,8 +103,14 @@ const usePartnerStore = create((set, get) => ({
   requests: [],
   requestsLoading: false,
 
-  fetchRequests: async () => {
-    set({ requestsLoading: true });
+  // `silent`: background polls (every 10s while online) pass silent=true so
+  // they don't flip requestsLoading and don't replace the `requests` array
+  // reference unless the data actually changed. Previously every poll set
+  // requestsLoading true→false and always wrote a brand-new array, which
+  // made the FlatList swap to its skeleton/empty state and re-render every
+  // card every 10 seconds — the "flicker" even when nothing changed.
+  fetchRequests: async (silent = false) => {
+    if (!silent) set({ requestsLoading: true });
     try {
       const { api } = require('../services/apiClient');
       const data = await api.get('/bookings/requests');
@@ -161,7 +167,14 @@ const usePartnerStore = create((set, get) => ({
           };
         });
 
-        set({ requests: mapped });
+        // Only replace the array reference if the set of request IDs (or
+        // the count) actually changed — keeps FlatList/RequestCard
+        // references stable across identical background polls.
+        const nextIds = mapped.map(r => r.id?.toString()).join(',');
+        const currentIds = get().requests.map(r => r.id?.toString()).join(',');
+        if (nextIds !== currentIds) {
+          set({ requests: mapped });
+        }
 
         const workerIsOnline = get().isOnline;
         if (workerIsOnline) {
@@ -185,7 +198,7 @@ const usePartnerStore = create((set, get) => ({
     } catch (err) {
       console.error('[Store] fetchRequests failed:', err.message);
     } finally {
-      set({ requestsLoading: false });
+      if (!silent) set({ requestsLoading: false });
     }
   },
 
