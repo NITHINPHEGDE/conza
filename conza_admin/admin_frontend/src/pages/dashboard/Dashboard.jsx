@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Users, HardHat, Store, Handshake, CalendarCheck, ShoppingCart,
   Package, Truck, TrendingUp, TrendingDown, AlertTriangle, Clock,
-  CheckCircle, XCircle, Star, MapPin, Eye
+  CheckCircle, XCircle, Star, MapPin, Eye, Loader2
 } from 'lucide-react'
 import useDashboardStore from '../../store/dashboard/useDashboardStore'
 import RevenueChart from '../../components/charts/RevenueChart/RevenueChart'
@@ -37,20 +37,41 @@ const StatCard = ({ title, value, icon: Icon, trend, trendValue, color }) => (
 export default function Dashboard() {
   const {
     stats, recentRegistrations, recentComplaints, recentOrders,
-    recentBookings, topWorkers, topVendors, lowStockAlerts, pendingVerifications
+    recentBookings, topWorkers, topVendors, lowStockAlerts, pendingVerifications,
+    revenueData, bookingData, userGrowthData, lastUpdated, loading, error,
+    fetchDashboard,
   } = useDashboardStore()
 
   const [activeTab, setActiveTab] = useState('overview')
 
+  useEffect(() => {
+    fetchDashboard()
+  }, [])
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-textPrimary">Dashboard</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-textPrimary">Dashboard</h1>
+          {lastUpdated && (
+            <p className="text-xs text-textMuted mt-1">
+              Last updated {new Date(lastUpdated).toLocaleTimeString()}
+            </p>
+          )}
+        </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm">Export</Button>
-          <Button size="sm">Refresh</Button>
+          <Button size="sm" onClick={fetchDashboard} disabled={loading}>
+            {loading ? <Loader2 size={14} className="animate-spin" /> : 'Refresh'}
+          </Button>
         </div>
       </div>
+
+      {error && (
+        <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-sm text-danger">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         <StatCard title="Total Users" value={stats.totalUsers} icon={Users} trend="up" trendValue="+12%" color="bg-blue-500" />
@@ -73,11 +94,18 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-surface rounded-xl border border-border p-5">
           <h3 className="text-lg font-semibold text-textPrimary mb-4">Revenue Trend</h3>
-          <RevenueChart />
+          <RevenueChart data={revenueData} />
         </div>
         <div className="bg-surface rounded-xl border border-border p-5">
           <h3 className="text-lg font-semibold text-textPrimary mb-4">Bookings by Category</h3>
-          <BookingChart />
+          <BookingChart data={bookingData} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-surface rounded-xl border border-border p-5">
+          <h3 className="text-lg font-semibold text-textPrimary mb-4">User Growth</h3>
+          <UserGrowthChart data={userGrowthData} />
         </div>
       </div>
 

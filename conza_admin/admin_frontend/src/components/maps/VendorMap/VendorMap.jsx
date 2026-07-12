@@ -1,6 +1,7 @@
+import { useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
-import { mockVendors } from '../../../mock/vendors'
 import L from 'leaflet'
+import useMapStore from '../../../store/maps/useMapStore'
 
 const vendorIcon = new L.DivIcon({
   className: 'custom-div-icon',
@@ -10,24 +11,38 @@ const vendorIcon = new L.DivIcon({
 })
 
 export default function VendorMap({ height = '400px' }) {
+  const { vendors, loading, error, fetchLiveTracking } = useMapStore()
+
+  useEffect(() => {
+    fetchLiveTracking()
+    const interval = setInterval(fetchLiveTracking, 30000)
+    return () => clearInterval(interval)
+  }, [fetchLiveTracking])
+
   return (
-    <div style={{ height }}>
+    <div style={{ height, position: 'relative' }}>
+      {error && (
+        <p className="absolute top-2 left-2 z-[1000] text-xs text-danger bg-white px-2 py-1 rounded shadow">
+          {error}
+        </p>
+      )}
+      {!loading && vendors.length === 0 && !error && (
+        <p className="absolute top-2 left-2 z-[1000] text-xs text-textMuted bg-white px-2 py-1 rounded shadow">
+          No active vendors found
+        </p>
+      )}
       <MapContainer center={[12.9716, 77.5946]} zoom={12} style={{ height: '100%', borderRadius: '0.5rem' }}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {mockVendors.map((vendor) => (
-          <Marker
-            key={vendor.id}
-            position={[vendor.latitude || 12.9716 + (Math.random() - 0.5) * 0.1, vendor.longitude || 77.5946 + (Math.random() - 0.5) * 0.1]}
-            icon={vendorIcon}
-          >
+        {vendors.map((vendor) => (
+          <Marker key={vendor.id} position={[vendor.latitude, vendor.longitude]} icon={vendorIcon}>
             <Popup>
               <div className="text-sm">
                 <p className="font-semibold">{vendor.shopName}</p>
                 <p className="text-textMuted">{vendor.name}</p>
-                <p className="text-xs">{vendor.city} | {vendor.sellerType}</p>
+                <p className="text-xs">{vendor.city}{vendor.approximate ? ' (approx.)' : ''}</p>
               </div>
             </Popup>
           </Marker>

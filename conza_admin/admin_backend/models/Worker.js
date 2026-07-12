@@ -27,6 +27,14 @@ const workerSchema = new mongoose.Schema({
   isOnline: { type: Boolean, default: false },
   isAvailable: { type: Boolean, default: true },
 
+  // GeoJSON location, written by the worker app's live location-tracking
+  // flush job. coordinates: [longitude, latitude]. Was missing from this
+  // mirrored schema entirely, which silently broke live-tracking queries.
+  location: {
+    type: { type: String, enum: ['Point'], default: 'Point' },
+    coordinates: { type: [Number], default: [0, 0] },
+  },
+
   rating: { type: Number, default: 5.0 },
   totalJobs: { type: Number, default: 0 },
   memberSince: { type: String, default: '' },

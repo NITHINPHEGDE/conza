@@ -1,11 +1,10 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { mockUserGrowthData } from '../../../mock/dashboard'
 
-export default function UserGrowthChart() {
+export default function UserGrowthChart({ data = [] }) {
   return (
     <div className="h-80">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={mockUserGrowthData}>
+        <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" />
           <XAxis dataKey="month" stroke="#ABA89E" fontSize={12} />
           <YAxis stroke="#ABA89E" fontSize={12} />

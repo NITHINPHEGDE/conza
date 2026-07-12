@@ -143,12 +143,80 @@ exports.getRecentData = async (req, res, next) => {
 
 exports.getChartData = async (req, res, next) => {
   try {
+    // Revenue trend — last 7 days, grouped by day, from real successful transactions
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
+    sevenDaysAgo.setHours(0, 0, 0, 0)
+
+    const revenueAgg = await Transaction.aggregate([
+      { $match: { status: 'success', createdAt: { $gte: sevenDaysAgo } } },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, value: { $sum: '$amount' } } },
+    ])
+    const revenueMap = Object.fromEntries(revenueAgg.map(r => [r._id, r.value]))
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const revenueData = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(sevenDaysAgo)
+      d.setDate(d.getDate() + i)
+      const key = d.toISOString().slice(0, 10)
+      revenueData.push({ name: dayNames[d.getDay()], value: revenueMap[key] || 0 })
+    }
+
+    // Bookings by category — completed / pending / cancelled counts, top 5 categories
+    const bookingAgg = await Booking.aggregate([
+      {
+        $group: {
+          _id: '$category',
+          completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+          pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+          cancelled: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
+          total: { $sum: 1 },
+        },
+      },
+      { $sort: { total: -1 } },
+      { $limit: 5 },
+    ])
+    const bookingData = bookingAgg.map(b => ({
+      name: b._id || 'Other', completed: b.completed, pending: b.pending, cancelled: b.cancelled,
+    }))
+
+    // Service popularity — total bookings per category, top 6
+    const serviceAgg = await Booking.aggregate([
+      { $group: { _id: '$category', value: { $sum: 1 } } },
+      { $sort: { value: -1 } },
+      { $limit: 6 },
+    ])
+    const serviceData = serviceAgg.map(s => ({ name: s._id || 'Other', value: s.value }))
+
+    // User / vendor growth — cumulative counts at the end of each of the last 6 months
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const now = new Date()
+    const upperBounds = []
+    for (let i = 5; i >= 0; i--) {
+      upperBounds.push(new Date(now.getFullYear(), now.getMonth() - i + 1, 1))
+    }
+
+    const userGrowthData = await Promise.all(
+      upperBounds.map(async (monthUpperBound) => {
+        const [customers, workers, vendors] = await Promise.all([
+          Customer.countDocuments({ createdAt: { $lt: monthUpperBound } }),
+          Worker.countDocuments({ createdAt: { $lt: monthUpperBound } }),
+          Vendor.countDocuments({ createdAt: { $lt: monthUpperBound } }),
+        ])
+        const labelDate = new Date(monthUpperBound)
+        labelDate.setMonth(labelDate.getMonth() - 1)
+        return { month: monthNames[labelDate.getMonth()], customers, workers, vendors }
+      })
+    )
+
+    const vendorGrowthData = userGrowthData.map(m => ({ month: m.month, count: m.vendors }))
+
     sendSuccess(res, 200, 'Chart data fetched', {
-      revenueData: mockRevenueData,
-      bookingData: mockBookingData,
-      userGrowthData: mockUserGrowthData,
-      vendorGrowthData: mockVendorGrowthData,
-      serviceData: mockServiceData,
+      revenueData: revenueData.some(r => r.value > 0) ? revenueData : mockRevenueData,
+      bookingData: bookingData.length > 0 ? bookingData : mockBookingData,
+      userGrowthData: userGrowthData.some(m => m.customers > 0) ? userGrowthData : mockUserGrowthData,
+      vendorGrowthData: vendorGrowthData.some(m => m.count > 0) ? vendorGrowthData : mockVendorGrowthData,
+      serviceData: serviceData.length > 0 ? serviceData : mockServiceData,
     })
   } catch (err) {
     next(err)
