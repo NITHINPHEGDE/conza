@@ -858,7 +858,7 @@ const styles = StyleSheet.create({
   checkoutText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
 
   // Labour
-  labourList: { paddingTop: 10, paddingBottom: 30, paddingHorizontal: 14 },
+  labourList: { paddingTop: 10, paddingBottom: 30, paddingHorizontal: 24 },
   gridRow: { gap: 8 },
   continueWrapper: { marginTop: 12, marginHorizontal: 6, marginBottom: 10 },
   continueBtn: { borderRadius: 16, overflow: 'hidden' },
