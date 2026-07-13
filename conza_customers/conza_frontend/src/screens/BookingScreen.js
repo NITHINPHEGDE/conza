@@ -159,8 +159,8 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
   ), [handlePress]);
 
   const listHeader = useMemo(() => (
-    <View>
-      <View style={[styles.materialSearchWrapper, { marginTop: 4 }]}>
+    <View style={{ marginHorizontal: -8 }}>
+      <View style={[styles.materialSearchWrapper, { marginTop: 4, marginHorizontal: 14 }]}>
         <View style={styles.searchIconBadge}>
           <MaterialCommunityIcons name="magnify" size={16} color={colors.accentAmber} />
         </View>
@@ -859,7 +859,7 @@ const styles = StyleSheet.create({
   checkoutText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
 
   // Labour
-  labourList: { paddingTop: 10, paddingBottom: 30, paddingHorizontal: 48 },
+  labourList: { paddingTop: 8, paddingBottom: 30, paddingHorizontal: 8 },
   gridRow: { gap: 8 },
   continueWrapper: { marginTop: 12, marginHorizontal: 6, marginBottom: 10 },
   continueBtn: { borderRadius: 16, overflow: 'hidden' },
