@@ -263,8 +263,8 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
 const styles = StyleSheet.create({
   // ── Card ──
   card: {
-    aspectRatio: 0.82,
-    borderRadius: 22,
+    aspectRatio: 0.75,
+    borderRadius: 16,
     backgroundColor: '#1e1e1e',
     overflow: 'hidden',
     position: 'relative',
@@ -299,9 +299,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emojiOrb: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emoji: {
-    fontSize: 26,
+    fontSize: 20,
   },
 
   // ── Vignettes ──
@@ -331,14 +331,14 @@ const styles = StyleSheet.create({
   // ── Selection ──
   selectGlow: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 22,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: colors.accentYellow,
     backgroundColor: 'rgba(255, 193, 7, 0.12)',
   },
   selectRing: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 22,
+    borderRadius: 16,
     borderWidth: 2.5,
     borderColor: colors.accentYellow,
   },
@@ -367,20 +367,20 @@ const styles = StyleSheet.create({
   // ── Floating rating ──
   floatingRating: {
     position: 'absolute',
-    top: 10,
-    left: 10,
+    top: 6,
+    left: 6,
     backgroundColor: 'rgba(255, 215, 0, 0.18)',
-    borderRadius: 16,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
     borderWidth: 1,
     borderColor: 'rgba(255, 215, 0, 0.35)',
   },
   ratingText: {
     color: '#FFD700',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
 
   // ── Footer ──
@@ -389,24 +389,24 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 10,
-    paddingBottom: 10,
-    paddingTop: 6,
+    paddingHorizontal: 7,
+    paddingBottom: 7,
+    paddingTop: 4,
   },
 
   // ── HIGHLIGHTED LABEL ──
   labelHighlight: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginBottom: 5,
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    marginBottom: 4,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
   label: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: -0.2,
   },
@@ -429,15 +429,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(52, 211, 153, 0.15)',
-    borderRadius: 12,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
     borderWidth: 1,
     borderColor: 'rgba(52, 211, 153, 0.3)',
     alignSelf: 'flex-start',
   },
   metaText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.2,
   },

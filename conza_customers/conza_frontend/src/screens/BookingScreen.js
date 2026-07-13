@@ -197,7 +197,7 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
         data={labourCategories}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        numColumns={2}
+        numColumns={3}
         columnWrapperStyle={styles.gridRow}
         contentContainerStyle={styles.labourList}
         showsVerticalScrollIndicator={false}
@@ -858,7 +858,7 @@ const styles = StyleSheet.create({
   checkoutText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
 
   // Labour
-  labourList: { paddingTop: 10, paddingBottom: 30, paddingHorizontal: 24 },
+  labourList: { paddingTop: 10, paddingBottom: 30, paddingHorizontal: 14 },
   gridRow: { gap: 8 },
   continueWrapper: { marginTop: 12, marginHorizontal: 6, marginBottom: 10 },
   continueBtn: { borderRadius: 16, overflow: 'hidden' },
