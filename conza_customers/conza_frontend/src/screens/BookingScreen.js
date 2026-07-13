@@ -177,6 +177,7 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
           </TouchableOpacity>
         )}
       </View>
+      <View style={{ height: 14 }} />
     </View>
   ), [search, onSearchChange, onClearSearch]);
 
@@ -197,7 +198,7 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
         data={labourCategories}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        numColumns={3}
+        numColumns={2}
         columnWrapperStyle={styles.gridRow}
         contentContainerStyle={styles.labourList}
         showsVerticalScrollIndicator={false}
@@ -858,7 +859,7 @@ const styles = StyleSheet.create({
   checkoutText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
 
   // Labour
-  labourList: { paddingTop: 10, paddingBottom: 30, paddingHorizontal: 14 },
+  labourList: { paddingTop: 10, paddingBottom: 30, paddingHorizontal: 48 },
   gridRow: { gap: 8 },
   continueWrapper: { marginTop: 12, marginHorizontal: 6, marginBottom: 10 },
   continueBtn: { borderRadius: 16, overflow: 'hidden' },

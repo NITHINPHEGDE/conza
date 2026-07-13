@@ -263,7 +263,7 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
 const styles = StyleSheet.create({
   // ── Card ──
   card: {
-    aspectRatio: 0.75,
+    aspectRatio: 0.88,
     borderRadius: 16,
     backgroundColor: '#1e1e1e',
     overflow: 'hidden',
