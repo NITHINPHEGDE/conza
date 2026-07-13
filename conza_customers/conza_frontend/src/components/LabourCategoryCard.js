@@ -147,7 +147,7 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
   const hasPhoto = !!item.image;
 
   return (
-    <Animated.View style={{ flex: 1, marginBottom: 8, transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={{ flex: 1, marginBottom: 34, transform: [{ scale: scaleAnim }] }}>
       <TouchableOpacity
         style={cardStyle}
         onPress={handlePress}
