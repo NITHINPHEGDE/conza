@@ -147,7 +147,7 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
   const hasPhoto = !!item.image;
 
   return (
-    <Animated.View style={{ width: '47%', margin: 6, transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={{ flex: 1, marginBottom: 8, transform: [{ scale: scaleAnim }] }}>
       <TouchableOpacity
         style={cardStyle}
         onPress={handlePress}
@@ -263,8 +263,8 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
 const styles = StyleSheet.create({
   // ── Card ──
   card: {
-    aspectRatio: 0.8,
-    borderRadius: 28,
+    aspectRatio: 0.9,
+    borderRadius: 22,
     backgroundColor: '#1e1e1e',
     overflow: 'hidden',
     position: 'relative',
@@ -299,9 +299,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emojiOrb: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emoji: {
-    fontSize: 32,
+    fontSize: 26,
   },
 
   // ── Vignettes ──
@@ -331,24 +331,24 @@ const styles = StyleSheet.create({
   // ── Selection ──
   selectGlow: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 28,
+    borderRadius: 22,
     borderWidth: 2,
     borderColor: colors.accentYellow,
     backgroundColor: 'rgba(255, 193, 7, 0.12)',
   },
   selectRing: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 28,
+    borderRadius: 22,
     borderWidth: 2.5,
     borderColor: colors.accentYellow,
   },
   checkBadge: {
     position: 'absolute',
-    top: 14,
-    right: 14,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    top: 10,
+    right: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -367,18 +367,18 @@ const styles = StyleSheet.create({
   // ── Floating rating ──
   floatingRating: {
     position: 'absolute',
-    top: 14,
-    left: 14,
+    top: 10,
+    left: 10,
     backgroundColor: 'rgba(255, 215, 0, 0.18)',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    borderRadius: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderWidth: 1,
     borderColor: 'rgba(255, 215, 0, 0.35)',
   },
   ratingText: {
     color: '#FFD700',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.3,
   },
@@ -389,24 +389,24 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-    paddingTop: 8,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    paddingTop: 6,
   },
 
   // ── HIGHLIGHTED LABEL ──
   labelHighlight: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: 8,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginBottom: 5,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
   label: {
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: -0.2,
   },
@@ -429,15 +429,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(52, 211, 153, 0.15)',
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    borderRadius: 12,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderWidth: 1,
     borderColor: 'rgba(52, 211, 153, 0.3)',
     alignSelf: 'flex-start',
   },
   metaText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
