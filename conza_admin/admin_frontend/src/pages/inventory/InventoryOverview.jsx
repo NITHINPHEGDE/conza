@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Package, AlertTriangle, XCircle, TrendingUp } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Package, AlertTriangle, XCircle, TrendingUp, Tags, Truck, ChevronRight } from 'lucide-react'
 import inventoryService from '../../services/inventoryService'
 import materialService from '../../services/materialService'
 import Table from '../../components/common/Table/Table'
@@ -94,6 +95,38 @@ export default function InventoryOverview() {
               <TrendingUp size={20} className="text-white" />
             </div>
           </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-semibold text-textPrimary mb-3">Category Management</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Link
+            to="/inventory/material-categories"
+            className="bg-surface rounded-xl border border-border p-5 flex items-center gap-4 hover:border-accentYellow transition-colors"
+          >
+            <div className="w-10 h-10 rounded-lg bg-accentYellowSoft flex items-center justify-center">
+              <Tags size={20} className="text-accentAmber" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-textPrimary">Material Categories</p>
+              <p className="text-xs text-textMuted">Create, edit and remove material categories</p>
+            </div>
+            <ChevronRight size={18} className="text-textMuted" />
+          </Link>
+          <Link
+            to="/inventory/rental-categories"
+            className="bg-surface rounded-xl border border-border p-5 flex items-center gap-4 hover:border-accentYellow transition-colors"
+          >
+            <div className="w-10 h-10 rounded-lg bg-accentYellowSoft flex items-center justify-center">
+              <Truck size={20} className="text-accentAmber" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-textPrimary">Rental Categories</p>
+              <p className="text-xs text-textMuted">Create, edit and remove rental categories</p>
+            </div>
+            <ChevronRight size={18} className="text-textMuted" />
+          </Link>
         </div>
       </div>
 

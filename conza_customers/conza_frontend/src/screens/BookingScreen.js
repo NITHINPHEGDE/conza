@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
+  Image,
   Modal,
   Alert,
 } from 'react-native';
@@ -217,8 +218,9 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
 // ─── Material View ────────────────────────────────────────────────────────────
 const MaterialView = React.memo(() => {
   const navigation      = useNavigation();
-  const searchMaterials = useAppStore((s) => s.searchMaterials);
+  const filterMaterials = useAppStore((s) => s.filterMaterials);
   const materials       = useAppStore((s) => s.materials);  // subscribe so list re-renders on load
+  const materialCategories = useAppStore((s) => s.materialCategories);
   const materialsLoading = useAppStore((s) => s.materialsLoading);
   const materialsError  = useAppStore((s) => s.materialsError);
   const fetchMaterials  = useAppStore((s) => s.fetchMaterials);
@@ -227,12 +229,17 @@ const MaterialView = React.memo(() => {
   const getCartItems    = useAppStore((s) => s.getCartItems);
   const getCartItemCount = useAppStore((s) => s.getCartItemCount);
 
-  const [query, setQuery] = useState('');
-  const filtered     = useMemo(() => searchMaterials(query), [materials, searchMaterials, query]);
+  const [query,       setQuery]       = useState('');
+  const [selectedCat, setSelectedCat] = useState('all');
+  const [showFilter,  setShowFilter]  = useState(false);
+
+  const filtered     = useMemo(() => filterMaterials(selectedCat, query), [materials, filterMaterials, selectedCat, query]);
+  const activeCat    = useMemo(() => materialCategories.find((c) => c.id === selectedCat), [materialCategories, selectedCat]);
   const totalItems   = useMemo(
     () => Object.values(cart).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0),
     [cart]
   );
+  
   // Compute total inline using subscribed `materials` + `cart` so it
   // reacts to both changing (fixes stale ₹0 bug when API loads after cart is populated)
   const totalPrice   = useMemo(
@@ -259,6 +266,14 @@ const MaterialView = React.memo(() => {
   }, [navigation, getCartItems, cart]);
 
   const handleClearQuery = useCallback(() => setQuery(''), []);
+  const handleOpenFilter = useCallback(() => setShowFilter(true), []);
+  const handleCloseFilter = useCallback(() => setShowFilter(false), []);
+  const handleClearCat = useCallback(() => setSelectedCat('all'), []);
+  
+  const handleSelectCat = useCallback((id) => {
+    setSelectedCat(id);
+    setShowFilter(false);
+  }, []);
 
   const handleAddMaterialToCart = useCallback((item) => {
     addToCart(item);
@@ -276,6 +291,25 @@ const MaterialView = React.memo(() => {
       />
     </View>
   ), [cart, handleUpdateQuantity, handleImagePress, handleAddMaterialToCart]);
+
+  const renderCatItem = useCallback(({ item: cat }) => (
+    <TouchableOpacity
+      key={cat.id}
+      style={[styles.catCard, selectedCat === cat.id && styles.catCardSelected]}
+      onPress={() => handleSelectCat(cat.id)}
+      activeOpacity={0.75}
+    >
+      {cat.image ? (
+        <Image source={{ uri: cat.image }} style={styles.catImage} />
+      ) : (
+        <Text style={styles.catEmoji}>{cat.emoji}</Text>
+      )}
+      <Text style={[styles.catLabel, selectedCat === cat.id && styles.catLabelSelected]}>
+        {cat.label}
+      </Text>
+      {selectedCat === cat.id && <View style={styles.catSelectedDot} />}
+    </TouchableOpacity>
+  ), [selectedCat, handleSelectCat]);
 
   const listHeader = useMemo(() => (
     <View>
@@ -297,21 +331,40 @@ const MaterialView = React.memo(() => {
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity style={styles.filterBtn} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={[styles.filterBtn, selectedCat !== 'all' && styles.filterBtnActive]}
+          activeOpacity={0.8}
+          onPress={handleOpenFilter}
+        >
           <View style={styles.filterIconBadge}>
             <MaterialCommunityIcons name="tune-variant" size={13} color="#16A34A" />
           </View>
-          <Text style={styles.filterBtnText}>Filter</Text>
+          <Text style={[styles.filterBtnText, selectedCat !== 'all' && styles.filterBtnTextActive]}>
+            {selectedCat !== 'all' ? activeCat?.label : 'Filter'}
+          </Text>
         </TouchableOpacity>
       </View>
+      {selectedCat !== 'all' && (
+        <View style={styles.activeCatRow}>
+          {activeCat?.image ? (
+            <Image source={{ uri: activeCat.image }} style={styles.activeCatImage} />
+          ) : (
+            <Text style={styles.activeCatEmoji}>{activeCat?.emoji}</Text>
+          )}
+          <Text style={styles.activeCatLabel}>{activeCat?.label}</Text>
+          <TouchableOpacity onPress={handleClearCat} activeOpacity={0.7}>
+            <Text style={styles.activeCatClear}>✕ Clear</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
-  ), [query, handleClearQuery]);
+  ), [query, handleClearQuery, selectedCat, activeCat, handleOpenFilter, handleClearCat]);
 
   const listEmpty = useMemo(() => (
     <EmptyState
       emoji="🧱"
       title="No materials found"
-      subtitle="Try a different search term"
+      subtitle="Try a different filter or search term"
     />
   ), []);
 
@@ -370,6 +423,45 @@ const MaterialView = React.memo(() => {
           </LinearGradient>
         </View>
       )}
+      
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilter}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseFilter}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={handleCloseFilter}
+        >
+          <TouchableOpacity style={styles.modalSheet} activeOpacity={1}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Filter by Category</Text>
+            <Text style={styles.modalSub}>Select a category to filter materials</Text>
+            
+            <FlatList
+              data={materialCategories}
+              keyExtractor={(item) => item.id}
+              renderItem={renderCatItem}
+              numColumns={3}
+              columnWrapperStyle={{ gap: 12, marginBottom: 12 }}
+              contentContainerStyle={{ paddingVertical: 10 }}
+              scrollEnabled={false}
+              extraData={selectedCat}
+            />
+
+            <TouchableOpacity
+              onPress={handleCloseFilter}
+              style={styles.modalCancel}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalCancelText}>Close</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 });
@@ -429,7 +521,11 @@ const RentalView = React.memo(() => {
       onPress={() => handleSelectCat(cat.id)}
       activeOpacity={0.75}
     >
-      <Text style={styles.catEmoji}>{cat.emoji}</Text>
+      {cat.image ? (
+        <Image source={{ uri: cat.image }} style={styles.catImage} />
+      ) : (
+        <Text style={styles.catEmoji}>{cat.emoji}</Text>
+      )}
       <Text style={[styles.catLabel, selectedCat === cat.id && styles.catLabelSelected]}>
         {cat.label}
       </Text>
@@ -484,7 +580,11 @@ const RentalView = React.memo(() => {
 
       {selectedCat !== 'all' && (
         <View style={styles.activeCatRow}>
-          <Text style={styles.activeCatEmoji}>{activeCat?.emoji}</Text>
+          {activeCat?.image ? (
+            <Image source={{ uri: activeCat.image }} style={styles.activeCatImage} />
+          ) : (
+            <Text style={styles.activeCatEmoji}>{activeCat?.emoji}</Text>
+          )}
           <Text style={styles.activeCatLabel}>{activeCat?.label}</Text>
           <TouchableOpacity onPress={handleClearCat} activeOpacity={0.7}>
             <Text style={styles.activeCatClear}>✕ Clear</Text>
@@ -985,6 +1085,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   activeCatEmoji: { fontSize: 16 },
+  activeCatImage: { width: 20, height: 20, borderRadius: 10 },
   activeCatLabel: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, flex: 1 },
   activeCatClear: { fontSize: 12, fontWeight: '600', color: colors.accentAmber },
   rentalGridList: { paddingHorizontal: 12, paddingBottom: 30 },
@@ -1003,6 +1104,7 @@ const styles = StyleSheet.create({
   },
   catCardSelected: { backgroundColor: '#FFFDF0', borderColor: colors.accentYellow },
   catEmoji: { fontSize: 28, marginBottom: 8 },
+  catImage: { width: 40, height: 40, borderRadius: 20, marginBottom: 8 },
   catLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, textAlign: 'center' },
   catLabelSelected: { color: colors.accentAmber },
   catSelectedDot: {

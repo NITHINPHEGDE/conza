@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Image, Alert, KeyboardAvoidingView, Platform,
@@ -11,11 +11,21 @@ import useVendorStore from '../store/useVendorStore';
 import useModeStore from '../store/useModeStore';
 import { colors } from '../theme/colors';
 import { uploadImagesToCloudinary } from '../utils/cloudinary';
+import { categoryService } from '../services/categoryService';
 
 
-const CATEGORIES = [
-  'Cement', 'Steel', 'Sand', 'Bricks',
-  'Aggregate', 'Timber', 'Paint', 'Plumbing', 'Electrical', 'Other',
+// Fallback categories used when admin hasn't configured any yet
+const FALLBACK_CATEGORIES = [
+  { id: 'cement',     name: 'Cement' },
+  { id: 'steel',      name: 'Steel' },
+  { id: 'sand',       name: 'Sand' },
+  { id: 'bricks',     name: 'Bricks' },
+  { id: 'aggregate',  name: 'Aggregate' },
+  { id: 'timber',     name: 'Timber' },
+  { id: 'paint',      name: 'Paint' },
+  { id: 'plumbing',   name: 'Plumbing' },
+  { id: 'electrical', name: 'Electrical' },
+  { id: 'other',      name: 'Other' },
 ];
 
 const UNITS = ['bag', 'piece', 'ton', 'kg', 'litre', 'box', 'roll', 'sheet', 'set', 'meter'];
@@ -27,7 +37,22 @@ const AddProductScreen = ({ navigation }) => {
   const { addProduct } = useVendorStore();
   const { mode }       = useModeStore();
   const [loading,     setLoading]     = useState(false);
-  const [uploadProgress, setUploadProgress] = useState('');  // e.g. "Uploading 1 of 3..."
+  const [uploadProgress, setUploadProgress] = useState('');
+
+  // Dynamic categories from admin
+  const [categories,    setCategories]    = useState(FALLBACK_CATEGORIES);
+  const [catsLoading,   setCatsLoading]   = useState(true);
+
+  useEffect(() => {
+    categoryService.getMaterialCategories()
+      .then((apiCats) => {
+        if (apiCats.length) {
+          setCategories(apiCats.map((c) => ({ id: c.id, name: c.name, image: c.image })));
+        }
+      })
+      .catch(() => { /* keep fallback */ })
+      .finally(() => setCatsLoading(false));
+  }, []);
 
   // Form state
   const [images,      setImages]      = useState([]);
@@ -241,20 +266,31 @@ navigation.navigate('InventoryList');
         {/* ── Category ── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Category *</Text>
-          <View style={styles.chipGrid}>
-            {CATEGORIES.map((cat) => (
-              <TouchableOpacity
-                key={cat}
-                style={[styles.chip, category === cat && styles.chipActive]}
-                onPress={() => setCategory(cat)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.chipText, category === cat && styles.chipTextActive]}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {catsLoading ? (
+            <ActivityIndicator size="small" color={colors.accentAmber} style={{ marginVertical: 12 }} />
+          ) : (
+            <View style={styles.categoryGrid}>
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[styles.catCard, category === cat.name && styles.catCardActive]}
+                  onPress={() => setCategory(cat.name)}
+                  activeOpacity={0.8}
+                >
+                  {cat.image ? (
+                    <Image source={{ uri: cat.image }} style={styles.catCardImage} />
+                  ) : null}
+                  <Text
+                    style={[styles.catCardText, category === cat.name && styles.catCardTextActive]}
+                    numberOfLines={2}
+                  >
+                    {cat.name}
+                  </Text>
+                  {category === cat.name && <View style={styles.catCardDot} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* ── Pricing & Stock ── */}
@@ -499,7 +535,7 @@ const styles = StyleSheet.create({
   rowInputs:  { flexDirection: 'row', gap: 10, marginBottom: 12 },
   halfField:  { flex: 1 },
 
-  // Chips
+  // Chips (kept for Unit picker)
   chipGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14,
@@ -512,6 +548,29 @@ const styles = StyleSheet.create({
   chipActive:     { backgroundColor: colors.accentAmberSoft, borderColor: colors.accentAmber },
   chipText:       { fontSize: 12, fontWeight: '600', color: colors.textMuted },
   chipTextActive: { color: colors.accentAmber, fontWeight: '800' },
+
+  // Dynamic category cards (3-column grid with optional image)
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  catCard: {
+    width: '30%',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    position: 'relative',
+  },
+  catCardActive: { backgroundColor: colors.accentAmberSoft, borderColor: colors.accentAmber },
+  catCardImage: { width: 36, height: 36, borderRadius: 18, marginBottom: 6 },
+  catCardText: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, textAlign: 'center' },
+  catCardTextActive: { color: colors.accentAmber },
+  catCardDot: {
+    position: 'absolute', top: 6, right: 6,
+    width: 7, height: 7, borderRadius: 4,
+    backgroundColor: colors.accentAmber,
+  },
 
   // Buttons
   buttonsRow:   { flexDirection: 'row', gap: 12, marginTop: 8 },

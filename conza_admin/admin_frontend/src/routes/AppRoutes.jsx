@@ -183,6 +183,7 @@ export default function AppRoutes() {
             <Route path="/materials" element={<MaterialList />} />
             <Route path="/materials/:id" element={<MaterialDetails />} />
             <Route path="/materials/categories" element={<MaterialCategories />} />
+            <Route path="/inventory/material-categories" element={<MaterialCategories />} />
             <Route path="/materials/featured" element={<FeaturedProducts />} />
           </Route>
 
@@ -191,6 +192,7 @@ export default function AppRoutes() {
             <Route path="/rentals" element={<RentalList />} />
             <Route path="/rentals/:id" element={<RentalDetails />} />
             <Route path="/rentals/categories" element={<RentalCategories />} />
+            <Route path="/inventory/rental-categories" element={<RentalCategories />} />
             <Route path="/rentals/featured" element={<FeaturedRentals />} />
           </Route>
 

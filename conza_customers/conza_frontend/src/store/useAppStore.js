@@ -12,12 +12,55 @@ import { workerAPI  } from '../api/workerAPI';
 import { bookingAPI } from '../api/bookingAPI';
 import { authAPI    } from '../api/authAPI';
 import { walletAPI  } from '../api/walletAPI';
+import { productAPI } from '../api/productAPI';
 
 import { socket, connectSocket } from '../utils/socket';
 
 export const EMPTY_ARRAY = [];
 const EMPTY_OBJ   = {};
 import api from '../api/axiosInstance';
+
+// Normalizes a category title into the id format used by the filter chips
+// ("Earth Movers" → "earth_movers"), matching how rental items already
+// normalize Product.category in fetchRentalData.
+const toCategoryId = (name) => (name || '').toLowerCase().trim().replace(/\s+/g, '_');
+
+// Builds the filter-chip category list shown in the customer app. Prefers the
+// admin-managed categories fetched from the backend; when none are available
+// (offline / not created yet) it derives them from the loaded items so the
+// existing filter keeps working exactly as before.
+const buildCategoryList = (apiCategories, items, { allEmoji = '🏗️', fallbackEmoji = '📦' } = {}) => {
+  const all = [{ id: 'all', label: 'All', emoji: allEmoji, image: null }];
+
+  if (Array.isArray(apiCategories) && apiCategories.length) {
+    return [
+      ...all,
+      ...apiCategories.map((c) => ({
+        id:    toCategoryId(c.name),
+        label: c.name,
+        image: c.image || null,
+        emoji: fallbackEmoji,
+      })),
+    ];
+  }
+
+  const seen = new Set();
+  const derived = [];
+  (items || []).forEach((item) => {
+    const raw = (item.category || '').trim();
+    if (!raw) return;
+    const id = toCategoryId(raw);
+    if (seen.has(id)) return;
+    seen.add(id);
+    derived.push({
+      id,
+      label: raw.charAt(0).toUpperCase() + raw.slice(1).replace(/_/g, ' '),
+      image: null,
+      emoji: fallbackEmoji,
+    });
+  });
+  return [...all, ...derived];
+};
 
 const useAppStore = create((set, get) => ({
 
@@ -329,15 +372,23 @@ const useAppStore = create((set, get) => ({
   },
 
   // ── Materials ─────────────────────────────────────────────────────────────
-  materials:       [],
-  materialsLoading: false,
-  materialsError:  null,
+  materials:          [],
+  materialCategories: [],
+  materialsLoading:   false,
+  materialsError:     null,
 
   fetchMaterials: async () => {
+    // Fetch products and admin-managed categories in parallel; the categories
+    // call is failure-isolated so it can never break product loading.
+    const catsPromise = productAPI.getMaterialCategories()
+      .then((d) => (Array.isArray(d?.categories) ? d.categories : null))
+      .catch(() => null);
+
     try {
       set({ materialsLoading: true, materialsError: null });
       const res  = await api.get('/products/public?type=material&limit=100');
       const data = res.data;
+      const apiCategories = await catsPromise;
 
       if (data.success && data.products?.length) {
         const normalized = data.products.map((p) => ({
@@ -361,13 +412,24 @@ const useAppStore = create((set, get) => ({
           brand:       p.brand || '',
           description: p.description || '',
         }));
-        set({ materials: normalized });
+        set({
+          materials: normalized,
+          materialCategories: buildCategoryList(apiCategories, normalized, { allEmoji: '🧱' }),
+        });
       } else {
-        set({ materials: dummyMaterials });
+        set({
+          materials: dummyMaterials,
+          materialCategories: buildCategoryList(apiCategories, dummyMaterials, { allEmoji: '🧱' }),
+        });
       }
     } catch (err) {
       console.warn('[Materials] API error, falling back to dummy:', err.message);
-      set({ materials: dummyMaterials, materialsError: null });
+      const apiCategories = await catsPromise;
+      set({
+        materials: dummyMaterials,
+        materialCategories: buildCategoryList(apiCategories, dummyMaterials, { allEmoji: '🧱' }),
+        materialsError: null,
+      });
     } finally {
       set({ materialsLoading: false });
     }
@@ -384,6 +446,18 @@ const useAppStore = create((set, get) => ({
     );
   },
 
+  filterMaterials: (category = 'all', query = '') => {
+    const q = query.trim().toLowerCase();
+    return get().materials.filter((item) => {
+      const matchCat   = category === 'all' || toCategoryId(item.category) === category;
+      const matchQuery = q === '' ||
+        (item.name     || '').toLowerCase().includes(q) ||
+        (item.seller   || '').toLowerCase().includes(q) ||
+        (item.category || '').toLowerCase().includes(q);
+      return matchCat && matchQuery;
+    });
+  },
+
   // ── Rental ──────────────────────────────────────────────────────────────
   rentalItems:      [],
   rentalCategories: [],
@@ -391,10 +465,17 @@ const useAppStore = create((set, get) => ({
   rentalError:      null,
 
   fetchRentalData: async () => {
+    // Fetch products and admin-managed categories in parallel; the categories
+    // call is failure-isolated so it can never break product loading.
+    const catsPromise = productAPI.getRentalCategories()
+      .then((d) => (Array.isArray(d?.categories) ? d.categories : null))
+      .catch(() => null);
+
     try {
       set({ rentalLoading: true, rentalError: null });
       const res  = await api.get('/products/public?type=rental&limit=100');
       const data = res.data;
+      const apiCategories = await catsPromise;
 
       if (data.success && data.products?.length) {
         const normalized = data.products.map((p) => ({
@@ -418,17 +499,10 @@ const useAppStore = create((set, get) => ({
           specs:       [],
         }));
 
-        const catSet = new Set(normalized.map((i) => i.category));
-        const categories = [
-          { id: 'all', label: 'All', emoji: '🏗️' },
-          ...Array.from(catSet).map((c) => ({
-            id:    c,
-            label: c.charAt(0).toUpperCase() + c.slice(1).replace(/_/g, ' '),
-            emoji: '📦',
-          })),
-        ];
-
-        set({ rentalItems: normalized, rentalCategories: categories });
+        set({
+          rentalItems: normalized,
+          rentalCategories: buildCategoryList(apiCategories, normalized, { allEmoji: '🏗️', fallbackEmoji: '📦' }),
+        });
       } else {
         set({ rentalItems: dummyRentalItems, rentalCategories: dummyRentalCategories });
       }

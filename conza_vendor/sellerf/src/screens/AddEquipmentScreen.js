@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     TextInput, Image, Alert, KeyboardAvoidingView, Platform,
@@ -10,25 +10,21 @@ import * as ImagePicker from 'expo-image-picker';
 import useVendorStore from '../store/useVendorStore';
 import { colors } from '../theme/colors';
 import { uploadImagesToCloudinary } from '../utils/cloudinary';
+import { categoryService } from '../services/categoryService';
 
-const CATEGORIES = [
-    'Concrete Equipment', 'Scaffolding', 'Earthmoving',
-    'Lifting Equipment', 'Compaction', 'Power Tools',
-    'Lighting', 'Formwork', 'Safety Equipment', 'Other',
+// Fallback rental categories used when admin hasn't configured any yet
+const FALLBACK_CATEGORIES = [
+    { id: 'concrete_equipment', name: 'Concrete Equipment', emoji: '🏗️' },
+    { id: 'scaffolding',        name: 'Scaffolding',        emoji: '🪜' },
+    { id: 'earthmoving',        name: 'Earthmoving',        emoji: '🚜' },
+    { id: 'lifting_equipment',  name: 'Lifting Equipment',  emoji: '🏋️' },
+    { id: 'compaction',         name: 'Compaction',         emoji: '🔨' },
+    { id: 'power_tools',        name: 'Power Tools',        emoji: '🔧' },
+    { id: 'lighting',           name: 'Lighting',           emoji: '💡' },
+    { id: 'formwork',           name: 'Formwork',           emoji: '🪵' },
+    { id: 'safety_equipment',   name: 'Safety Equipment',   emoji: '🦺' },
+    { id: 'other',              name: 'Other',              emoji: '📦' },
 ];
-
-const CATEGORY_EMOJI = {
-    'Concrete Equipment': '🏗️',
-    'Scaffolding': '🪜',
-    'Earthmoving': '🚜',
-    'Lifting Equipment': '🏋️',
-    'Compaction': '🔨',
-    'Power Tools': '🔧',
-    'Lighting': '💡',
-    'Formwork': '🪵',
-    'Safety Equipment': '🦺',
-    'Other': '📦',
-};
 
 const UNITS = ['unit', 'set', 'pair', 'piece'];
 const MAX_IMAGES = 5;
@@ -46,6 +42,26 @@ const AddEquipmentScreen = ({ navigation }) => {
 
     const [loading, setLoading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState('');
+
+    // Dynamic categories from admin
+    const [categories,  setCategories]  = useState(FALLBACK_CATEGORIES);
+    const [catsLoading, setCatsLoading] = useState(true);
+
+    useEffect(() => {
+        categoryService.getRentalCategories()
+            .then((apiCats) => {
+                if (apiCats.length) {
+                    setCategories(apiCats.map((c) => ({
+                        id:    c.id,
+                        name:  c.name,
+                        image: c.image || null,
+                        emoji: '📦',
+                    })));
+                }
+            })
+            .catch(() => { /* keep fallback */ })
+            .finally(() => setCatsLoading(false));
+    }, []);
 
     const [images, setImages] = useState([]);
     const [name, setName] = useState('');
@@ -244,19 +260,33 @@ const AddEquipmentScreen = ({ navigation }) => {
                 {/* ── Category ── */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Category *</Text>
-                    <View style={styles.chipGrid}>
-                        {CATEGORIES.map((cat) => (
-                            <TouchableOpacity
-                                key={cat}
-                                style={[styles.chip, category === cat && styles.chipActive]}
-                                onPress={() => setCategory(cat)}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={styles.chipEmoji}>{CATEGORY_EMOJI[cat]}</Text>
-                                <Text style={[styles.chipText, category === cat && styles.chipTextActive]}>{cat}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                    {catsLoading ? (
+                        <ActivityIndicator size="small" color={colors.accentAmber} style={{ marginVertical: 12 }} />
+                    ) : (
+                        <View style={styles.categoryGrid}>
+                            {categories.map((cat) => (
+                                <TouchableOpacity
+                                    key={cat.id}
+                                    style={[styles.catCard, category === cat.name && styles.catCardActive]}
+                                    onPress={() => setCategory(cat.name)}
+                                    activeOpacity={0.75}
+                                >
+                                    {cat.image ? (
+                                        <Image source={{ uri: cat.image }} style={styles.catCardImage} />
+                                    ) : (
+                                        <Text style={styles.catCardEmoji}>{cat.emoji}</Text>
+                                    )}
+                                    <Text
+                                        style={[styles.catCardText, category === cat.name && styles.catCardTextActive]}
+                                        numberOfLines={2}
+                                    >
+                                        {cat.name}
+                                    </Text>
+                                    {category === cat.name && <View style={styles.catCardDot} />}
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
                 </View>
 
                 {/* ── Rental Pricing ── */}
@@ -433,12 +463,34 @@ const styles = StyleSheet.create({
     rowInputs: { flexDirection: 'row', gap: 10 },
     halfField: { flex: 1 },
 
+    // Chips (kept for unit picker)
     chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border },
     chipActive: { backgroundColor: colors.accentAmberSoft, borderColor: colors.accentAmber },
     chipEmoji: { fontSize: 12 },
     chipText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
     chipTextActive: { color: colors.accentAmber, fontWeight: '800' },
+
+    // Dynamic category cards (3-column grid with image or emoji)
+    categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    catCard: {
+        width: '30%', alignItems: 'center',
+        paddingVertical: 14, paddingHorizontal: 6,
+        borderRadius: 14,
+        backgroundColor: colors.surfaceElevated,
+        borderWidth: 1.5, borderColor: colors.border,
+        position: 'relative',
+    },
+    catCardActive: { backgroundColor: colors.accentAmberSoft, borderColor: colors.accentAmber },
+    catCardImage:  { width: 36, height: 36, borderRadius: 18, marginBottom: 6 },
+    catCardEmoji:  { fontSize: 22, marginBottom: 6 },
+    catCardText:   { fontSize: 11, fontWeight: '700', color: colors.textSecondary, textAlign: 'center' },
+    catCardTextActive: { color: colors.accentAmber },
+    catCardDot: {
+        position: 'absolute', top: 6, right: 6,
+        width: 7, height: 7, borderRadius: 4,
+        backgroundColor: colors.accentAmber,
+    },
 
     unitRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
     unitChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border },

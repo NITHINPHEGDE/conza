@@ -4,13 +4,17 @@ const router  = express.Router();
 const {
   getMyProducts, createProduct, updateProduct, deleteProduct,
   toggleAvailability, getPublicProducts, getProductById,
-  getUploadSignature,
+  getUploadSignature, getMaterialCategories, getRentalCategories,
 } = require('../controllers/productController');
 const { protectSeller } = require('../middleware/sellerAuthMiddleware');
 
 // Public (customer browsing)
 router.get('/public',      getPublicProducts);
 router.get('/public/:id',  getProductById);
+
+// Public category lists (managed from the admin panel)
+router.get('/categories/materials', getMaterialCategories);
+router.get('/categories/rentals',   getRentalCategories);
 
 // Seller protected
 router.get('/upload-signature', protectSeller, getUploadSignature);  // ← before /:id

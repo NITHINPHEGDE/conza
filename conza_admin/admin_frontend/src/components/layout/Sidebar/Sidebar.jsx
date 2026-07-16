@@ -40,7 +40,11 @@ const menuGroups = [
     items: [
       { icon: Package, label: 'Materials',  path: '/materials',  permission: 'materials' },
       { icon: Truck,   label: 'Rentals',    path: '/rentals',    permission: 'rentals' },
-      { icon: Boxes,   label: 'Inventory',  path: '/inventory',  permission: 'inventory' },
+      { icon: Boxes,   label: 'Inventory',  path: '/inventory',  permission: 'inventory',
+        children: [
+          { label: 'Material Categories', path: '/inventory/material-categories' },
+          { label: 'Rental Categories',   path: '/inventory/rental-categories' },
+        ] },
       { icon: Wrench,  label: 'Services',   path: '/services',   permission: 'services' },
     ]
   },

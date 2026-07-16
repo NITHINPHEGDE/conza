@@ -1,5 +1,6 @@
-// conzacsb/controllers/productController.js
 const Product = require('../models/Product');
+const MaterialCategory = require('../models/MaterialCategory');
+const RentalCategory   = require('../models/RentalCategory');
 const { withCache, invalidateCache } = require('../utils/cacheHelpers');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../middleware/cloudinaryUpload');
 
@@ -236,8 +237,40 @@ const getUploadSignature = (req, res) => {
   res.json({ success: true, signature, timestamp, apiKey, cloudName, folder });
 };
 
+// GET /api/products/categories/materials  (public — admin-managed material categories)
+const getMaterialCategories = async (req, res) => {
+  try {
+    const docs = await MaterialCategory.find({ active: true })
+      .select('name image')
+      .sort({ name: 1 })
+      .lean();
+    res.json({
+      success: true,
+      categories: docs.map((c) => ({ id: c._id, name: c.name, image: c.image })),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// GET /api/products/categories/rentals  (public — admin-managed rental categories)
+const getRentalCategories = async (req, res) => {
+  try {
+    const docs = await RentalCategory.find({ active: true })
+      .select('name image')
+      .sort({ name: 1 })
+      .lean();
+    res.json({
+      success: true,
+      categories: docs.map((c) => ({ id: c._id, name: c.name, image: c.image })),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
 
 module.exports = {
   getMyProducts, getPublicProducts, getProductById,
   createProduct, updateProduct, deleteProduct, toggleAvailability,getUploadSignature,
+  getMaterialCategories, getRentalCategories,
 };

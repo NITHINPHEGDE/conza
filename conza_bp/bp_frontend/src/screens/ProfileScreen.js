@@ -6,6 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import usePartnerStore from '../store/usePartnerStore';
 import { logout } from '../services/authService';
 import { stopLocationTracking } from '../services/locationService';
@@ -191,7 +192,7 @@ const EditProfileModal = React.memo(({ visible, profile, onClose, onSave }) => {
                 </LinearGradient>
               )}
               <View style={styles.avatarPickerOverlay}>
-                <Text style={styles.avatarPickerIcon}>📷</Text>
+                <MaterialCommunityIcons name="camera-outline" size={15} color={colors.accentAmber} />
               </View>
             </TouchableOpacity>
             {uploadingImage && (
@@ -216,13 +217,13 @@ const EditProfileModal = React.memo(({ visible, profile, onClose, onSave }) => {
 const MenuItem = React.memo(({ icon, label, sub, danger, onPress }) => (
   <TouchableOpacity style={styles.menuItem} activeOpacity={0.75} onPress={onPress}>
     <View style={[styles.menuIcon, danger && styles.menuIconDanger]}>
-      <Text style={{ fontSize: 18 }}>{icon}</Text>
+      <MaterialCommunityIcons name={icon} size={17} color={danger ? colors.danger : colors.accentAmber} />
     </View>
     <View style={{ flex: 1 }}>
       <Text style={[styles.menuLabel, danger && { color: colors.danger }]}>{label}</Text>
       {sub ? <Text style={styles.menuSub}>{sub}</Text> : null}
     </View>
-    {!danger && <Text style={styles.menuArrow}>›</Text>}
+    {!danger && <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />}
   </TouchableOpacity>
 ));
 
@@ -264,6 +265,8 @@ const ProfileScreen = ({ navigation }) => {
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
 
+        <Text style={styles.screenHeading}>Profile</Text>
+
         {/* Avatar Section */}
         <View style={styles.avatarSection}>
           {profile.profileImage ? (
@@ -278,9 +281,13 @@ const ProfileScreen = ({ navigation }) => {
             </LinearGradient>
           )}
           <Text style={styles.userName}>{profile.fullName || profile.name || 'Worker'}</Text>
-          <Text style={styles.userCategory}>⭐ {rating.toFixed(1)} · {profile.category || ''}</Text>
+          <View style={styles.userMetaRow}>
+            <MaterialCommunityIcons name="star" size={13} color={colors.accentAmber} />
+            <Text style={styles.userCategory}>{rating.toFixed(1)} · {profile.category || ''}</Text>
+          </View>
           <Text style={styles.userPhone}>{profile.phone || ''}</Text>
           <TouchableOpacity style={styles.editBtn} activeOpacity={0.8} onPress={() => setEditVisible(true)}>
+            <MaterialCommunityIcons name="pencil-outline" size={13} color={colors.accentAmber} />
             <Text style={styles.editBtnText}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
@@ -299,16 +306,16 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>My Info</Text>
             {!!profile.locationText && (
-              <MenuItem icon="📍" label="Service Areas" sub={profile.locationText} />
+              <MenuItem icon="map-marker-outline" label="Service Areas" sub={profile.locationText} />
             )}
             {!!profile.category && (
-              <MenuItem icon="🔧" label="Service Category" sub={profile.category} />
+              <MenuItem icon="wrench-outline" label="Service Category" sub={profile.category} />
             )}
             {profile.experience != null && (
-              <MenuItem icon="⏱️" label="Experience" sub={`${profile.experience} year${profile.experience !== 1 ? 's' : ''}`} />
+              <MenuItem icon="clock-time-four-outline" label="Experience" sub={`${profile.experience} year${profile.experience !== 1 ? 's' : ''}`} />
             )}
             {!!profile.bio && (
-              <MenuItem icon="📝" label="About" sub={profile.bio} />
+              <MenuItem icon="text-box-outline" label="About" sub={profile.bio} />
             )}
           </View>
         )}
@@ -316,18 +323,18 @@ const ProfileScreen = ({ navigation }) => {
         {/* Legal */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Legal</Text>
-          <MenuItem icon="📃" label="Terms & Conditions" onPress={() => handleLegal('terms')} />
-          <MenuItem icon="🔐" label="Privacy Policy"     onPress={() => handleLegal('privacy')} />
-          <MenuItem icon="ℹ️" label="About Us"            onPress={() => handleLegal('about')} />
+          <MenuItem icon="file-document-outline" label="Terms & Conditions" onPress={() => handleLegal('terms')} />
+          <MenuItem icon="shield-lock-outline"    label="Privacy Policy"     onPress={() => handleLegal('privacy')} />
+          <MenuItem icon="information-outline"    label="About Us"           onPress={() => handleLegal('about')} />
         </View>
 
         {/* Support */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support</Text>
-          <MenuItem icon="❓" label="FAQs"          onPress={() => handleHelpFAQ('faqs')} />
-          <MenuItem icon="📖" label="Help Articles" onPress={() => handleHelpFAQ('articles')} />
+          <MenuItem icon="help-circle-outline"            label="FAQs"          onPress={() => handleHelpFAQ('faqs')} />
+          <MenuItem icon="book-open-page-variant-outline" label="Help Articles" onPress={() => handleHelpFAQ('articles')} />
           <MenuItem
-            icon="💬"
+            icon="email-outline"
             label="Chat With Us"
             sub="Email support"
             onPress={() => {
@@ -341,7 +348,7 @@ const ProfileScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.section}>
-          <MenuItem icon="🚪" label="Logout" danger onPress={handleLogout} />
+          <MenuItem icon="logout" label="Logout" danger onPress={handleLogout} />
         </View>
 
         <Text style={styles.version}>Conza Partner v1.0.0</Text>
@@ -360,8 +367,9 @@ const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   screen:   { flex: 1, backgroundColor: colors.background },
   scroll:   { paddingBottom: 40 },
+  screenHeading: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, paddingHorizontal: 20, marginBottom: 4, letterSpacing: -0.3 },
   avatarSection: {
-    alignItems: 'center', paddingVertical: 28, paddingHorizontal: 20,
+    alignItems: 'center', paddingVertical: 24, paddingHorizontal: 20,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   avatar: {
@@ -372,11 +380,13 @@ const styles = StyleSheet.create({
   },
   avatarImage: { width: 80, height: 80, borderRadius: 26, marginBottom: 12 },
   avatarInitials: { fontSize: 26, fontWeight: '800', color: colors.textPrimary, letterSpacing: 1 },
-  userName:      { fontSize: 20, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
-  userCategory:  { fontSize: 13, fontWeight: '600', color: colors.accentAmber, marginBottom: 4 },
+  userName:      { fontSize: 20, fontWeight: '800', color: colors.textPrimary, marginBottom: 6 },
+  userMetaRow:   { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
+  userCategory:  { fontSize: 13, fontWeight: '600', color: colors.accentAmber },
   userPhone:     { fontSize: 13, color: colors.textSecondary, marginBottom: 16, fontWeight: '500' },
   editBtn: {
-    paddingHorizontal: 22, paddingVertical: 8, borderRadius: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 20, paddingVertical: 8, borderRadius: 12,
     borderWidth: 1.5, borderColor: colors.accentYellow, backgroundColor: colors.accentYellowSoft,
   },
   editBtnText: { fontSize: 13, fontWeight: '700', color: colors.accentAmber },
@@ -407,10 +417,9 @@ const styles = StyleSheet.create({
     width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surfaceElevated,
     alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border,
   },
-  menuIconDanger: { backgroundColor: colors.dangerSoft, borderColor: 'rgba(224,59,59,0.2)' },
+  menuIconDanger: { backgroundColor: colors.dangerSoft || 'rgba(224,59,59,0.1)', borderColor: 'rgba(224,59,59,0.2)' },
   menuLabel:  { fontSize: 14, fontWeight: '600', color: colors.textPrimary, marginBottom: 2 },
   menuSub:    { fontSize: 11, color: colors.textMuted, fontWeight: '400' },
-  menuArrow:  { fontSize: 22, color: colors.textMuted, fontWeight: '300', lineHeight: 26 },
   version:    { textAlign: 'center', marginTop: 28, fontSize: 12, color: colors.textMuted, fontWeight: '500' },
 
   // Modal
@@ -437,7 +446,6 @@ const styles = StyleSheet.create({
     borderRadius: 10, backgroundColor: colors.surface, borderWidth: 1.5,
     borderColor: colors.accentYellow, alignItems: 'center', justifyContent: 'center',
   },
-  avatarPickerIcon: { fontSize: 14 },
   uploadingText:    { marginTop: 8, fontSize: 12, color: colors.textMuted, fontWeight: '500' },
 
   fieldRow:         { marginBottom: 18 },

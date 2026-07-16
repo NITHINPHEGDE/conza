@@ -33,20 +33,45 @@ const StatCard = React.memo(({ value, label }) => (
 ));
 
 const MenuItem = React.memo(({ icon, label, sub, danger, onPress }) => (
-  <TouchableOpacity style={styles.menuItem} activeOpacity={0.75} onPress={onPress}>
+  <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={onPress}>
     <View style={[styles.menuIcon, danger && styles.menuIconDanger]}>
-      {icon === '📍' ? (
-        <MaterialCommunityIcons name="map-marker" size={18} color={colors.accentAmber} />
-      ) : (
-        <Text style={{ fontSize: 18 }}>{icon}</Text>
-      )}
+      <MaterialCommunityIcons
+        name={icon}
+        size={19}
+        color={danger ? colors.danger : colors.accentAmber}
+      />
     </View>
     <View style={{ flex: 1 }}>
       <Text style={[styles.menuLabel, danger && { color: colors.danger }]}>{label}</Text>
       {sub && <Text style={styles.menuSub}>{sub}</Text>}
     </View>
-    {!danger && <Text style={styles.menuArrow}>›</Text>}
+    {!danger && (
+      <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textMuted} />
+    )}
   </TouchableOpacity>
+));
+
+// ── Reusable empty / error state ───────────────────────────────────────────────
+
+const StateBlock = React.memo(({ icon, iconColor, title, subtitle }) => (
+  <View style={styles.emptyState}>
+    <View style={styles.emptyStateIconWrap}>
+      <MaterialCommunityIcons name={icon} size={30} color={iconColor || colors.textMuted} />
+    </View>
+    <Text style={styles.emptyStateText}>{title}</Text>
+    {subtitle ? <Text style={styles.emptyStateSub}>{subtitle}</Text> : null}
+  </View>
+));
+
+// ── Modal header (shared) ──────────────────────────────────────────────────────
+
+const ModalHeader = React.memo(({ icon, title }) => (
+  <View style={styles.modalHeaderRow}>
+    <View style={styles.modalHeaderIcon}>
+      <MaterialCommunityIcons name={icon} size={20} color={colors.accentAmber} />
+    </View>
+    <Text style={styles.modalTitle}>{title}</Text>
+  </View>
 ));
 
 // ── Orders Modal ──────────────────────────────────────────────────────────────
@@ -72,15 +97,15 @@ const OrdersModal = React.memo(({ visible, onClose }) => {
       <View style={styles.modalOverlay}>
         <View style={[styles.modalSheet, { maxHeight: '80%' }]}>
           <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>My Orders</Text>
+          <ModalHeader icon="clipboard-text-outline" title="My Orders" />
           {completedOrdersLoading ? (
             <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 32 }} />
           ) : completedOrders.length === 0 ? (
-            <View style={styles.emptyOrders}>
-              <Text style={styles.emptyOrdersIcon}>📭</Text>
-              <Text style={styles.emptyOrdersText}>No completed orders yet</Text>
-              <Text style={styles.emptyOrdersSub}>Your finished bookings and orders will appear here.</Text>
-            </View>
+            <StateBlock
+              icon="package-variant-closed"
+              title="No completed orders yet"
+              subtitle="Your finished bookings and orders will appear here."
+            />
           ) : (
             <ScrollView showsVerticalScrollIndicator={false}>
               {completedOrders.map((b) => (
@@ -88,19 +113,23 @@ const OrdersModal = React.memo(({ visible, onClose }) => {
                   <View style={styles.orderCardTop}>
                     <Text style={styles.orderLabel}>{formatLabel(b)}</Text>
                     <View style={styles.orderBadge}>
-                      <Text style={styles.orderBadgeText}>✓ Completed</Text>
+                      <MaterialCommunityIcons name="check-circle" size={12} color={colors.success} />
+                      <Text style={styles.orderBadgeText}>Completed</Text>
                     </View>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                     {b.city && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                        <MaterialCommunityIcons name="map-marker" size={11} color={colors.textMuted} />
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                        <MaterialCommunityIcons name="map-marker-outline" size={12} color={colors.textMuted} />
                         <Text style={styles.orderMeta}>{b.city}</Text>
                       </View>
                     )}
-                    <Text style={styles.orderMeta}>
-                      🗓 {new Date(b.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <MaterialCommunityIcons name="calendar-blank-outline" size={12} color={colors.textMuted} />
+                      <Text style={styles.orderMeta}>
+                        {new Date(b.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               ))}
@@ -148,25 +177,21 @@ const FAQsModal = React.memo(({ visible, onClose }) => {
       <View style={styles.modalOverlay}>
         <View style={[styles.modalSheet, { maxHeight: '90%' }]}>
           <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>FAQs</Text>
+          <ModalHeader icon="help-circle-outline" title="FAQs" />
           {loading ? (
             <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 32 }} />
           ) : error ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>⚠️</Text>
-              <Text style={styles.emptyStateText}>{error}</Text>
-            </View>
+            <StateBlock icon="alert-circle-outline" iconColor={colors.danger} title={error} />
           ) : sections.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>❓</Text>
-              <Text style={styles.emptyStateText}>No FAQs available yet.</Text>
-            </View>
+            <StateBlock icon="help-circle-outline" title="No FAQs available yet." />
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
               {sections.map((section) => (
                 <View key={section.title} style={styles.faqSection}>
                   <View style={styles.faqSectionHeader}>
-                    <Text style={styles.faqSectionIcon}>{section.icon}</Text>
+                    <View style={styles.faqSectionIconWrap}>
+                      <MaterialCommunityIcons name="folder-text-outline" size={14} color={colors.accentAmber} />
+                    </View>
                     <Text style={styles.faqSectionTitle}>{section.title}</Text>
                   </View>
                   {section.items.map((item, idx) => {
@@ -181,7 +206,11 @@ const FAQsModal = React.memo(({ visible, onClose }) => {
                       >
                         <View style={styles.faqQuestion}>
                           <Text style={styles.faqQuestionText}>{item.q}</Text>
-                          <Text style={styles.faqChevron}>{open ? '▲' : '▼'}</Text>
+                          <MaterialCommunityIcons
+                            name={open ? 'chevron-up' : 'chevron-down'}
+                            size={18}
+                            color={colors.textMuted}
+                          />
                         </View>
                         {open && <Text style={styles.faqAnswer}>{item.a}</Text>}
                       </TouchableOpacity>
@@ -224,22 +253,24 @@ const LegalModal = React.memo(({ visible, onClose, title, icon, fetcher, fieldKe
       <View style={styles.modalOverlay}>
         <View style={[styles.modalSheet, { maxHeight: '90%' }]}>
           <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>{title}</Text>
+          <ModalHeader icon={icon} title={title} />
           {loading ? (
             <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 32 }} />
           ) : error ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>⚠️</Text>
-              <Text style={styles.emptyStateText}>{error}</Text>
-            </View>
+            <StateBlock icon="alert-circle-outline" iconColor={colors.danger} title={error} />
           ) : !doc ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>{icon}</Text>
-              <Text style={styles.emptyStateText}>Content not available yet.</Text>
-            </View>
+            <StateBlock icon={icon} title="Content not available yet." />
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
-              <Text style={styles.faqAnswer}>{doc.content}</Text>
+              {doc.updatedAt && (
+                <View style={styles.legalMetaRow}>
+                  <MaterialCommunityIcons name="clock-outline" size={12} color={colors.textMuted} />
+                  <Text style={styles.legalMetaText}>
+                    Last updated {new Date(doc.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </Text>
+                </View>
+              )}
+              <Text style={styles.legalContentText}>{doc.content}</Text>
             </ScrollView>
           )}
           <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
@@ -284,19 +315,13 @@ const HelpArticlesModal = React.memo(({ visible, onClose }) => {
       <View style={styles.modalOverlay}>
         <View style={[styles.modalSheet, { maxHeight: '90%' }]}>
           <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>Help Articles</Text>
+          <ModalHeader icon="book-open-page-variant-outline" title="Help Articles" />
           {loading ? (
             <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 32 }} />
           ) : error ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>⚠️</Text>
-              <Text style={styles.emptyStateText}>{error}</Text>
-            </View>
+            <StateBlock icon="alert-circle-outline" iconColor={colors.danger} title={error} />
           ) : articles.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>📖</Text>
-              <Text style={styles.emptyStateText}>No help articles available yet.</Text>
-            </View>
+            <StateBlock icon="book-open-page-variant-outline" title="No help articles available yet." />
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
               {articles.map((article) => {
@@ -310,7 +335,11 @@ const HelpArticlesModal = React.memo(({ visible, onClose }) => {
                   >
                     <View style={styles.articleHeader}>
                       <Text style={styles.articleTitle}>{article.title}</Text>
-                      <Text style={styles.faqChevron}>{open ? '▲' : '▼'}</Text>
+                      <MaterialCommunityIcons
+                        name={open ? 'chevron-up' : 'chevron-down'}
+                        size={18}
+                        color={colors.textMuted}
+                      />
                     </View>
                     {open && <Text style={styles.articleContent}>{article.content}</Text>}
                   </TouchableOpacity>
@@ -408,6 +437,9 @@ const ProfileScreen = () => {
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
 
+        {/* Header */}
+        <Text style={styles.screenHeading}>Profile</Text>
+
         {/* Avatar Section */}
         <LinearGradient
           colors={['rgba(245,200,66,0.1)', 'transparent']}
@@ -422,8 +454,12 @@ const ProfileScreen = () => {
             <Text style={styles.avatarInitials}>{initials}</Text>
           </LinearGradient>
           <Text style={styles.userName}>{u.fullName}</Text>
-          <Text style={styles.userPhone}>{u.phone}</Text>
+          <View style={styles.userPhoneRow}>
+            <MaterialCommunityIcons name="phone-outline" size={13} color={colors.textSecondary} />
+            <Text style={styles.userPhone}>{u.phone}</Text>
+          </View>
           <TouchableOpacity style={styles.editBtn} activeOpacity={0.8} onPress={openEdit}>
+            <MaterialCommunityIcons name="pencil-outline" size={14} color={colors.accentAmber} />
             <Text style={styles.editBtnText}>Edit Profile</Text>
           </TouchableOpacity>
         </LinearGradient>
@@ -440,28 +476,28 @@ const ProfileScreen = () => {
         {/* Account Menu */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-          <MenuItem icon="📍" label="Saved Addresses" sub="Manage delivery addresses" onPress={() => setAddressVisible(true)} />
-          <MenuItem icon="📋" label="My Orders"        sub="View completed bookings"   onPress={() => setOrdersVisible(true)} />
+          <MenuItem icon="map-marker-outline" label="Saved Addresses" sub="Manage delivery addresses" onPress={() => setAddressVisible(true)} />
+          <MenuItem icon="clipboard-text-outline" label="My Orders" sub="View completed bookings" onPress={() => setOrdersVisible(true)} />
         </View>
 
         {/* Support Menu */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support</Text>
-          <MenuItem icon="❓" label="FAQs"          sub="Browse common questions"  onPress={() => setFaqsVisible(true)} />
-          <MenuItem icon="📖" label="Help Articles" sub="Guides and how-to articles" onPress={() => setHelpArticlesVisible(true)} />
-          <MenuItem icon="💬" label="Chat With Us"  sub="Email our support team"    onPress={handleChatWithUs} />
+          <MenuItem icon="help-circle-outline" label="FAQs" sub="Browse common questions" onPress={() => setFaqsVisible(true)} />
+          <MenuItem icon="book-open-page-variant-outline" label="Help Articles" sub="Guides and how-to articles" onPress={() => setHelpArticlesVisible(true)} />
+          <MenuItem icon="email-outline" label="Chat With Us" sub="Email our support team" onPress={handleChatWithUs} />
         </View>
 
         {/* Legal Menu */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Legal</Text>
-          <MenuItem icon="📃" label="Terms & Conditions" sub="Customer terms of use"   onPress={() => setTermsVisible(true)} />
-          <MenuItem icon="🔐" label="Privacy Policy"     sub="How we handle your data" onPress={() => setPrivacyVisible(true)} />
-          <MenuItem icon="ℹ️" label="About Us"            sub="Learn more about Conza"  onPress={() => setAboutVisible(true)} />
+          <MenuItem icon="file-document-outline" label="Terms & Conditions" sub="Customer terms of use" onPress={() => setTermsVisible(true)} />
+          <MenuItem icon="shield-lock-outline" label="Privacy Policy" sub="How we handle your data" onPress={() => setPrivacyVisible(true)} />
+          <MenuItem icon="information-outline" label="About Us" sub="Learn more about Conza" onPress={() => setAboutVisible(true)} />
         </View>
 
         <View style={styles.section}>
-          <MenuItem icon="🚪" label="Logout" danger onPress={handleLogout} />
+          <MenuItem icon="logout" label="Logout" danger onPress={handleLogout} />
         </View>
 
         <Text style={styles.version}>Conza v1.0.0</Text>
@@ -490,7 +526,7 @@ const ProfileScreen = () => {
         visible={termsVisible}
         onClose={() => setTermsVisible(false)}
         title="Terms & Conditions"
-        icon="📃"
+        icon="file-document-outline"
         fieldKey="terms"
         fetcher={fetchCustomerLegal}
       />
@@ -498,7 +534,7 @@ const ProfileScreen = () => {
         visible={privacyVisible}
         onClose={() => setPrivacyVisible(false)}
         title="Privacy Policy"
-        icon="🔐"
+        icon="shield-lock-outline"
         fieldKey="privacy"
         fetcher={fetchCustomerLegal}
       />
@@ -506,7 +542,7 @@ const ProfileScreen = () => {
         visible={aboutVisible}
         onClose={() => setAboutVisible(false)}
         title="About Us"
-        icon="ℹ️"
+        icon="information-outline"
         fieldKey="about"
         fetcher={fetchAboutUs}
       />
@@ -516,7 +552,7 @@ const ProfileScreen = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Edit Profile</Text>
+            <ModalHeader icon="pencil-outline" title="Edit Profile" />
 
             <ScrollView style={{ maxHeight: 400 }}>
               <View style={styles.inputGroup}>
@@ -583,9 +619,17 @@ const styles = StyleSheet.create({
   scroll: {
     paddingBottom: 40,
   },
+  screenHeading: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    paddingHorizontal: 20,
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
   avatarSection: {
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: 28,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -613,16 +657,24 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     color: colors.textPrimary,
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  userPhoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 18,
   },
   userPhone: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: 18,
     fontWeight: '500',
   },
   editBtn: {
-    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 22,
     paddingVertical: 9,
     borderRadius: 12,
     borderWidth: 1.5,
@@ -722,12 +774,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontWeight: '400',
   },
-  menuArrow: {
-    fontSize: 22,
-    color: colors.textMuted,
-    fontWeight: '300',
-    lineHeight: 26,
-  },
   version: {
     textAlign: 'center',
     marginTop: 32,
@@ -756,12 +802,26 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 20,
   },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 24,
+  },
+  modalHeaderIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: colors.accentAmberSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '800',
     color: colors.textPrimary,
     textAlign: 'center',
-    marginBottom: 24,
   },
   // ── Edit Profile
   inputGroup: { marginBottom: 18 },
@@ -800,23 +860,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   // ── Orders
-  emptyOrders: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyOrdersIcon: { fontSize: 48, marginBottom: 12 },
-  emptyOrdersText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 6,
-  },
-  emptyOrdersSub: {
-    fontSize: 13,
-    color: colors.textMuted,
-    textAlign: 'center',
-    paddingHorizontal: 24,
-  },
   orderCard: {
     backgroundColor: colors.surface,
     borderRadius: 14,
@@ -829,7 +872,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   orderLabel: {
     fontSize: 14,
@@ -838,10 +881,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   orderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: 'rgba(46,139,87,0.12)',
     borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
   },
   orderBadgeText: {
     fontSize: 11,
@@ -856,14 +902,32 @@ const styles = StyleSheet.create({
   // ── Empty / Error state
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 36,
+    paddingHorizontal: 24,
   },
-  emptyStateIcon: { fontSize: 40, marginBottom: 12 },
+  emptyStateIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
   emptyStateText: {
     fontSize: 14,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  emptyStateSub: {
+    fontSize: 12,
     color: colors.textMuted,
     textAlign: 'center',
-    fontWeight: '500',
+    marginTop: 4,
+    fontWeight: '400',
   },
   // ── FAQ
   faqSection: {
@@ -875,7 +939,14 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 8,
   },
-  faqSectionIcon: { fontSize: 18 },
+  faqSectionIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    backgroundColor: colors.accentAmberSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   faqSectionTitle: {
     fontSize: 15,
     fontWeight: '800',
@@ -900,11 +971,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary,
     flex: 1,
-  },
-  faqChevron: {
-    fontSize: 10,
-    color: colors.textMuted,
-    marginTop: 2,
   },
   faqAnswer: {
     fontSize: 13,
@@ -939,6 +1005,27 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 20,
     marginTop: 10,
+    fontWeight: '400',
+  },
+  // ── Legal (About / Terms / Privacy)
+  legalMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  legalMetaText: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '500',
+  },
+  legalContentText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 21,
     fontWeight: '400',
   },
 });

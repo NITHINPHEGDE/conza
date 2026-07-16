@@ -1,49 +1,131 @@
-import { useState } from 'react'
-import { Edit, Trash2, Plus } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Edit, Trash2, Plus, ImagePlus } from 'lucide-react'
 import Table from '../../components/common/Table/Table'
 import Button from '../../components/common/Button/Button'
 import Modal from '../../components/common/Modal/Modal'
 import Input from '../../components/common/Input/Input'
 import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
-
-const initialCategories = [
-  { id: '1', name: 'Cement', products: 45, active: true },
-  { id: '2', name: 'Steel', products: 32, active: true },
-  { id: '3', name: 'Blocks', products: 28, active: true },
-  { id: '4', name: 'Sand', products: 15, active: true },
-  { id: '5', name: 'Paint', products: 56, active: true },
-  { id: '6', name: 'Tiles', products: 42, active: true },
-]
+import materialCategoryService from '../../services/materialCategoryService'
 
 export default function MaterialCategories() {
-  const [categories, setCategories] = useState(initialCategories)
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState({ name: '' })
+  const [form, setForm] = useState({ name: '', active: true })
+  const [imagePreview, setImagePreview] = useState(null)
+  const [imageBase64, setImageBase64] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState(null)
 
-  const handleSave = () => {
-    if (editing) {
-      setCategories(categories.map((c) => c.id === editing.id ? { ...c, name: form.name } : c))
-    } else {
-      setCategories([...categories, { id: String(categories.length + 1), name: form.name, products: 0, active: true }])
+  const loadCategories = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const res = await materialCategoryService.getAll({ limit: 100 })
+      if (res?.success === false) throw new Error(res.message || 'Failed to load categories')
+      setCategories(res.data || [])
+    } catch (err) {
+      setError(err.message || 'Failed to load categories')
+    } finally {
+      setLoading(false)
     }
-    setModalOpen(false)
+  }, [])
+
+  useEffect(() => {
+    loadCategories()
+  }, [loadCategories])
+
+  const openAddModal = () => {
     setEditing(null)
-    setForm({ name: '' })
+    setForm({ name: '', active: true })
+    setImagePreview(null)
+    setImageBase64(null)
+    setFormError(null)
+    setModalOpen(true)
   }
 
-  const handleDelete = (id) => {
-    setCategories(categories.filter((c) => c.id !== id))
+  const openEditModal = (row) => {
+    setEditing(row)
+    setForm({ name: row.name, active: row.active ?? true })
+    setImagePreview(row.image || null)
+    setImageBase64(null)
+    setFormError(null)
+    setModalOpen(true)
+  }
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      setImagePreview(reader.result)
+      setImageBase64(reader.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleSave = async () => {
+    setFormError(null)
+    if (!form.name.trim()) {
+      setFormError('Category title is required.')
+      return
+    }
+    if (!editing && !imageBase64) {
+      setFormError('Please upload a category image.')
+      return
+    }
+
+    try {
+      setSaving(true)
+      let res
+      if (editing) {
+        const payload = { name: form.name.trim(), active: form.active }
+        if (imageBase64) payload.image = imageBase64
+        res = await materialCategoryService.update(editing._id, payload)
+      } else {
+        res = await materialCategoryService.create({ name: form.name.trim(), image: imageBase64, active: form.active })
+      }
+      if (res?.success === false) throw new Error(res.message || 'Failed to save category')
+      setModalOpen(false)
+      await loadCategories()
+    } catch (err) {
+      setFormError(err.message || 'Failed to save category')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this category? This cannot be undone.')) return
+    try {
+      const res = await materialCategoryService.remove(id)
+      if (res?.success === false) throw new Error(res.message || 'Failed to delete category')
+      setCategories((prev) => prev.filter((c) => c._id !== id))
+    } catch (err) {
+      alert(err.message || 'Failed to delete category')
+    }
   }
 
   const columns = [
-    { key: 'name', title: 'Category Name' },
+    { key: 'name', title: 'Category', render: (row) => (
+      <div className="flex items-center gap-3">
+        <img
+          src={row.image}
+          alt={row.name}
+          className="w-8 h-8 rounded-lg object-cover border border-border"
+        />
+        <span className="font-medium text-textPrimary">{row.name}</span>
+      </div>
+    )},
     { key: 'products', title: 'Products' },
     { key: 'active', title: 'Active', render: (row) => row.active ? 'Yes' : 'No' },
     { key: 'actions', title: 'Actions', render: (row) => (
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={() => { setEditing(row); setForm({ name: row.name }); setModalOpen(true); }}><Edit size={14} /></Button>
-        <Button variant="ghost" size="sm" onClick={() => handleDelete(row.id)}><Trash2 size={14} className="text-danger" /></Button>
+        <Button variant="ghost" size="sm" onClick={() => openEditModal(row)}><Edit size={14} /></Button>
+        <Button variant="ghost" size="sm" onClick={() => handleDelete(row._id)}><Trash2 size={14} className="text-danger" /></Button>
       </div>
     )},
   ]
@@ -53,11 +135,12 @@ export default function MaterialCategories() {
       <Breadcrumb items={[{ label: 'Materials', path: '/materials' }, { label: 'Categories' }]} />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-textPrimary">Material Categories</h1>
-        <Button onClick={() => { setEditing(null); setForm({ name: '' }); setModalOpen(true); }}>
+        <Button onClick={openAddModal}>
           <Plus size={16} /> Add Category
         </Button>
       </div>
-      <Table columns={columns} data={categories} />
+      {error && <div className="text-sm text-danger">{error}</div>}
+      <Table columns={columns} data={loading ? [] : categories} rowKey="_id" emptyText={loading ? 'Loading...' : 'No categories found'} />
 
       <Modal
         isOpen={modalOpen}
@@ -66,11 +149,37 @@ export default function MaterialCategories() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave}>Save</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
           </>
         }
       >
-        <Input label="Category Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <div className="space-y-4">
+          {formError && <div className="text-sm text-danger">{formError}</div>}
+
+          <div>
+            <label className="block text-sm font-medium text-textSecondary mb-1.5">Category Image</label>
+            <label className="flex items-center gap-4 cursor-pointer">
+              <div className="w-20 h-20 rounded-lg border border-dashed border-border bg-surfaceElevated flex items-center justify-center overflow-hidden">
+                {imagePreview ? (
+                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <ImagePlus size={22} className="text-textMuted" />
+                )}
+              </div>
+              <span className="text-sm text-accentAmber font-medium">
+                {imagePreview ? 'Change image' : 'Upload image'}
+              </span>
+              <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+            </label>
+          </div>
+
+          <Input label="Category Title" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+            <span className="text-sm text-textSecondary">Active (visible in the customer app)</span>
+          </label>
+        </div>
       </Modal>
     </div>
   )
