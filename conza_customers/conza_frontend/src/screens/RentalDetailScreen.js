@@ -304,9 +304,14 @@ const RentalDetailScreen = ({ route, navigation }) => {
   );
 
   const handleImageScroll = useCallback((e) => {
+    // Fires from both onScroll (live, while dragging) and
+    // onMomentumScrollEnd (after a fling) so the dot updates immediately
+    // instead of only after a fast swipe's momentum fully settles — a slow
+    // deliberate drag previously left the indicator stuck on the old dot.
     const idx = Math.round(e.nativeEvent.contentOffset.x / HERO_PAGE_WIDTH);
-    setActiveImageIndex(idx);
-  }, []);
+    const clamped = Math.max(0, Math.min(idx, images.length - 1));
+    setActiveImageIndex((prev) => (prev === clamped ? prev : clamped));
+  }, [images.length]);
 
   const handleProceed = useCallback((bookingDetails) => {
     setShowBookNow(false);
@@ -391,6 +396,7 @@ const RentalDetailScreen = ({ route, navigation }) => {
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
+            onScroll={handleImageScroll}
             onMomentumScrollEnd={handleImageScroll}
             scrollEventThrottle={16}
             style={styles.heroScroll}
