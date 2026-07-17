@@ -400,7 +400,7 @@ const RentalDetailScreen = ({ route, navigation }) => {
                 key={`${uri}-${idx}`}
                 source={{ uri }}
                 style={[styles.heroImage, { width: HERO_PAGE_WIDTH }]}
-                resizeMode="cover"
+                resizeMode="contain"
               />
             ))}
           </ScrollView>

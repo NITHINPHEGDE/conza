@@ -205,7 +205,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
                 key={`${uri}-${idx}`}
                 source={{ uri }}
                 style={[styles.image, { width }]}
-                resizeMode="cover"
+                resizeMode="contain"
               />
             ))}
           </ScrollView>

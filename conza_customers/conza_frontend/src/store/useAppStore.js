@@ -374,7 +374,12 @@ const useAppStore = create((set, get) => ({
   // ── Materials ─────────────────────────────────────────────────────────────
   materials:          [],
   materialCategories: [],
-  materialsLoading:   false,
+  // Starts `true` (not `false`) so the very first render — which can happen
+  // before initApp()'s fetchMaterials() call has had a chance to flip this
+  // flag — shows the loading skeleton instead of an empty FlatList hitting
+  // its "No materials found" ListEmptyComponent. Without this, cold app
+  // start briefly flashed "No materials found" before the skeleton/data.
+  materialsLoading:   true,
   materialsError:     null,
 
   fetchMaterials: async () => {
@@ -462,7 +467,10 @@ const useAppStore = create((set, get) => ({
   // ── Rental ──────────────────────────────────────────────────────────────
   rentalItems:      [],
   rentalCategories: [],
-  rentalLoading:    false,
+  // Same fix as materialsLoading above — default to `true` so the rental
+  // tab shows its skeleton on first render instead of a flash of the
+  // "No rentals found" empty state before fetchRentalData() completes.
+  rentalLoading:    true,
   rentalError:      null,
 
   fetchRentalData: async () => {
