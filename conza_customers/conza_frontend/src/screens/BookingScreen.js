@@ -727,7 +727,11 @@ const BookingScreen = () => {
       </TouchableOpacity>
 
       {/* Wallet balance chip */}
-      <TouchableOpacity style={[styles.walletChip, { marginTop: 1 }]} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={[styles.walletChip, { marginTop: 1 }]}
+        activeOpacity={0.8}
+        onPress={() => navigation.navigate('Wallet')}
+      >
         <View style={styles.walletIconBadge}>
           <MaterialCommunityIcons name="wallet" size={12} color="#F0A500" />
         </View>

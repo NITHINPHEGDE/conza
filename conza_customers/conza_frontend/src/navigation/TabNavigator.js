@@ -19,6 +19,7 @@ import SignupScreen           from '../screens/SignupScreen';
 import StatusScreen           from '../screens/StatusScreen';
 import BookingTrackingScreen  from '../screens/BookingTrackingScreen';
 import CartScreen             from '../screens/CartScreen';
+import WalletScreen           from '../screens/WalletScreen';
 import useAppStore            from '../store/useAppStore';
 import { colors }             from '../theme/colors';
 
@@ -43,6 +44,7 @@ const BookingStack = () => (
     <Stack.Screen name="MaterialDetail"   component={MaterialDetailScreen}   />
     <Stack.Screen name="RentalDetail"     component={RentalDetailScreen}     />
     <Stack.Screen name="RentalCheckout"   component={RentalCheckoutScreen}   />
+    <Stack.Screen name="Wallet"           component={WalletScreen}           />
   </Stack.Navigator>
 );
 
@@ -51,6 +53,14 @@ const StatusStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="StatusList"    component={StatusScreen}          />
     <Stack.Screen name="BookingDetail" component={BookingTrackingScreen} />
+  </Stack.Navigator>
+);
+
+// Profile tab stack — profile → wallet
+const ProfileStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="ProfileHome" component={ProfileScreen} />
+    <Stack.Screen name="Wallet"      component={WalletScreen}  />
   </Stack.Navigator>
 );
 
@@ -125,7 +135,7 @@ const TabNavigator = () => {
       <Tab.Screen name="CartTab"       component={CartScreen}         options={{ title: 'Cart'           }} />
       <Tab.Screen name="CivilEngineer" component={CivilEngineerScreen} options={{ title: 'Civil Engineer' }} />
       <Tab.Screen name="Status"        component={StatusStack}        options={{ title: 'Status'         }} />
-      <Tab.Screen name="Profile"       component={ProfileScreen}      options={{ title: 'Profile'        }} />
+      <Tab.Screen name="Profile"       component={ProfileStack}       options={{ title: 'Profile'        }} />
     </Tab.Navigator>
   );
 };

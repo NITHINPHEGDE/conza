@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
 import useAppStore from '../store/useAppStore';
 import { SectionLoader } from '../components/LoadingState';
 import { useAuth } from '../hooks/useAuth';
@@ -359,13 +360,17 @@ const HelpArticlesModal = React.memo(({ visible, onClose }) => {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 const ProfileScreen = () => {
+  const navigation               = useNavigation();
   const userProfile             = useAppStore((s) => s.userProfile);
   const profileLoading          = useAppStore((s) => s.profileLoading);
   const derivedCompletedCount   = useAppStore((s) => s.derivedCompletedCount);
   const derivedActiveSitesCount = useAppStore((s) => s.derivedActiveSitesCount);
   const fetchCompletedOrders    = useAppStore((s) => s.fetchCompletedOrders);
+  const walletBalance           = useAppStore((s) => s.walletBalance);
   const insets                  = useSafeAreaInsets();
   const { logout, updateProfile, loading } = useAuth();
+
+  const handleOpenWallet = useCallback(() => navigation.navigate('Wallet'), [navigation]);
 
   const userLat          = useAppStore((s) => s.userLat);
   const userLng          = useAppStore((s) => s.userLng);
@@ -472,6 +477,30 @@ const ProfileScreen = () => {
           <View style={styles.statDivider} />
           <StatCard value={u.memberSince ?? '—'} label="Member Since" />
         </View>
+
+        {/* Wallet & Gift Card */}
+        <TouchableOpacity style={styles.walletCard} activeOpacity={0.85} onPress={handleOpenWallet}>
+          <View style={styles.walletCardTop}>
+            <View style={styles.walletCardIconWrap}>
+              <MaterialCommunityIcons name="wallet-outline" size={18} color={colors.textPrimary} />
+            </View>
+            <Text style={styles.walletCardTitle}>Conza Cash & Gift Card</Text>
+            <View style={styles.walletNewBadge}>
+              <Text style={styles.walletNewBadgeText}>NEW</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
+          </View>
+          <View style={styles.walletCardDivider} />
+          <View style={styles.walletCardBottom}>
+            <View>
+              <Text style={styles.walletCardLabel}>Available Balance</Text>
+              <Text style={styles.walletCardValue}>₹{walletBalance}</Text>
+            </View>
+            <TouchableOpacity style={styles.walletAddBtn} activeOpacity={0.8} onPress={handleOpenWallet}>
+              <Text style={styles.walletAddBtnText}>Add Balance</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
 
         {/* Account Menu */}
         <View style={styles.section}>
@@ -719,6 +748,52 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
     marginVertical: 14,
   },
+  walletCard: {
+    backgroundColor: 'rgba(109,40,217,0.06)',
+    marginHorizontal: 20,
+    marginTop: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(109,40,217,0.18)',
+    padding: 16,
+  },
+  walletCardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  walletCardIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  walletCardTitle: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.textPrimary },
+  walletNewBadge: {
+    backgroundColor: colors.success,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    marginRight: 4,
+  },
+  walletNewBadgeText: { fontSize: 9.5, fontWeight: '800', color: colors.white, letterSpacing: 0.3 },
+  walletCardDivider: {
+    height: 1,
+    backgroundColor: 'rgba(109,40,217,0.15)',
+    marginVertical: 14,
+  },
+  walletCardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  walletCardLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '600', marginBottom: 3 },
+  walletCardValue: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
+  walletAddBtn: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  walletAddBtnText: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
   section: {
     marginTop: 24,
     marginHorizontal: 20,
