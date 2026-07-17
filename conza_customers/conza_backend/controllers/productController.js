@@ -32,7 +32,7 @@ const getPublicProducts = async (req, res) => {
   try {
     const { type, search, category, page = 1, limit = 20 } = req.query;
     const cacheKey = `products:catalog:${type||'all'}:${category||'all'}:${page}:${limit}:${search||''}`;
-    const TTL      = search ? 0 : 360; // don't cache search results
+    const TTL      = search ? 0 : 60; // don't cache search results; 60s TTL keeps catalog fresh
 
     const fetch = async () => {
       const query = { isAvailable: true };
@@ -114,6 +114,12 @@ const createProduct = async (req, res) => {
       lowStockAt:   Number(lowStockAt) || 5,
       images:       Array.isArray(images) ? images.slice(0, 5) : [],
     });
+
+    // Bust the public catalog cache so customers immediately see the new
+    // product alongside all existing ones (without this, the 60-second
+    // cached response keeps serving the pre-creation list and the new
+    // product appears to be alone until the old cache expires).
+    await invalidateCache('products:catalog:*');
 
     res.status(201).json({ success: true, product });
   } catch (err) {
