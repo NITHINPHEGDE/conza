@@ -20,8 +20,9 @@ import LoginScreen          from '../screens/auth/LoginScreen';
 import SignUpScreen         from '../screens/auth/SignUpScreen';
 import HelpFAQScreen      from '../screens/HelpFAQScreen';
 import LegalScreen        from '../screens/LegalScreen';
-import SuspendedScreen    from '../screens/SuspendedScreen';
-import VerificationBanner from '../components/VerificationBanner';
+import SuspendedScreen           from '../screens/SuspendedScreen';
+import PendingVerificationScreen from '../screens/PendingVerificationScreen';
+import VerificationBanner        from '../components/VerificationBanner';
 
 import usePartnerStore, { selectActiveJob, selectJobStatus } from '../store/usePartnerStore';
 import { getLoggedInUser, getMe } from '../services/authService';
@@ -118,10 +119,26 @@ const MainAppStack = () => {
   // and every other screen/route becomes unreachable.
   const isSuspended = usePartnerStore((s) => s.worker?.status === 'suspended');
 
+  // A worker who has signed up but has not yet been verified by the admin
+  // must not be able to reach Home/Earnings/Active/History/Profile — they
+  // were previously only shown a dismissible top banner, which still let
+  // them go online and receive/accept real job requests before verification.
+  // Gate the entire app behind a dedicated screen instead, exactly like the
+  // suspended flow, until isVerified flips to true.
+  const isVerified = usePartnerStore((s) => !!s.worker?.isVerified);
+
   if (isSuspended) {
     return (
       <Stack.Navigator screenOptions={STACK_OPTS}>
         <Stack.Screen name="Suspended" component={SuspendedScreen} />
+      </Stack.Navigator>
+    );
+  }
+
+  if (!isVerified) {
+    return (
+      <Stack.Navigator screenOptions={STACK_OPTS}>
+        <Stack.Screen name="PendingVerification" component={PendingVerificationScreen} />
       </Stack.Navigator>
     );
   }

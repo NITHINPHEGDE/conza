@@ -6,6 +6,16 @@ const { withCache }      = require('../utils/cacheHelpers');
 // ── Coordinate rounding helper (groups nearby users into same bucket) ─────────
 const round3 = (n) => Math.round(parseFloat(n) * 1000) / 1000;
 
+// ── Distance (km) → ETA (minutes) helper ───────────────────────────────────
+// Base rate: 1.5 minutes per km, plus an extra 3 minutes for every full 5km
+// travelled (accounts for traffic/stops on longer trips).
+const kmToMinutes = (km) => {
+  if (km === null || km === undefined || isNaN(km)) return null;
+  const base  = km * 1.5;
+  const extra = Math.floor(km / 5) * 3;
+  return Math.max(1, Math.round(base + extra));
+};
+
 // Category names must match tolerantly (case/whitespace) — the app sends
 // whatever string it has on hand, and it must still match the worker's
 // stored category even if casing or stray spaces differ slightly.
@@ -213,7 +223,7 @@ const getNearbyWorkers = async (req, res) => {
         perDayCharge: w.perDayCharge,
         rating:       w.rating,
         totalJobs:    w.totalJobs,
-        distance:     `${distKm} km away`,
+        distance:     `${kmToMinutes(distKm)} min away`,
         distanceKm:   distKm,
         available:    true,
         isOnline:     true,
@@ -384,7 +394,7 @@ const searchWorkers = async (req, res) => {
           perDayCharge: w.perDayCharge,
           rating:       w.rating,
           totalJobs:    w.totalJobs,
-          distance:     distanceKm ? `${distanceKm} km away` : '',
+          distance:     distanceKm ? `${kmToMinutes(distanceKm)} min away` : '',
           distanceKm,
           available:    w.isOnline,
           isOnline:     w.isOnline,
