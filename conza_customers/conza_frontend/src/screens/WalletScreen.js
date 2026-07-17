@@ -16,9 +16,9 @@ import { useNavigation } from '@react-navigation/native';
 import useAppStore from '../store/useAppStore';
 import { colors } from '../theme/colors';
 
-const WALLET_ACCENT      = '#6D28D9';
-const WALLET_ACCENT_SOFT = 'rgba(109,40,217,0.08)';
-const WALLET_BANNER_BG   = '#EDE6FB';
+const WALLET_ACCENT      = '#F0A500';
+const WALLET_ACCENT_SOFT = 'rgba(240,165,0,0.10)';
+const WALLET_BANNER_BG   = '#FEF9E7';
 
 const QUICK_AMOUNTS = [500, 1000, 2000, 5000];
 
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   },
   promoTitle: { fontSize: 12, fontWeight: '800', color: WALLET_ACCENT, letterSpacing: 0.3 },
   promoSub: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
-  promoDivider: { width: 1, height: 30, backgroundColor: 'rgba(109,40,217,0.18)', marginHorizontal: 10 },
+  promoDivider: { width: 1, height: 30, backgroundColor: 'rgba(240,165,0,0.25)', marginHorizontal: 10 },
 
   card: {
     backgroundColor: colors.surface,

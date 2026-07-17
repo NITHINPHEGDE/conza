@@ -749,12 +749,12 @@ const styles = StyleSheet.create({
     marginVertical: 14,
   },
   walletCard: {
-    backgroundColor: 'rgba(109,40,217,0.06)',
+    backgroundColor: 'rgba(245,200,66,0.10)',
     marginHorizontal: 20,
     marginTop: 16,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(109,40,217,0.18)',
+    borderColor: 'rgba(240,165,0,0.30)',
     padding: 16,
   },
   walletCardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
   walletNewBadgeText: { fontSize: 9.5, fontWeight: '800', color: colors.white, letterSpacing: 0.3 },
   walletCardDivider: {
     height: 1,
-    backgroundColor: 'rgba(109,40,217,0.15)',
+    backgroundColor: 'rgba(240,165,0,0.25)',
     marginVertical: 14,
   },
   walletCardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
