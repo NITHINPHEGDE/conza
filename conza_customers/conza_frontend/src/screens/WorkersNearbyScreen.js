@@ -52,7 +52,7 @@ const WorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
       onPress={handleToggle}
       activeOpacity={0.85}
     >
-      {/* Top row: avatar, name, rating, distance, checkbox */}
+      {/* Top row: avatar, name + verified badge, rating, distance, checkbox */}
       <View style={styles.cardTop}>
         <LinearGradient
           colors={gradientColors}
@@ -64,7 +64,15 @@ const WorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
         </LinearGradient>
 
         <View style={styles.nameBlock}>
-          <Text style={styles.name} numberOfLines={1}>{worker.name}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>{worker.name}</Text>
+            {worker.isVerified !== false && (
+              <View style={styles.verifiedBadge}>
+                <MaterialCommunityIcons name="shield-check" size={11} color={VERIFIED_GREEN} />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+            )}
+          </View>
           <View style={styles.metaRow}>
             <View style={styles.ratingChip}>
               <Text style={styles.ratingStar}>⭐</Text>
@@ -81,14 +89,6 @@ const WorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
           {isSelected && <Text style={styles.checkmark}>✓</Text>}
         </View>
       </View>
-
-      {/* Verified badge — its own row, never collides with anything */}
-      {worker.isVerified !== false && (
-        <View style={styles.verifiedBadge}>
-          <MaterialCommunityIcons name="shield-check" size={13} color={VERIFIED_GREEN} />
-          <Text style={styles.verifiedText}>Verified</Text>
-        </View>
-      )}
 
       {/* Skills */}
       {(worker.skills || []).length > 0 && (
@@ -504,12 +504,13 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 16, fontWeight: '800', color: colors.white, letterSpacing: 0.5 },
   nameBlock: { flex: 1, minWidth: 0 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   name: {
     fontSize: 16,
     fontWeight: '800',
     color: colors.textPrimary,
-    marginBottom: 6,
     letterSpacing: 0.1,
+    flexShrink: 1,
   },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ratingChip: {
@@ -556,17 +557,17 @@ const styles = StyleSheet.create({
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 5,
+    alignSelf: 'center',
+    flexShrink: 0,
+    gap: 3,
     backgroundColor: VERIFIED_GREEN_SOFT,
-    borderRadius: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    marginBottom: 10,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderWidth: 1,
     borderColor: 'rgba(22,163,74,0.2)',
   },
-  verifiedText: { fontSize: 10.5, fontWeight: '700', color: VERIFIED_GREEN, letterSpacing: 0.2 },
+  verifiedText: { fontSize: 9.5, fontWeight: '700', color: VERIFIED_GREEN, letterSpacing: 0.1 },
 
   // Skills
   skillsRow: {

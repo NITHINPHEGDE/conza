@@ -42,7 +42,7 @@ const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
       onPress={handleToggle}
       activeOpacity={0.85}
     >
-      {/* Top row: avatar, name, rating, checkbox */}
+      {/* Top row: avatar, name + verified badge, rating, checkbox */}
       <View style={styles.topRow}>
         <LinearGradient
           colors={gradientColors}
@@ -54,7 +54,15 @@ const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
         </LinearGradient>
 
         <View style={styles.identity}>
-          <Text style={styles.name} numberOfLines={1}>{worker.name}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>{worker.name}</Text>
+            {worker.isVerified && (
+              <View style={styles.verifiedBadge}>
+                <MaterialCommunityIcons name="shield-check" size={11} color={VERIFIED_GREEN} />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+            )}
+          </View>
           <View style={styles.subRow}>
             <View style={styles.ratingChip}>
               <Text style={styles.ratingStar}>⭐</Text>
@@ -71,14 +79,6 @@ const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
           {isSelected && <Text style={styles.checkmark}>✓</Text>}
         </View>
       </View>
-
-      {/* Verified badge */}
-      {worker.isVerified && (
-        <View style={styles.verifiedBadge}>
-          <MaterialCommunityIcons name="shield-check" size={13} color={VERIFIED_GREEN} />
-          <Text style={styles.verifiedText}>Verified</Text>
-        </View>
-      )}
 
       {/* Category */}
       <View style={styles.categoryTag}>
@@ -149,7 +149,8 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 15, fontWeight: '800', color: colors.white, letterSpacing: 0.5 },
 
   identity: { flex: 1, minWidth: 0 },
-  name: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  name: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, flexShrink: 1 },
   subRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ratingChip: {
     flexDirection: 'row',
@@ -184,17 +185,17 @@ const styles = StyleSheet.create({
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 5,
+    alignSelf: 'center',
+    flexShrink: 0,
+    gap: 3,
     backgroundColor: VERIFIED_GREEN_SOFT,
-    borderRadius: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    marginBottom: 10,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderWidth: 1,
     borderColor: 'rgba(22,163,74,0.2)',
   },
-  verifiedText: { fontSize: 10.5, fontWeight: '700', color: VERIFIED_GREEN, letterSpacing: 0.2 },
+  verifiedText: { fontSize: 9.5, fontWeight: '700', color: VERIFIED_GREEN, letterSpacing: 0.1 },
 
   categoryTag: {
     alignSelf: 'flex-start',
