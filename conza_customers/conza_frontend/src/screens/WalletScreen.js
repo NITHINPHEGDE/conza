@@ -61,7 +61,7 @@ const WalletScreen = () => {
     );
   }, []);
 
-  const displayBalance = useMemo(() => `\u20B9${walletLoading ? '\u2013' : walletBalance}`, [walletBalance, walletLoading]);
+  const displayBalance = useMemo(() => `₹${walletLoading ? '–' : walletBalance}`, [walletBalance, walletLoading]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -111,7 +111,7 @@ const WalletScreen = () => {
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Add amount <Text style={styles.required}>*</Text></Text>
           <View style={styles.amountInputWrap}>
-            <Text style={styles.rupeeSymbol}>\u20B9</Text>
+            <Text style={styles.rupeeSymbol}>₹</Text>
             <TextInput
               style={styles.amountInput}
               value={amount}
@@ -290,9 +290,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  chipSelected: { borderColor: colors.danger, backgroundColor: 'rgba(224,59,59,0.06)' },
+  chipSelected: { borderColor: colors.accentAmber, backgroundColor: 'rgba(245,200,66,0.12)' },
   chipText: { fontSize: 14, fontWeight: '700', color: colors.textSecondary },
-  chipTextSelected: { color: colors.danger },
+  chipTextSelected: { color: colors.accentAmber },
 
   addBtn: { borderRadius: 16, overflow: 'hidden' },
   addBtnTouch: { paddingVertical: 16, alignItems: 'center' },
@@ -327,9 +327,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: colors.danger,
+    borderColor: colors.accentAmber,
   },
-  giftBtnText: { fontSize: 13, fontWeight: '700', color: colors.danger },
+  giftBtnText: { fontSize: 13, fontWeight: '700', color: colors.accentAmber },
 
   txHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   txHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
