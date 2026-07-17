@@ -1,6 +1,7 @@
 const Product = require('../models/Product');
 const MaterialCategory = require('../models/MaterialCategory');
 const RentalCategory   = require('../models/RentalCategory');
+const Seller            = require('../models/Seller');
 const { withCache, invalidateCache } = require('../utils/cacheHelpers');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../middleware/cloudinaryUpload');
 
@@ -40,6 +41,11 @@ const getPublicProducts = async (req, res) => {
       if (category) query.category = category;
       if (search)   query.$text    = { $search: search };
       if (type === 'material') query.stock = { $gt: 0 };
+
+      // Materials and rentals from unverified vendors must never be visible
+      // to customers, regardless of type/category/search filters above.
+      const verifiedSellerIds = await Seller.find({ isVerified: true }).distinct('_id');
+      query.seller = { $in: verifiedSellerIds };
 
       const skip = (Number(page) - 1) * Number(limit);
       const [products, total] = await Promise.all([

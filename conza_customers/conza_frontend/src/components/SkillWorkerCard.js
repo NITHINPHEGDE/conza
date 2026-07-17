@@ -4,8 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 
-const VERIFIED_BLUE = '#2E6BE8';
-const VERIFIED_BLUE_SOFT = 'rgba(46,107,232,0.08)';
+const VERIFIED_GREEN = '#16A34A';
+const VERIFIED_GREEN_SOFT = 'rgba(22,163,74,0.10)';
 
 const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
   const handleToggle = useCallback(() => {
@@ -75,8 +75,8 @@ const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
       {/* Verified badge */}
       {worker.isVerified && (
         <View style={styles.verifiedBadge}>
-          <MaterialCommunityIcons name="shield-check" size={13} color={VERIFIED_BLUE} />
-          <Text style={styles.verifiedText}>Labour Card Certified</Text>
+          <MaterialCommunityIcons name="shield-check" size={13} color={VERIFIED_GREEN} />
+          <Text style={styles.verifiedText}>Verified</Text>
         </View>
       )}
 
@@ -186,15 +186,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 5,
-    backgroundColor: VERIFIED_BLUE_SOFT,
+    backgroundColor: VERIFIED_GREEN_SOFT,
     borderRadius: 8,
     paddingHorizontal: 9,
     paddingVertical: 4,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: 'rgba(46,107,232,0.2)',
+    borderColor: 'rgba(22,163,74,0.2)',
   },
-  verifiedText: { fontSize: 10.5, fontWeight: '700', color: VERIFIED_BLUE, letterSpacing: 0.2 },
+  verifiedText: { fontSize: 10.5, fontWeight: '700', color: VERIFIED_GREEN, letterSpacing: 0.2 },
 
   categoryTag: {
     alignSelf: 'flex-start',

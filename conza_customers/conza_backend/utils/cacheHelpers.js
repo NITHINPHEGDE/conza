@@ -46,7 +46,15 @@ const withCache = async (key, ttl, fetcher) => {
 
     // Null-cache protection: cache null too (short TTL)
     const storeValue = data !== undefined && data !== null ? data : null;
-    const isEmpty    = storeValue === null || (Array.isArray(storeValue) && storeValue.length === 0);
+    // Paginated list responses (e.g. { products, total, page, pages }) wrap
+    // the actual array — without unwrapping them here, an empty result page
+    // (0 products, e.g. right after a filter change) gets cached with the
+    // full TTL instead of the short "self-healing" empty TTL below, so a
+    // transient empty response can stick around for the whole cache window.
+    const isEmpty =
+      storeValue === null ||
+      (Array.isArray(storeValue) && storeValue.length === 0) ||
+      (storeValue && typeof storeValue === 'object' && 'total' in storeValue && storeValue.total === 0);
     // Jitter is capped at 20% of TTL (not a flat 60 s) — otherwise an 8-second
     // TTL becomes up to 68 seconds, keeping stale empty results far too long.
     const jitter     = Math.floor(Math.random() * Math.max(1, Math.ceil(ttl * 0.2)));

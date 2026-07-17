@@ -381,6 +381,10 @@ const useAppStore = create((set, get) => ({
   // start briefly flashed "No materials found" before the skeleton/data.
   materialsLoading:   true,
   materialsError:     null,
+  // Tracks whether fetchMaterials() has completed at least once. Used by the
+  // Material tab to tell "genuinely nothing matched" apart from "data hasn't
+  // arrived yet", so it never shows the empty state before a real result.
+  materialsFetched:   false,
 
   fetchMaterials: async () => {
     // Fetch products and admin-managed categories in parallel; the categories
@@ -437,7 +441,7 @@ const useAppStore = create((set, get) => ({
         materialsError: null,
       });
     } finally {
-      set({ materialsLoading: false });
+      set({ materialsLoading: false, materialsFetched: true });
     }
   },
 

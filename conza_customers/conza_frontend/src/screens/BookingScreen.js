@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -222,6 +222,7 @@ const MaterialView = React.memo(() => {
   const materials       = useAppStore((s) => s.materials);  // subscribe so list re-renders on load
   const materialCategories = useAppStore((s) => s.materialCategories);
   const materialsLoading = useAppStore((s) => s.materialsLoading);
+  const materialsFetched = useAppStore((s) => s.materialsFetched);
   const materialsError  = useAppStore((s) => s.materialsError);
   const fetchMaterials  = useAppStore((s) => s.fetchMaterials);
   const cart            = useAppStore((s) => s.cart);
@@ -232,6 +233,18 @@ const MaterialView = React.memo(() => {
   const [query,       setQuery]       = useState('');
   const [selectedCat, setSelectedCat] = useState('all');
   const [showFilter,  setShowFilter]  = useState(false);
+
+  // Self-heals the "skeleton → No materials found" glitch: if this tab is
+  // opened before/around the app-boot fetchMaterials() call has actually
+  // populated data (or resolved with a stale/empty result), re-trigger the
+  // fetch on mount instead of leaving the empty state stuck until the user
+  // manually navigates away and back.
+  useEffect(() => {
+    if (!materialsLoading && (!materialsFetched || materials.length === 0)) {
+      fetchMaterials();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered     = useMemo(() => filterMaterials(selectedCat, query), [materials, filterMaterials, selectedCat, query]);
   const activeCat    = useMemo(() => materialCategories.find((c) => c.id === selectedCat), [materialCategories, selectedCat]);
@@ -361,19 +374,21 @@ const MaterialView = React.memo(() => {
   ), [query, handleClearQuery, selectedCat, activeCat, handleOpenFilter, handleClearCat]);
 
   const listEmpty = useMemo(() => (
-    <EmptyState
-      emoji="🧱"
-      title="No materials found"
-      subtitle="Try a different filter or search term"
-    />
-  ), []);
+    materialsFetched ? (
+      <EmptyState
+        emoji="🧱"
+        title="No materials found"
+        subtitle="Try a different filter or search term"
+      />
+    ) : null
+  ), [materialsFetched]);
 
   const contentContainerStyle = useMemo(() => [
     styles.materialGridList,
     totalItems > 0 && { paddingBottom: 100 },
   ], [totalItems]);
 
-  if (materialsLoading) return <MaterialGridSkeleton />;
+  if (materialsLoading || (!materialsFetched && materials.length === 0)) return <MaterialGridSkeleton />;
   if (materialsError)   return <ErrorState message={materialsError} onRetry={fetchMaterials} />;
 
   return (

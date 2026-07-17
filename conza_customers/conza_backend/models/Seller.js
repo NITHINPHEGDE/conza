@@ -26,6 +26,15 @@ const sellerSchema = new mongoose.Schema(
 
     pushToken:  { type: String, default: null },
 
+    // Admin-managed — controls whether this vendor's products/rentals are
+    // visible to customers. Mirrors the flag on the vendor-side Seller model.
+    status: {
+      type:    String,
+      enum:    ['active', 'suspended', 'inactive', 'pending_verification'],
+      default: 'pending_verification',
+    },
+    isVerified: { type: Boolean, default: false },
+
     memberSince: {
       type: String,
       default: () =>
