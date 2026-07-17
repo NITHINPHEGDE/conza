@@ -19,9 +19,20 @@ const MaterialCard = React.memo(({
   unit, 
   distance,
   image, 
+  images,
   rating, 
   inStock, 
   quantity = 0, 
+  category,
+  brand,
+  description,
+  sellerId,
+  sellerPhone,
+  sellerCity,
+  returnable,
+  replaceable,
+  returnPolicy,
+  replacementPolicy,
   onUpdate, 
   onImagePress,
   onAddToCart,
@@ -50,8 +61,24 @@ const MaterialCard = React.memo(({
   ], [inStock]);
   
   const handleImagePress = useCallback(() => {
-    onImagePress && onImagePress({ id, name, seller, price, unit, distance, image, rating, inStock, quantity });
-  }, [onImagePress, id, name, seller, price, unit, distance, image, rating, inStock, quantity]);
+    // Pass the full product payload through to the detail screen —
+    // previously this stripped everything down to a single `image` field,
+    // so the detail screen's image carousel only ever had one photo to
+    // show even when the vendor had uploaded several during listing.
+    onImagePress && onImagePress({
+      id, name, seller, price, unit, distance,
+      image, images,
+      rating, inStock, quantity,
+      category, brand, description,
+      sellerId, sellerPhone, sellerCity,
+      returnable, replaceable, returnPolicy, replacementPolicy,
+    });
+  }, [
+    onImagePress, id, name, seller, price, unit, distance,
+    image, images, rating, inStock, quantity,
+    category, brand, description, sellerId, sellerPhone, sellerCity,
+    returnable, replaceable, returnPolicy, replacementPolicy,
+  ]);
 
   const handleMinus = useCallback(() => {
     onUpdate(id, Math.max(0, (Number(quantity) || 0) - 1));

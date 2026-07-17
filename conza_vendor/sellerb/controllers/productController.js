@@ -6,6 +6,7 @@ const {
   deleteFromCloudinary,
   extractPublicId,
 } = require('../middleware/cloudinary');
+const { invalidateCache } = require('../utils/cacheHelpers');
 
 // ── GET /api/products/upload-signature ───────────────────────────────────────
 // Frontend calls this first, then uploads directly to Cloudinary
@@ -139,6 +140,12 @@ const createProduct = async (req, res) => {
       images:        Array.isArray(images) ? images.slice(0, 5) : [],
     });
 
+    // Bust the customer-facing catalog cache (conza_backend) so the new
+    // product appears alongside every existing product immediately —
+    // otherwise it stays invisible (or the list stays stale) for up to
+    // 60 seconds because that cache lives in a separate service/process.
+    await invalidateCache('products:catalog:*');
+
     res.status(201).json({ success: true, product });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -187,6 +194,7 @@ const updateProduct = async (req, res) => {
     if (lowStockAt !== undefined)    product.lowStockAt    = Number(lowStockAt);
 
     await product.save();
+    await invalidateCache(`products:detail:${product._id}`, 'products:catalog:*');
     res.json({ success: true, product });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -212,6 +220,7 @@ const deleteProduct = async (req, res) => {
     }
 
     await product.deleteOne();
+    await invalidateCache(`products:detail:${product._id}`, 'products:catalog:*');
     res.json({ success: true, message: 'Product deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -227,6 +236,7 @@ const toggleAvailability = async (req, res) => {
     }
     product.isAvailable = !product.isAvailable;
     await product.save();
+    await invalidateCache(`products:detail:${product._id}`, 'products:catalog:*');
     res.json({ success: true, isAvailable: product.isAvailable });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
