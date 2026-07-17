@@ -126,12 +126,25 @@ const MaterialDetailScreen = ({ route, navigation }) => {
   const [cartAdded, setCartAdded]                   = useState(false);
   const [showReturnTerms, setShowReturnTerms]       = useState(false);
   const [showReplacementTerms, setShowReplacementTerms] = useState(false);
+  const [activeImageIndex, setActiveImageIndex]     = useState(0);
 
   if (!item) return null;
 
   const offer       = materialOffers[item.id];
   const description = materialDescriptions[item.id] || 'High quality construction material sourced from certified suppliers.';
   const discountedPrice = useMemo(() => Math.round(item.price * 0.95), [item.price]);
+
+  // Vendor can upload up to 5 images per product — fall back to the single
+  // `image` field for older/dummy data that predates the multi-image array.
+  const images = useMemo(
+    () => (Array.isArray(item.images) && item.images.length ? item.images : (item.image ? [item.image] : [])),
+    [item.images, item.image]
+  );
+
+  const handleImageScroll = useCallback((e) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+    setActiveImageIndex(idx);
+  }, []);
 
   const handleBuyNowConfirm = useCallback((qty) => {
     setShowDialog(false);
@@ -180,16 +193,40 @@ const MaterialDetailScreen = ({ route, navigation }) => {
       >
         {/* ── Hero Image ── */}
         <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: item.image }}
-            style={styles.image}
-            resizeMode="cover"
-          />
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handleImageScroll}
+            scrollEventThrottle={16}
+          >
+            {images.map((uri, idx) => (
+              <Image
+                key={`${uri}-${idx}`}
+                source={{ uri }}
+                style={[styles.image, { width }]}
+                resizeMode="cover"
+              />
+            ))}
+          </ScrollView>
+
+          {/* Pagination dots — only shown when there's more than one image */}
+          {images.length > 1 && (
+            <View style={styles.imageDots} pointerEvents="none">
+              {images.map((_, idx) => (
+                <View
+                  key={idx}
+                  style={[styles.imageDot, idx === activeImageIndex && styles.imageDotActive]}
+                />
+              ))}
+            </View>
+          )}
 
           {/* Dark gradient overlay at bottom of image */}
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.62)']}
             style={styles.imageOverlay}
+            pointerEvents="none"
           >
             {/* Seller + Rating pinned to bottom of image */}
             <View style={styles.imageFooter}>
@@ -411,6 +448,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceElevated,
   },
   image: { width: '100%', height: '100%' },
+  imageDots: {
+    position: 'absolute',
+    top: 16,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  imageDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  imageDotActive: {
+    width: 18,
+    backgroundColor: '#FFFFFF',
+  },
   imageOverlay: {
     position: 'absolute',
     bottom: 0,

@@ -10,11 +10,15 @@ import {
   Modal,
   TextInput,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 import DateTimePicker from '@react-native-community/datetimepicker';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const HERO_PAGE_WIDTH = SCREEN_WIDTH - 40; // heroWrapper has 20px margin on each side
 
 
 // ─── Quantity Selector ────────────────────────────────────────────────────────
@@ -288,8 +292,21 @@ const RentalDetailScreen = ({ route, navigation }) => {
   const { item } = route.params;
   const [showBookNow,  setShowBookNow]  = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   const description = useMemo(() => item.description || 'High quality rental equipment for your construction needs.', [item.description]);
+
+  // Vendor can upload up to 5 images per product — fall back to the single
+  // `image` field for older/dummy data that predates the multi-image array.
+  const images = useMemo(
+    () => (Array.isArray(item.images) && item.images.length ? item.images : (item.image ? [item.image] : [])),
+    [item.images, item.image]
+  );
+
+  const handleImageScroll = useCallback((e) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / HERO_PAGE_WIDTH);
+    setActiveImageIndex(idx);
+  }, []);
 
   const handleProceed = useCallback((bookingDetails) => {
     setShowBookNow(false);
@@ -370,7 +387,36 @@ const RentalDetailScreen = ({ route, navigation }) => {
 
         {/* Hero Image */}
         <View style={styles.heroWrapper}>
-          <Image source={{ uri: item.image }} style={styles.heroImage} resizeMode="cover" />
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handleImageScroll}
+            scrollEventThrottle={16}
+            style={styles.heroScroll}
+          >
+            {images.map((uri, idx) => (
+              <Image
+                key={`${uri}-${idx}`}
+                source={{ uri }}
+                style={[styles.heroImage, { width: HERO_PAGE_WIDTH }]}
+                resizeMode="cover"
+              />
+            ))}
+          </ScrollView>
+
+          {/* Pagination dots — only shown when there's more than one image */}
+          {images.length > 1 && (
+            <View style={styles.heroDots} pointerEvents="none">
+              {images.map((_, idx) => (
+                <View
+                  key={idx}
+                  style={[styles.heroDot, idx === activeImageIndex && styles.heroDotActive]}
+                />
+              ))}
+            </View>
+          )}
+
           <View style={styles.heroBadge}>
             <View style={[styles.availDot, {
               backgroundColor: item.available ? colors.success : colors.danger
@@ -507,12 +553,30 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: 20 },
 
   // Hero
-  heroWrapper: { position: 'relative', marginHorizontal: 20, marginBottom: 16 },
+  heroWrapper: { position: 'relative', marginHorizontal: 20, marginBottom: 16, borderRadius: 20, overflow: 'hidden' },
+  heroScroll: { borderRadius: 20 },
   heroImage: {
-    width: '100%',
     height: 220,
-    borderRadius: 20,
     backgroundColor: colors.surfaceElevated,
+  },
+  heroDots: {
+    position: 'absolute',
+    top: 12,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  heroDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  heroDotActive: {
+    width: 18,
+    backgroundColor: '#FFFFFF',
   },
   heroBadge: {
     position: 'absolute',
