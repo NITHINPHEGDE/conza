@@ -9,7 +9,7 @@ const ServiceCategory  = require('../models/ServiceCategory');
 // GET /api/workers/categories — public, used on the sign-up / edit-profile screens
 const getCategories = asyncHandler(async (req, res) => {
   const categories = await ServiceCategory.find({ active: true })
-    .select('name image commission radius description')
+    .select('name image commission radius description perHourCharge perDayCharge')
     .sort({ name: 1 })
     .lean();
 
@@ -19,6 +19,10 @@ const getCategories = asyncHandler(async (req, res) => {
       id:    c._id,
       name:  c.name,
       image: c.image,
+      // Read-only — admin-set pricing that will be applied to this worker
+      // automatically once they register under this category.
+      perHourCharge: c.perHourCharge || 0,
+      perDayCharge:  c.perDayCharge || 0,
     })),
   });
 });

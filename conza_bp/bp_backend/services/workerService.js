@@ -113,7 +113,7 @@ const invalidateWorkerCache = async (category) => {
 const signUpWorker = async (data) => {
   const {
     fullName, username, password, phone, email,
-    category, skills, minCharge, baseCharge, perDayCharge, locationText,
+    category, skills, locationText,
     experience, bio, profileImage,
   } = data;
 
@@ -134,8 +134,11 @@ const signUpWorker = async (data) => {
       throw new AppError('Email is already registered.', 400);
   }
 
-  const categoryExists = await ServiceCategory.exists({ name: category, active: true });
-  if (!categoryExists) {
+  // Pricing is admin-managed per category — business partners can only pick
+  // a category, never set their own rates. Look up the category's current
+  // base charges and stamp them onto the new worker record.
+  const categoryDoc = await ServiceCategory.findOne({ name: category, active: true });
+  if (!categoryDoc) {
     throw new AppError('Selected category is not available.', 400);
   }
 
@@ -148,9 +151,9 @@ const signUpWorker = async (data) => {
     profileImage: profileImage || null,
     category,
     skills:       skills || [],
-    minCharge:    minCharge || null,
-    baseCharge:   baseCharge || null,
-    perDayCharge: perDayCharge || null,
+    minCharge:    categoryDoc.perHourCharge || 0,
+    baseCharge:   null,
+    perDayCharge: categoryDoc.perDayCharge || 0,
     locationText: locationText || '',
     experience:   experience || null,
     bio:          bio || '',

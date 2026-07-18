@@ -32,9 +32,9 @@ const signupRules = [
   // and changes over time, so it can no longer be a static enum here.
   body('locationText').trim().notEmpty().withMessage('Location is required.'),
   body('email').optional({ nullable: true, checkFalsy: true }).isEmail().withMessage('Invalid email address.'),
-  body('minCharge').optional({ nullable: true }).isNumeric().withMessage('Min charge must be a number.'),
-  body('baseCharge').optional({ nullable: true }).isNumeric().withMessage('Base minimum charge must be a number.'),
-  body('perDayCharge').optional({ nullable: true }).isNumeric().withMessage('Per day charge must be a number.'),
+  // Pricing (minCharge / baseCharge / perDayCharge) is admin-managed per
+  // category and is no longer accepted from the sign-up form — see
+  // workerService.signUpWorker(), which derives it from ServiceCategory.
   body('experience').optional({ nullable: true }).isNumeric().withMessage('Experience must be a number.'),
   validate,
 ];

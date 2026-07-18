@@ -50,6 +50,8 @@ export default function Categories() {
       </div>
     )},
     { key: 'commission', title: 'Commission', render: (row) => `${row.commission}%` },
+    { key: 'perHourCharge', title: 'Base / Hour', render: (row) => `₹${row.perHourCharge ?? 0}` },
+    { key: 'perDayCharge', title: 'Base / Day', render: (row) => `₹${row.perDayCharge ?? 0}` },
     { key: 'radius', title: 'Radius', render: (row) => `${row.radius} km` },
     { key: 'workers', title: 'Workers' },
     { key: 'bookings', title: 'Bookings' },

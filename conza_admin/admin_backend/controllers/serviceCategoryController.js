@@ -1,4 +1,5 @@
 const ServiceCategory = require('../models/ServiceCategory')
+const Worker = require('../models/Worker')
 const { sendSuccess, sendPaginated } = require('../utils/response')
 const { createError } = require('../utils/error')
 const { uploadToCloudinary, deleteFromCloudinary, extractPublicId } = require('../middleware/cloudinaryUpload')
@@ -19,7 +20,7 @@ exports.getCategories = async (req, res, next) => {
 
 exports.createCategory = async (req, res, next) => {
   try {
-    const { name, image, commission, radius, description } = req.body
+    const { name, image, commission, radius, description, perHourCharge, perDayCharge } = req.body
     if (!name || !image) return next(createError(400, 'Name and service image are required.'))
 
     // If the frontend sent a base64 data-URI, upload it to Cloudinary.
@@ -34,6 +35,8 @@ exports.createCategory = async (req, res, next) => {
       commission: commission || 15,
       radius: radius || 5,
       description: description || '',
+      perHourCharge: perHourCharge != null ? Number(perHourCharge) : 0,
+      perDayCharge: perDayCharge != null ? Number(perDayCharge) : 0,
     })
     req.auditTarget = `Service Category - ${name}`
     req.auditDetails = `Created service category`
@@ -61,7 +64,27 @@ exports.updateCategory = async (req, res, next) => {
 
     delete updates.baseCharge // no longer a valid field
 
+    if (updates.perHourCharge !== undefined) updates.perHourCharge = Number(updates.perHourCharge) || 0
+    if (updates.perDayCharge !== undefined) updates.perDayCharge = Number(updates.perDayCharge) || 0
+
     const category = await ServiceCategory.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true })
+
+    // Pricing is category-wide: whenever the admin edits the per-hour or
+    // per-day base charge for a category, push the new charges onto every
+    // worker already registered under that category so pricing stays
+    // consistent for the whole category, not just new sign-ups.
+    if (updates.perHourCharge !== undefined || updates.perDayCharge !== undefined) {
+      await Worker.updateMany(
+        { category: category.name },
+        {
+          $set: {
+            minCharge: category.perHourCharge,
+            perDayCharge: category.perDayCharge,
+          },
+        }
+      )
+    }
+
     req.auditTarget = `Service Category #${req.params.id} - ${category.name}`
     req.auditDetails = `Updated category`
     sendSuccess(res, 200, 'Category updated', { category })

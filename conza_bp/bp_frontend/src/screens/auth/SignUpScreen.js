@@ -90,7 +90,7 @@ const SignUpScreen = ({ navigation }) => {
 
   const [form, setForm] = useState({
     fullName: '', username: '', password: '', confirmPassword: '',
-    phone: '', category: '', skills: [], minCharge: '', baseCharge: '', perDayCharge: '',
+    phone: '', category: '', skills: [],
     location: '', experience: '', bio: '', availability: true,
     email: '', profileImage: null,
   });
@@ -104,6 +104,10 @@ const SignUpScreen = ({ navigation }) => {
 
   const [categories, setCategories]         = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  // The category the partner picked, including its admin-set pricing —
+  // shown read-only so the partner knows their rate before submitting.
+  const selectedCategory = categories.find((c) => c.name === form.category) || null;
 
   useEffect(() => {
     let isMounted = true;
@@ -193,15 +197,6 @@ const SignUpScreen = ({ navigation }) => {
     if (!form.category)         e.category  = 'Please select a category.';
     if (!form.location.trim())  e.location  = 'Location is required.';
 
-    if (form.minCharge && isNaN(Number(form.minCharge)))
-      e.minCharge = 'Enter a valid number.';
-
-    if (form.baseCharge && isNaN(Number(form.baseCharge)))
-      e.baseCharge = 'Enter a valid number.';
-
-    if (form.perDayCharge && isNaN(Number(form.perDayCharge)))
-      e.perDayCharge = 'Enter a valid number.';
-
     if (form.experience && isNaN(Number(form.experience)))
       e.experience = 'Enter a valid number.';
 
@@ -227,9 +222,6 @@ const SignUpScreen = ({ navigation }) => {
         phone:       form.phone.trim(),
         category:    form.category,
         skills:      form.skills,
-        minCharge:    form.minCharge ? Number(form.minCharge) : null,
-        baseCharge:   form.baseCharge ? Number(form.baseCharge) : null,
-        perDayCharge: form.perDayCharge ? Number(form.perDayCharge) : null,
         locationText: form.location.trim(),
         experience:  form.experience ? Number(form.experience) : null,
         bio:         form.bio.trim(),
@@ -372,6 +364,26 @@ const SignUpScreen = ({ navigation }) => {
             {errors.category && <Text style={fStyles.errorText}>{errors.category}</Text>}
           </View>
 
+          {/* Admin-set pricing preview — read-only, cannot be edited here */}
+          {!!selectedCategory && (
+            <View style={styles.priceInfoBox}>
+              <Text style={styles.priceInfoTitle}>Pricing for {selectedCategory.name}</Text>
+              <Text style={styles.priceInfoSub}>
+                Set by Conza admin. All partners in this category are charged the same rate.
+              </Text>
+              <View style={styles.priceInfoRow}>
+                <View style={styles.priceInfoItem}>
+                  <Text style={styles.priceInfoLabel}>Per Hour</Text>
+                  <Text style={styles.priceInfoValue}>₹{selectedCategory.perHourCharge || 0}</Text>
+                </View>
+                <View style={styles.priceInfoItem}>
+                  <Text style={styles.priceInfoLabel}>Per Day</Text>
+                  <Text style={styles.priceInfoValue}>₹{selectedCategory.perDayCharge || 0}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
           {/* Skills */}
           <View style={fStyles.wrap}>
             <View style={fStyles.labelRow}>
@@ -412,9 +424,6 @@ const SignUpScreen = ({ navigation }) => {
             <Text style={styles.skillsCount}>{form.skills.length}/5 skills added</Text>
           </View>
 
-          <Field label="Per Hour Minimum Charge (₹)" value={form.minCharge} onChangeText={set('minCharge')} placeholder="e.g. 200" keyboardType="numeric" error={errors.minCharge} optional />
-          <Field label="Base Minimum Charge (₹)" value={form.baseCharge} onChangeText={set('baseCharge')} placeholder="e.g. 150 (flat call-out fee)" keyboardType="numeric" error={errors.baseCharge} optional />
-          <Field label="Per Day Charge (₹)" value={form.perDayCharge} onChangeText={set('perDayCharge')} placeholder="e.g. 800 (for multi-day jobs)" keyboardType="numeric" error={errors.perDayCharge} optional />
           <Field label="Location / Address" value={form.location} onChangeText={set('location')} placeholder="e.g. Whitefield, Bangalore" error={errors.location} />
           <Field label="Experience (in years)" value={form.experience} onChangeText={set('experience')} placeholder="e.g. 5" keyboardType="numeric" error={errors.experience} optional />
           <Field label="Bio / Description" value={form.bio} onChangeText={set('bio')} placeholder="Tell customers about your work and expertise..." multiline numberOfLines={4} optional />
@@ -496,6 +505,13 @@ const styles = StyleSheet.create({
   catChipImage:   { width: 22, height: 22, borderRadius: 11 },
   catChipText:    { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   catChipTextActive:{ color: colors.accentAmber, fontWeight: '700' },
+  priceInfoBox:   { backgroundColor: colors.accentYellowSoft, borderRadius: 14, borderWidth: 1, borderColor: colors.accentYellow, padding: 16, marginBottom: 20 },
+  priceInfoTitle: { fontSize: 13, fontWeight: '800', color: colors.textPrimary, marginBottom: 2 },
+  priceInfoSub:   { fontSize: 11, color: colors.textMuted, fontWeight: '500', marginBottom: 12 },
+  priceInfoRow:   { flexDirection: 'row', gap: 12 },
+  priceInfoItem:  { flex: 1, backgroundColor: colors.surface, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.border },
+  priceInfoLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '600', marginBottom: 2 },
+  priceInfoValue: { fontSize: 16, color: colors.accentAmber, fontWeight: '800' },
   addSkillBtn:    { backgroundColor: colors.accentYellowSoft, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: colors.accentYellow, marginLeft: 8 },
   addSkillBtnDisabled: { opacity: 0.4 },
   addSkillBtnText:{ fontSize: 13, fontWeight: '700', color: colors.accentAmber },
