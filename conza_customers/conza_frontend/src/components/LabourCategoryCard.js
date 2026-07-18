@@ -245,12 +245,12 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
           {/* Availability chip */}
           <View style={styles.metaRow}>
             <View style={styles.availabilityChip}>
-              <LiveDot />
+              {item.available > 0 && <LiveDot />}
               <Text
                 style={[styles.metaText, hasPhoto ? styles.metaTextOnPhoto : styles.metaTextOnTint]}
                 numberOfLines={1}
               >
-                {item.available} free
+                {item.available === 0 ? 'not available' : `${item.available} available`}
               </Text>
             </View>
           </View>
