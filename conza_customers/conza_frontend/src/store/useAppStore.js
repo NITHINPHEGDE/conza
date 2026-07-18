@@ -625,6 +625,22 @@ const useAppStore = create((set, get) => ({
     }
   },
 
+  // ── All Labour Bookings (every status, for Status screen tabs/filters) ────
+  labourBookings:        [],
+  labourBookingsLoading: false,
+
+  fetchLabourBookings: async () => {
+    try {
+      set({ labourBookingsLoading: true });
+      const data = await bookingAPI.getMyBookings();
+      set({ labourBookings: data.bookings || [] });
+    } catch (err) {
+      console.error('fetchLabourBookings error:', err.message);
+    } finally {
+      set({ labourBookingsLoading: false });
+    }
+  },
+
   setActiveBookingId: async (id) => {
     if (id) {
       await AsyncStorage.setItem('activeBookingId', id);
@@ -879,6 +895,11 @@ const useAppStore = create((set, get) => ({
               ? { ...b, status }
               : b
           ),
+          labourBookings: s.labourBookings.map((b) =>
+            b._id?.toString() === bookingId?.toString()
+              ? { ...b, status }
+              : b
+          ),
           activeBooking:
             s.activeBooking?._id?.toString() === bookingId?.toString()
               ? bookingSnapshot
@@ -893,6 +914,7 @@ const useAppStore = create((set, get) => ({
       }
 
       get().fetchActiveBookings();
+      get().fetchLabourBookings();
       get().fetchProjects();
     });
 
@@ -902,6 +924,11 @@ const useAppStore = create((set, get) => ({
       if (bookingId && status) {
         set((s) => ({
           activeBookings: s.activeBookings.map((b) =>
+            b._id?.toString() === bookingId?.toString()
+              ? { ...b, status }
+              : b
+          ),
+          labourBookings: s.labourBookings.map((b) =>
             b._id?.toString() === bookingId?.toString()
               ? { ...b, status }
               : b
@@ -926,6 +953,11 @@ const useAppStore = create((set, get) => ({
 
       set((s) => ({
         activeBookings: s.activeBookings.map((b) =>
+          b._id?.toString() === bookingId?.toString()
+            ? { ...b, status: 'awaiting_customer_confirmation' }
+            : b
+        ),
+        labourBookings: s.labourBookings.map((b) =>
           b._id?.toString() === bookingId?.toString()
             ? { ...b, status: 'awaiting_customer_confirmation' }
             : b
