@@ -108,6 +108,7 @@ export const ROUTES = {
   CONTENT_FAQS: '/content/faqs',
   CONTENT_TERMS: '/content/terms',
   CONTENT_PRIVACY: '/content/privacy',
+  CONTENT_REFUND: '/content/refund',
   CONTENT_ABOUT: '/content/about',
   CONTENT_HELP: '/content/help',
   CONTENT_BANNERS: '/content/banners',

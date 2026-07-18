@@ -17,6 +17,7 @@ const bookingRoutes        = require('./routes/bookingRoutes');
 const sellerAuthRoutes     = require('./routes/sellerAuthRoutes');
 const productRoutes        = require('./routes/productRoutes');
 const sellerOrderRoutes    = require('./routes/sellerOrderRoutes');
+const complaintRoutes      = require('./routes/complaintRoutes');
 const { errorHandler }     = require('./middleware/errorMiddleware');
 const { authLimiter, apiLimiter } = require('./middleware/rateLimiter');
 
@@ -57,6 +58,7 @@ app.use('/api/auth',     authLimiter, authRoutes);
 app.use('/api/wallet',   require('./routes/walletRoutes'));
 app.use('/api/workers',  apiLimiter,  workerRoutes);
 app.use('/api/bookings', apiLimiter,  bookingRoutes);
+app.use('/api/complaints', apiLimiter, complaintRoutes);
 
 // ── Seller routes ──
 app.use('/api/seller/auth',     authLimiter, sellerAuthRoutes);

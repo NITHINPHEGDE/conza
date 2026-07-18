@@ -19,17 +19,18 @@ const getContent = (type) => async (req, res, next) => {
   }
 }
 
-// ── Legal (Terms & Privacy) — per app, admin protected ─────────────────────
+// ── Legal (Terms & Privacy & Refund) — per app, admin protected ────────────
 exports.getLegal = async (req, res, next) => {
   try {
     const { appTarget } = req.params
     if (!VALID_APP_TARGETS.includes(appTarget)) {
       return next(createError(400, 'Invalid appTarget. Must be customer, worker, or vendor.'))
     }
-    const docs = await Content.find({ type: { $in: ['terms', 'privacy'] }, appTarget })
+    const docs = await Content.find({ type: { $in: ['terms', 'privacy', 'refund'] }, appTarget })
     const terms = docs.find((d) => d.type === 'terms') || null
     const privacy = docs.find((d) => d.type === 'privacy') || null
-    sendSuccess(res, 200, 'Legal content retrieved', { terms, privacy })
+    const refund = docs.find((d) => d.type === 'refund') || null
+    sendSuccess(res, 200, 'Legal content retrieved', { terms, privacy, refund })
   } catch (err) {
     next(err)
   }
@@ -38,8 +39,8 @@ exports.getLegal = async (req, res, next) => {
 exports.upsertLegal = async (req, res, next) => {
   try {
     const { type, appTarget } = req.params
-    if (!['terms', 'privacy'].includes(type)) {
-      return next(createError(400, 'Invalid type. Must be terms or privacy.'))
+    if (!['terms', 'privacy', 'refund'].includes(type)) {
+      return next(createError(400, 'Invalid type. Must be terms, privacy, or refund.'))
     }
     if (!VALID_APP_TARGETS.includes(appTarget)) {
       return next(createError(400, 'Invalid appTarget. Must be customer, worker, or vendor.'))
@@ -91,12 +92,13 @@ exports.getPublicLegal = async (req, res, next) => {
     if (!VALID_APP_TARGETS.includes(appTarget)) {
       return next(createError(400, 'Invalid appTarget.'))
     }
-    const docs = await Content.find({ type: { $in: ['terms', 'privacy'] }, appTarget, status: 'published' })
+    const docs = await Content.find({ type: { $in: ['terms', 'privacy', 'refund'] }, appTarget, status: 'published' })
       .select('type title content updatedAt')
       .lean()
     const terms = docs.find((d) => d.type === 'terms') || null
     const privacy = docs.find((d) => d.type === 'privacy') || null
-    sendSuccess(res, 200, 'Legal content retrieved', { terms, privacy })
+    const refund = docs.find((d) => d.type === 'refund') || null
+    sendSuccess(res, 200, 'Legal content retrieved', { terms, privacy, refund })
   } catch (err) {
     next(err)
   }
@@ -116,6 +118,7 @@ exports.getPublicAbout = async (req, res, next) => {
 exports.getFAQs = getContent('faq')
 exports.getTerms = getContent('terms')
 exports.getPrivacy = getContent('privacy')
+exports.getRefund = getContent('refund')
 exports.getAbout = getContent('about')
 exports.getHelp = getContent('help')
 exports.getBanners = getContent('banner')

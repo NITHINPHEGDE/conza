@@ -23,6 +23,7 @@ import { colors } from '../theme/colors';
 import SavedAddressSheet from '../components/SavedAddressSheet';
 import { fetchCustomerFAQs, fetchCustomerHelpArticles } from '../api/faqHelpAPI';
 import { fetchCustomerLegal, fetchAboutUs } from '../api/legalAPI';
+import { complaintAPI } from '../api/complaintAPI';
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -230,6 +231,149 @@ const FAQsModal = React.memo(({ visible, onClose }) => {
   );
 });
 
+// ── Report an Issue Modal ───────────────────────────────────────────────────
+
+const ISSUE_STATUS_META = {
+  open: { label: 'Open', color: colors.accentAmber, bg: colors.accentAmberSoft },
+  in_progress: { label: 'In Progress', color: colors.accentAmber, bg: colors.accentAmberSoft },
+  resolved: { label: 'Resolved', color: colors.success, bg: 'rgba(46,139,87,0.12)' },
+  closed: { label: 'Closed', color: colors.textMuted, bg: colors.surfaceElevated },
+  escalated: { label: 'Escalated', color: colors.danger, bg: 'rgba(224,59,59,0.12)' },
+};
+
+const ReportIssueModal = React.memo(({ visible, onClose }) => {
+  const [subject, setSubject] = useState('');
+  const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+
+  const [complaints, setComplaints] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+
+  const loadComplaints = useCallback(() => {
+    setLoading(true);
+    setLoadError(null);
+    complaintAPI.getMyComplaints()
+      .then((data) => setComplaints(data.complaints || []))
+      .catch(() => setLoadError('Failed to load your reported issues.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (visible) loadComplaints();
+  }, [visible, loadComplaints]);
+
+  const handleSubmit = useCallback(async () => {
+    if (!subject.trim()) {
+      setSubmitError('Please enter a subject for your issue.');
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await complaintAPI.reportIssue({ subject: subject.trim(), description: description.trim() });
+      setSubject('');
+      setDescription('');
+      loadComplaints();
+    } catch (err) {
+      setSubmitError(err.message || 'Failed to submit your issue. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [subject, description, loadComplaints]);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { maxHeight: '90%' }]}>
+          <View style={styles.modalHandle} />
+          <ModalHeader icon="alert-circle-outline" title="Report an Issue" />
+
+          <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: 8 }}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Subject</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Worker did not arrive"
+                placeholderTextColor={colors.textMuted}
+                value={subject}
+                onChangeText={setSubject}
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Description (optional)</Text>
+              <TextInput
+                style={[styles.input, { minHeight: 90, textAlignVertical: 'top' }]}
+                placeholder="Tell us more about the issue"
+                placeholderTextColor={colors.textMuted}
+                value={description}
+                onChangeText={setDescription}
+                multiline
+              />
+            </View>
+            {submitError && <Text style={styles.errorText}>{submitError}</Text>}
+
+            <View style={styles.saveBtn}>
+              <TouchableOpacity
+                style={[styles.saveBtnTouch, { backgroundColor: colors.accentYellow }]}
+                onPress={handleSubmit}
+                disabled={submitting}
+                activeOpacity={0.85}
+              >
+                {submitting ? (
+                  <ActivityIndicator color={colors.textPrimary} />
+                ) : (
+                  <Text style={styles.saveBtnText}>Submit Issue</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 10 }]}>Your Reported Issues</Text>
+            {loading ? (
+              <ActivityIndicator color={colors.accentAmber} style={{ marginVertical: 20 }} />
+            ) : loadError ? (
+              <StateBlock icon="alert-circle-outline" iconColor={colors.danger} title={loadError} />
+            ) : complaints.length === 0 ? (
+              <StateBlock icon="alert-circle-outline" title="No issues reported yet." />
+            ) : (
+              complaints.map((c) => {
+                const meta = ISSUE_STATUS_META[c.status] || ISSUE_STATUS_META.open;
+                return (
+                  <View key={c._id} style={styles.orderCard}>
+                    <View style={styles.orderCardTop}>
+                      <Text style={styles.orderLabel}>{c.subject}</Text>
+                      <View style={[styles.orderBadge, { backgroundColor: meta.bg }]}>
+                        <Text style={[styles.orderBadgeText, { color: meta.color }]}>{meta.label}</Text>
+                      </View>
+                    </View>
+                    {!!c.description && <Text style={styles.articleContent}>{c.description}</Text>}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 8 }}>
+                      <MaterialCommunityIcons name="calendar-blank-outline" size={12} color={colors.textMuted} />
+                      <Text style={styles.orderMeta}>
+                        {new Date(c.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </Text>
+                    </View>
+                    {!!c.resolution && (
+                      <Text style={[styles.articleContent, { marginTop: 6, fontStyle: 'italic' }]}>
+                        Admin note: {c.resolution}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+
+          <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
+            <Text style={styles.cancelBtnText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+});
+
 // ── Legal Content Modal (Terms / Privacy / About Us) ─────────────────────────
 
 const LegalModal = React.memo(({ visible, onClose, title, icon, fetcher, fieldKey }) => {
@@ -386,8 +530,10 @@ const ProfileScreen = () => {
   const [helpArticlesVisible, setHelpArticlesVisible] = useState(false);
   const [termsVisible,        setTermsVisible]        = useState(false);
   const [privacyVisible,      setPrivacyVisible]      = useState(false);
+  const [refundVisible,       setRefundVisible]       = useState(false);
   const [aboutVisible,        setAboutVisible]        = useState(false);
   const [addressVisible,      setAddressVisible]      = useState(false);
+  const [reportIssueVisible,  setReportIssueVisible]  = useState(false);
   const [form, setForm] = useState({ fullName: '', email: '', locationText: '' });
   const [updateError, setUpdateError] = useState(null);
 
@@ -514,6 +660,7 @@ const ProfileScreen = () => {
           <Text style={styles.sectionTitle}>Support</Text>
           <MenuItem icon="help-circle-outline" label="FAQs" sub="Browse common questions" onPress={() => setFaqsVisible(true)} />
           <MenuItem icon="book-open-page-variant-outline" label="Help Articles" sub="Guides and how-to articles" onPress={() => setHelpArticlesVisible(true)} />
+          <MenuItem icon="alert-circle-outline" label="Report an Issue" sub="Raise a complaint and track its status" onPress={() => setReportIssueVisible(true)} />
           <MenuItem icon="email-outline" label="Chat With Us" sub="Email our support team" onPress={handleChatWithUs} />
         </View>
 
@@ -522,6 +669,7 @@ const ProfileScreen = () => {
           <Text style={styles.sectionTitle}>Legal</Text>
           <MenuItem icon="file-document-outline" label="Terms & Conditions" sub="Customer terms of use" onPress={() => setTermsVisible(true)} />
           <MenuItem icon="shield-lock-outline" label="Privacy Policy" sub="How we handle your data" onPress={() => setPrivacyVisible(true)} />
+          <MenuItem icon="cash-refund" label="Refund Policy" sub="How refunds are processed" onPress={() => setRefundVisible(true)} />
           <MenuItem icon="information-outline" label="About Us" sub="Learn more about Conza" onPress={() => setAboutVisible(true)} />
         </View>
 
@@ -550,6 +698,9 @@ const ProfileScreen = () => {
       {/* Help Articles Modal */}
       <HelpArticlesModal visible={helpArticlesVisible} onClose={() => setHelpArticlesVisible(false)} />
 
+      {/* Report an Issue Modal */}
+      <ReportIssueModal visible={reportIssueVisible} onClose={() => setReportIssueVisible(false)} />
+
       {/* Legal Modals */}
       <LegalModal
         visible={termsVisible}
@@ -565,6 +716,14 @@ const ProfileScreen = () => {
         title="Privacy Policy"
         icon="shield-lock-outline"
         fieldKey="privacy"
+        fetcher={fetchCustomerLegal}
+      />
+      <LegalModal
+        visible={refundVisible}
+        onClose={() => setRefundVisible(false)}
+        title="Refund Policy"
+        icon="cash-refund"
+        fieldKey="refund"
         fetcher={fetchCustomerLegal}
       />
       <LegalModal

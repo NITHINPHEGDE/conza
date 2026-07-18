@@ -112,6 +112,7 @@ import SeasonalOffers from '../pages/promotions/SeasonalOffers'
 import FAQsHelpCenter from '../pages/content/FAQsHelpCenter'
 import Terms from '../pages/content/Terms'
 import Privacy from '../pages/content/Privacy'
+import RefundPolicy from '../pages/content/RefundPolicy'
 import AboutUs from '../pages/content/AboutUs'
 import Banners from '../pages/content/Banners'
 
@@ -309,6 +310,7 @@ export default function AppRoutes() {
             <Route path="/content/help" element={<FAQsHelpCenter />} />
             <Route path="/content/terms" element={<Terms />} />
             <Route path="/content/privacy" element={<Privacy />} />
+            <Route path="/content/refund" element={<RefundPolicy />} />
             <Route path="/content/about" element={<AboutUs />} />
             <Route path="/content/banners" element={<Banners />} />
           </Route>

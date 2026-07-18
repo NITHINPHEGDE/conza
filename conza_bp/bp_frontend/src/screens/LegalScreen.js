@@ -10,6 +10,7 @@ import { fetchWorkerLegal, fetchAboutUs } from '../services/legalService';
 const TABS = [
   { key: 'terms',   label: 'Terms',   fieldKey: 'terms',   fetcher: fetchWorkerLegal },
   { key: 'privacy', label: 'Privacy', fieldKey: 'privacy', fetcher: fetchWorkerLegal },
+  { key: 'refund',  label: 'Refund',  fieldKey: 'refund',  fetcher: fetchWorkerLegal },
   { key: 'about',   label: 'About Us', fieldKey: 'about',  fetcher: fetchAboutUs },
 ];
 

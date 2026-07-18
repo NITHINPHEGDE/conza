@@ -247,6 +247,7 @@ const ProfileScreen = () => {
   const [helpArticlesVisible, setHelpArticlesVisible] = useState(false);
   const [termsVisible,        setTermsVisible]        = useState(false);
   const [privacyVisible,      setPrivacyVisible]      = useState(false);
+  const [refundVisible,       setRefundVisible]       = useState(false);
   const [aboutVisible,        setAboutVisible]        = useState(false);
 
   return (
@@ -320,6 +321,7 @@ const ProfileScreen = () => {
           <Text style={styles.menuSection}>Legal</Text>
           <MenuItem icon="file-document-outline" label="Terms & Conditions" onPress={() => setTermsVisible(true)} />
           <MenuItem icon="lock-outline"           label="Privacy Policy"     onPress={() => setPrivacyVisible(true)} />
+          <MenuItem icon="cash-refund"            label="Refund Policy"      onPress={() => setRefundVisible(true)} />
           <MenuItem icon="information-outline"    label="About Us"           onPress={() => setAboutVisible(true)} />
         </View>
 
@@ -356,6 +358,14 @@ const ProfileScreen = () => {
         title="Privacy Policy"
         icon="lock-outline"
         fieldKey="privacy"
+        fetcher={fetchVendorLegal}
+      />
+      <LegalModal
+        visible={refundVisible}
+        onClose={() => setRefundVisible(false)}
+        title="Refund Policy"
+        icon="cash-refund"
+        fieldKey="refund"
         fetcher={fetchVendorLegal}
       />
       <LegalModal
