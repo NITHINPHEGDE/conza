@@ -8,7 +8,7 @@ import serviceCategoryService from '../../services/serviceCategoryService'
 
 export default function AddCategory() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ name: '', commission: '15', radius: '5', description: '', perHourCharge: '0', perDayCharge: '0' })
+  const [form, setForm] = useState({ name: '', commission: '15', radius: '5', description: '', baseCharge: '0', perHourCharge: '0', perDayCharge: '0' })
   const [imagePreview, setImagePreview] = useState(null)
   const [imageBase64, setImageBase64] = useState(null)
   const [error, setError] = useState(null)
@@ -42,8 +42,9 @@ export default function AddCategory() {
         commission: Number(form.commission),
         radius: Number(form.radius),
         description: form.description,
+        baseCharge:    Number(form.baseCharge)    || 0,
         perHourCharge: Number(form.perHourCharge) || 0,
-        perDayCharge: Number(form.perDayCharge) || 0,
+        perDayCharge:  Number(form.perDayCharge)  || 0,
       })
       navigate('/services')
     } catch (err) {
@@ -85,12 +86,20 @@ export default function AddCategory() {
         <Input label="Commission (%)" type="number" value={form.commission} onChange={(e) => setForm({ ...form, commission: e.target.value })} required />
         <Input label="Service Radius (km)" type="number" value={form.radius} onChange={(e) => setForm({ ...form, radius: e.target.value })} required />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border">
-          <p className="md:col-span-2 text-xs font-medium text-textMuted -mb-1">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-border">
+          <p className="md:col-span-3 text-xs font-medium text-textMuted -mb-1">
             Base pricing for this category — applied automatically to every business partner who registers under it.
           </p>
           <Input
-            label="Base Charge / Hour (₹)"
+            label="Base Charge (₹)"
+            type="number"
+            min="0"
+            value={form.baseCharge}
+            onChange={(e) => setForm({ ...form, baseCharge: e.target.value })}
+            required
+          />
+          <Input
+            label="Per Hour (₹)"
             type="number"
             min="0"
             value={form.perHourCharge}
@@ -98,7 +107,7 @@ export default function AddCategory() {
             required
           />
           <Input
-            label="Base Charge / Day (₹)"
+            label="Per Day (₹)"
             type="number"
             min="0"
             value={form.perDayCharge}

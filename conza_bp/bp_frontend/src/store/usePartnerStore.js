@@ -1,10 +1,13 @@
 import { create } from 'zustand';
+import { Alert } from 'react-native';
 import { toggleOnlineAPI } from '../services/workerService';
 import {
   startLocationTracking,
   stopLocationTracking,
   setTrackingMode,
   TRACKING_MODE,
+  getCurrentCoords,
+  getDistanceInMeters,
 } from '../services/locationService';
 import { socket, connectSocket } from '../utils/socket';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -350,12 +353,51 @@ const usePartnerStore = create((set, get) => ({
   })),
 
   markArrived: async () => {
-    const { activeJob, updateRequestStatus } = get();
+    const { activeJob } = get();
     if (!activeJob) return;
-    await updateRequestStatus(activeJob.id, 'arrived');
-    const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-    set({ jobStatus: 'arrived', checkInTime: timeStr });
-    setTrackingMode(TRACKING_MODE.ACTIVE);  // still on-site, keep high-frequency
+
+    try {
+      const coords = await getCurrentCoords();
+      if (!coords) {
+        Alert.alert('Location Required', 'Please enable location permission to mark yourself as arrived.');
+        return;
+      }
+
+      // Client-side pre-check so the worker gets instant feedback without
+      // waiting on the network — the server re-checks this authoritatively.
+      if (activeJob.latitude != null && activeJob.longitude != null) {
+        const distance = getDistanceInMeters(
+          coords.latitude, coords.longitude,
+          activeJob.latitude, activeJob.longitude
+        );
+        if (distance > 50) {
+          Alert.alert(
+            'Too Far From Customer',
+            `You're about ${Math.round(distance)}m away from the customer's location. You need to be within 50m to mark yourself as arrived.`
+          );
+          return;
+        }
+      }
+
+      const { api } = require('../services/apiClient');
+      await api.patch(`/bookings/${activeJob.id}/status`, {
+        status: 'arrived',
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+      });
+
+      await stopAlertSound();
+      stopNativeAlert();
+      cancelLocalAlert(activeJob.id);
+
+      const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      set({ jobStatus: 'arrived', checkInTime: timeStr });
+      setTrackingMode(TRACKING_MODE.ACTIVE);  // still on-site, keep high-frequency
+      await get().fetchRequests();
+    } catch (err) {
+      console.error('[Store] markArrived failed:', err.message);
+      Alert.alert('Unable to Mark as Arrived', err.message || 'Something went wrong. Please try again.');
+    }
   },
 
   startWork: async () => {

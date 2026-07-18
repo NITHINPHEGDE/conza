@@ -34,7 +34,7 @@ const bookingSchema = new mongoose.Schema(
     platformFee: { type: Number, default: 0 },
     total:       { type: Number, required: true },
     paymentMethod: {
-      type: String, enum: ['cod', 'upi', 'card'], default: 'cod',
+      type: String, enum: ['cod', 'upi', 'card', 'wallet', 'pending'], default: 'cod',
     },
 
     // Status
@@ -52,6 +52,10 @@ const bookingSchema = new mongoose.Schema(
     acceptedAt:    { type: Date, default: null },
     checkInTime:   { type: Date, default: null },
     checkOutTime:  { type: Date, default: null },
+    workStartTime: { type: Date, default: null },   // when worker actually starts the job (status → in_progress)
+    hoursWorked:   { type: Number, default: null },  // billed hours for immediate/hourly bookings (0 = base fee applied)
+    hourlyRate:    { type: Number, default: null },  // combined per-hour rate of assigned workers
+    baseFeeApplied: { type: Boolean, default: false }, // true when work ≤ 1 hr and base charge was billed
     workerCancelled: { type: Boolean, default: false },
     notes:         { type: String, default: '' },
     description:   { type: String, default: '' },

@@ -9,7 +9,7 @@ import serviceCategoryService from '../../services/serviceCategoryService'
 export default function EditCategory() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [form, setForm] = useState({ name: '', commission: '', radius: '', description: '', active: true, perHourCharge: '0', perDayCharge: '0' })
+  const [form, setForm] = useState({ name: '', commission: '', radius: '', description: '', active: true, baseCharge: '0', perHourCharge: '0', perDayCharge: '0' })
   const [imagePreview, setImagePreview] = useState(null)
   const [imageBase64, setImageBase64] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -27,8 +27,9 @@ export default function EditCategory() {
           radius: category.radius ?? '',
           description: category.description || '',
           active: category.active ?? true,
+          baseCharge:    category.baseCharge    ?? 0,
           perHourCharge: category.perHourCharge ?? 0,
-          perDayCharge: category.perDayCharge ?? 0,
+          perDayCharge:  category.perDayCharge  ?? 0,
         })
         setImagePreview(category.image || null)
       } catch (err) {
@@ -62,8 +63,9 @@ export default function EditCategory() {
         radius: Number(form.radius),
         description: form.description,
         active: form.active,
+        baseCharge:    Number(form.baseCharge)    || 0,
         perHourCharge: Number(form.perHourCharge) || 0,
-        perDayCharge: Number(form.perDayCharge) || 0,
+        perDayCharge:  Number(form.perDayCharge)  || 0,
       }
       if (imageBase64) payload.image = imageBase64
 
@@ -110,12 +112,20 @@ export default function EditCategory() {
         <Input label="Commission (%)" type="number" value={form.commission} onChange={(e) => setForm({ ...form, commission: e.target.value })} required />
         <Input label="Service Radius (km)" type="number" value={form.radius} onChange={(e) => setForm({ ...form, radius: e.target.value })} required />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border">
-          <p className="md:col-span-2 text-xs font-medium text-textMuted -mb-1">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-border">
+          <p className="md:col-span-3 text-xs font-medium text-textMuted -mb-1">
             Base pricing for this category. Changing these updates every business partner already registered under this category as well.
           </p>
           <Input
-            label="Base Charge / Hour (₹)"
+            label="Base Charge (₹)"
+            type="number"
+            min="0"
+            value={form.baseCharge}
+            onChange={(e) => setForm({ ...form, baseCharge: e.target.value })}
+            required
+          />
+          <Input
+            label="Per Hour (₹)"
             type="number"
             min="0"
             value={form.perHourCharge}
@@ -123,7 +133,7 @@ export default function EditCategory() {
             required
           />
           <Input
-            label="Base Charge / Day (₹)"
+            label="Per Day (₹)"
             type="number"
             min="0"
             value={form.perDayCharge}

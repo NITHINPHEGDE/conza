@@ -15,11 +15,11 @@ const serviceCategorySchema = new mongoose.Schema({
 
   // ── Admin-set pricing for this category (mirrors conza_admin) ───────────
   // Business partners no longer set their own pricing at sign-up. The admin
-  // sets a base charge per hour and per day for the whole category, and
-  // every worker registering under this category is auto-priced with these
-  // values — see workerService.signUpWorker().
-  perHourCharge: { type: Number, default: 0, min: 0 },
-  perDayCharge:  { type: Number, default: 0, min: 0 },
+  // sets three rates for the whole category, and every worker registering
+  // under this category is auto-priced with these values.
+  baseCharge:    { type: Number, default: 0, min: 0 }, // fixed call-out / base fee
+  perHourCharge: { type: Number, default: 0, min: 0 }, // rate per hour
+  perDayCharge:  { type: Number, default: 0, min: 0 }, // rate per day
 }, { timestamps: true });
 
 module.exports = mongoose.model('ServiceCategory', serviceCategorySchema);

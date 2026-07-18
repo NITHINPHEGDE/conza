@@ -208,6 +208,11 @@ const BookingTrackingScreen = ({ navigation }) => {
             <DetailRow label="Service"      value={activeBooking.category} />
             <DetailRow label="Location"     value={`${activeBooking.area}, ${activeBooking.city}`} />
             <DetailRow label="Address"      value={activeBooking.address || 'N/A'} />
+            {activeBooking.baseFeeApplied ? (
+              <DetailRow label="Billing"        value="Base fee (< 1 hr)" />
+            ) : !!activeBooking.hoursWorked && (
+              <DetailRow label="Hours Worked"   value={`${activeBooking.hoursWorked} hr${activeBooking.hoursWorked === 1 ? '' : 's'}`} />
+            )}
             <DetailRow label="Total Amount" value={`₹${activeBooking.total}`} />
             <DetailRow label="Payment"      value={activeBooking.paymentMethod.toUpperCase()} />
           </View>

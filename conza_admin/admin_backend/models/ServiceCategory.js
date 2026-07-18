@@ -15,13 +15,13 @@ const serviceCategorySchema = new mongoose.Schema({
   description: { type: String, default: '' },
 
   // ── Admin-set pricing for this category ─────────────────────────────────
-  // Business partners can no longer set their own pricing at sign-up — the
-  // admin sets a base charge per hour and per day for the whole category,
-  // and every worker who registers under (or already belongs to) this
-  // category is priced accordingly. See serviceCategoryController.updateCategory
-  // and conza_bp workerService.signUpWorker.
-  perHourCharge: { type: Number, default: 0, min: 0 },
-  perDayCharge: { type: Number, default: 0, min: 0 },
+  // Admin sets three separate rates for the whole category; every worker
+  // who registers under (or already belongs to) this category is priced
+  // accordingly. See serviceCategoryController.updateCategory and
+  // conza_bp workerService.signUpWorker.
+  baseCharge:    { type: Number, default: 0, min: 0 }, // fixed call-out / base fee
+  perHourCharge: { type: Number, default: 0, min: 0 }, // rate per hour
+  perDayCharge:  { type: Number, default: 0, min: 0 }, // rate per day
 }, { timestamps: true })
 
 module.exports = workersDB.model('ServiceCategory', serviceCategorySchema)

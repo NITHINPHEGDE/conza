@@ -2,7 +2,11 @@ const Booking = require('../models/Booking');
 const Worker  = require('../models/Worker');
 const logger  = require('../utils/logger');
 const { withCache, invalidateCache } = require('../utils/cacheHelpers');
+const { getDistanceInMeters } = require('../utils/geoUtils');
+const { calculateHourlyCharge } = require('../utils/billingUtils');
 require('../models/User');
+
+const ARRIVAL_RADIUS_METERS = 50;
 
 // ── GET /api/bookings/requests ────────────────────────────────────────────
 const getWorkerRequests = async (req, res) => {
@@ -58,7 +62,41 @@ const updateBookingStatus = async (req, res) => {
     }
 
     if (status === 'accepted'  && !booking.acceptedAt)   booking.acceptedAt   = new Date();
-    if (status === 'arrived'   && !booking.checkInTime)   booking.checkInTime  = new Date();
+
+    // "Mark as Arrived" is only allowed within 50m of the customer's saved location
+    if (status === 'arrived' && !booking.checkInTime) {
+      const { latitude, longitude } = req.body;
+      if (latitude === undefined || latitude === null || longitude === undefined || longitude === null) {
+        return res.status(400).json({
+          success: false,
+          message: 'Your current location is required to mark yourself as arrived.',
+        });
+      }
+      if (booking.latitude != null && booking.longitude != null) {
+        const distance = getDistanceInMeters(
+          Number(latitude), Number(longitude),
+          booking.latitude, booking.longitude
+        );
+        if (distance > ARRIVAL_RADIUS_METERS) {
+          return res.status(403).json({
+            success: false,
+            message: `You must be within ${ARRIVAL_RADIUS_METERS}m of the customer's location to mark as arrived. You are currently ~${Math.round(distance)}m away.`,
+          });
+        }
+      }
+      booking.checkInTime = new Date();
+    }
+
+    // Work timer starts here — hourly billing is calculated from this point
+    if (status === 'in_progress' && !booking.workStartTime) {
+      booking.workStartTime = new Date();
+      if (!booking.hourlyRate) {
+        booking.hourlyRate = (booking.workerSnapshot || []).reduce(
+          (sum, w) => sum + (Number(w.pricePerDay) || Number(w.minCharge) || 0), 0
+        );
+      }
+    }
+
     if (status === 'awaiting_customer_confirmation' && !booking.checkOutTime) {
       booking.checkOutTime = new Date(); // Tentative
       if (req.body.paymentMethod) booking.paymentMethod = req.body.paymentMethod;
@@ -67,6 +105,38 @@ const updateBookingStatus = async (req, res) => {
       booking.checkOutTime = new Date();
       if (req.body.paymentMethod) booking.paymentMethod = req.body.paymentMethod;
     }
+
+    // Immediate labour bookings are billed by the hour, tiered in 30-min
+    // increments, computed once from workStartTime → checkOutTime.
+    // Exception: if work is ≤ 1 hour, the combined baseCharge is applied
+    // instead of the hourly rate (minimum call-out fee).
+    if (
+      ['awaiting_customer_confirmation', 'completed'].includes(status) &&
+      booking.isImmediate &&
+      booking.bookingType === 'labour' &&
+      booking.workStartTime &&
+      booking.hoursWorked == null
+    ) {
+      const hourlyRate = booking.hourlyRate || (booking.workerSnapshot || []).reduce(
+        (sum, w) => sum + (Number(w.pricePerDay) || 0), 0
+      );
+      // Sum each worker's baseCharge for sub-1-hour billing
+      const combinedBaseCharge = (booking.workerSnapshot || []).reduce(
+        (sum, w) => sum + (Number(w.baseCharge) || 0), 0
+      );
+      const { billedHours, subtotal, baseFeeApplied } = calculateHourlyCharge(
+        booking.workStartTime, booking.checkOutTime, hourlyRate, combinedBaseCharge
+      );
+      const platformFee = Math.round(subtotal * 0.05);
+
+      booking.hoursWorked    = billedHours;
+      booking.hourlyRate     = hourlyRate;
+      booking.subtotal       = subtotal;
+      booking.platformFee    = platformFee;
+      booking.total          = subtotal + platformFee;
+      booking.baseFeeApplied = baseFeeApplied;
+    }
+
     if (status === 'cancelled') booking.workerCancelled = true;
 
     booking.status = status;

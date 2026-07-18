@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { reverseGeocodeFullAddress } from '../hooks/useAuth';
 import useAppStore from '../store/useAppStore';
 import {
@@ -55,10 +55,9 @@ const PAYMENT_METHODS = [
 const WorkerRow = React.memo(({ worker }) => {
   const rateSegments = useMemo(() => {
     const segs = [{ label: 'Per Hr', value: Number(worker.pricePerDay) || 0 }];
-    if (worker.baseCharge) segs.push({ label: 'Base', value: Number(worker.baseCharge) });
     if (worker.perDayCharge) segs.push({ label: 'Per Day', value: Number(worker.perDayCharge) });
     return segs;
-  }, [worker.pricePerDay, worker.baseCharge, worker.perDayCharge]);
+  }, [worker.pricePerDay, worker.perDayCharge]);
 
   return (
     <View style={styles.workerRow}>
@@ -165,9 +164,22 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const [scheduledTime, setScheduledTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [multiDay, setMultiDay] = useState(false);
-  const [toDate, setToDate] = useState(new Date());
+  const [toDate, setToDate] = useState(new Date(Date.now() + 24 * 60 * 60 * 1000));
   const [showToDatePicker, setShowToDatePicker] = useState(false);
+
+  // Scheduled bookings are always multi-day — keep `toDate` at least one day
+  // after `scheduledDate` whenever the "From" date changes.
+  useEffect(() => {
+    const minTo = new Date(scheduledDate);
+    minTo.setDate(minTo.getDate() + 1);
+    minTo.setHours(0, 0, 0, 0);
+    const currentTo = new Date(toDate);
+    currentTo.setHours(0, 0, 0, 0);
+    if (currentTo < minTo) {
+      setToDate(minTo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduledDate]);
 
   const [savedAddressSheetVisible, setSavedAddressSheetVisible] = useState(false);
   const [selectedSavedAddress, setSelectedSavedAddress] = useState(null);
@@ -181,7 +193,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const { submitBooking, loading: submitting, error: submitError } = useBooking('labour');
 
   const scheduledDates = useMemo(() => {
-    if (bookingType !== 'scheduled' || !multiDay) return [];
+    if (bookingType !== 'scheduled') return [];
     const dates = [];
     const cur = new Date(scheduledDate);
     cur.setHours(0, 0, 0, 0);
@@ -192,18 +204,25 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       cur.setDate(cur.getDate() + 1);
     }
     return dates;
-  }, [bookingType, multiDay, scheduledDate, toDate]);
+  }, [bookingType, scheduledDate, toDate]);
 
-  const totalDays = bookingType === 'scheduled' && multiDay ? Math.max(scheduledDates.length, 1) : 1;
+  const totalDays = bookingType === 'scheduled' ? Math.max(scheduledDates.length, 1) : 1;
 
   const { subtotal, platformFee, total } = useMemo(() => {
-    const sub = totalDays > 1
+    const sub = bookingType === 'scheduled'
       ? selectedWorkers.reduce((sum, w) => sum + ((Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * totalDays), 0)
       : selectedWorkers.reduce((sum, w) => sum + (Number(w.pricePerDay) || 0), 0);
     const fee = Math.round(sub * PLATFORM_FEE_RATE);
     const tot = sub + fee;
     return { subtotal: sub, platformFee: fee, total: tot };
-  }, [selectedWorkers, totalDays]);
+  }, [selectedWorkers, totalDays, bookingType]);
+
+  // Combined hourly rate for immediate (pay-per-hour) bookings — shown as a
+  // reference only; the real amount is billed after the work is finished.
+  const hourlyRateTotal = useMemo(
+    () => selectedWorkers.reduce((sum, w) => sum + (Number(w.pricePerDay) || 0), 0),
+    [selectedWorkers]
+  );
 
   const handleSelectPayment = useCallback((id) => setPayment(id), []);
   const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
@@ -283,6 +302,11 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   }, [scheduledDate, scheduledTime]);
 
   const handleConfirmBooking = useCallback(async () => {
+    if (bookingType === 'scheduled' && totalDays < 2) {
+      Alert.alert('Select More Days', 'Scheduled bookings must span at least 2 days. Please pick a "To Date" after the "From Date".');
+      return;
+    }
+
     const ok = await submitBooking({
       selectedWorkers,
       category,
@@ -294,12 +318,12 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       district,
       state,
       pincode,
-      paymentMethod,
+      paymentMethod: bookingType === 'immediate' ? 'pending' : paymentMethod,
       description,
       isImmediate: bookingType === 'immediate',
       scheduledDate: bookingType === 'scheduled' ? combinedScheduledDate : null,
-      scheduledEndDate: bookingType === 'scheduled' && multiDay ? toDate : null,
-      scheduledDates: bookingType === 'scheduled' && multiDay ? scheduledDates.map((d) => d.toISOString()) : [],
+      scheduledEndDate: bookingType === 'scheduled' ? toDate : null,
+      scheduledDates: bookingType === 'scheduled' ? scheduledDates.map((d) => d.toISOString()) : [],
       totalDays,
       latitude: lat,
       longitude: lng,
@@ -309,9 +333,15 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         index: 0,
         routes: [{ name: 'BookingHome' }],
       });
+      if (bookingType === 'immediate') {
+        Alert.alert(
+          'Booking Confirmed! ⚡',
+          "Your labour has been booked instantly. You'll be charged based on the actual hours worked once the job starts."
+        );
+      }
       navigation.navigate('Status');
     }
-  }, [submitBooking, selectedWorkers, category, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, multiDay, toDate, scheduledDates, totalDays, lat, lng, navigation]);
+  }, [submitBooking, selectedWorkers, category, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, toDate, scheduledDates, totalDays, lat, lng, navigation]);
 
   const handleToDateChange = (event, date) => {
     setShowToDatePicker(Platform.OS === 'ios');
@@ -530,9 +560,11 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
 
           {bookingType === 'scheduled' && (
             <>
+              <Text style={styles.multiDayHint}>📅 Scheduled bookings are for multiple days only. Pick a start and end date below.</Text>
+
               <View style={styles.scheduleRow}>
                 <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowDatePicker(true)}>
-                  <Text style={styles.dateTimeLabel}>{multiDay ? 'From Date' : 'Date'}</Text>
+                  <Text style={styles.dateTimeLabel}>From Date</Text>
                   <Text style={styles.dateTimeValue}>{scheduledDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowTimePicker(true)}>
@@ -541,38 +573,25 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                style={styles.multiDayToggle}
-                onPress={() => setMultiDay((m) => !m)}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.checkbox, multiDay && styles.checkboxOn]}>
-                  {multiDay && <Text style={styles.checkboxMark}>✓</Text>}
+              <View style={styles.scheduleRow}>
+                {showToDatePicker && (
+                  <DateTimePicker
+                    value={toDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
+                    onChange={handleToDateChange}
+                    minimumDate={new Date(scheduledDate.getTime() + 24 * 60 * 60 * 1000)}
+                  />
+                )}
+                <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowToDatePicker(true)}>
+                  <Text style={styles.dateTimeLabel}>To Date</Text>
+                  <Text style={styles.dateTimeValue}>{toDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</Text>
+                </TouchableOpacity>
+                <View style={styles.dateTimeBtn}>
+                  <Text style={styles.dateTimeLabel}>Total Days</Text>
+                  <Text style={styles.dateTimeValue}>{totalDays} day{totalDays > 1 ? 's' : ''}</Text>
                 </View>
-                <Text style={styles.multiDayLabel}>Book for multiple days</Text>
-              </TouchableOpacity>
-
-              {multiDay && (
-                <View style={styles.scheduleRow}>
-                  {showToDatePicker && (
-                    <DateTimePicker
-                      value={toDate}
-                      mode="date"
-                      display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
-                      onChange={handleToDateChange}
-                      minimumDate={scheduledDate}
-                    />
-                  )}
-                  <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowToDatePicker(true)}>
-                    <Text style={styles.dateTimeLabel}>To Date</Text>
-                    <Text style={styles.dateTimeValue}>{toDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</Text>
-                  </TouchableOpacity>
-                  <View style={styles.dateTimeBtn}>
-                    <Text style={styles.dateTimeLabel}>Total Days</Text>
-                    <Text style={styles.dateTimeValue}>{totalDays} day{totalDays > 1 ? 's' : ''}</Text>
-                  </View>
-                </View>
-              )}
+              </View>
             </>
           )}
 
@@ -588,39 +607,68 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
           />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payment Method</Text>
-          <View style={styles.walletBalanceRow}>
-            <Text style={styles.walletBalanceLabel}>👛 Wallet Balance</Text>
-            <Text style={styles.walletBalanceValue}>₹{walletBalance}</Text>
+        {bookingType === 'immediate' ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Instant Booking</Text>
+            <View style={styles.immediateInfoCard}>
+              <Text style={styles.immediateInfoEmoji}>⚡</Text>
+              <Text style={styles.immediateInfoTitle}>No payment needed right now</Text>
+              <Text style={styles.immediateInfoText}>
+                Your labour will be booked and dispatched immediately — no payment method required now.
+                Once the worker starts the job, billing runs by the hour and the final amount is
+                calculated automatically based on the time actually worked, payable on completion.
+              </Text>
+            </View>
+            <View style={styles.billDivider} />
+            {selectedWorkers.map((worker) => (
+              <View key={worker._id} style={styles.billRow}>
+                <Text style={styles.billLabel}>{worker.name} (per hour)</Text>
+                <Text style={styles.billValue}>₹{Number(worker.pricePerDay) || 0}</Text>
+              </View>
+            ))}
+            <View style={styles.billDivider} />
+            <View style={styles.billRow}>
+              <Text style={styles.billTotalLabel}>Combined Hourly Rate</Text>
+              <Text style={styles.billTotalValue}>₹{hourlyRateTotal.toLocaleString()}/hr</Text>
+            </View>
           </View>
-          {PAYMENT_METHODS.map((method) => (
-            <PaymentOption
-              key={method.id}
-              method={method}
-              selected={paymentMethod === method.id}
-              onSelect={handleSelectPayment}
-            />
-          ))}
-        </View>
+        ) : (
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Payment Method</Text>
+              <View style={styles.walletBalanceRow}>
+                <Text style={styles.walletBalanceLabel}>👛 Wallet Balance</Text>
+                <Text style={styles.walletBalanceValue}>₹{walletBalance}</Text>
+              </View>
+              {PAYMENT_METHODS.map((method) => (
+                <PaymentOption
+                  key={method.id}
+                  method={method}
+                  selected={paymentMethod === method.id}
+                  onSelect={handleSelectPayment}
+                />
+              ))}
+            </View>
 
-        <View style={styles.billSection}>
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>
-              Subtotal ({selectedWorkers.length} worker{selectedWorkers.length > 1 ? 's' : ''}{totalDays > 1 ? ` × ${totalDays} days` : ''})
-            </Text>
-            <Text style={styles.billValue}>₹{subtotal.toLocaleString()}</Text>
-          </View>
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Platform Fee</Text>
-            <Text style={styles.billValue}>₹{platformFee.toLocaleString()}</Text>
-          </View>
-          <View style={styles.billDivider} />
-          <View style={styles.billRow}>
-            <Text style={styles.billTotalLabel}>Total Amount</Text>
-            <Text style={styles.billTotalValue}>₹{total.toLocaleString()}</Text>
-          </View>
-        </View>
+            <View style={styles.billSection}>
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>
+                  Subtotal ({selectedWorkers.length} worker{selectedWorkers.length > 1 ? 's' : ''} × {totalDays} days)
+                </Text>
+                <Text style={styles.billValue}>₹{subtotal.toLocaleString()}</Text>
+              </View>
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>Platform Fee</Text>
+                <Text style={styles.billValue}>₹{platformFee.toLocaleString()}</Text>
+              </View>
+              <View style={styles.billDivider} />
+              <View style={styles.billRow}>
+                <Text style={styles.billTotalLabel}>Total Amount</Text>
+                <Text style={styles.billTotalValue}>₹{total.toLocaleString()}</Text>
+              </View>
+            </View>
+          </>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -640,7 +688,9 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
             {submitting ? (
               <ActivityIndicator color={colors.textPrimary} />
             ) : (
-              <Text style={styles.confirmText}>Confirm Booking</Text>
+              <Text style={styles.confirmText}>
+                {bookingType === 'immediate' ? 'Book Now ⚡' : 'Confirm Booking'}
+              </Text>
             )}
           </TouchableOpacity>
         </LinearGradient>
@@ -1025,6 +1075,25 @@ const styles = StyleSheet.create({
   checkboxOn: { backgroundColor: colors.accentAmber, borderColor: colors.accentAmber },
   checkboxMark: { color: colors.white, fontSize: 12, fontWeight: '800' },
   multiDayLabel: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  multiDayHint: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
+    marginBottom: 14,
+    lineHeight: 17,
+  },
+  immediateInfoCard: {
+    backgroundColor: colors.accentYellowSoft,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.accentYellow,
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  immediateInfoEmoji: { fontSize: 28, marginBottom: 8 },
+  immediateInfoTitle: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, marginBottom: 6, textAlign: 'center' },
+  immediateInfoText: { fontSize: 12, color: colors.textSecondary, lineHeight: 18, textAlign: 'center', fontWeight: '500' },
   webPickerContainer: {
     backgroundColor: colors.surfaceElevated,
     padding: 16,
