@@ -76,6 +76,10 @@ const updateBookingStatus = async (req, res) => {
         return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
       }
 
+      // Atomically claim a slot only if:
+      //   • booking is still pending (accepting new workers)
+      //   • this worker hasn't already claimed a slot
+      //   • the required number of workers hasn't been reached yet
       const claimed = await Booking.findOneAndUpdate(
         {
           _id:    bookingId,
@@ -103,11 +107,13 @@ const updateBookingStatus = async (req, res) => {
         return res.status(409).json({ success: false, message: 'This job has already been filled by other workers' });
       }
 
+      // Mark this specific worker unavailable immediately.
+      await Worker.findByIdAndUpdate(workerId, { isAvailable: false });
+
       let finalBooking = claimed;
 
-      // Quota reached — lock in the team, compute real pricing from the
-      // workers who actually accepted, and flip the job to 'accepted' so
-      // everyone else's broadcast copy disappears (see socketService.js).
+      // Once the full quota is reached, close the booking (flip to 'accepted')
+      // so remaining workers stop seeing it, and compute final pricing.
       if (claimed.workers.length >= claimed.requiredWorkers) {
         const isMultiDay = !claimed.isImmediate && claimed.totalDays && claimed.totalDays > 1;
         const subtotal = (claimed.workerSnapshot || []).reduce((sum, w) => {
@@ -123,8 +129,6 @@ const updateBookingStatus = async (req, res) => {
           { status: 'accepted', subtotal, platformFee, total: subtotal + platformFee },
           { new: true }
         );
-
-        await Worker.updateMany({ _id: { $in: finalBooking.workers } }, { isAvailable: false });
       }
 
       await Promise.allSettled(
@@ -140,23 +144,87 @@ const updateBookingStatus = async (req, res) => {
         `bookings:detail:${bookingId}`
       ).catch(() => {});
 
-      logger.info({ bookingId, workerId, filled: finalBooking.status === 'accepted' }, 'Auto-book slot claimed');
-      return res.json({ success: true, booking: finalBooking });
+      logger.info({ bookingId, workerId, totalAccepted: claimed.workers.length, required: claimed.requiredWorkers }, 'Auto-book slot claimed — worker starting independently');
+
+      // Always return status: 'accepted' to this worker so the frontend
+      // immediately navigates them to the ActiveJob flow without waiting.
+      return res.json({
+        success: true,
+        booking: { ...finalBooking.toObject(), status: 'accepted' },
+      });
     }
 
-    // ── Auto-book decline — just drop out of the broadcast pool, don't
-    // cancel the job for everyone else still waiting to accept ──────────────
+    // ── Auto-book decline — worker drops out of the broadcast pool ────────────
+    // Pull this worker from requestedWorkerIds, then check whether everyone
+    // has now responded (either accepted into workers[] or declined/removed).
+    // If so and quota is not met, notify the customer intelligently.
     if (booking.isAutoBook && status === 'cancelled' && booking.status === 'pending') {
       const isRequested = (booking.requestedWorkerIds || []).some(id => id.toString() === workerId);
       if (!isRequested) {
         return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
       }
+
       const updated = await Booking.findByIdAndUpdate(
         bookingId,
         { $pull: { requestedWorkerIds: workerId } },
         { new: true }
       );
       await invalidateCache(`bp:worker:${workerId}:requests:pending:*`).catch(() => {});
+
+      // ── Check if everyone has responded ──────────────────────────────────────
+      // requestedWorkerIds now only contains workers who HAVEN'T responded yet.
+      // Workers who accepted were $addToSet'd to workers[] but stay in requestedWorkerIds.
+      // Workers who declined are $pull'd from requestedWorkerIds entirely.
+      // So: unresponded = those in requestedWorkerIds who are NOT yet in workers[].
+      const acceptedIds  = new Set((updated.workers || []).map(id => id.toString()));
+      const unresponded  = (updated.requestedWorkerIds || []).filter(id => !acceptedIds.has(id.toString()));
+      const acceptedCount = acceptedIds.size;
+      const required      = updated.requiredWorkers || 1;
+
+      if (unresponded.length === 0 && acceptedCount < required) {
+        // Everyone has responded and the quota is not met.
+        const { getIO } = require('../services/socketService');
+        const io = getIO();
+
+        if (acceptedCount === 0) {
+          // ── CASE 1: Zero workers accepted — auto-cancel the booking ─────
+          await Booking.findByIdAndUpdate(bookingId, {
+            status: 'cancelled',
+            cancellationReason: 'no_workers_available',
+          });
+          await invalidateCache(
+            `bookings:user:${updated.user}:*`,
+            `bookings:detail:${bookingId}`
+          ).catch(() => {});
+
+          io.to(`customer_${updated.user}`).emit('autobook_failed', {
+            bookingId,
+            message: `No ${updated.category || 'workers'} were available nearby. Your request has been cancelled automatically.`,
+          });
+          logger.info({ bookingId }, 'Auto-book auto-cancelled — zero workers accepted');
+
+        } else {
+          // ── CASE 2: Partial match — ask the customer what they want to do ──
+          // Mark the booking so it waits for customer decision.
+          await Booking.findByIdAndUpdate(bookingId, {
+            autoBookStatus: 'partial',
+          });
+          await invalidateCache(
+            `bookings:user:${updated.user}:*`,
+            `bookings:detail:${bookingId}`
+          ).catch(() => {});
+
+          io.to(`customer_${updated.user}`).emit('autobook_partial', {
+            bookingId,
+            acceptedCount,
+            required,
+            category: updated.category || 'worker',
+            message: `Only ${acceptedCount} of ${required} ${updated.category || 'workers'} accepted. Proceed with ${acceptedCount}, or cancel?`,
+          });
+          logger.info({ bookingId, acceptedCount, required }, 'Auto-book partial match — awaiting customer decision');
+        }
+      }
+
       return res.json({ success: true, declined: true, booking: updated });
     }
 

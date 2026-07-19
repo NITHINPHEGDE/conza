@@ -347,21 +347,7 @@ const ActiveJobScreen = ({ navigation }) => {
           <Text style={styles.jobDesc} numberOfLines={2}>{activeJob.description}</Text>
         </View>
 
-        {jobStatus === 'pending' ? (
-          <View style={styles.waitingCard}>
-            <Text style={styles.waitingEmoji}>⏳</Text>
-            <Text style={styles.waitingTitle}>Waiting for the rest of the team</Text>
-            <Text style={styles.waitingText}>
-              You're confirmed for this job! We're still waiting for other workers to accept
-              this Auto Book request. This screen updates automatically the moment the team is full.
-            </Text>
-            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelJob}>
-              <Text style={styles.cancelBtnText}>Cancel Job</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.workflowTitle}>Job Progress</Text>
+        <Text style={styles.workflowTitle}>Job Progress</Text>
 
             <StatusCard
               step={1} title="Waiting for Arrival"
@@ -387,8 +373,6 @@ const ActiveJobScreen = ({ navigation }) => {
                 <Text style={styles.cancelBtnText}>Cancel Job</Text>
               </TouchableOpacity>
             )}
-          </>
-        )}
 
       </ScrollView>
 

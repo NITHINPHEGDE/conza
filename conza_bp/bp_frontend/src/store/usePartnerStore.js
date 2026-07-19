@@ -517,6 +517,19 @@ lastPaymentMethod: null,
       const data = await api.get(`/bookings/${bookingId}`);
       if (data.success) {
         const r = data.booking;
+        const workerId = get().worker?._id?.toString();
+
+        // For auto-book, if this worker has already claimed a slot (they're in
+        // workers[]) the overall booking may still be 'pending' while waiting
+        // for the remaining slots to fill. But THIS worker should start their
+        // job immediately — show them 'accepted' so the workflow kicks off.
+        const uiStatus = (
+          r.isAutoBook &&
+          r.status === 'pending' &&
+          workerId &&
+          (r.workers || []).some(id => id?.toString() === workerId)
+        ) ? 'accepted' : r.status;
+
         const mapped = {
           ...r,
           id:              r._id,
@@ -527,7 +540,7 @@ lastPaymentMethod: null,
           estimatedAmount: r.total || 0,
           service:         r.category || 'Service',
         };
-        set({ activeJob: mapped, jobStatus: r.status });
+        set({ activeJob: mapped, jobStatus: uiStatus });
         socket.emit('join_booking', bookingId);
       }
     } catch (err) {

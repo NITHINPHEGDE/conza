@@ -85,7 +85,7 @@ const getMaterialBucket = (status) => {
   return 'active';
 };
 
-const MaterialCard = React.memo(({ order }) => {
+const MaterialCard = React.memo(({ order, onPress }) => {
   const s         = getMaterialStatus(order.status);
   const itemNames = useMemo(() =>
     (order.items || []).map((i) => i.title || i.name).filter(Boolean).join(', '),
@@ -111,7 +111,9 @@ const MaterialCard = React.memo(({ order }) => {
         </View>
         <View style={styles.cardBottom}>
           <Text style={styles.amountText}>₹{order.total}</Text>
-          <Text style={styles.bookingIdText}>#{(order._id || '').slice(-6).toUpperCase()}</Text>
+          <TouchableOpacity style={styles.viewBtn} onPress={onPress} activeOpacity={0.8}>
+            <Text style={styles.viewBtnText}>View Details →</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -137,7 +139,7 @@ const getRentalBucket = (status) => {
   return 'active';
 };
 
-const RentalCard = React.memo(({ order }) => {
+const RentalCard = React.memo(({ order, onPress }) => {
   const s         = getRentalStatus(order.status);
   const itemNames = useMemo(() =>
     (order.items || []).map((i) => i.title || i.name).filter(Boolean).join(', '),
@@ -160,7 +162,9 @@ const RentalCard = React.memo(({ order }) => {
         <Text style={styles.locationText}>📍 {order.city}</Text>
         <View style={styles.cardBottom}>
           <Text style={styles.amountText}>₹{order.total}</Text>
-          <Text style={styles.bookingIdText}>#{(order._id || '').slice(-6).toUpperCase()}</Text>
+          <TouchableOpacity style={styles.viewBtn} onPress={onPress} activeOpacity={0.8}>
+            <Text style={styles.viewBtnText}>View Details →</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -374,10 +378,18 @@ const StatusScreen = ({ navigation }) => {
               />
             ))}
             {activeTab === 'order' && currentList.map((order) => (
-              <MaterialCard key={order._id} order={order} />
+              <MaterialCard
+                key={order._id}
+                order={order}
+                onPress={() => navigation.navigate('OrderDetail', { orderId: order._id })}
+              />
             ))}
             {activeTab === 'rental' && currentList.map((order) => (
-              <RentalCard key={order._id} order={order} />
+              <RentalCard
+                key={order._id}
+                order={order}
+                onPress={() => navigation.navigate('OrderDetail', { orderId: order._id })}
+              />
             ))}
           </>
         )}

@@ -26,6 +26,30 @@ const DetailRow = React.memo(({ label, value }) => (
   </View>
 ));
 
+// ── Work Timeline helpers ─────────────────────────────────────────────────────
+const fmtTime = (iso) => {
+  if (!iso) return null;
+  return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+};
+
+const TimelineRow = React.memo(({ icon, color, label, time, done }) => (
+  <View style={styles.tlRow}>
+    <View style={[styles.tlDot, done ? { backgroundColor: color } : styles.tlDotPending]}>
+      <MaterialCommunityIcons name={icon} size={14} color={done ? '#FFF' : '#94A3B8'} />
+    </View>
+    <View style={styles.tlContent}>
+      <Text style={[styles.tlLabel, done && { color: '#1E293B' }]}>{label}</Text>
+      <Text style={[styles.tlTime, done && { color: color }]}>
+        {done ? fmtTime(time) : 'Pending'}
+      </Text>
+    </View>
+  </View>
+));
+
+const TimelineLine = React.memo(({ done }) => (
+  <View style={[styles.tlLine, done && styles.tlLineDone]} />
+));
+
 const BookingTrackingScreen = ({ navigation }) => {
   const activeBooking        = useAppStore((s) => s.activeBooking);
   const activeBookingId      = useAppStore((s) => s.activeBookingId);
@@ -38,6 +62,7 @@ const BookingTrackingScreen = ({ navigation }) => {
   const [confirming, setConfirming]           = useState(false);
   const [reportingIssue, setReportingIssue]   = useState(false);
   const [issueComment, setIssueComment]       = useState('');
+  const [partialData, setPartialData]         = useState(null); // { acceptedCount, required, category }
 
   // Join the booking-specific socket room so booking_status_changed events
   // are received. Re-join on reconnect to handle network interruptions.
@@ -56,17 +81,47 @@ const BookingTrackingScreen = ({ navigation }) => {
     };
   }, [activeBookingId]);
 
-  // Quick Auto Book — refetch immediately whenever another worker accepts so
-  // the "X of Y workers accepted" progress updates in real time instead of
-  // waiting for the 30s fallback poll.
+  // Quick Auto Book — refetch on worker progress updates
   useEffect(() => {
     if (!activeBookingId) return;
     const handleProgress = (data) => {
       if (data?.bookingId === activeBookingId) fetchActiveBooking(activeBookingId);
     };
     socket.on('autobook_progress', handleProgress);
+    return () => { socket.off('autobook_progress', handleProgress); };
+  }, [activeBookingId, fetchActiveBooking]);
+
+  // Handle edge case: all workers responded but quota not met
+  useEffect(() => {
+    if (!activeBookingId) return;
+
+    const handleFailed = (data) => {
+      if (data?.bookingId !== activeBookingId) return;
+      // 0 workers accepted — auto-cancelled
+      fetchActiveBooking(activeBookingId);
+      Alert.alert(
+        'No Workers Available ☹️',
+        data.message || `No workers were available nearby. Your booking has been cancelled automatically.`,
+        [{ text: 'OK' }]
+      );
+    };
+
+    const handlePartial = (data) => {
+      if (data?.bookingId !== activeBookingId) return;
+      // Some workers accepted, customer must decide
+      fetchActiveBooking(activeBookingId);
+      setPartialData({
+        acceptedCount: data.acceptedCount,
+        required:      data.required,
+        category:      data.category,
+      });
+    };
+
+    socket.on('autobook_failed',  handleFailed);
+    socket.on('autobook_partial', handlePartial);
     return () => {
-      socket.off('autobook_progress', handleProgress);
+      socket.off('autobook_failed',  handleFailed);
+      socket.off('autobook_partial', handlePartial);
     };
   }, [activeBookingId, fetchActiveBooking]);
 
@@ -137,6 +192,28 @@ const BookingTrackingScreen = ({ navigation }) => {
     }
   }, [activeBookingId, issueComment, fetchActiveBooking]);
 
+  const handlePartialProceed = useCallback(async () => {
+    if (!activeBookingId) return;
+    try {
+      await bookingAPI.confirmPartialAutoBook(activeBookingId);
+      setPartialData(null);
+      await fetchActiveBooking(activeBookingId);
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.message || err.message || 'Something went wrong.');
+    }
+  }, [activeBookingId, fetchActiveBooking]);
+
+  const handlePartialCancel = useCallback(async () => {
+    if (!activeBookingId) return;
+    try {
+      await bookingAPI.cancelPartialAutoBook(activeBookingId);
+      setPartialData(null);
+      await fetchActiveBooking(activeBookingId);
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.message || err.message || 'Something went wrong.');
+    }
+  }, [activeBookingId, fetchActiveBooking]);
+
   const handleOK = useCallback(async () => {
     await clearActiveBooking();
     navigation.navigate('StatusList');
@@ -195,14 +272,31 @@ const BookingTrackingScreen = ({ navigation }) => {
           <Text style={styles.bookingId}>ID: {activeBooking._id.slice(-8).toUpperCase()}</Text>
         </View>
 
+        {/* Partial match decision card — shown when some workers accepted but quota not met */}
+        {partialData && (
+          <View style={styles.partialCard}>
+            <Text style={styles.partialEmoji}>⚠️</Text>
+            <Text style={styles.partialTitle}>Partial Match</Text>
+            <Text style={styles.partialSub}>
+              Only {partialData.acceptedCount} of {partialData.required} {partialData.category}s accepted your request.{`\n`}
+              Would you like to proceed with {partialData.acceptedCount} worker{partialData.acceptedCount > 1 ? 's' : ''}, or cancel?
+            </Text>
+            <TouchableOpacity style={styles.partialProceedBtn} onPress={handlePartialProceed} activeOpacity={0.85}>
+              <Text style={styles.partialProceedText}>✓ Proceed with {partialData.acceptedCount} Worker{partialData.acceptedCount > 1 ? 's' : ''}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.partialCancelBtn} onPress={handlePartialCancel} activeOpacity={0.75}>
+              <Text style={styles.partialCancelText}>✕ Cancel Booking</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {activeBooking.isAutoBook && activeBooking.status === 'pending' && (
           <View style={styles.autoBookProgressCard}>
             <MaterialCommunityIcons name="account-multiple" size={20} color="#F59E0B" />
             <Text style={styles.autoBookProgressText}>
-              {(activeBooking.acceptedWorkers || []).length} of {activeBooking.requiredWorkers || 1} worker{(activeBooking.requiredWorkers || 1) > 1 ? 's' : ''} accepted
+              {(activeBooking.workers || []).length} of {activeBooking.requiredWorkers || 1} worker{(activeBooking.requiredWorkers || 1) > 1 ? 's' : ''} accepted
             </Text>
             <Text style={styles.autoBookProgressSub}>
-              Broadcasting to nearby {activeBooking.category}s — updates automatically
+              Broadcasting to nearby {activeBooking.category}s — each worker starts independently
             </Text>
           </View>
         )}
@@ -241,10 +335,70 @@ const BookingTrackingScreen = ({ navigation }) => {
             ) : !!activeBooking.hoursWorked && (
               <DetailRow label="Hours Worked"   value={`${activeBooking.hoursWorked} hr${activeBooking.hoursWorked === 1 ? '' : 's'}`} />
             )}
-            <DetailRow label="Total Amount" value={`₹${activeBooking.total}`} />
-            <DetailRow label="Payment"      value={activeBooking.paymentMethod.toUpperCase()} />
+
+            {/* Auto-book: show per-worker breakdown */}
+            {activeBooking.isAutoBook && (activeBooking.workers || []).length > 0 ? (
+              <>
+                <View style={styles.detailDivider} />
+                <Text style={styles.workerBreakdownTitle}>
+                  ⚡ {(activeBooking.workers || []).length} Worker{(activeBooking.workers || []).length > 1 ? 's' : ''} Assigned
+                </Text>
+                {(activeBooking.workers || []).map((w, i) => {
+                  const snap = (activeBooking.workerSnapshot || [])[i];
+                  const name = w.fullName || snap?.name || `Worker ${i + 1}`;
+                  const rate = snap?.pricePerDay || snap?.minCharge || 0;
+                  return (
+                    <View key={w._id || i} style={styles.workerBreakdownRow}>
+                      <Text style={styles.workerBreakdownName}>👷 {name}</Text>
+                      {rate > 0 && <Text style={styles.workerBreakdownRate}>₹{rate}/hr</Text>}
+                    </View>
+                  );
+                })}
+                <View style={styles.detailDivider} />
+                <DetailRow label="Estimated Total" value={`₹${activeBooking.total}`} />
+                <DetailRow label="Note" value="Final bill calculated per actual hours worked" />
+              </>
+            ) : (
+              <DetailRow label="Total Amount" value={`₹${activeBooking.total}`} />
+            )}
+
+            <DetailRow label="Payment" value={(activeBooking.paymentMethod || 'pending').toUpperCase()} />
           </View>
         </View>
+
+        {/* Work Timeline — arrival, start, finish times */}
+        {activeBooking.bookingType === 'labour' && (
+          activeBooking.checkInTime || activeBooking.workStartTime || activeBooking.checkOutTime
+        ) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Work Timeline</Text>
+            <View style={styles.timelineCard}>
+              <TimelineRow
+                icon="map-marker-check"
+                color="#10B981"
+                label="Worker Arrived"
+                time={activeBooking.checkInTime}
+                done={!!activeBooking.checkInTime}
+              />
+              <TimelineLine done={!!activeBooking.workStartTime} />
+              <TimelineRow
+                icon="play-circle"
+                color="#6366F1"
+                label="Work Started"
+                time={activeBooking.workStartTime}
+                done={!!activeBooking.workStartTime}
+              />
+              <TimelineLine done={!!activeBooking.checkOutTime} />
+              <TimelineRow
+                icon="check-circle"
+                color="#F59E0B"
+                label="Work Finished"
+                time={activeBooking.checkOutTime}
+                done={!!activeBooking.checkOutTime}
+              />
+            </View>
+          </View>
+        )}
 
         {activeBooking.status === 'completed' && (
           <View style={styles.terminalCard}>
@@ -491,6 +645,92 @@ const styles = StyleSheet.create({
   modalConfirmText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
   modalDismissBtn:  { width: '100%', paddingVertical: 12, alignItems: 'center' },
   modalDismissText: { color: '#64748B', fontWeight: '600', fontSize: 15 },
+
+  // Auto-book per-worker breakdown
+  detailDivider: { height: 1, backgroundColor: '#E2E8F0', marginVertical: 10 },
+  workerBreakdownTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#F59E0B',
+    marginBottom: 8,
+  },
+  workerBreakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 5,
+  },
+  workerBreakdownName: { fontSize: 13, fontWeight: '600', color: '#1E293B' },
+  workerBreakdownRate: { fontSize: 13, fontWeight: '700', color: '#6366F1' },
+
+  // Partial auto-book decision card
+  partialCard: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    borderRadius: 18,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  partialEmoji:       { fontSize: 32, marginBottom: 8 },
+  partialTitle:       { fontSize: 17, fontWeight: '800', color: '#92400E', marginBottom: 6 },
+  partialSub:         { fontSize: 13, color: '#78350F', textAlign: 'center', lineHeight: 20, marginBottom: 18 },
+  partialProceedBtn: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 24,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  partialProceedText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
+  partialCancelBtn: {
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 24,
+    width: '100%',
+    alignItems: 'center',
+  },
+  partialCancelText: { color: '#EF4444', fontWeight: '700', fontSize: 14 },
+
+  // Work Timeline
+  timelineCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+  },
+  tlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  tlDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tlDotPending: {
+    backgroundColor: '#E2E8F0',
+  },
+  tlContent: { flex: 1 },
+  tlLabel: { fontSize: 13, fontWeight: '600', color: '#94A3B8' },
+  tlTime:  { fontSize: 14, fontWeight: '800', marginTop: 1 },
+  tlLine: {
+    width: 2,
+    height: 20,
+    backgroundColor: '#E2E8F0',
+    marginLeft: 15,
+    marginVertical: 2,
+  },
+  tlLineDone: { backgroundColor: '#10B981' },
 });
 
 export default BookingTrackingScreen;

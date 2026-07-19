@@ -38,6 +38,17 @@ export const bookingAPI = {
     return res.data;
   },
 
+  // Partial auto-book: customer decides what to do when fewer workers accepted
+  confirmPartialAutoBook: async (id) => {
+    const res = await api.patch(`/bookings/${id}/partial-proceed`);
+    return res.data;
+  },
+
+  cancelPartialAutoBook: async (id) => {
+    const res = await api.patch(`/bookings/${id}/partial-cancel`);
+    return res.data;
+  },
+
   // ── Seller orders (material / rental) ──────────────────────────────────
   placeSellerOrder: async (data) => {
     const res = await api.post('/orders/seller', data);

@@ -529,4 +529,89 @@ const reportIssue = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-module.exports = { createBooking, createAutoBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue };
+
+// ── PATCH /api/bookings/:id/partial-proceed ──────────────────────────────────
+// Customer accepts a partial auto-book match (fewer workers than requested).
+// Booking status flips to 'accepted' so the workers who accepted can continue.
+const confirmPartialAutoBook = async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id });
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+    if (!booking.isAutoBook || booking.autoBookStatus !== 'partial') {
+      return res.status(400).json({ success: false, message: 'Booking is not in a partial state' });
+    }
+
+    const updated = await Booking.findByIdAndUpdate(
+      booking._id,
+      { status: 'accepted', autoBookStatus: 'partial_confirmed' },
+      { new: true }
+    );
+
+    await invalidateCache(`bookings:user:${req.user._id}:*`, `bookings:detail:${booking._id}`).catch(() => {});
+
+    try {
+      const io = getIO();
+      // Tell all accepted workers the job is officially on
+      io.to(`booking_${booking._id}`).emit('booking_status_changed', {
+        bookingId: booking._id.toString(),
+        status: 'accepted',
+      });
+      io.to(`customer_${req.user._id}`).emit('booking_updated', {
+        operationType: 'update',
+        bookingId: booking._id.toString(),
+        status: 'accepted',
+      });
+    } catch (_) {}
+
+    res.json({ success: true, booking: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── PATCH /api/bookings/:id/partial-cancel ───────────────────────────────────
+// Customer cancels a partial auto-book match.
+// Frees all workers who had already accepted, cancels the booking.
+const cancelPartialAutoBook = async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id });
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+    if (!booking.isAutoBook || booking.autoBookStatus !== 'partial') {
+      return res.status(400).json({ success: false, message: 'Booking is not in a partial state' });
+    }
+
+    await Booking.findByIdAndUpdate(booking._id, {
+      status: 'cancelled',
+      autoBookStatus: 'partial_cancelled',
+      cancellationReason: 'customer_rejected_partial',
+    });
+
+    // Free all workers who had accepted
+    if (booking.workers && booking.workers.length > 0) {
+      await Worker.updateMany({ _id: { $in: booking.workers } }, { isAvailable: true });
+    }
+
+    await invalidateCache(`bookings:user:${req.user._id}:*`, `bookings:detail:${booking._id}`).catch(() => {});
+
+    try {
+      const io = getIO();
+      // Notify each accepted worker their job was cancelled
+      io.to(`booking_${booking._id}`).emit('booking_status_changed', {
+        bookingId: booking._id.toString(),
+        status: 'cancelled',
+        reason: 'Customer chose to cancel — insufficient workers were available',
+      });
+      io.to(`customer_${req.user._id}`).emit('booking_updated', {
+        operationType: 'update',
+        bookingId: booking._id.toString(),
+        status: 'cancelled',
+      });
+    } catch (_) {}
+
+    res.json({ success: true, message: 'Booking cancelled. Workers have been released.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { createBooking, createAutoBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue, confirmPartialAutoBook, cancelPartialAutoBook };
