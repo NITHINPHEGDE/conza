@@ -17,15 +17,27 @@ const getWorkerRequests = async (req, res) => {
     const cacheKey = `bp:worker:${workerId}:requests:pending:${page}:${limit}`;
     const TTL      = 15;
 
+    // Manual bookings: worker is directly in `workers`.
+    // Auto-book requests: worker is in the broadcast pool (`requestedWorkerIds`)
+    // but hasn't yet claimed a slot in `workers` — once they do (or the quota
+    // fills), this query stops returning it for everyone.
+    const query = {
+      status: 'pending',
+      $or: [
+        { isAutoBook: { $ne: true }, workers: workerId },
+        { isAutoBook: true, requestedWorkerIds: workerId, workers: { $ne: workerId } },
+      ],
+    };
+
     const result = await withCache(cacheKey, TTL, async () => {
       const [requests, total] = await Promise.all([
-        Booking.find({ workers: workerId, status: 'pending', declinedWorkers: { $ne: workerId } })
+        Booking.find(query)
           .populate('user', 'fullName phone profileImage')
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(Number(limit))
           .lean(),
-        Booking.countDocuments({ workers: workerId, status: 'pending', declinedWorkers: { $ne: workerId } }),
+        Booking.countDocuments(query),
       ]);
       return { requests, total };
     });
@@ -45,206 +57,112 @@ const getWorkerRequests = async (req, res) => {
   }
 };
 
-// ── Quick Auto Book: atomic per-worker accept ──────────────────────────────
-// Many workers can hit this within milliseconds of each other. The $expr
-// size-guard makes the push atomic per document in MongoDB — only the first
-// `requiredWorkers` callers succeed; everyone else gets a clean 409 instead
-// of silently over-filling the booking.
-const handleAutoBookAccept = async (req, res, booking) => {
-  try {
-    const workerId = req.worker._id;
-
-    const updated = await Booking.findOneAndUpdate(
-      {
-        _id: booking._id,
-        autoBookStatus: 'broadcasting',
-        acceptedWorkers: { $ne: workerId },
-        $expr: { $lt: [{ $size: '$acceptedWorkers' }, '$requiredWorkers'] },
-      },
-      {
-        $push: { acceptedWorkers: workerId },
-        $set:  { acceptedAt: booking.acceptedAt || new Date() },
-      },
-      { new: true }
-    );
-
-    if (!updated) {
-      return res.status(409).json({
-        success: false,
-        message: 'This request has just been filled by other workers. Better luck next time!',
-      });
-    }
-
-    let finalBooking = updated;
-    const isFulfilled = updated.acceptedWorkers.length >= updated.requiredWorkers;
-
-    if (isFulfilled) {
-      const acceptedWorkerDocs = await Worker.find({ _id: { $in: updated.acceptedWorkers } })
-        .select('fullName minCharge baseCharge perDayCharge rating').lean();
-
-      const workerSnapshot = acceptedWorkerDocs.map(w => ({
-        _id:          w._id,
-        name:         w.fullName,
-        pricePerDay:  w.minCharge || 0,
-        minCharge:    w.minCharge,
-        baseCharge:   w.baseCharge,
-        perDayCharge: w.perDayCharge,
-        rating:       w.rating,
-      }));
-      const subtotal = updated.isImmediate
-        ? workerSnapshot.reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0)
-        : workerSnapshot.reduce((s, w) => s + ((Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * (updated.totalDays || 1)), 0);
-      const platformFee = Math.round(subtotal * 0.05);
-
-      finalBooking = await Booking.findOneAndUpdate(
-        { _id: booking._id, autoBookStatus: 'broadcasting' },
-        {
-          $set: {
-            autoBookStatus: 'fulfilled',
-            status:         'accepted',
-            acceptedAt:     updated.acceptedAt || new Date(),
-            workers:        updated.acceptedWorkers,
-            workerSnapshot,
-            subtotal, platformFee, total: subtotal + platformFee,
-          },
-        },
-        { new: true }
-      ) || updated;
-
-      await Worker.updateMany({ _id: { $in: finalBooking.acceptedWorkers } }, { isAvailable: false });
-
-      const closedFor = (booking.workers || []).filter(
-        wId => !finalBooking.acceptedWorkers.some(a => a.toString() === wId.toString())
-      );
-
-      try {
-        const { getIO } = require('../services/socketService');
-        const io = getIO();
-        closedFor.forEach(wId =>
-          io.to(`worker_${wId}`).emit('autobook_request_closed', { bookingId: booking._id.toString() })
-        );
-        finalBooking.acceptedWorkers.forEach(wId =>
-          io.to(`worker_${wId}`).emit('autobook_confirmed', { bookingId: booking._id.toString() })
-        );
-        io.to(`customer_${booking.user}`).emit('booking_updated', {
-          operationType: 'update', bookingId: booking._id.toString(), status: 'accepted',
-        });
-        io.to(`booking_${booking._id}`).emit('booking_status_changed', {
-          bookingId: booking._id.toString(), status: 'accepted',
-        });
-      } catch (err) {
-        logger.error({ err }, 'Failed to emit autobook fulfilment events');
-      }
-    } else {
-      try {
-        const { getIO } = require('../services/socketService');
-        const io = getIO();
-        io.to(`customer_${booking.user}`).emit('autobook_progress', {
-          bookingId: booking._id.toString(),
-          accepted:  updated.acceptedWorkers.length,
-          required:  updated.requiredWorkers,
-        });
-        io.to(`booking_${booking._id}`).emit('autobook_progress', {
-          bookingId: booking._id.toString(),
-          accepted:  updated.acceptedWorkers.length,
-          required:  updated.requiredWorkers,
-        });
-      } catch (_) {}
-    }
-
-    await Promise.allSettled(
-      (booking.workers || []).map((wId) =>
-        invalidateCache(
-          `bp:worker:${wId}:requests:pending:*`,
-          `bp:worker:${wId}:history:*`,
-          `bp:booking:${booking._id}`
-        )
-      )
-    );
-    await invalidateCache(
-      `bookings:user:${booking.user}:*`,
-      `bookings:detail:${booking._id}`
-    ).catch(() => {});
-
-    logger.info({ bookingId: booking._id, workerId, isFulfilled }, 'Autobook accept processed');
-    res.json({ success: true, booking: finalBooking, autoBookFulfilled: isFulfilled });
-  } catch (err) {
-    logger.error({ err }, 'handleAutoBookAccept failed');
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-// ── Quick Auto Book: decline only removes the request for THIS worker ──────
-// The booking stays open for everyone else. If every broadcast worker ends
-// up declining before enough acceptances come in, the request is closed out
-// so it doesn't sit "pending" forever with no one left to fulfil it.
-const handleAutoBookDecline = async (req, res, booking) => {
-  try {
-    const workerId = req.worker._id;
-
-    await Booking.updateOne(
-      { _id: booking._id },
-      { $addToSet: { declinedWorkers: workerId } }
-    );
-
-    const fresh = await Booking.findById(booking._id)
-      .select('workers acceptedWorkers declinedWorkers requiredWorkers user autoBookStatus status');
-
-    if (
-      fresh &&
-      fresh.autoBookStatus === 'broadcasting' &&
-      fresh.acceptedWorkers.length < fresh.requiredWorkers &&
-      fresh.declinedWorkers.length >= fresh.workers.length
-    ) {
-      fresh.status = 'cancelled';
-      fresh.autoBookStatus = 'cancelled';
-      await fresh.save();
-
-      try {
-        const { getIO } = require('../services/socketService');
-        const io = getIO();
-        io.to(`customer_${fresh.user}`).emit('booking_updated', {
-          operationType: 'update', bookingId: fresh._id.toString(), status: 'cancelled',
-        });
-        io.to(`booking_${fresh._id}`).emit('booking_status_changed', {
-          bookingId: fresh._id.toString(), status: 'cancelled',
-        });
-      } catch (_) {}
-    }
-
-    await invalidateCache(
-      `bp:worker:${workerId}:requests:pending:*`,
-      `bp:booking:${booking._id}`
-    ).catch(() => {});
-
-    res.json({ success: true, declined: true });
-  } catch (err) {
-    logger.error({ err }, 'handleAutoBookDecline failed');
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
 // ── PATCH /api/bookings/:id/status ───────────────────────────────────────
 const updateBookingStatus = async (req, res) => {
   try {
     const { status } = req.body;
     const bookingId  = req.params.id;
 
-    const booking = await Booking.findById(bookingId);
+    const booking  = await Booking.findById(bookingId);
+    const workerId = req.worker._id.toString();
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    const isAssigned = booking.workers.some(id => id.toString() === req.worker._id.toString());
-    if (!isAssigned) {
-      return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
+    // ── Auto-book acceptance — atomic first-come-first-served slot claim ────
+    if (booking.isAutoBook && status === 'accepted') {
+      const isRequested = (booking.requestedWorkerIds || []).some(id => id.toString() === workerId);
+      if (!isRequested) {
+        return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
+      }
+
+      const claimed = await Booking.findOneAndUpdate(
+        {
+          _id:    bookingId,
+          status: 'pending',
+          workers: { $ne: workerId },
+          $expr:  { $lt: [{ $size: '$workers' }, '$requiredWorkers'] },
+        },
+        {
+          $addToSet: { workers: workerId },
+          $push: {
+            workerSnapshot: {
+              _id:          req.worker._id,
+              name:         req.worker.fullName,
+              pricePerDay:  req.worker.minCharge   || 0,
+              perDayCharge: req.worker.perDayCharge || 0,
+              baseCharge:   req.worker.baseCharge   || 0,
+            },
+          },
+          $set: { acceptedAt: booking.acceptedAt || new Date() },
+        },
+        { new: true }
+      );
+
+      if (!claimed) {
+        return res.status(409).json({ success: false, message: 'This job has already been filled by other workers' });
+      }
+
+      let finalBooking = claimed;
+
+      // Quota reached — lock in the team, compute real pricing from the
+      // workers who actually accepted, and flip the job to 'accepted' so
+      // everyone else's broadcast copy disappears (see socketService.js).
+      if (claimed.workers.length >= claimed.requiredWorkers) {
+        const isMultiDay = !claimed.isImmediate && claimed.totalDays && claimed.totalDays > 1;
+        const subtotal = (claimed.workerSnapshot || []).reduce((sum, w) => {
+          const rate = isMultiDay
+            ? (Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * claimed.totalDays
+            : (Number(w.pricePerDay) || 0);
+          return sum + rate;
+        }, 0);
+        const platformFee = Math.round(subtotal * 0.05);
+
+        finalBooking = await Booking.findByIdAndUpdate(
+          bookingId,
+          { status: 'accepted', subtotal, platformFee, total: subtotal + platformFee },
+          { new: true }
+        );
+
+        await Worker.updateMany({ _id: { $in: finalBooking.workers } }, { isAvailable: false });
+      }
+
+      await Promise.allSettled(
+        (booking.requestedWorkerIds || []).map((wId) =>
+          invalidateCache(
+            `bp:worker:${wId}:requests:pending:*`,
+            `bp:booking:${bookingId}`
+          )
+        )
+      );
+      await invalidateCache(
+        `bookings:user:${booking.user}:*`,
+        `bookings:detail:${bookingId}`
+      ).catch(() => {});
+
+      logger.info({ bookingId, workerId, filled: finalBooking.status === 'accepted' }, 'Auto-book slot claimed');
+      return res.json({ success: true, booking: finalBooking });
     }
 
-    // ── Quick Auto Book: accept/decline are per-worker while broadcasting,
-    // not a whole-booking status flip like the normal single-assignment flow.
-    if (booking.isAutoBook && booking.autoBookStatus === 'broadcasting') {
-      if (status === 'accepted')  return handleAutoBookAccept(req, res, booking);
-      if (status === 'cancelled') return handleAutoBookDecline(req, res, booking);
+    // ── Auto-book decline — just drop out of the broadcast pool, don't
+    // cancel the job for everyone else still waiting to accept ──────────────
+    if (booking.isAutoBook && status === 'cancelled' && booking.status === 'pending') {
+      const isRequested = (booking.requestedWorkerIds || []).some(id => id.toString() === workerId);
+      if (!isRequested) {
+        return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
+      }
+      const updated = await Booking.findByIdAndUpdate(
+        bookingId,
+        { $pull: { requestedWorkerIds: workerId } },
+        { new: true }
+      );
+      await invalidateCache(`bp:worker:${workerId}:requests:pending:*`).catch(() => {});
+      return res.json({ success: true, declined: true, booking: updated });
+    }
+
+    const isAssigned = booking.workers.some(id => id.toString() === workerId);
+    if (!isAssigned) {
+      return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
     }
 
     if (status === 'accepted'  && !booking.acceptedAt)   booking.acceptedAt   = new Date();

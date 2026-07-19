@@ -347,31 +347,47 @@ const ActiveJobScreen = ({ navigation }) => {
           <Text style={styles.jobDesc} numberOfLines={2}>{activeJob.description}</Text>
         </View>
 
-        <Text style={styles.workflowTitle}>Job Progress</Text>
+        {jobStatus === 'pending' ? (
+          <View style={styles.waitingCard}>
+            <Text style={styles.waitingEmoji}>⏳</Text>
+            <Text style={styles.waitingTitle}>Waiting for the rest of the team</Text>
+            <Text style={styles.waitingText}>
+              You're confirmed for this job! We're still waiting for other workers to accept
+              this Auto Book request. This screen updates automatically the moment the team is full.
+            </Text>
+            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelJob}>
+              <Text style={styles.cancelBtnText}>Cancel Job</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.workflowTitle}>Job Progress</Text>
 
-        <StatusCard
-          step={1} title="Waiting for Arrival"
-          description="You've accepted the job. Head to the customer's location."
-          status={jobStatus === 'accepted' ? 'active' : 'done'} buttonLabel="Mark as Arrived"
-          onPress={markArrived}
-        />
-        <StatusCard
-          step={2} title="At Location"
-          description="You've reached the site. Click below to start the work timer."
-          status={jobStatus === 'arrived' ? 'active' : (['in_progress', 'completed'].includes(jobStatus) ? 'done' : 'pending')} buttonLabel="Start Work ▶"
-          onPress={startWork}
-        />
-        <StatusCard
-          step={3} title="Work in Progress"
-          description="Finish the work and collect payment from the customer."
-          status={jobStatus === 'in_progress' ? 'active' : (['awaiting_customer_confirmation', 'completed'].includes(jobStatus) ? 'done' : 'pending')} buttonLabel="Work Completed ✓"
-          onPress={handleWorkDone} isLast
-        />
+            <StatusCard
+              step={1} title="Waiting for Arrival"
+              description="You've accepted the job. Head to the customer's location."
+              status={jobStatus === 'accepted' ? 'active' : 'done'} buttonLabel="Mark as Arrived"
+              onPress={markArrived}
+            />
+            <StatusCard
+              step={2} title="At Location"
+              description="You've reached the site. Click below to start the work timer."
+              status={jobStatus === 'arrived' ? 'active' : (['in_progress', 'completed'].includes(jobStatus) ? 'done' : 'pending')} buttonLabel="Start Work ▶"
+              onPress={startWork}
+            />
+            <StatusCard
+              step={3} title="Work in Progress"
+              description="Finish the work and collect payment from the customer."
+              status={jobStatus === 'in_progress' ? 'active' : (['awaiting_customer_confirmation', 'completed'].includes(jobStatus) ? 'done' : 'pending')} buttonLabel="Work Completed ✓"
+              onPress={handleWorkDone} isLast
+            />
 
-        {(!['awaiting_customer_confirmation', 'completed'].includes(jobStatus)) && (
-          <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelJob}>
-            <Text style={styles.cancelBtnText}>Cancel Job</Text>
-          </TouchableOpacity>
+            {(!['awaiting_customer_confirmation', 'completed'].includes(jobStatus)) && (
+              <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelJob}>
+                <Text style={styles.cancelBtnText}>Cancel Job</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
 
       </ScrollView>
@@ -447,6 +463,18 @@ const styles = StyleSheet.create({
   backLinkText:     { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
   cancelBtn:        { marginTop: 20, padding: 15, alignItems: 'center' },
   cancelBtnText:    { color: colors.danger, fontWeight: '700', fontSize: 14 },
+  waitingCard: {
+    marginHorizontal: 20,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 24,
+    alignItems: 'center',
+  },
+  waitingEmoji: { fontSize: 40, marginBottom: 12 },
+  waitingTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, marginBottom: 8, textAlign: 'center' },
+  waitingText: { fontSize: 13, color: colors.textMuted, lineHeight: 19, textAlign: 'center' },
 });
 
 export default ActiveJobScreen;

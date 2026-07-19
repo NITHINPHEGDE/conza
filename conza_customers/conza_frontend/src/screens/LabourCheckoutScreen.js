@@ -141,7 +141,10 @@ const SelectedAddressCard = React.memo(({ address, onClear }) => {
 });
 
 const LabourCheckoutScreen = ({ route, navigation }) => {
-  const { selectedWorkers = [], category = '' } = route.params || {};
+  const {
+    selectedWorkers = [], category = '',
+    isAutoBook = false, requiredWorkers = 1, isImmediatePreset,
+  } = route.params || {};
 
   const [houseNumber, setHouseNumber] = useState('');
   const [houseName,   setHouseName]   = useState('');
@@ -159,7 +162,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const [fetching,    setFetching]    = useState(false);
 
   const [description, setDescription] = useState('');
-  const [bookingType, setBookingType] = useState('immediate');
+  const [bookingType, setBookingType] = useState(isImmediatePreset === false ? 'scheduled' : 'immediate');
   const [scheduledDate, setScheduledDate] = useState(new Date());
   const [scheduledTime, setScheduledTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -190,7 +193,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       .join(', ') || null;
   }, [houseNumber, houseName, street, area, city, state, pincode]);
 
-  const { submitBooking, loading: submitting, error: submitError } = useBooking('labour');
+  const { submitBooking, submitAutoBooking, loading: submitting, error: submitError } = useBooking('labour');
 
   const scheduledDates = useMemo(() => {
     if (bookingType !== 'scheduled') return [];
@@ -307,9 +310,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       return;
     }
 
-    const ok = await submitBooking({
-      selectedWorkers,
-      category,
+    const commonFields = {
       houseNumber,
       houseName,
       street,
@@ -327,13 +328,23 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       totalDays,
       latitude: lat,
       longitude: lng,
-    });
+    };
+
+    const ok = isAutoBook
+      ? await submitAutoBooking({ ...commonFields, category, requiredWorkers })
+      : await submitBooking({ ...commonFields, selectedWorkers, category });
+
     if (ok) {
       navigation.reset({
         index: 0,
         routes: [{ name: 'BookingHome' }],
       });
-      if (bookingType === 'immediate') {
+      if (isAutoBook) {
+        Alert.alert(
+          bookingType === 'immediate' ? 'Request Sent! ⚡' : 'Request Sent! 📅',
+          `We've notified nearby ${category}s. You'll be matched with the first ${requiredWorkers} to accept.`
+        );
+      } else if (bookingType === 'immediate') {
         Alert.alert(
           'Booking Confirmed! ⚡',
           "Your labour has been booked instantly. You'll be charged based on the actual hours worked once the job starts."
@@ -341,7 +352,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       }
       navigation.navigate('Status');
     }
-  }, [submitBooking, selectedWorkers, category, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, toDate, scheduledDates, totalDays, lat, lng, navigation]);
+  }, [submitBooking, submitAutoBooking, isAutoBook, requiredWorkers, selectedWorkers, category, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, toDate, scheduledDates, totalDays, lat, lng, navigation]);
 
   const handleToDateChange = (event, date) => {
     setShowToDatePicker(Platform.OS === 'ios');
@@ -390,10 +401,25 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         contentContainerStyle={styles.scroll}
       >
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Selected Workers</Text>
-          {selectedWorkers.map((worker) => (
-            <WorkerRow key={worker._id} worker={worker} />
-          ))}
+          {isAutoBook ? (
+            <>
+              <Text style={styles.sectionTitle}>Auto-Match Workers</Text>
+              <View style={styles.autoMatchCard}>
+                <Text style={styles.autoMatchEmoji}>⚡</Text>
+                <Text style={styles.autoMatchTitle}>We'll notify nearby {category}s</Text>
+                <Text style={styles.autoMatchText}>
+                  Your request goes out to every available {category} nearby. The first {requiredWorkers} to accept will be assigned to your job — the request disappears for everyone else the moment it's filled.
+                </Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={styles.sectionTitle}>Selected Workers</Text>
+              {selectedWorkers.map((worker) => (
+                <WorkerRow key={worker._id} worker={worker} />
+              ))}
+            </>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -543,20 +569,30 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
           <View style={styles.sectionDivider} />
 
           <Text style={styles.inputLabel}>Booking Schedule</Text>
-          <View style={styles.bookingTypeRow}>
-            <TouchableOpacity
-              style={[styles.typeBtn, bookingType === 'immediate' && styles.typeBtnActive]}
-              onPress={() => setBookingType('immediate')}
-            >
-              <Text style={[styles.typeBtnText, bookingType === 'immediate' && styles.typeBtnTextActive]}>⚡ Immediate</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.typeBtn, bookingType === 'scheduled' && styles.typeBtnActive]}
-              onPress={() => setBookingType('scheduled')}
-            >
-              <Text style={[styles.typeBtnText, bookingType === 'scheduled' && styles.typeBtnTextActive]}>📅 Schedule</Text>
-            </TouchableOpacity>
-          </View>
+          {isAutoBook ? (
+            <View style={styles.bookingTypeRow}>
+              <View style={[styles.typeBtn, styles.typeBtnActive]}>
+                <Text style={[styles.typeBtnText, styles.typeBtnTextActive]}>
+                  {bookingType === 'immediate' ? '⚡ Immediate' : '📅 Scheduled'}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.bookingTypeRow}>
+              <TouchableOpacity
+                style={[styles.typeBtn, bookingType === 'immediate' && styles.typeBtnActive]}
+                onPress={() => setBookingType('immediate')}
+              >
+                <Text style={[styles.typeBtnText, bookingType === 'immediate' && styles.typeBtnTextActive]}>⚡ Immediate</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.typeBtn, bookingType === 'scheduled' && styles.typeBtnActive]}
+                onPress={() => setBookingType('scheduled')}
+              >
+                <Text style={[styles.typeBtnText, bookingType === 'scheduled' && styles.typeBtnTextActive]}>📅 Schedule</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {bookingType === 'scheduled' && (
             <>
@@ -619,18 +655,26 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
                 calculated automatically based on the time actually worked, payable on completion.
               </Text>
             </View>
-            <View style={styles.billDivider} />
-            {selectedWorkers.map((worker) => (
-              <View key={worker._id} style={styles.billRow}>
-                <Text style={styles.billLabel}>{worker.name} (per hour)</Text>
-                <Text style={styles.billValue}>₹{Number(worker.pricePerDay) || 0}</Text>
-              </View>
-            ))}
-            <View style={styles.billDivider} />
-            <View style={styles.billRow}>
-              <Text style={styles.billTotalLabel}>Combined Hourly Rate</Text>
-              <Text style={styles.billTotalValue}>₹{hourlyRateTotal.toLocaleString()}/hr</Text>
-            </View>
+            {isAutoBook ? (
+              <Text style={styles.autoMatchNote}>
+                Hourly rate will be set once workers accept — billed automatically based on time worked.
+              </Text>
+            ) : (
+              <>
+                <View style={styles.billDivider} />
+                {selectedWorkers.map((worker) => (
+                  <View key={worker._id} style={styles.billRow}>
+                    <Text style={styles.billLabel}>{worker.name} (per hour)</Text>
+                    <Text style={styles.billValue}>₹{Number(worker.pricePerDay) || 0}</Text>
+                  </View>
+                ))}
+                <View style={styles.billDivider} />
+                <View style={styles.billRow}>
+                  <Text style={styles.billTotalLabel}>Combined Hourly Rate</Text>
+                  <Text style={styles.billTotalValue}>₹{hourlyRateTotal.toLocaleString()}/hr</Text>
+                </View>
+              </>
+            )}
           </View>
         ) : (
           <>
@@ -651,21 +695,29 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
             </View>
 
             <View style={styles.billSection}>
-              <View style={styles.billRow}>
-                <Text style={styles.billLabel}>
-                  Subtotal ({selectedWorkers.length} worker{selectedWorkers.length > 1 ? 's' : ''} × {totalDays} days)
+              {isAutoBook ? (
+                <Text style={styles.autoMatchNote}>
+                  Final price will be calculated once {requiredWorkers} worker{requiredWorkers > 1 ? 's' : ''} accept your request.
                 </Text>
-                <Text style={styles.billValue}>₹{subtotal.toLocaleString()}</Text>
-              </View>
-              <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Platform Fee</Text>
-                <Text style={styles.billValue}>₹{platformFee.toLocaleString()}</Text>
-              </View>
-              <View style={styles.billDivider} />
-              <View style={styles.billRow}>
-                <Text style={styles.billTotalLabel}>Total Amount</Text>
-                <Text style={styles.billTotalValue}>₹{total.toLocaleString()}</Text>
-              </View>
+              ) : (
+                <>
+                  <View style={styles.billRow}>
+                    <Text style={styles.billLabel}>
+                      Subtotal ({selectedWorkers.length} worker{selectedWorkers.length > 1 ? 's' : ''} × {totalDays} days)
+                    </Text>
+                    <Text style={styles.billValue}>₹{subtotal.toLocaleString()}</Text>
+                  </View>
+                  <View style={styles.billRow}>
+                    <Text style={styles.billLabel}>Platform Fee</Text>
+                    <Text style={styles.billValue}>₹{platformFee.toLocaleString()}</Text>
+                  </View>
+                  <View style={styles.billDivider} />
+                  <View style={styles.billRow}>
+                    <Text style={styles.billTotalLabel}>Total Amount</Text>
+                    <Text style={styles.billTotalValue}>₹{total.toLocaleString()}</Text>
+                  </View>
+                </>
+              )}
             </View>
           </>
         )}
@@ -757,6 +809,25 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginBottom: 16,
     letterSpacing: 0.1,
+  },
+
+  autoMatchCard: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: -4,
+  },
+  autoMatchEmoji: { fontSize: 24, marginBottom: 4 },
+  autoMatchTitle: { fontSize: 14, fontWeight: '700', color: '#92400E', marginBottom: 4 },
+  autoMatchText:  { fontSize: 12, color: '#B45309', lineHeight: 18 },
+  autoMatchNote: {
+    fontSize: 13,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginVertical: 10,
   },
 
   workerRow: {

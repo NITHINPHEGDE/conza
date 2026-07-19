@@ -29,7 +29,10 @@ const usePartnerStore = create((set, get) => ({
     set({ worker });
     if (worker) {
       connectSocket();
-      setTimeout(() => get().initSocketHandlers(), 300);
+      setTimeout(() => {
+        get().initSocketHandlers();
+        socket.emit('join_worker', worker._id);
+      }, 300);
       // Workers are always online — start location tracking immediately on login
       setTimeout(() => startLocationTracking(), 500);
 
@@ -167,6 +170,9 @@ const usePartnerStore = create((set, get) => ({
             scheduledDates:   r.scheduledDates || [],
             totalDays:        r.totalDays || 1,
             isImmediate:      r.isImmediate !== false,
+            isAutoBook:       r.isAutoBook || false,
+            requiredWorkers:  r.requiredWorkers || 0,
+            acceptedCount:    (r.workers || []).length,
           };
         });
 
@@ -208,39 +214,29 @@ const usePartnerStore = create((set, get) => ({
   initSocketHandlers: () => {
     socket.off('booking_updated');
     socket.off('booking_status_changed');
-    socket.off('autobook_request_closed');
-    socket.off('autobook_confirmed');
-    socket.off('connect', get()._rejoinWorkerRoom);
+    socket.off('new_auto_book_request');
+    socket.off('job_request_removed');
+    socket.off('connect');
 
-    // Quick Auto Book — join this worker's personal room so the server can
-    // push targeted events (request closed / confirmed) instead of relying
-    // solely on the 10s poll.
-    const workerId = get().worker?._id;
-    if (workerId) socket.emit('join_worker', workerId);
-    const rejoinWorkerRoom = () => {
-      const id = get().worker?._id;
-      if (id) socket.emit('join_worker', id);
-    };
-    set({ _rejoinWorkerRoom: rejoinWorkerRoom });
-    socket.on('connect', rejoinWorkerRoom);
-
-    socket.on('autobook_request_closed', (data) => {
-      console.log('⚡ BP: Autobook request closed:', data.bookingId);
-      stopAlertSound();
-      stopNativeAlert();
-      cancelLocalAlert(data.bookingId);
-      set((state) => ({
-        requests: state.requests.filter((r) => r.id?.toString() !== data.bookingId?.toString()),
-      }));
+    // Rejoin the worker's personal room on every (re)connect so Quick Auto
+    // Book broadcasts/removals keep reaching this device.
+    socket.on('connect', () => {
+      const w = get().worker;
+      if (w) socket.emit('join_worker', w._id);
     });
 
-    socket.on('autobook_confirmed', (data) => {
-      console.log('⚡ BP: Autobook confirmed for this worker:', data.bookingId);
+    socket.on('new_auto_book_request', (data) => {
+      console.log('⚡ BP: New auto-book request:', data);
+      get().fetchRequests();
+    });
+
+    socket.on('job_request_removed', (data) => {
+      console.log('🗑️ BP: Auto-book request filled/removed:', data.bookingId);
       set((state) => ({
-        requests: state.requests.filter((r) => r.id?.toString() !== data.bookingId?.toString()),
+        requests: state.requests.filter(
+          (r) => r.id?.toString() !== data.bookingId?.toString()
+        ),
       }));
-      get().setActiveJobId(data.bookingId);
-      setTrackingMode(TRACKING_MODE.ACTIVE);
     });
 
     socket.on('booking_updated', (data) => {
@@ -261,17 +257,9 @@ const usePartnerStore = create((set, get) => ({
     socket.on('booking_status_changed', (data) => {
       console.log('🔄 BP: Booking status changed:', data.status);
       if (get().activeJobId === data.bookingId) {
-        // Apply status directly from the socket event to avoid hitting
-        // stale Redis cache in fetchActiveJob. This is the critical fix:
-        // when the customer confirms completion, status becomes 'completed'
-        // but fetchActiveJob would return cached 'awaiting_customer_confirmation'
-        // for up to 30 seconds, blocking the CompletionModal from showing.
         if (data.status) {
           set({ jobStatus: data.status });
         }
-        // Background refetch for full document (address, amount, etc.)
-        // but only if NOT completed — once completed, activeJob data is already
-        // frozen and we don't want a stale cache response overwriting jobStatus.
         if (data.status !== 'completed') {
           get().fetchActiveJob(data.bookingId);
         }
@@ -281,7 +269,6 @@ const usePartnerStore = create((set, get) => ({
     socket.on('job_completed_confirmed', (data) => {
       console.log('🔄 BP: Job completion confirmed by customer:', data.bookingId);
       if (get().activeJobId === data.bookingId) {
-        // Customer confirmed, now we can complete the job and ask for payment
         set({ jobStatus: 'completed' }); 
       }
     });
@@ -289,7 +276,7 @@ const usePartnerStore = create((set, get) => ({
     socket.on('issue_reported', (data) => {
       console.log('🔄 BP: Issue reported by customer:', data.bookingId);
       if (get().activeJobId === data.bookingId) {
-        get().fetchActiveJob(data.bookingId); // To get the issue report details
+        get().fetchActiveJob(data.bookingId); 
         const { Alert } = require('react-native');
         Alert.alert('Issue Reported', 'The customer has reported an issue with the completed work. Please discuss with the customer or contact support.');
       }
@@ -306,20 +293,8 @@ const usePartnerStore = create((set, get) => ({
       cancelLocalAlert(requestId);
 
       if (status === 'accepted') {
-        // For a Quick Auto Book request, `autoBookFulfilled` is false when
-        // this worker accepted but the required number of workers hasn't
-        // been reached yet — they wait for `autobook_confirmed` before the
-        // job actually starts. Every other case (undefined, or true) behaves
-        // exactly like a normal single-assignment accept.
-        const fulfilled = data?.autoBookFulfilled !== false;
-        if (fulfilled) {
-          await get().setActiveJobId(requestId);
-          setTrackingMode(TRACKING_MODE.ACTIVE);   // worker is now en-route
-        } else {
-          set((state) => ({
-            requests: state.requests.filter((r) => r.id?.toString() !== requestId?.toString()),
-          }));
-        }
+        await get().setActiveJobId(requestId);
+        setTrackingMode(TRACKING_MODE.ACTIVE);   // worker is now en-route
       }
       if (status === 'cancelled' && get().activeJobId === requestId) {
         await get().setActiveJobId(null);
@@ -327,11 +302,17 @@ const usePartnerStore = create((set, get) => ({
       }
 
       await get().fetchRequests();
-      return data;
+      return data.booking;
     } catch (err) {
       console.error('[Store] updateRequestStatus failed:', err.message);
-      await get().fetchRequests().catch(() => {});
-      return { success: false, message: err.message };
+      // Auto-book slot was claimed by someone else first — drop it locally
+      // instead of leaving a dead card in the list until the next poll.
+      if (/already been filled/i.test(err.message || '')) {
+        set((state) => ({
+          requests: state.requests.filter((r) => r.id !== requestId),
+        }));
+      }
+      throw err;
     }
   },
 

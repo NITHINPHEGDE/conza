@@ -178,5 +178,66 @@ export const useBooking = (type) => {
     }
   }, [type, clearCart, userLat, userLng, userProfile]);
 
-  return { submitBooking, loading, error, success };
+  // ── Quick Auto Book — broadcasts to nearby workers, no pre-selection ────
+  const submitAutoBooking = useCallback(async (bookingData) => {
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccess(false);
+
+      const {
+        category, requiredWorkers,
+        houseNumber, houseName, street, area, city, district,
+        state, pincode, paymentMethod, description,
+        isImmediate, scheduledDate, scheduledEndDate, scheduledDates, totalDays,
+        latitude, longitude,
+      } = bookingData;
+
+      if (!city || !pincode) {
+        throw new Error('Please provide at least city and pincode');
+      }
+      const lat = latitude  ?? userLat;
+      const lng = longitude ?? userLng;
+      if (lat == null || lng == null) {
+        throw new Error('Location is required for Quick Auto Book');
+      }
+
+      const payload = {
+        category,
+        requiredWorkers: requiredWorkers || 1,
+        houseNumber:    houseNumber || '',
+        houseName:      houseName   || '',
+        street:         street      || '',
+        address:        street      || '',
+        area:           area        || '',
+        city,
+        district:       district    || '',
+        state:          state       || '',
+        pincode,
+        latitude:       lat,
+        longitude:      lng,
+        paymentMethod:  paymentMethod || 'cod',
+        description:    description   || '',
+        isImmediate:    isImmediate !== undefined ? isImmediate : true,
+        scheduledDate:    scheduledDate    || null,
+        scheduledEndDate: scheduledEndDate || null,
+        scheduledDates:   scheduledDates   || [],
+        totalDays:        totalDays        || 1,
+      };
+
+      const result = await bookingAPI.createAutoBooking(payload);
+      if (result.success && result.booking?._id) {
+        await setActiveBookingId(result.booking._id);
+      }
+      setSuccess(true);
+      return true;
+    } catch (err) {
+      setError(err.message || 'Something went wrong while auto-booking');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [userLat, userLng, setActiveBookingId]);
+
+  return { submitBooking, submitAutoBooking, loading, error, success };
 };

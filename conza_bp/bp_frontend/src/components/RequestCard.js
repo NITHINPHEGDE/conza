@@ -29,9 +29,9 @@ const RequestCard = React.memo(({ request, onViewDetails }) => {
       </View>
 
       {request.isAutoBook && (
-        <View style={styles.autoBookBadge}>
-          <Text style={styles.autoBookBadgeText}>
-            ⚡ Quick Auto Book · needs {request.requiredWorkers || 1} worker{(request.requiredWorkers || 1) > 1 ? 's' : ''}
+        <View style={styles.autoBadge}>
+          <Text style={styles.autoBadgeText}>
+            ⚡ Auto-Match · {Math.max(0, (request.requiredWorkers || 0) - (request.acceptedCount || 0))} slot{(request.requiredWorkers || 0) - (request.acceptedCount || 0) === 1 ? '' : 's'} left
           </Text>
         </View>
       )}
@@ -76,6 +76,8 @@ const styles = StyleSheet.create({
   subService:  { fontSize: 12, fontWeight: '500', color: colors.textSecondary },
   amountBadge: { backgroundColor: colors.accentAmberSoft, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(240,165,0,0.25)' },
   amountText:  { fontSize: 14, fontWeight: '800', color: colors.accentAmber },
+  autoBadge:   { alignSelf: 'flex-start', backgroundColor: 'rgba(240,165,0,0.12)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(240,165,0,0.25)' },
+  autoBadgeText: { fontSize: 10, fontWeight: '700', color: colors.accentAmber },
   autoBookBadge: { alignSelf: 'flex-start', backgroundColor: colors.accentYellowSoft, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(245,200,66,0.3)', marginBottom: 12 },
   autoBookBadgeText: { fontSize: 11, fontWeight: '700', color: colors.accentAmber },
   metaRow:     { flexDirection: 'row', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 4 },

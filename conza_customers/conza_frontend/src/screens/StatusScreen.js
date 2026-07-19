@@ -43,7 +43,13 @@ const BookingCard = React.memo(({ booking, onPress }) => {
           <Text style={styles.bookingIdText}>#{booking._id.slice(-6).toUpperCase()}</Text>
         </View>
         <Text style={styles.serviceName}>{booking.category || 'Booking'}</Text>
-        {worker && <Text style={styles.workerName}>👷 {worker.fullName}</Text>}
+        {booking.isAutoBook && booking.status === 'pending' ? (
+          <Text style={styles.workerName}>
+            ⚡ Matching workers: {(booking.workers || []).length}/{booking.requiredWorkers || 0} confirmed
+          </Text>
+        ) : (
+          worker && <Text style={styles.workerName}>👷 {worker.fullName}</Text>
+        )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 10 }}>
           <MaterialCommunityIcons name="map-marker" size={13} color="#64748B" />
           <Text style={[styles.locationText, { marginBottom: 0 }]} numberOfLines={1}>

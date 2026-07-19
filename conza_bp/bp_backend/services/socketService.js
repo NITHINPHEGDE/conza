@@ -37,6 +37,7 @@ const initSocket = (server) => {
     });
     socket.on('join_workers_watch', ()  => socket.join('workers_watch_room'));
     socket.on('join_products',      ()  => socket.join('products_room'));
+    socket.on('join_worker',        (id) => socket.join(`worker_${id}`));
 
     socket.on('disconnect', () => logger.info({ socketId: socket.id }, 'Client disconnected'));
   });
@@ -182,6 +183,30 @@ const watchChanges = () => {
             io.to(`booking_${bookingId}`).emit('job_completed_confirmed', {
               bookingId,
             });
+          }
+        }
+
+        // ── Quick Auto Book — broadcast new requests, remove filled ones ────
+        if (c.fullDocument?.isAutoBook) {
+          const doc          = c.fullDocument;
+          const requestedIds = (doc.requestedWorkerIds || []).map((id) => id.toString());
+          const acceptedIds  = (doc.workers || []).map((id) => id.toString());
+
+          if (c.operationType === 'insert' && doc.status === 'pending') {
+            requestedIds.forEach((id) => {
+              io.to(`worker_${id}`).emit('new_auto_book_request', {
+                bookingId,
+                category: doc.category,
+              });
+            });
+          }
+
+          if (doc.status !== 'pending') {
+            requestedIds
+              .filter((id) => !acceptedIds.includes(id))
+              .forEach((id) => {
+                io.to(`worker_${id}`).emit('job_request_removed', { bookingId });
+              });
           }
         }
       });

@@ -7,9 +7,9 @@ export const bookingAPI = {
     return res.data;
   },
 
-  // ── Quick Auto Book — broadcast to nearby workers ───────────────────────
-  createAutoBookRequest: async (data) => {
-    const res = await api.post('/bookings/autobook', data);
+  // ── Quick Auto Book ──────────────────────────────────────────────────────
+  createAutoBooking: async (data) => {
+    const res = await api.post('/bookings/auto', data);
     return res.data;
   },
 

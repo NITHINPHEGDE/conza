@@ -13,12 +13,11 @@ const bookingSchema = new mongoose.Schema(
     workerSnapshot: [mongoose.Schema.Types.Mixed],  // stores name/price at time of booking
     category: { type: String, default: '' },
 
-    // ── Quick Auto Book (broadcast to nearby workers) ─────────────────────
-    isAutoBook:      { type: Boolean, default: false },
-    requiredWorkers: { type: Number, default: 1 },
-    acceptedWorkers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Worker' }],
-    declinedWorkers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Worker' }],
-    autoBookStatus:  { type: String, enum: ['broadcasting', 'fulfilled', 'cancelled'], default: undefined },
+    // Quick Auto Book — request broadcast to every nearby worker in the
+    // category; first `requiredWorkers` to accept get assigned to `workers`.
+    isAutoBook:         { type: Boolean, default: false },
+    requiredWorkers:    { type: Number, default: 0 },
+    requestedWorkerIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Worker' }],
 
     // For material / rental bookings
     items: [mongoose.Schema.Types.Mixed],
@@ -83,6 +82,9 @@ bookingSchema.index({ user: 1, status: 1 });
 
 // BP worker fetching their bookings sorted by time
 bookingSchema.index({ workers: 1, status: 1, createdAt: -1 });
+
+// Quick Auto Book — worker checking their broadcast pool for pending requests
+bookingSchema.index({ requestedWorkerIds: 1, status: 1 });
 
 // worker history sorted by updatedAt
 bookingSchema.index({ workers: 1, status: 1, updatedAt: -1 });

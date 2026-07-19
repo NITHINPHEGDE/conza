@@ -40,13 +40,18 @@ const RequestDetailsScreen = ({ navigation, route }) => {
     try {
       setUpdating(true);
       const result = await updateRequestStatus(request.id, 'accepted');
-      if (!result || result.success === false) {
+      
+      // Some store responses return an object instead of throwing
+      if (result && result.success === false) {
         setUpdating(false);
-        Alert.alert('Unable to Accept', result?.message || 'This request may no longer be available.');
+        const { Alert } = require('react-native');
+        Alert.alert('Unable to Accept', result.message || 'This request may no longer be available.');
         return;
       }
-      if (request.isAutoBook && result.autoBookFulfilled === false) {
+
+      if (request.isAutoBook && result && result.autoBookFulfilled === false) {
         setUpdating(false);
+        const { Alert } = require('react-native');
         Alert.alert(
           "You're In! ⚡",
           "We'll notify you the moment the remaining workers join and the job is confirmed."
@@ -54,9 +59,13 @@ const RequestDetailsScreen = ({ navigation, route }) => {
         navigation.goBack();
         return;
       }
+
       navigation.navigate('ActiveJob');
-    } catch {
+    } catch (err) {
       setUpdating(false);
+      const { Alert } = require('react-native');
+      Alert.alert('Job Unavailable', err.message || 'This job is no longer available.');
+      navigation.goBack();
     }
   }, [updateRequestStatus, request.id, request.isAutoBook, navigation]);
 
@@ -97,6 +106,14 @@ const RequestDetailsScreen = ({ navigation, route }) => {
           <Text style={styles.amountValue}>₹{request.estimatedAmount}</Text>
           <Text style={styles.amountSub}>{request.distance} · {request.timeAway}</Text>
         </LinearGradient>
+
+        {request.isAutoBook && (
+          <View style={styles.autoMatchBadge}>
+            <Text style={styles.autoMatchBadgeText}>
+              ⚡ Auto-Match · {Math.max(0, (request.requiredWorkers || 0) - (request.acceptedCount || 0))} more slot{(request.requiredWorkers || 0) - (request.acceptedCount || 0) === 1 ? '' : 's'} open — first to accept wins
+            </Text>
+          </View>
+        )}
 
         {request.isAutoBook && (
           <View style={styles.autoBookInfoBox}>
@@ -191,6 +208,8 @@ const styles = StyleSheet.create({
   descText:     { fontSize: 13, color: colors.textSecondary, lineHeight: 19 },
   urgentBadge:  { marginTop: 8, backgroundColor: 'rgba(240,165,0,0.12)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: 'rgba(240,165,0,0.3)', alignSelf: 'flex-start' },
   urgentText:   { fontSize: 12, fontWeight: '700', color: colors.accentAmber },
+  autoMatchBadge: { marginHorizontal: 20, marginBottom: 16, backgroundColor: 'rgba(240,165,0,0.12)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(240,165,0,0.3)' },
+  autoMatchBadgeText: { fontSize: 12, fontWeight: '700', color: colors.accentAmber, textAlign: 'center', lineHeight: 17 },
   autoBookInfoBox: { marginHorizontal: 20, marginBottom: 16, backgroundColor: colors.accentYellowSoft, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(245,200,66,0.3)' },
   autoBookInfoTitle: { fontSize: 13, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
   autoBookInfoText: { fontSize: 12, color: colors.textSecondary, lineHeight: 17, fontWeight: '500' },
