@@ -8,14 +8,20 @@ import {
   StatusBar,
   Modal,
   RefreshControl,
+  Alert,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import useAppStore, { EMPTY_ARRAY } from '../store/useAppStore';
 import { WorkerListSkeleton, ErrorState, EmptyState } from '../components/LoadingState';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { socket } from '../utils/socket';
+import { reverseGeocodeFullAddress } from '../hooks/useAuth';
 
 // ─── Worker Card ──────────────────────────────────────────────────────────────
 const VERIFIED_GREEN = '#16A34A';
@@ -203,6 +209,16 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
   const [showModal, setShowModal] = useState(false);
   const [quantity, setQuantity]   = useState(1);
 
+  // ── Quick Auto Book state ────────────────────────────────────────────────
+  const submitAutoBookRequest = useAppStore((s) => s.submitAutoBookRequest);
+  const [bookingStep, setBookingStep]       = useState('quantity'); // 'quantity' | 'type'
+  const [scheduleMode, setScheduleMode]     = useState(false);
+  const [schedDate, setSchedDate]           = useState(new Date());
+  const [schedTime, setSchedTime]           = useState(new Date(Date.now() + 60 * 60 * 1000));
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [autoBookSubmitting, setAutoBookSubmitting] = useState(false);
+
   const displayed = allWorkers;
 
   const toggleWorker = useCallback((worker) => {
@@ -229,11 +245,115 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
   const handleFilterAll = useCallback(() => setFilterAvail('All'), []);
   const handleFilterAvailable = useCallback(() => setFilterAvail('Available'), []);
   const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
-  const handleOpenModal = useCallback(() => setShowModal(true), []);
-  const handleCloseModal = useCallback(() => setShowModal(false), []);
-  
+
+  const handleOpenModal = useCallback(() => {
+    setBookingStep('quantity');
+    setScheduleMode(false);
+    setShowModal(true);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    if (autoBookSubmitting) return;
+    setShowModal(false);
+    setBookingStep('quantity');
+    setScheduleMode(false);
+  }, [autoBookSubmitting]);
+
   const handleIncrement = useCallback(() => setQuantity((q) => Math.min(10, q + 1)), []);
   const handleDecrement = useCallback(() => setQuantity((q) => Math.max(1, q - 1)), []);
+
+  const handleContinueToType  = useCallback(() => setBookingStep('type'), []);
+  const handleBackToQuantity  = useCallback(() => setBookingStep('quantity'), []);
+  const handleSelectScheduled = useCallback(() => setScheduleMode(true), []);
+
+  const handleShowDatePicker = useCallback(() => setShowDatePicker(true), []);
+  const handleShowTimePicker = useCallback(() => setShowTimePicker(true), []);
+
+  const handleDateChange = useCallback((event, date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (date) {
+      setSchedDate(date);
+      if (Platform.OS === 'android') setShowDatePicker(false);
+    }
+  }, []);
+
+  const handleTimeChange = useCallback((event, time) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    if (time) {
+      setSchedTime(time);
+      if (Platform.OS === 'android') setShowTimePicker(false);
+    }
+  }, []);
+
+  // Sends the auto-book request: finds the customer's current location,
+  // reverse-geocodes it for the address, then broadcasts the request to
+  // every nearby worker in this category. The first `quantity` workers to
+  // accept get the job — the request disappears from everyone else.
+  const handleSubmitAutoBook = useCallback(async (mode) => {
+    try {
+      setAutoBookSubmitting(true);
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Location Needed', 'Please allow location access so we can find workers near you.');
+        return;
+      }
+
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const place = await reverseGeocodeFullAddress(pos.coords.latitude, pos.coords.longitude);
+
+      if (!place || !place.city || !place.pincode) {
+        Alert.alert('Location Error', "Couldn't detect your address. Please try again or book manually instead.");
+        return;
+      }
+
+      let scheduledDateValue = null;
+      if (mode === 'scheduled') {
+        const combined = new Date(schedDate);
+        combined.setHours(schedTime.getHours());
+        combined.setMinutes(schedTime.getMinutes());
+        if (combined.getTime() <= Date.now()) {
+          Alert.alert('Invalid Time', 'Please choose a future date and time.');
+          return;
+        }
+        scheduledDateValue = combined.toISOString();
+      }
+
+      const result = await submitAutoBookRequest({
+        category,
+        quantity,
+        isImmediate:   mode === 'immediate',
+        scheduledDate: scheduledDateValue,
+        houseNumber:   place.houseNumber,
+        houseName:     place.houseName,
+        street:        place.street,
+        area:          place.area,
+        city:          place.city,
+        district:      place.district,
+        state:         place.state,
+        pincode:       place.pincode,
+        latitude:      pos.coords.latitude,
+        longitude:     pos.coords.longitude,
+      });
+
+      if (result?.success) {
+        setShowModal(false);
+        setBookingStep('quantity');
+        setScheduleMode(false);
+        Alert.alert(
+          'Request Sent! ⚡',
+          `We've notified ${result.broadcastCount || 'nearby'} ${category}${quantity > 1 ? 's' : ''} nearby — you'll be matched with the first ${quantity} to accept.`
+        );
+        navigation.navigate('Status', { screen: 'BookingDetail' });
+      } else {
+        Alert.alert('No Workers Nearby', result?.message || `No ${category}s are available nearby right now. Please try again later or book manually.`);
+      }
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Could not send the auto book request. Please try again.');
+    } finally {
+      setAutoBookSubmitting(false);
+    }
+  }, [category, quantity, schedDate, schedTime, submitAutoBookRequest, navigation]);
 
   const handleCheckout = useCallback(() => {
     navigation.navigate('LabourCheckout', {
@@ -338,65 +458,175 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
         >
           <TouchableOpacity style={styles.modalSheet} activeOpacity={1}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>
-              How many {category}s do you need?
-            </Text>
-            <Text style={styles.modalSub}>
-              We'll match you with the highest-rated workers nearby
-            </Text>
-            <View style={styles.counterRow}>
-              <TouchableOpacity
-                style={styles.counterBtn}
-                onPress={handleDecrement}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.counterBtnText}>−</Text>
-              </TouchableOpacity>
-              <View style={styles.counterDisplay}>
-                <Text style={styles.counterValue}>{quantity}</Text>
-                <Text style={styles.counterLabel}>
-                  {category}{quantity > 1 ? 's' : ''}
+
+            {bookingStep === 'quantity' && (
+              <>
+                <Text style={styles.modalTitle}>
+                  How many {category}s do you need?
                 </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.counterBtn}
-                onPress={handleIncrement}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.counterBtnText}>+</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalNote}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 5 }}>
-                <MaterialCommunityIcons name="map-marker" size={14} color={colors.textMuted} style={{ marginTop: 1 }} />
-                <Text style={[styles.modalNoteText, { flex: 1 }]}>
-                  Workers with valid Labour Cards will be prioritized for your safety.
+                <Text style={styles.modalSub}>
+                  We'll match you with the highest-rated workers nearby
                 </Text>
-              </View>
-            </View>
-            <LinearGradient
-              colors={[colors.gradientStart, colors.gradientEnd]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.modalConfirmBtn}
-            >
-              <TouchableOpacity
-                style={styles.checkoutTouchable}
-                activeOpacity={0.85}
-                onPress={handleCloseModal}
-              >
-                <Text style={styles.checkoutText}>
-                  Book {quantity} {category}{quantity > 1 ? 's' : ''} →
+                <View style={styles.counterRow}>
+                  <TouchableOpacity
+                    style={styles.counterBtn}
+                    onPress={handleDecrement}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.counterBtnText}>−</Text>
+                  </TouchableOpacity>
+                  <View style={styles.counterDisplay}>
+                    <Text style={styles.counterValue}>{quantity}</Text>
+                    <Text style={styles.counterLabel}>
+                      {category}{quantity > 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.counterBtn}
+                    onPress={handleIncrement}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.counterBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.modalNote}>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 5 }}>
+                    <MaterialCommunityIcons name="map-marker" size={14} color={colors.textMuted} style={{ marginTop: 1 }} />
+                    <Text style={[styles.modalNoteText, { flex: 1 }]}>
+                      Workers with valid Labour Cards will be prioritized for your safety.
+                    </Text>
+                  </View>
+                </View>
+                <LinearGradient
+                  colors={[colors.gradientStart, colors.gradientEnd]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.modalConfirmBtn}
+                >
+                  <TouchableOpacity
+                    style={styles.checkoutTouchable}
+                    activeOpacity={0.85}
+                    onPress={handleContinueToType}
+                  >
+                    <Text style={styles.checkoutText}>
+                      Continue with {quantity} {category}{quantity > 1 ? 's' : ''} →
+                    </Text>
+                  </TouchableOpacity>
+                </LinearGradient>
+                <TouchableOpacity
+                  onPress={handleCloseModal}
+                  style={styles.modalCancel}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {bookingStep === 'type' && (
+              <>
+                <TouchableOpacity onPress={handleBackToQuantity} style={styles.modalBackRow} activeOpacity={0.7} disabled={autoBookSubmitting}>
+                  <Text style={styles.modalBackText}>← Back</Text>
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>When do you need them?</Text>
+                <Text style={styles.modalSub}>
+                  We'll send this to every nearby {category} — the first {quantity} to accept get the job, instantly.
                 </Text>
-              </TouchableOpacity>
-            </LinearGradient>
-            <TouchableOpacity
-              onPress={handleCloseModal}
-              style={styles.modalCancel}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
+
+                <View style={styles.typeOptionRow}>
+                  <TouchableOpacity
+                    style={[styles.typeOptionCard, !scheduleMode && styles.typeOptionCardActive]}
+                    onPress={() => handleSubmitAutoBook('immediate')}
+                    activeOpacity={0.85}
+                    disabled={autoBookSubmitting}
+                  >
+                    {autoBookSubmitting && !scheduleMode ? (
+                      <ActivityIndicator color={colors.accentAmber} />
+                    ) : (
+                      <>
+                        <Text style={styles.typeOptionEmoji}>⚡</Text>
+                        <Text style={styles.typeOptionTitle}>Immediate</Text>
+                        <Text style={styles.typeOptionSub}>Send now, get matched fast</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.typeOptionCard, scheduleMode && styles.typeOptionCardActive]}
+                    onPress={handleSelectScheduled}
+                    activeOpacity={0.85}
+                    disabled={autoBookSubmitting}
+                  >
+                    <Text style={styles.typeOptionEmoji}>📅</Text>
+                    <Text style={styles.typeOptionTitle}>Schedule</Text>
+                    <Text style={styles.typeOptionSub}>Pick a date & time</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {scheduleMode && (
+                  <>
+                    <View style={styles.scheduleFieldsRow}>
+                      <TouchableOpacity style={styles.scheduleFieldBtn} onPress={handleShowDatePicker} activeOpacity={0.75}>
+                        <Text style={styles.scheduleFieldLabel}>DATE</Text>
+                        <Text style={styles.scheduleFieldValue}>
+                          {schedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.scheduleFieldBtn} onPress={handleShowTimePicker} activeOpacity={0.75}>
+                        <Text style={styles.scheduleFieldLabel}>TIME</Text>
+                        <Text style={styles.scheduleFieldValue}>
+                          {schedTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    {showDatePicker && (
+                      <DateTimePicker
+                        value={schedDate}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
+                        onChange={handleDateChange}
+                        minimumDate={new Date()}
+                      />
+                    )}
+                    {showTimePicker && (
+                      <DateTimePicker
+                        value={schedTime}
+                        mode="time"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
+                        onChange={handleTimeChange}
+                      />
+                    )}
+                    <LinearGradient
+                      colors={[colors.gradientStart, colors.gradientEnd]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.modalConfirmBtn}
+                    >
+                      <TouchableOpacity
+                        style={styles.checkoutTouchable}
+                        activeOpacity={0.85}
+                        onPress={() => handleSubmitAutoBook('scheduled')}
+                        disabled={autoBookSubmitting}
+                      >
+                        {autoBookSubmitting ? (
+                          <ActivityIndicator color={colors.textPrimary} />
+                        ) : (
+                          <Text style={styles.checkoutText}>Confirm Schedule →</Text>
+                        )}
+                      </TouchableOpacity>
+                    </LinearGradient>
+                  </>
+                )}
+
+                <TouchableOpacity
+                  onPress={handleCloseModal}
+                  style={styles.modalCancel}
+                  activeOpacity={0.7}
+                  disabled={autoBookSubmitting}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -744,6 +974,40 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   autoBookBtnText: { color: colors.textPrimary, fontSize: 12, fontWeight: '800' },
+
+  // Auto Book modal — step 2 (immediate/schedule)
+  modalBackRow: { alignSelf: 'flex-start', marginBottom: 10 },
+  modalBackText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  typeOptionRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  typeOptionCard: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+    paddingVertical: 20,
+    alignItems: 'center',
+    minHeight: 100,
+    justifyContent: 'center',
+  },
+  typeOptionCardActive: {
+    borderColor: colors.accentYellow,
+    backgroundColor: colors.accentYellowSoft,
+  },
+  typeOptionEmoji: { fontSize: 22, marginBottom: 6 },
+  typeOptionTitle: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, marginBottom: 2 },
+  typeOptionSub: { fontSize: 11, color: colors.textMuted, fontWeight: '500', textAlign: 'center', paddingHorizontal: 6 },
+  scheduleFieldsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  scheduleFieldBtn: {
+    flex: 1,
+    backgroundColor: colors.inputBg,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  scheduleFieldLabel: { fontSize: 11, fontWeight: '600', color: colors.textMuted, textTransform: 'uppercase', marginBottom: 4 },
+  scheduleFieldValue: { fontSize: 14, fontWeight: '700', color: colors.accentAmber },
 
 });
 

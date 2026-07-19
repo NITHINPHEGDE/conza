@@ -30,6 +30,7 @@ const initSocket = (server) => {
 
     socket.on('join_booking',      (id) => socket.join(`booking_${id}`));
     socket.on('join_customer',     (id) => socket.join(`customer_${id}`));
+    socket.on('join_worker',       (id) => socket.join(`worker_${id}`));
     socket.on('join_seller',       (id) => {
       socket.join(`seller_${id}`);
       logger.info({ sellerId: id }, 'Seller joined room');

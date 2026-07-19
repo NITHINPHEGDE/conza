@@ -651,6 +651,19 @@ const useAppStore = create((set, get) => ({
     if (id) get().fetchActiveBooking(id);
   },
 
+  // ── Quick Auto Book — broadcast a request to nearby workers ─────────────
+  submitAutoBookRequest: async (payload) => {
+    try {
+      const data = await bookingAPI.createAutoBookRequest(payload);
+      if (data.success && data.booking?._id) {
+        await get().setActiveBookingId(data.booking._id);
+      }
+      return data;
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  },
+
   fetchActiveBooking: async (id) => {
     const bookingId = id || get().activeBookingId;
     if (!bookingId) return;

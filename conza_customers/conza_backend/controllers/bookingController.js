@@ -19,6 +19,7 @@ const getRedlock = () => {
 
 const Booking = require('../models/Booking');
 const Worker  = require('../models/Worker');
+const ServiceCategory = require('../models/ServiceCategory');
 
 const sendPushNotification = async (pushToken, title, body, data = {}) => {
   try {
@@ -173,6 +174,143 @@ const createBooking = async (req, res) => {
         { $inc: { totalJobs: 1 } }
       ).catch(() => {});
     }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── Quick Auto Book helpers ─────────────────────────────────────────────
+const escapeRegexAB = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const categoryMatcherAB = (category) =>
+  category ? { $regex: `^${escapeRegexAB(category.trim())}$`, $options: 'i' } : undefined;
+
+const EARTH_RADIUS_KM_AB = 6371;
+
+// Finds every verified, currently-online worker of `category` within the
+// category's admin-configured service radius of (lat, lng) — this is the
+// broadcast pool for a Quick Auto Book request.
+const findNearbyBroadcastWorkers = async (category, lat, lng) => {
+  const serviceCategory = await ServiceCategory.findOne({
+    active: true, name: categoryMatcherAB(category),
+  }).select('radius').lean();
+
+  const radiusKm = (serviceCategory && serviceCategory.radius) || 5;
+  const radiusRadians = radiusKm / EARTH_RADIUS_KM_AB;
+
+  const workers = await Worker.find({
+    isAvailable: { $ne: false },
+    isOnline:    true,
+    status:      { $not: { $eq: 'suspended' } },
+    isVerified:  true,
+    category:    categoryMatcherAB(category),
+    location: {
+      $geoWithin: { $centerSphere: [[lng, lat], radiusRadians] },
+    },
+  }).select('fullName pushToken minCharge baseCharge perDayCharge rating category').lean();
+
+  return workers;
+};
+
+// ── POST /api/bookings/autobook ───────────────────────────────────────────
+// "Quick Auto Book" — the customer picks only a category + how many workers
+// they need. We broadcast the request to every nearby available worker in
+// that category; whichever `quantity` workers accept first get the job, and
+// the request disappears from everyone else (per-worker accept/decline is
+// handled in bp_backend's updateBookingStatus).
+const createAutoBookRequest = async (req, res) => {
+  try {
+    const {
+      category, quantity,
+      houseNumber, houseName, street, area, city, district, state, pincode,
+      address, latitude, longitude,
+      isImmediate, scheduledDate, notes, description,
+    } = req.body;
+
+    if (!category || !city || !pincode || latitude == null || longitude == null) {
+      return res.status(400).json({ success: false, message: 'Missing required fields for auto book' });
+    }
+
+    const qty = Math.max(1, Math.min(10, parseInt(quantity) || 1));
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+
+    const nearbyWorkers = await findNearbyBroadcastWorkers(category, lat, lng);
+
+    if (!nearbyWorkers.length) {
+      return res.status(404).json({
+        success: false,
+        message: `No ${category}s are available nearby right now. Please try again later or book manually.`,
+      });
+    }
+
+    const workerIds = nearbyWorkers.map((w) => w._id);
+    const avgCharge = nearbyWorkers.reduce((sum, w) => sum + (Number(w.minCharge) || 0), 0) / nearbyWorkers.length;
+    const subtotal  = Math.round(avgCharge * qty) || 0;
+    const platformFee = Math.round(subtotal * 0.05);
+    const total = subtotal + platformFee;
+
+    const booking = await Booking.create({
+      user:           req.user._id,
+      bookingType:    'labour',
+      workers:        workerIds,
+      workerSnapshot: nearbyWorkers.map((w) => ({
+        _id: w._id, name: w.fullName, pricePerDay: w.minCharge || 0,
+        minCharge: w.minCharge, baseCharge: w.baseCharge, perDayCharge: w.perDayCharge, rating: w.rating,
+      })),
+      category,
+      houseNumber:  houseNumber || '',
+      houseName:    houseName   || '',
+      street:       street      || '',
+      address:      address || street || '',
+      area:         area        || '',
+      city,
+      district:     district    || '',
+      state:        state       || '',
+      pincode,
+      latitude:     lat,
+      longitude:    lng,
+      subtotal, platformFee, total,
+      paymentMethod: isImmediate === false ? 'cod' : 'pending',
+      status:       'pending',
+      isImmediate:  isImmediate !== undefined ? isImmediate : true,
+      scheduledDate: scheduledDate || null,
+      notes:        notes       || '',
+      description:  description || '',
+      isAutoBook:      true,
+      requiredWorkers: qty,
+      acceptedWorkers: [],
+      declinedWorkers: [],
+      autoBookStatus:  'broadcasting',
+    });
+
+    logger.info({ bookingId: booking._id, broadcastCount: nearbyWorkers.length, requiredWorkers: qty }, 'Auto book request created');
+
+    await invalidateCache(`bookings:user:${req.user._id}:*`).catch(() => {});
+
+    try {
+      const { getIO } = require('../services/socketService');
+      const io = getIO();
+      io.to(`customer_${req.user._id}`).emit('booking_updated', {
+        operationType:   'insert',
+        bookingId:       booking._id.toString(),
+        status:          'pending',
+        bookingSnapshot: null,
+      });
+    } catch (_) {}
+
+    res.status(201).json({ success: true, booking, broadcastCount: nearbyWorkers.length });
+
+    const pushPromises = nearbyWorkers
+      .filter((w) => w.pushToken)
+      .map((w) =>
+        sendPushNotification(
+          w.pushToken,
+          '⚡ Quick Auto Book Request!',
+          `New ${category} job in ${city}${isImmediate === false ? ' (scheduled)' : ' — respond fast!'}`,
+          { bookingId: booking._id.toString(), type: 'new_request' }
+        )
+      );
+    Promise.allSettled(pushPromises).catch(() => {});
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -379,4 +517,4 @@ const reportIssue = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-module.exports = { createBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue };// 
+module.exports = { createBooking, createAutoBookRequest, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue };

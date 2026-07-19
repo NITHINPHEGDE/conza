@@ -56,6 +56,20 @@ const BookingTrackingScreen = ({ navigation }) => {
     };
   }, [activeBookingId]);
 
+  // Quick Auto Book — refetch immediately whenever another worker accepts so
+  // the "X of Y workers accepted" progress updates in real time instead of
+  // waiting for the 30s fallback poll.
+  useEffect(() => {
+    if (!activeBookingId) return;
+    const handleProgress = (data) => {
+      if (data?.bookingId === activeBookingId) fetchActiveBooking(activeBookingId);
+    };
+    socket.on('autobook_progress', handleProgress);
+    return () => {
+      socket.off('autobook_progress', handleProgress);
+    };
+  }, [activeBookingId, fetchActiveBooking]);
+
   // Fallback polling at 30s — socket handles real-time; this catches any missed
   // events (e.g. app was in background, network blip). This is existing architecture.
   useEffect(() => {
@@ -133,7 +147,9 @@ const BookingTrackingScreen = ({ navigation }) => {
     [activeBooking?.status]
   );
 
-  const worker = activeBooking?.workers?.[0];
+  const worker = (!activeBooking?.isAutoBook || activeBooking?.autoBookStatus === 'fulfilled')
+    ? activeBooking?.workers?.[0]
+    : null;
 
   const statusCardStyle = useMemo(() =>
     status ? [styles.statusCard, { borderColor: status.color }] : styles.statusCard,
@@ -178,6 +194,18 @@ const BookingTrackingScreen = ({ navigation }) => {
           <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
           <Text style={styles.bookingId}>ID: {activeBooking._id.slice(-8).toUpperCase()}</Text>
         </View>
+
+        {activeBooking.isAutoBook && activeBooking.status === 'pending' && (
+          <View style={styles.autoBookProgressCard}>
+            <MaterialCommunityIcons name="account-multiple" size={20} color="#F59E0B" />
+            <Text style={styles.autoBookProgressText}>
+              {(activeBooking.acceptedWorkers || []).length} of {activeBooking.requiredWorkers || 1} worker{(activeBooking.requiredWorkers || 1) > 1 ? 's' : ''} accepted
+            </Text>
+            <Text style={styles.autoBookProgressSub}>
+              Broadcasting to nearby {activeBooking.category}s — updates automatically
+            </Text>
+          </View>
+        )}
 
         {worker && (
           <View style={styles.section}>
@@ -360,6 +388,17 @@ const styles = StyleSheet.create({
   },
   statusText:     { fontSize: 22, fontWeight: '800', marginTop: 10 },
   bookingId:      { fontSize: 12, color: '#94A3B8', marginTop: 5 },
+  autoBookProgressCard: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  autoBookProgressText: { fontSize: 15, fontWeight: '800', color: '#92400E', marginTop: 6 },
+  autoBookProgressSub:  { fontSize: 12, color: '#B45309', marginTop: 4, textAlign: 'center' },
   section:        { marginBottom: 25 },
   sectionTitle:   { fontSize: 16, fontWeight: '700', color: '#1E293B', marginBottom: 12 },
   workerCard: {

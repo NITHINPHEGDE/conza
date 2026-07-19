@@ -208,6 +208,40 @@ const usePartnerStore = create((set, get) => ({
   initSocketHandlers: () => {
     socket.off('booking_updated');
     socket.off('booking_status_changed');
+    socket.off('autobook_request_closed');
+    socket.off('autobook_confirmed');
+    socket.off('connect', get()._rejoinWorkerRoom);
+
+    // Quick Auto Book — join this worker's personal room so the server can
+    // push targeted events (request closed / confirmed) instead of relying
+    // solely on the 10s poll.
+    const workerId = get().worker?._id;
+    if (workerId) socket.emit('join_worker', workerId);
+    const rejoinWorkerRoom = () => {
+      const id = get().worker?._id;
+      if (id) socket.emit('join_worker', id);
+    };
+    set({ _rejoinWorkerRoom: rejoinWorkerRoom });
+    socket.on('connect', rejoinWorkerRoom);
+
+    socket.on('autobook_request_closed', (data) => {
+      console.log('⚡ BP: Autobook request closed:', data.bookingId);
+      stopAlertSound();
+      stopNativeAlert();
+      cancelLocalAlert(data.bookingId);
+      set((state) => ({
+        requests: state.requests.filter((r) => r.id?.toString() !== data.bookingId?.toString()),
+      }));
+    });
+
+    socket.on('autobook_confirmed', (data) => {
+      console.log('⚡ BP: Autobook confirmed for this worker:', data.bookingId);
+      set((state) => ({
+        requests: state.requests.filter((r) => r.id?.toString() !== data.bookingId?.toString()),
+      }));
+      get().setActiveJobId(data.bookingId);
+      setTrackingMode(TRACKING_MODE.ACTIVE);
+    });
 
     socket.on('booking_updated', (data) => {
       console.log('🔄 BP: Booking update received:', data);
@@ -265,15 +299,27 @@ const usePartnerStore = create((set, get) => ({
   updateRequestStatus: async (requestId, status, extraData = {}) => {
     try {
       const { api } = require('../services/apiClient');
-      await api.patch(`/bookings/${requestId}/status`, { status, ...extraData });
+      const data = await api.patch(`/bookings/${requestId}/status`, { status, ...extraData });
 
       await stopAlertSound();
       stopNativeAlert();
       cancelLocalAlert(requestId);
 
       if (status === 'accepted') {
-        await get().setActiveJobId(requestId);
-        setTrackingMode(TRACKING_MODE.ACTIVE);   // worker is now en-route
+        // For a Quick Auto Book request, `autoBookFulfilled` is false when
+        // this worker accepted but the required number of workers hasn't
+        // been reached yet — they wait for `autobook_confirmed` before the
+        // job actually starts. Every other case (undefined, or true) behaves
+        // exactly like a normal single-assignment accept.
+        const fulfilled = data?.autoBookFulfilled !== false;
+        if (fulfilled) {
+          await get().setActiveJobId(requestId);
+          setTrackingMode(TRACKING_MODE.ACTIVE);   // worker is now en-route
+        } else {
+          set((state) => ({
+            requests: state.requests.filter((r) => r.id?.toString() !== requestId?.toString()),
+          }));
+        }
       }
       if (status === 'cancelled' && get().activeJobId === requestId) {
         await get().setActiveJobId(null);
@@ -281,8 +327,11 @@ const usePartnerStore = create((set, get) => ({
       }
 
       await get().fetchRequests();
+      return data;
     } catch (err) {
       console.error('[Store] updateRequestStatus failed:', err.message);
+      await get().fetchRequests().catch(() => {});
+      return { success: false, message: err.message };
     }
   },
 

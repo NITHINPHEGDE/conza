@@ -1,7 +1,7 @@
 // src/screens/RequestDetailsScreen.js
 import React, { useCallback, memo } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, StatusBar,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, StatusBar, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -39,12 +39,26 @@ const RequestDetailsScreen = ({ navigation, route }) => {
   const handleAccept = useCallback(async () => {
     try {
       setUpdating(true);
-      await updateRequestStatus(request.id, 'accepted');
+      const result = await updateRequestStatus(request.id, 'accepted');
+      if (!result || result.success === false) {
+        setUpdating(false);
+        Alert.alert('Unable to Accept', result?.message || 'This request may no longer be available.');
+        return;
+      }
+      if (request.isAutoBook && result.autoBookFulfilled === false) {
+        setUpdating(false);
+        Alert.alert(
+          "You're In! ⚡",
+          "We'll notify you the moment the remaining workers join and the job is confirmed."
+        );
+        navigation.goBack();
+        return;
+      }
       navigation.navigate('ActiveJob');
     } catch {
       setUpdating(false);
     }
-  }, [updateRequestStatus, request.id, navigation]);
+  }, [updateRequestStatus, request.id, request.isAutoBook, navigation]);
 
   const handleDecline = useCallback(async () => {
     try {
@@ -83,6 +97,15 @@ const RequestDetailsScreen = ({ navigation, route }) => {
           <Text style={styles.amountValue}>₹{request.estimatedAmount}</Text>
           <Text style={styles.amountSub}>{request.distance} · {request.timeAway}</Text>
         </LinearGradient>
+
+        {request.isAutoBook && (
+          <View style={styles.autoBookInfoBox}>
+            <Text style={styles.autoBookInfoTitle}>⚡ Quick Auto Book</Text>
+            <Text style={styles.autoBookInfoText}>
+              This request was sent to multiple nearby workers at once. It needs {request.requiredWorkers || 1} worker{(request.requiredWorkers || 1) > 1 ? 's' : ''} total — the first ones to accept get the job. If you decline, it simply won't show up for you again; it stays open for the others.
+            </Text>
+          </View>
+        )}
 
         <SectionBox title="Customer Info">
           <InfoRow icon="👤" label="Name"  value={request.userName} />
@@ -168,6 +191,9 @@ const styles = StyleSheet.create({
   descText:     { fontSize: 13, color: colors.textSecondary, lineHeight: 19 },
   urgentBadge:  { marginTop: 8, backgroundColor: 'rgba(240,165,0,0.12)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: 'rgba(240,165,0,0.3)', alignSelf: 'flex-start' },
   urgentText:   { fontSize: 12, fontWeight: '700', color: colors.accentAmber },
+  autoBookInfoBox: { marginHorizontal: 20, marginBottom: 16, backgroundColor: colors.accentYellowSoft, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(245,200,66,0.3)' },
+  autoBookInfoTitle: { fontSize: 13, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
+  autoBookInfoText: { fontSize: 12, color: colors.textSecondary, lineHeight: 17, fontWeight: '500' },
   bottomActions:{ flexDirection: 'row', paddingHorizontal: 20, paddingTop: 16, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, gap: 12 },
   declineBtn:   { flex: 1, borderRadius: 14, paddingVertical: 15, alignItems: 'center', borderWidth: 1.5, borderColor: colors.danger, backgroundColor: colors.dangerSoft },
   declineBtnText:{ fontSize: 15, fontWeight: '700', color: colors.danger },

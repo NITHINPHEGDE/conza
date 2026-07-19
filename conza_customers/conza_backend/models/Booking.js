@@ -13,6 +13,13 @@ const bookingSchema = new mongoose.Schema(
     workerSnapshot: [mongoose.Schema.Types.Mixed],  // stores name/price at time of booking
     category: { type: String, default: '' },
 
+    // ── Quick Auto Book (broadcast to nearby workers) ─────────────────────
+    isAutoBook:      { type: Boolean, default: false },
+    requiredWorkers: { type: Number, default: 1 },
+    acceptedWorkers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Worker' }],
+    declinedWorkers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Worker' }],
+    autoBookStatus:  { type: String, enum: ['broadcasting', 'fulfilled', 'cancelled'], default: undefined },
+
     // For material / rental bookings
     items: [mongoose.Schema.Types.Mixed],
 
