@@ -30,6 +30,13 @@ const initSocket = (server) => {
 
     socket.on('join_booking',      (id) => socket.join(`booking_${id}`));
     socket.on('join_customer',     (id) => socket.join(`customer_${id}`));
+    // BP workers connect to this server and join their personal room so
+    // Quick Auto Book broadcasts (new_auto_book_request / job_request_removed)
+    // reach every device in the broadcast pool, not just the first one.
+    socket.on('join_worker',        (id) => {
+      socket.join(`worker_${id}`);
+      logger.info({ workerId: id }, 'Worker joined room');
+    });
     socket.on('join_seller',       (id) => {
       socket.join(`seller_${id}`);
       logger.info({ sellerId: id }, 'Seller joined room');
@@ -118,6 +125,35 @@ const watchChanges = () => {
           // reacts immediately when labour marks work done — no separate event needed.
           isWorkCompletion: status === 'awaiting_customer_confirmation',
         });
+
+        // ── Quick Auto Book — broadcast new requests, remove filled ones ────
+        // Workers connect their sockets to THIS server (customer backend) and
+        // join worker_{id} rooms. Emit new_auto_book_request to every worker in
+        // the broadcast pool on insert, and job_request_removed when the booking
+        // is no longer pending (quota filled / cancelled).
+        if (doc?.isAutoBook) {
+          const requestedIds = (doc.requestedWorkerIds || []).map((id) => id.toString());
+          const acceptedIds  = (doc.workers || []).map((id) => id.toString());
+
+          if (c.operationType === 'insert' && doc.status === 'pending') {
+            // New auto-book — notify every worker in the broadcast pool
+            requestedIds.forEach((id) => {
+              io.to(`worker_${id}`).emit('new_auto_book_request', {
+                bookingId,
+                category: doc.category,
+              });
+            });
+          }
+
+          if (doc.status !== 'pending') {
+            // Booking is no longer accepting — remove it from non-accepted workers
+            requestedIds
+              .filter((id) => !acceptedIds.includes(id))
+              .forEach((id) => {
+                io.to(`worker_${id}`).emit('job_request_removed', { bookingId });
+              });
+          }
+        }
       });
       bookingStream.on('error', () => setTimeout(startWatching, 5000));
 
