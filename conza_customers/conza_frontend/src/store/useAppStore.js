@@ -651,6 +651,20 @@ const useAppStore = create((set, get) => ({
     if (id) get().fetchActiveBooking(id);
   },
 
+  // ── Auto-Book Progress Popup ────────────────────────────────────────────
+  autoBookProgress: null,  // { acceptedCount, requiredWorkers, isFinal, category, bookingId } | null
+
+  dismissAutoBookProgress: () => set({ autoBookProgress: null }),
+
+  // ── Work Completion Popup ───────────────────────────────────────────────
+  // When a worker marks work as finished, this popup appears on ANY screen
+  // and offers a one-tap redirect to the confirmation page.
+  pendingWorkCompletion: null, // { bookingId, workerName, category } | null
+
+  dismissWorkCompletion: () => set({ pendingWorkCompletion: null }),
+
+  clearPendingWorkCompletion: () => set({ pendingWorkCompletion: null }),
+
   // ── Quick Auto Book — broadcast a request to nearby workers ─────────────
   submitAutoBookRequest: async (payload) => {
     try {
@@ -797,6 +811,9 @@ const useAppStore = create((set, get) => ({
     socket.off('worker_updated');
     socket.off('worker_availability_changed');
     socket.off('worker_went_offline');
+    socket.off('autobook_progress');
+    socket.off('autobook_failed');
+    socket.off('autobook_partial');
     socket.off('connect');
 
     socket.on('worker_availability_changed', (data) => {
@@ -960,8 +977,66 @@ const useAppStore = create((set, get) => ({
       }
     });
 
+    // ── Auto-Book Progress Popup ──────────────────────────────────────────
+    // Live-updating popup showing how many workers have accepted/rejected the
+    // customer's auto-book request.
+    socket.on('autobook_progress', (data) => {
+      const { bookingId, acceptedCount, requiredWorkers, required, category } = data;
+      if (!bookingId) return;
+      // Only show popup for the currently active booking
+      if (bookingId?.toString() !== get().activeBookingId?.toString()) return;
+
+      const count  = acceptedCount ?? 0;
+      const needed = requiredWorkers ?? required ?? 0;
+
+      set({
+        autoBookProgress: {
+          bookingId,
+          acceptedCount: count,
+          requiredWorkers: needed,
+          // Mark as final when the quota is actually met — the popup will
+          // slide out automatically on success.
+          isFinal: needed > 0 && count >= needed,
+          category: category || 'workers',
+        },
+      });
+    });
+
+    socket.on('autobook_partial', (data) => {
+      const { bookingId, acceptedCount, required, category } = data;
+      if (!bookingId) return;
+      if (bookingId?.toString() !== get().activeBookingId?.toString()) return;
+
+      set({
+        autoBookProgress: {
+          bookingId,
+          acceptedCount: acceptedCount ?? 0,
+          requiredWorkers: required ?? 0,
+          isFinal: true,
+          category: category || 'workers',
+        },
+      });
+    });
+
+    socket.on('autobook_failed', (data) => {
+      const { bookingId, message } = data;
+      if (!bookingId) return;
+      if (bookingId?.toString() !== get().activeBookingId?.toString()) return;
+
+      set({
+        autoBookProgress: {
+          bookingId,
+          acceptedCount: 0,
+          requiredWorkers: 0,
+          isFinal: true,
+          message: message || 'No workers accepted your request',
+          category: 'workers',
+        },
+      });
+    });
+
     socket.on('work_completion_requested', (data) => {
-      const { bookingId } = data;
+      const { bookingId, workerName, category } = data;
       if (!bookingId) return;
 
       set((s) => ({
@@ -979,6 +1054,12 @@ const useAppStore = create((set, get) => ({
           s.activeBooking?._id?.toString() === bookingId?.toString()
             ? { ...s.activeBooking, status: 'awaiting_customer_confirmation' }
             : s.activeBooking,
+        // Show the work-completion popup on whatever screen the customer is on
+        pendingWorkCompletion: {
+          bookingId: bookingId.toString(),
+          workerName: workerName || 'Your worker',
+          category: category || 'worker',
+        },
       }));
 
       if (get().activeBookingId?.toString() === bookingId?.toString()) {

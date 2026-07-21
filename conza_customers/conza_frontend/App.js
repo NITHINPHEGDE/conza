@@ -7,6 +7,7 @@ import TabNavigator, { AuthStack } from './src/navigation/TabNavigator';
 import SplashScreen from './src/screens/SplashScreen';
 import SuspendedScreen from './src/screens/SuspendedScreen';
 import LocationRequiredScreen from './src/screens/LocationRequiredScreen';
+import WorkCompletionPopup from './src/components/WorkCompletionPopup';
 import './src/hooks/useAuth';
 import { useAuth } from './src/hooks/useAuth';
 import useAppStore from './src/store/useAppStore';
@@ -67,6 +68,8 @@ export default function App() {
             <Stack.Screen name="Auth" component={AuthStack} />
           )}
         </Stack.Navigator>
+        {/* Global overlay — appears on any screen when a worker finishes work */}
+        <WorkCompletionPopup />
       </NavigationContainer>
     </SafeAreaProvider>
   );

@@ -93,6 +93,10 @@ const watchChanges = () => {
           checkInTime:  doc.checkInTime,
           checkOutTime: doc.checkOutTime,
           issueReport:  doc.issueReport,
+          // Auto-book fields needed for real-time acceptance tracking
+          isAutoBook:       doc.isAutoBook || false,
+          requiredWorkers:  doc.requiredWorkers || 0,
+          requestedWorkerIds: doc.requestedWorkerIds || [],
         } : null;
 
         // Notify the specific customer who owns this booking (StatusScreen list)

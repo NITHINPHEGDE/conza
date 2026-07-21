@@ -22,7 +22,7 @@ const calculateBilledHours = (elapsedMs) => {
  *
  * Billing rules:
  *  - If work duration is ≤ 1 hour  → charge the combined baseCharge (minimum
- *    call-out fee), regardless of the per-hour rate.
+ *    call-out fee). Falls back to hourlyRate if baseCharge is not set.
  *  - If work duration is > 1 hour  → standard tiered hourly billing applies
  *    (rounded up to the nearest 30 min), using hourlyRate.
  *
@@ -36,9 +36,10 @@ const calculateBilledHours = (elapsedMs) => {
 const calculateHourlyCharge = (workStartTime, workEndTime, hourlyRate, baseCharge = 0) => {
   const elapsedMs = new Date(workEndTime).getTime() - new Date(workStartTime).getTime();
 
-  // ── Sub-1-hour: charge the base fee ───────────────────────────────────────
+  // ── Sub-1-hour: charge the base fee (fallback to hourly rate if not set) ──
   if (elapsedMs <= HOUR_MS) {
-    const subtotal = Math.round(Number(baseCharge) || 0);
+    const charge = Number(baseCharge) || Number(hourlyRate) || 0;
+    const subtotal = Math.round(charge);
     return { billedHours: 0, subtotal, baseFeeApplied: true };
   }
 

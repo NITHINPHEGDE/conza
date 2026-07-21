@@ -5,6 +5,7 @@ import useAppStore from '../store/useAppStore';
 import { bookingAPI } from '../api/bookingAPI';
 import { BookingTrackingSkeleton } from '../components/Skeleton';
 import { socket } from '../utils/socket';
+import AutoBookPopup from '../components/AutoBookPopup';
 
 const getStatusDisplay = (status) => {
   switch (status) {
@@ -56,6 +57,7 @@ const BookingTrackingScreen = ({ navigation }) => {
   const fetchActiveBooking   = useAppStore((s) => s.fetchActiveBooking);
   const cancelActiveBooking  = useAppStore((s) => s.cancelActiveBooking);
   const clearActiveBooking   = useAppStore((s) => s.clearActiveBooking);
+  const clearPendingWorkCompletion = useAppStore((s) => s.clearPendingWorkCompletion);
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling]           = useState(false);
@@ -63,6 +65,12 @@ const BookingTrackingScreen = ({ navigation }) => {
   const [reportingIssue, setReportingIssue]   = useState(false);
   const [issueComment, setIssueComment]       = useState('');
   const [partialData, setPartialData]         = useState(null); // { acceptedCount, required, category }
+
+  // Clear the work-completion popup when this screen is already visible,
+  // since the in-screen confirmation modal handles it here.
+  useEffect(() => {
+    clearPendingWorkCompletion();
+  }, []);
 
   // Join the booking-specific socket room so booking_status_changed events
   // are received. Re-join on reconnect to handle network interruptions.
@@ -258,6 +266,7 @@ const BookingTrackingScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      <AutoBookPopup />
       <View style={styles.header}>
         <View style={{ width: 24 }} />
         <Text style={styles.headerTitle}>Booking Status</Text>

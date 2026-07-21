@@ -110,6 +110,27 @@ const updateBookingStatus = async (req, res) => {
       // Mark this specific worker unavailable immediately.
       await Worker.findByIdAndUpdate(workerId, { isAvailable: false });
 
+      // Notify the customer about acceptance progress in real-time.
+      // Fires for EVERY slot claim so the customer sees a live count.
+      try {
+        const { getIO } = require('../services/socketService');
+        const io = getIO();
+        io.to(`customer_${booking.user}`).emit('autobook_progress', {
+          bookingId:       booking._id.toString(),
+          acceptedCount:   claimed.workers.length,
+          requiredWorkers: claimed.requiredWorkers,
+          category:        booking.category || 'workers',
+        });
+        io.to(`booking_${booking._id}`).emit('autobook_progress', {
+          bookingId:       booking._id.toString(),
+          acceptedCount:   claimed.workers.length,
+          requiredWorkers: claimed.requiredWorkers,
+          category:        booking.category || 'workers',
+        });
+      } catch (err) {
+        logger.error({ err }, 'Failed to emit autobook_progress');
+      }
+
       let finalBooking = claimed;
 
       // Once the full quota is reached, close the booking (flip to 'accepted')
@@ -129,6 +150,22 @@ const updateBookingStatus = async (req, res) => {
           { status: 'accepted', subtotal, platformFee, total: subtotal + platformFee },
           { new: true }
         );
+
+        // Immediately notify all non-accepted workers in the broadcast pool
+        // that this request is no longer available so they see it vanish
+        // right away instead of waiting for the async change stream.
+        try {
+          const { getIO } = require('../services/socketService');
+          const io = getIO();
+          const acceptedSet = new Set((claimed.workers || []).map(id => id.toString()));
+          (booking.requestedWorkerIds || [])
+            .filter(id => !acceptedSet.has(id.toString()))
+            .forEach(id => {
+              io.to(`worker_${id}`).emit('job_request_removed', { bookingId });
+            });
+        } catch (err) {
+          logger.error({ err }, 'Failed to emit job_request_removed on quota fill');
+        }
       }
 
       await Promise.allSettled(
@@ -180,6 +217,28 @@ const updateBookingStatus = async (req, res) => {
       const unresponded  = (updated.requestedWorkerIds || []).filter(id => !acceptedIds.has(id.toString()));
       const acceptedCount = acceptedIds.size;
       const required      = updated.requiredWorkers || 1;
+
+      // Notify customer of acceptance progress on every decline too.
+      // This keeps the customer's popup in sync — e.g. "1/3 accepted" →
+      // a worker declines → customer sees the updated count.
+      try {
+        const { getIO } = require('../services/socketService');
+        const io = getIO();
+        io.to(`customer_${updated.user}`).emit('autobook_progress', {
+          bookingId,
+          acceptedCount,
+          required,
+          category: updated.category || 'workers',
+        });
+        io.to(`booking_${bookingId}`).emit('autobook_progress', {
+          bookingId,
+          acceptedCount,
+          required,
+          category: updated.category || 'workers',
+        });
+      } catch (err) {
+        logger.error({ err }, 'Failed to emit autobook_progress on decline');
+      }
 
       if (unresponded.length === 0 && acceptedCount < required) {
         // Everyone has responded and the quota is not met.
@@ -352,6 +411,18 @@ const updateBookingStatus = async (req, res) => {
           bookingId,
           status,
         });
+
+        // For auto-book bookings transitioning away from 'pending', notify all
+        // non-accepted workers in the broadcast pool that the request is gone
+        // so they don't keep seeing a stale card until cache expires.
+        if (booking.isAutoBook && booking.status !== 'pending' && status !== 'pending') {
+          const acceptedSet = new Set((booking.workers || []).map(id => id.toString()));
+          (booking.requestedWorkerIds || [])
+            .filter(id => !acceptedSet.has(id.toString()))
+            .forEach(id => {
+              io.to(`worker_${id}`).emit('job_request_removed', { bookingId });
+            });
+        }
       } catch (err) {
         logger.error({ err }, 'Failed to emit booking status event');
       }

@@ -6,6 +6,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
 import { SkeletonList, BookingCardSkeleton } from '../components/Skeleton';
+import AutoBookPopup from '../components/AutoBookPopup';
 
 const getStatusDisplay = (status) => {
   switch (status) {
@@ -344,6 +345,7 @@ const StatusScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      <AutoBookPopup />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Bookings</Text>
         <Text style={styles.headerCount}>{currentList.length} {currentFilter}</Text>
