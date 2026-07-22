@@ -162,15 +162,23 @@ const BookingTrackingScreen = ({ navigation }) => {
   const confirmCancel = useCallback(async () => {
     setCancelling(true);
     try {
-      await cancelActiveBooking();
-      setShowCancelModal(false);
+      if (activeBooking?.isAutoBook) {
+        // Bug 4 fix: for auto-book, use the dedicated cancel-auto endpoint
+        // so workers who already accepted keep their active job.
+        await bookingAPI.cancelAutoBooking(activeBookingId);
+        setShowCancelModal(false);
+        await fetchActiveBooking(activeBookingId);
+      } else {
+        await cancelActiveBooking();
+        setShowCancelModal(false);
+      }
     } catch (err) {
       setShowCancelModal(false);
       Alert.alert('Error', err.message || 'Could not cancel booking.');
     } finally {
       setCancelling(false);
     }
-  }, [cancelActiveBooking]);
+  }, [cancelActiveBooking, activeBooking?.isAutoBook, activeBookingId, fetchActiveBooking]);
 
   const handleConfirmCompletion = useCallback(async () => {
     if (!activeBookingId) return;
@@ -439,9 +447,16 @@ const BookingTrackingScreen = ({ navigation }) => {
           </View>
         )}
 
+        {/* Cancel button — show for:
+            - Normal bookings: only while status === 'pending'
+            - Auto-book: while status === 'pending' (even with partial accepts)
+              Customer can close the broadcast at any time. Already-accepted
+              workers will keep their active job. */}
         {activeBooking.status === 'pending' && (
           <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
-            <Text style={styles.cancelBtnText}>Cancel Booking</Text>
+            <Text style={styles.cancelBtnText}>
+              {activeBooking.isAutoBook ? 'Cancel Auto-Book' : 'Cancel Booking'}
+            </Text>
           </TouchableOpacity>
         )}
 

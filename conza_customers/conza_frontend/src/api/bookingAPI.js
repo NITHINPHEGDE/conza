@@ -49,6 +49,13 @@ export const bookingAPI = {
     return res.data;
   },
 
+  // Cancel auto-book broadcast while still pending.
+  // Workers who already accepted continue; remaining pool is cleared.
+  cancelAutoBooking: async (id) => {
+    const res = await api.patch(`/bookings/${id}/cancel-auto`);
+    return res.data;
+  },
+
   // ── Seller orders (material / rental) ──────────────────────────────────
   placeSellerOrder: async (data) => {
     const res = await api.post('/orders/seller', data);

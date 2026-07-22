@@ -400,16 +400,26 @@ const updateBookingStatus = async (req, res) => {
       try {
         const { getIO } = require('../services/socketService');
         const io = getIO();
+
+        // Minimal snapshot so BP workers can tell if this is an auto-book
+        // and avoid overriding another worker's personal stage (Bug 2 fix).
+        const minSnapshot = {
+          isAutoBook: booking.isAutoBook || false,
+          workers:    (booking.workers || []).map(id => id.toString()),
+        };
+
         // Notify customer's personal room (StatusScreen list updates)
         io.to(`customer_${booking.user}`).emit('booking_updated', {
-          operationType: 'update',
+          operationType:   'update',
           bookingId,
           status,
+          bookingSnapshot: minSnapshot,
         });
         // Notify booking detail room (BookingTrackingScreen updates)
         io.to(`booking_${bookingId}`).emit('booking_status_changed', {
           bookingId,
           status,
+          bookingSnapshot: minSnapshot,
         });
 
         // For auto-book bookings transitioning away from 'pending', notify all

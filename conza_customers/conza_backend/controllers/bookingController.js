@@ -308,6 +308,15 @@ const createAutoBooking = async (req, res) => {
         status:          'pending',
         bookingSnapshot: null,
       });
+
+      // Bug 3 fix: immediately broadcast to all workers in the pool so there
+      // is no delay waiting for the MongoDB change stream to fire.
+      requestedWorkerIds.forEach((id) => {
+        io.to(`worker_${id.toString()}`).emit('new_auto_book_request', {
+          bookingId: booking._id.toString(),
+          category:  booking.category,
+        });
+      });
     } catch (_) {}
 
     res.status(201).json({ success: true, booking, requestedWorkers: requestedWorkerIds.length });
@@ -435,6 +444,101 @@ const cancelBooking = async (req, res) => {
     } catch (_) {}
 
     res.json({ success: true, booking });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── PATCH /api/bookings/:id/cancel-auto ──────────────────────────────────────
+// Customer cancels an auto-book while it is still open (pending broadcast).
+// Workers who have already accepted keep their active job — the booking is NOT
+// globally cancelled from their perspective. Instead:
+//   • The booking's requestedWorkerIds is cleared so no new workers can accept.
+//   • If 0 workers have accepted → booking status becomes 'cancelled'.
+//   • If ≥ 1 workers already accepted → booking status becomes 'accepted'
+//     (quota is considered fulfilled by whoever accepted) and remaining
+//     pending workers receive job_request_removed.
+const cancelAutoBooking = async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id });
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+    if (!booking.isAutoBook) {
+      return res.status(400).json({ success: false, message: 'This endpoint is only for auto-book requests' });
+    }
+    if (!['pending'].includes(booking.status)) {
+      return res.status(400).json({ success: false, message: 'Auto-book is no longer pending — cannot cancel broadcast' });
+    }
+
+    const acceptedWorkers = (booking.workers || []).map(id => id.toString());
+    const pendingWorkers  = (booking.requestedWorkerIds || [])
+      .map(id => id.toString())
+      .filter(id => !acceptedWorkers.includes(id));
+
+    // Decide final status
+    const finalStatus = acceptedWorkers.length > 0 ? 'accepted' : 'cancelled';
+
+    // Close the broadcast: clear remaining pool & set final status
+    const updated = await Booking.findByIdAndUpdate(
+      booking._id,
+      {
+        status:             finalStatus,
+        // Keep accepted workers but wipe pending ones out of requestedWorkerIds
+        requestedWorkerIds: acceptedWorkers,
+        cancellationReason: acceptedWorkers.length > 0 ? 'customer_closed_broadcast' : 'customer_cancelled',
+      },
+      { new: true }
+    );
+
+    await invalidateCache(
+      `bookings:detail:${booking._id}`,
+      `bookings:user:${req.user._id}:*`
+    );
+
+    try {
+      const io = getIO();
+
+      // Tell workers still in pending pool the request is gone
+      pendingWorkers.forEach(id => {
+        io.to(`worker_${id}`).emit('job_request_removed', { bookingId: booking._id.toString() });
+      });
+
+      // Notify customer
+      io.to(`customer_${req.user._id}`).emit('booking_updated', {
+        operationType:   'update',
+        bookingId:       booking._id.toString(),
+        status:          finalStatus,
+        bookingSnapshot: null,
+      });
+
+      // If there are accepted workers, let them know booking is now officially accepted
+      if (acceptedWorkers.length > 0) {
+        io.to(`booking_${booking._id}`).emit('booking_status_changed', {
+          bookingId:       booking._id.toString(),
+          status:          'accepted',
+          bookingSnapshot: null,
+          isWorkCompletion: false,
+        });
+      } else {
+        // No workers — fully cancelled
+        io.to(`booking_${booking._id}`).emit('booking_status_changed', {
+          bookingId:       booking._id.toString(),
+          status:          'cancelled',
+          bookingSnapshot: null,
+          isWorkCompletion: false,
+        });
+      }
+    } catch (_) {}
+
+    res.json({
+      success:         true,
+      booking:         updated,
+      acceptedWorkers: acceptedWorkers.length,
+      message:         acceptedWorkers.length > 0
+        ? `Broadcast closed. ${acceptedWorkers.length} worker(s) who already accepted will continue.`
+        : 'Booking cancelled. No workers had accepted.',
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -614,4 +718,4 @@ const cancelPartialAutoBook = async (req, res) => {
   }
 };
 
-module.exports = { createBooking, createAutoBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue, confirmPartialAutoBook, cancelPartialAutoBook };
+module.exports = { createBooking, createAutoBooking, getMyBookings, getBookingById, cancelBooking, cancelAutoBooking, confirmCompletion, reportIssue, confirmPartialAutoBook, cancelPartialAutoBook };

@@ -232,22 +232,49 @@ const usePartnerStore = create((set, get) => ({
 
     socket.on('job_request_removed', (data) => {
       console.log('🗑️ BP: Auto-book request filled/removed:', data.bookingId);
-      set((state) => ({
-        requests: state.requests.filter(
-          (r) => r.id?.toString() !== data.bookingId?.toString()
-        ),
-      }));
-    });
-
-    socket.on('booking_updated', (data) => {
-      console.log('🔄 BP: Booking update received:', data);
-      if (data.status && data.status !== 'pending') {
+      // Only remove if we are NOT the active worker on this job
+      // (i.e. we haven't accepted it ourselves)
+      if (get().activeJobId !== data.bookingId?.toString()) {
         set((state) => ({
           requests: state.requests.filter(
             (r) => r.id?.toString() !== data.bookingId?.toString()
           ),
         }));
       }
+    });
+
+    socket.on('booking_updated', (data) => {
+      console.log('🔄 BP: Booking update received:', data);
+      const workerId = get().worker?._id?.toString();
+
+      // For auto-book: if status is non-pending, only remove the request card
+      // for workers who did NOT claim a slot (i.e. not in the accepted set).
+      // Workers who accepted should keep their active job unaffected.
+      if (data.status && data.status !== 'pending') {
+        const bookingSnapshot = data.bookingSnapshot;
+        const isAutoBook = bookingSnapshot?.isAutoBook;
+        if (isAutoBook && workerId) {
+          const acceptedIds = (bookingSnapshot?.workers || []).map(id => id?.toString());
+          const iAccepted = acceptedIds.includes(workerId);
+          if (!iAccepted) {
+            // Not our job — remove request card
+            set((state) => ({
+              requests: state.requests.filter(
+                (r) => r.id?.toString() !== data.bookingId?.toString()
+              ),
+            }));
+          }
+          // If we did accept, our active job stays — do not remove
+        } else {
+          // Normal (non-auto) booking or no snapshot — old behaviour
+          set((state) => ({
+            requests: state.requests.filter(
+              (r) => r.id?.toString() !== data.bookingId?.toString()
+            ),
+          }));
+        }
+      }
+
       get().fetchRequests();
       if (get().activeJobId === data.bookingId) {
         get().fetchActiveJob(data.bookingId);
@@ -257,7 +284,37 @@ const usePartnerStore = create((set, get) => ({
     socket.on('booking_status_changed', (data) => {
       console.log('🔄 BP: Booking status changed:', data.status);
       if (get().activeJobId === data.bookingId) {
-        if (data.status) {
+        // For auto-book, each worker runs their own independent workflow.
+        // A status change caused by ANOTHER worker (e.g. they clicked "Start Work")
+        // must NOT override THIS worker's current stage.
+        // Rule: only update jobStatus if the new status is a natural FORWARD
+        // progression from our current status, or if this booking is not auto-book.
+        const currentStatus = get().jobStatus;
+        const newStatus = data.status;
+        const bookingSnapshot = data.bookingSnapshot;
+        const isAutoBook = bookingSnapshot?.isAutoBook;
+        const workerId = get().worker?._id?.toString();
+
+        const shouldUpdate = (() => {
+          if (!newStatus) return false;
+          // Always apply terminal states (completed / cancelled) regardless
+          if (['completed', 'cancelled'].includes(newStatus)) return true;
+          // For non-auto-book, always apply
+          if (!isAutoBook) return true;
+          // For auto-book: only apply if the change can only have come from
+          // THIS worker's own action (i.e. the current worker's status should
+          // be behind the new status in the workflow, and the new status is a
+          // valid next step from their current personal stage).
+          const statusOrder = ['pending', 'accepted', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed'];
+          const currentIdx = statusOrder.indexOf(currentStatus);
+          const newIdx = statusOrder.indexOf(newStatus);
+          // Only advance forward — never let another worker's action go backward or
+          // jump us past stages we haven't gone through ourselves.
+          // A status is 'ours' only if it's exactly one step ahead.
+          return newIdx === currentIdx + 1;
+        })();
+
+        if (shouldUpdate && data.status) {
           set({ jobStatus: data.status });
         }
         if (data.status !== 'completed') {
@@ -519,16 +576,40 @@ lastPaymentMethod: null,
         const r = data.booking;
         const workerId = get().worker?._id?.toString();
 
-        // For auto-book, if this worker has already claimed a slot (they're in
-        // workers[]) the overall booking may still be 'pending' while waiting
-        // for the remaining slots to fill. But THIS worker should start their
-        // job immediately — show them 'accepted' so the workflow kicks off.
-        const uiStatus = (
-          r.isAutoBook &&
-          r.status === 'pending' &&
-          workerId &&
-          (r.workers || []).some(id => id?.toString() === workerId)
-        ) ? 'accepted' : r.status;
+        // ── Determine the correct UI status for THIS worker ────────────────
+        // For auto-book, each worker runs their own independent workflow.
+        // The global booking status reflects whichever worker is furthest
+        // along (or the last one who changed it). We must NOT let the global
+        // status reset a worker who is personally further along.
+        const statusOrder = ['pending', 'accepted', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed'];
+        const currentPersonalStatus = get().jobStatus; // what THIS worker's UI currently shows
+        const globalStatus = r.status;
+
+        let uiStatus;
+        if (r.isAutoBook && workerId) {
+          const iAmAccepted = (r.workers || []).some(id => id?.toString() === workerId);
+
+          if (!iAmAccepted) {
+            // We haven't claimed a slot — not our active job anymore
+            uiStatus = globalStatus;
+          } else if (globalStatus === 'pending') {
+            // Booking still collecting workers but WE accepted — show 'accepted'
+            uiStatus = 'accepted';
+          } else if (['cancelled', 'completed'].includes(globalStatus)) {
+            // Terminal states always apply
+            uiStatus = globalStatus;
+          } else {
+            // For in-flight statuses (arrived, in_progress, awaiting_customer_confirmation):
+            // keep whichever is further along — personal or global.
+            // This prevents another worker's action from resetting our workflow stage.
+            const currentIdx  = statusOrder.indexOf(currentPersonalStatus);
+            const globalIdx   = statusOrder.indexOf(globalStatus);
+            uiStatus = currentIdx >= globalIdx ? currentPersonalStatus : globalStatus;
+          }
+        } else {
+          // Non-auto-book: always use global status
+          uiStatus = globalStatus;
+        }
 
         const mapped = {
           ...r,
