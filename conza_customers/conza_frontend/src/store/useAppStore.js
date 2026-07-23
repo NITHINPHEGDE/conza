@@ -932,9 +932,13 @@ const useAppStore = create((set, get) => ({
           ),
           activeBooking:
             s.activeBooking?._id?.toString() === bookingId?.toString()
-              ? bookingSnapshot
-                ? { ...s.activeBooking, ...bookingSnapshot, status }
-                : { ...s.activeBooking, status }
+              ? {
+                  ...s.activeBooking,
+                  status,
+                  ...(bookingSnapshot && bookingSnapshot.isAutoBook !== undefined
+                    ? { isAutoBook: bookingSnapshot.isAutoBook }
+                    : {}),
+                }
               : s.activeBooking,
         }));
       }
@@ -965,9 +969,13 @@ const useAppStore = create((set, get) => ({
           ),
           activeBooking:
             s.activeBooking?._id?.toString() === bookingId?.toString()
-              ? bookingSnapshot
-                ? { ...s.activeBooking, ...bookingSnapshot, status }
-                : { ...s.activeBooking, status }
+              ? {
+                  ...s.activeBooking,
+                  status,
+                  ...(bookingSnapshot && bookingSnapshot.isAutoBook !== undefined
+                    ? { isAutoBook: bookingSnapshot.isAutoBook }
+                    : {}),
+                }
               : s.activeBooking,
         }));
       }

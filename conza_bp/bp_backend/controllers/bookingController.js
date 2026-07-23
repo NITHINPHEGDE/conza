@@ -21,11 +21,12 @@ const getWorkerRequests = async (req, res) => {
     // Auto-book requests: worker is in the broadcast pool (`requestedWorkerIds`)
     // but hasn't yet claimed a slot in `workers` — once they do (or the quota
     // fills), this query stops returning it for everyone.
+    const workerObjId = req.worker._id;
     const query = {
       status: 'pending',
       $or: [
-        { isAutoBook: { $ne: true }, workers: workerId },
-        { isAutoBook: true, requestedWorkerIds: workerId, workers: { $ne: workerId } },
+        { isAutoBook: { $ne: true }, workers: workerObjId },
+        { isAutoBook: true, requestedWorkerIds: workerObjId, workers: { $ne: workerObjId } },
       ],
     };
 
@@ -96,6 +97,11 @@ const updateBookingStatus = async (req, res) => {
               pricePerDay:  req.worker.minCharge   || 0,
               perDayCharge: req.worker.perDayCharge || 0,
               baseCharge:   req.worker.baseCharge   || 0,
+            },
+            workerStatuses: {
+              worker:     req.worker._id,
+              status:     'accepted',
+              acceptedAt: new Date(),
             },
           },
           $set: { acceptedAt: booking.acceptedAt || new Date() },
@@ -172,7 +178,7 @@ const updateBookingStatus = async (req, res) => {
         (booking.requestedWorkerIds || []).map((wId) =>
           invalidateCache(
             `bp:worker:${wId}:requests:pending:*`,
-            `bp:booking:${bookingId}`
+            `bp:booking:${bookingId}:*`
           )
         )
       );
@@ -187,7 +193,7 @@ const updateBookingStatus = async (req, res) => {
       // immediately navigates them to the ActiveJob flow without waiting.
       return res.json({
         success: true,
-        booking: { ...finalBooking.toObject(), status: 'accepted' },
+        booking: { ...finalBooking.toObject(), myStatus: 'accepted' },
       });
     }
 
@@ -292,10 +298,26 @@ const updateBookingStatus = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
     }
 
-    if (status === 'accepted'  && !booking.acceptedAt)   booking.acceptedAt   = new Date();
+    // ── Update per-worker status in workerStatuses array ─────────────────────
+    if (!booking.workerStatuses) booking.workerStatuses = [];
+    let ws = booking.workerStatuses.find(w => w.worker && w.worker.toString() === workerId);
+    if (!ws) {
+      booking.workerStatuses.push({
+        worker: req.worker._id,
+        status: status,
+        acceptedAt: booking.acceptedAt || new Date(),
+      });
+      ws = booking.workerStatuses[booking.workerStatuses.length - 1];
+    } else {
+      ws.status = status;
+    }
+
+    if (status === 'accepted' && !ws.acceptedAt) {
+      ws.acceptedAt = new Date();
+    }
 
     // "Mark as Arrived" is only allowed within 50m of the customer's saved location
-    if (status === 'arrived' && !booking.checkInTime) {
+    if (status === 'arrived' && !ws.checkInTime) {
       const { latitude, longitude } = req.body;
       if (latitude === undefined || latitude === null || longitude === undefined || longitude === null) {
         return res.status(400).json({
@@ -315,12 +337,14 @@ const updateBookingStatus = async (req, res) => {
           });
         }
       }
-      booking.checkInTime = new Date();
+      ws.checkInTime = new Date();
+      if (!booking.checkInTime) booking.checkInTime = ws.checkInTime;
     }
 
     // Work timer starts here — hourly billing is calculated from this point
-    if (status === 'in_progress' && !booking.workStartTime) {
-      booking.workStartTime = new Date();
+    if (status === 'in_progress' && !ws.workStartTime) {
+      ws.workStartTime = new Date();
+      if (!booking.workStartTime) booking.workStartTime = ws.workStartTime;
       if (!booking.hourlyRate) {
         booking.hourlyRate = (booking.workerSnapshot || []).reduce(
           (sum, w) => sum + (Number(w.pricePerDay) || Number(w.minCharge) || 0), 0
@@ -328,12 +352,14 @@ const updateBookingStatus = async (req, res) => {
       }
     }
 
-    if (status === 'awaiting_customer_confirmation' && !booking.checkOutTime) {
-      booking.checkOutTime = new Date(); // Tentative
+    if (status === 'awaiting_customer_confirmation' && !ws.checkOutTime) {
+      ws.checkOutTime = new Date();
+      if (!booking.checkOutTime) booking.checkOutTime = ws.checkOutTime;
       if (req.body.paymentMethod) booking.paymentMethod = req.body.paymentMethod;
     }
-    if (status === 'completed' && !booking.checkOutTime) {
-      booking.checkOutTime = new Date();
+    if (status === 'completed' && !ws.checkOutTime) {
+      ws.checkOutTime = new Date();
+      if (!booking.checkOutTime) booking.checkOutTime = ws.checkOutTime;
       if (req.body.paymentMethod) booking.paymentMethod = req.body.paymentMethod;
     }
 
@@ -370,7 +396,29 @@ const updateBookingStatus = async (req, res) => {
 
     if (status === 'cancelled') booking.workerCancelled = true;
 
-    booking.status = status;
+    // ── Calculate overall booking.status safely ──────────────────────────────
+    // If auto-book is STILL accepting workers, keep overall status as 'pending'
+    // so remaining workers can still see & accept open slots!
+    if (booking.isAutoBook && (booking.workers || []).length < (booking.requiredWorkers || 1)) {
+      booking.status = 'pending';
+    } else {
+      const allWs = booking.workerStatuses || [];
+      const totalAssigned = (booking.workers || []).length;
+      if (status === 'cancelled') {
+        booking.status = 'cancelled';
+      } else if (allWs.length >= totalAssigned && allWs.every(w => w.status === 'completed')) {
+        booking.status = 'completed';
+      } else if (allWs.length >= totalAssigned && allWs.every(w => w.status === 'awaiting_customer_confirmation' || w.status === 'completed')) {
+        booking.status = 'awaiting_customer_confirmation';
+      } else if (allWs.some(w => w.status === 'in_progress' || w.status === 'awaiting_customer_confirmation' || w.status === 'completed')) {
+        booking.status = 'in_progress';
+      } else if (allWs.some(w => w.status === 'arrived')) {
+        booking.status = 'arrived';
+      } else {
+        booking.status = 'accepted';
+      }
+    }
+
     await booking.save();
 
     if (status === 'accepted') {
@@ -388,7 +436,12 @@ const updateBookingStatus = async (req, res) => {
         io.to(`customer_${booking.user}`).emit('work_completion_requested', { bookingId });
         io.to(`booking_${bookingId}`).emit('work_completion_requested', { bookingId });
         // Also emit standard status change
-        io.to(`booking_${bookingId}`).emit('booking_status_changed', { bookingId, status });
+        io.to(`booking_${bookingId}`).emit('booking_status_changed', {
+          bookingId,
+          workerId,
+          workerStatus: status,
+          status: booking.status,
+        });
       } catch (err) {
         logger.error({ err }, 'Failed to emit work_completion_requested');
       }
@@ -412,13 +465,15 @@ const updateBookingStatus = async (req, res) => {
         io.to(`customer_${booking.user}`).emit('booking_updated', {
           operationType:   'update',
           bookingId,
-          status,
+          status:          booking.status,
           bookingSnapshot: minSnapshot,
         });
         // Notify booking detail room (BookingTrackingScreen updates)
         io.to(`booking_${bookingId}`).emit('booking_status_changed', {
           bookingId,
-          status,
+          workerId,
+          workerStatus: status,
+          status: booking.status,
           bookingSnapshot: minSnapshot,
         });
 
@@ -444,7 +499,7 @@ const updateBookingStatus = async (req, res) => {
         invalidateCache(
           `bp:worker:${wId}:requests:pending:*`,
           `bp:worker:${wId}:history:*`,
-          `bp:booking:${bookingId}`
+          `bp:booking:${bookingId}:*`
         )
       )
     );
@@ -475,13 +530,13 @@ const getWorkerHistory = async (req, res) => {
 
     const result = await withCache(cacheKey, TTL, async () => {
       const [history, total] = await Promise.all([
-        Booking.find({ workers: workerId, status: { $in: ['completed', 'cancelled'] } })
+        Booking.find({ workers: req.worker._id, status: { $in: ['completed', 'cancelled'] } })
           .populate('user', 'fullName phone profileImage')
           .sort({ updatedAt: -1 })
           .skip(skip)
           .limit(Number(limit))
           .lean(),
-        Booking.countDocuments({ workers: workerId, status: { $in: ['completed', 'cancelled'] } }),
+        Booking.countDocuments({ workers: req.worker._id, status: { $in: ['completed', 'cancelled'] } }),
       ]);
       return { history, total };
     });
@@ -504,7 +559,8 @@ const getWorkerHistory = async (req, res) => {
 const getBookingById = async (req, res) => {
   try {
     const bookingId = req.params.id;
-    const cacheKey  = `bp:booking:${bookingId}`;
+    const workerId  = req.worker?._id?.toString();
+    const cacheKey  = `bp:booking:${bookingId}:worker:${workerId || 'anon'}`;
     const TTL       = 30;
 
     const booking = await withCache(cacheKey, TTL, () =>
@@ -514,7 +570,24 @@ const getBookingById = async (req, res) => {
     );
 
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
-    res.json({ success: true, booking });
+
+    let myStatus;
+    if (workerId) {
+      const ws = (booking.workerStatuses || []).find(
+        w => w.worker && (w.worker._id || w.worker).toString() === workerId
+      );
+      if (ws) {
+        myStatus = ws.status;
+      } else if ((booking.workers || []).some(id => (id._id || id).toString() === workerId)) {
+        myStatus = 'accepted';
+      } else {
+        myStatus = booking.status;
+      }
+    } else {
+      myStatus = booking.status;
+    }
+
+    res.json({ success: true, booking: { ...booking, myStatus } });
   } catch (err) {
     logger.error({ err }, 'getBookingById failed');
     res.status(500).json({ success: false, message: err.message });

@@ -19,6 +19,18 @@ const bookingSchema = new mongoose.Schema(
     requiredWorkers:    { type: Number, default: 0 },
     requestedWorkerIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Worker' }],
 
+    // Per-worker status tracking for multi-worker / auto-book bookings
+    workerStatuses: [
+      {
+        worker:        { type: mongoose.Schema.Types.ObjectId, ref: 'Worker' },
+        status:        { type: String, default: 'accepted' },
+        acceptedAt:    { type: Date, default: null },
+        checkInTime:   { type: Date, default: null },
+        workStartTime: { type: Date, default: null },
+        checkOutTime:  { type: Date, default: null },
+      }
+    ],
+
     // For material / rental bookings
     items: [mongoose.Schema.Types.Mixed],
 

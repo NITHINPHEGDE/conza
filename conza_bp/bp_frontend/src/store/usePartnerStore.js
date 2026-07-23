@@ -282,39 +282,16 @@ const usePartnerStore = create((set, get) => ({
     });
 
     socket.on('booking_status_changed', (data) => {
-      console.log('🔄 BP: Booking status changed:', data.status);
+      console.log('🔄 BP: Booking status changed:', data);
       if (get().activeJobId === data.bookingId) {
-        // For auto-book, each worker runs their own independent workflow.
-        // A status change caused by ANOTHER worker (e.g. they clicked "Start Work")
-        // must NOT override THIS worker's current stage.
-        // Rule: only update jobStatus if the new status is a natural FORWARD
-        // progression from our current status, or if this booking is not auto-book.
-        const currentStatus = get().jobStatus;
-        const newStatus = data.status;
-        const bookingSnapshot = data.bookingSnapshot;
-        const isAutoBook = bookingSnapshot?.isAutoBook;
         const workerId = get().worker?._id?.toString();
-
-        const shouldUpdate = (() => {
-          if (!newStatus) return false;
-          // Always apply terminal states (completed / cancelled) regardless
-          if (['completed', 'cancelled'].includes(newStatus)) return true;
-          // For non-auto-book, always apply
-          if (!isAutoBook) return true;
-          // For auto-book: only apply if the change can only have come from
-          // THIS worker's own action (i.e. the current worker's status should
-          // be behind the new status in the workflow, and the new status is a
-          // valid next step from their current personal stage).
-          const statusOrder = ['pending', 'accepted', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed'];
-          const currentIdx = statusOrder.indexOf(currentStatus);
-          const newIdx = statusOrder.indexOf(newStatus);
-          // Only advance forward — never let another worker's action go backward or
-          // jump us past stages we haven't gone through ourselves.
-          // A status is 'ours' only if it's exactly one step ahead.
-          return newIdx === currentIdx + 1;
-        })();
-
-        if (shouldUpdate && data.status) {
+        // If the socket event is targeted at a specific worker's status change:
+        if (data.workerId) {
+          if (data.workerId === workerId && data.workerStatus) {
+            set({ jobStatus: data.workerStatus });
+          }
+        } else if (data.status) {
+          // Global event (e.g. cancelled, completed)
           set({ jobStatus: data.status });
         }
         if (data.status !== 'completed') {
@@ -577,38 +554,16 @@ lastPaymentMethod: null,
         const workerId = get().worker?._id?.toString();
 
         // ── Determine the correct UI status for THIS worker ────────────────
-        // For auto-book, each worker runs their own independent workflow.
-        // The global booking status reflects whichever worker is furthest
-        // along (or the last one who changed it). We must NOT let the global
-        // status reset a worker who is personally further along.
-        const statusOrder = ['pending', 'accepted', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed'];
-        const currentPersonalStatus = get().jobStatus; // what THIS worker's UI currently shows
-        const globalStatus = r.status;
-
+        const myWs = (r.workerStatuses || []).find(w => w.worker && (w.worker._id || w.worker).toString() === workerId);
         let uiStatus;
-        if (r.isAutoBook && workerId) {
-          const iAmAccepted = (r.workers || []).some(id => id?.toString() === workerId);
-
-          if (!iAmAccepted) {
-            // We haven't claimed a slot — not our active job anymore
-            uiStatus = globalStatus;
-          } else if (globalStatus === 'pending') {
-            // Booking still collecting workers but WE accepted — show 'accepted'
-            uiStatus = 'accepted';
-          } else if (['cancelled', 'completed'].includes(globalStatus)) {
-            // Terminal states always apply
-            uiStatus = globalStatus;
-          } else {
-            // For in-flight statuses (arrived, in_progress, awaiting_customer_confirmation):
-            // keep whichever is further along — personal or global.
-            // This prevents another worker's action from resetting our workflow stage.
-            const currentIdx  = statusOrder.indexOf(currentPersonalStatus);
-            const globalIdx   = statusOrder.indexOf(globalStatus);
-            uiStatus = currentIdx >= globalIdx ? currentPersonalStatus : globalStatus;
-          }
+        if (myWs && myWs.status) {
+          uiStatus = myWs.status;
+        } else if (r.myStatus) {
+          uiStatus = r.myStatus;
+        } else if (r.isAutoBook && r.status === 'pending') {
+          uiStatus = 'accepted';
         } else {
-          // Non-auto-book: always use global status
-          uiStatus = globalStatus;
+          uiStatus = r.status;
         }
 
         const mapped = {

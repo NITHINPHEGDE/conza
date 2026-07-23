@@ -298,6 +298,11 @@ const createAutoBooking = async (req, res) => {
     logger.info({ bookingId: booking._id, requestedWorkers: requestedWorkerIds.length }, 'Auto-book request created');
 
     await invalidateCache(`bookings:user:${req.user._id}:*`).catch(() => {});
+    await Promise.allSettled(
+      requestedWorkerIds.map((wId) =>
+        invalidateCache(`bp:worker:${wId.toString()}:requests:pending:*`)
+      )
+    ).catch(() => {});
 
     try {
       const { getIO } = require('../services/socketService');
@@ -451,13 +456,7 @@ const cancelBooking = async (req, res) => {
 
 // ── PATCH /api/bookings/:id/cancel-auto ──────────────────────────────────────
 // Customer cancels an auto-book while it is still open (pending broadcast).
-// Workers who have already accepted keep their active job — the booking is NOT
-// globally cancelled from their perspective. Instead:
-//   • The booking's requestedWorkerIds is cleared so no new workers can accept.
-//   • If 0 workers have accepted → booking status becomes 'cancelled'.
-//   • If ≥ 1 workers already accepted → booking status becomes 'accepted'
-//     (quota is considered fulfilled by whoever accepted) and remaining
-//     pending workers receive job_request_removed.
+// Workers who have already accepted keep their active job — the remaining quota is closed.
 const cancelAutoBooking = async (req, res) => {
   try {
     const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id });
@@ -476,18 +475,32 @@ const cancelAutoBooking = async (req, res) => {
       .map(id => id.toString())
       .filter(id => !acceptedWorkers.includes(id));
 
-    // Decide final status
     const finalStatus = acceptedWorkers.length > 0 ? 'accepted' : 'cancelled';
 
-    // Close the broadcast: clear remaining pool & set final status
+    const updates = {
+      status:             finalStatus,
+      requestedWorkerIds: acceptedWorkers,
+      cancellationReason: acceptedWorkers.length > 0 ? 'customer_closed_broadcast' : 'customer_cancelled',
+    };
+
+    if (acceptedWorkers.length > 0) {
+      updates.requiredWorkers = acceptedWorkers.length;
+      const isMultiDay = !booking.isImmediate && booking.totalDays > 1;
+      const subtotal = (booking.workerSnapshot || []).reduce((sum, w) => {
+        const rate = isMultiDay
+          ? (Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * booking.totalDays
+          : (Number(w.pricePerDay) || 0);
+        return sum + rate;
+      }, 0);
+      const platformFee = Math.round(subtotal * 0.05);
+      updates.subtotal    = subtotal;
+      updates.platformFee = platformFee;
+      updates.total       = subtotal + platformFee;
+    }
+
     const updated = await Booking.findByIdAndUpdate(
       booking._id,
-      {
-        status:             finalStatus,
-        // Keep accepted workers but wipe pending ones out of requestedWorkerIds
-        requestedWorkerIds: acceptedWorkers,
-        cancellationReason: acceptedWorkers.length > 0 ? 'customer_closed_broadcast' : 'customer_cancelled',
-      },
+      updates,
       { new: true }
     );
 
@@ -495,16 +508,17 @@ const cancelAutoBooking = async (req, res) => {
       `bookings:detail:${booking._id}`,
       `bookings:user:${req.user._id}:*`
     );
+    await Promise.allSettled(
+      pendingWorkers.map((wId) => invalidateCache(`bp:worker:${wId}:requests:pending:*`))
+    ).catch(() => {});
 
     try {
       const io = getIO();
 
-      // Tell workers still in pending pool the request is gone
       pendingWorkers.forEach(id => {
         io.to(`worker_${id}`).emit('job_request_removed', { bookingId: booking._id.toString() });
       });
 
-      // Notify customer
       io.to(`customer_${req.user._id}`).emit('booking_updated', {
         operationType:   'update',
         bookingId:       booking._id.toString(),
@@ -512,7 +526,6 @@ const cancelAutoBooking = async (req, res) => {
         bookingSnapshot: null,
       });
 
-      // If there are accepted workers, let them know booking is now officially accepted
       if (acceptedWorkers.length > 0) {
         io.to(`booking_${booking._id}`).emit('booking_status_changed', {
           bookingId:       booking._id.toString(),
@@ -521,7 +534,6 @@ const cancelAutoBooking = async (req, res) => {
           isWorkCompletion: false,
         });
       } else {
-        // No workers — fully cancelled
         io.to(`booking_${booking._id}`).emit('booking_status_changed', {
           bookingId:       booking._id.toString(),
           status:          'cancelled',
