@@ -27,23 +27,34 @@ const getLabourBucket = (status) => {
   return 'active';
 };
 
+const countAcceptedWorkers = (booking) =>
+  (booking.workerStatuses || []).filter((w) => !['pending', 'expired'].includes(w.status)).length;
+
 const BookingCard = React.memo(({ booking, onPress }) => {
   const s      = getStatusDisplay(booking.status);
   const worker = booking.workers?.[0];
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
-      <View style={[styles.cardAccent, { backgroundColor: s.color }]} />
+      <View style={[styles.cardAccent, { backgroundColor: booking.isAutobook ? '#F0A500' : s.color }]} />
       <View style={styles.cardBody}>
         <View style={styles.cardTop}>
           <View style={styles.statusPill}>
-            <MaterialCommunityIcons name={s.icon} size={14} color={s.color} />
-            <Text style={[styles.statusPillText, { color: s.color }]}>{s.text}</Text>
+            <MaterialCommunityIcons name={booking.isAutobook ? 'flash' : s.icon} size={14} color={booking.isAutobook ? '#F0A500' : s.color} />
+            <Text style={[styles.statusPillText, { color: booking.isAutobook ? '#F0A500' : s.color }]}>
+              {booking.isAutobook && booking.status === 'pending' ? 'Auto Book — Finding workers' : s.text}
+            </Text>
           </View>
           <Text style={styles.bookingIdText}>#{booking._id.slice(-6).toUpperCase()}</Text>
         </View>
         <Text style={styles.serviceName}>{booking.category || 'Booking'}</Text>
-        {worker && <Text style={styles.workerName}>👷 {worker.fullName}</Text>}
+        {booking.isAutobook ? (
+          <Text style={styles.workerName}>
+            ⚡ {countAcceptedWorkers(booking)}/{booking.requiredWorkers || '?'} workers accepted
+          </Text>
+        ) : (
+          worker && <Text style={styles.workerName}>👷 {worker.fullName}</Text>
+        )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 10 }}>
           <MaterialCommunityIcons name="map-marker" size={13} color="#64748B" />
           <Text style={[styles.locationText, { marginBottom: 0 }]} numberOfLines={1}>

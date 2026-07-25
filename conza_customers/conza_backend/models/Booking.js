@@ -37,6 +37,34 @@ const bookingSchema = new mongoose.Schema(
       type: String, enum: ['cod', 'upi', 'card', 'wallet', 'pending'], default: 'cod',
     },
 
+    // ── Quick Auto Book ──────────────────────────────────────────────────
+    // When true, this booking was broadcast to every nearby worker in the
+    // category. Workers accept independently (workerStatuses) until
+    // `requiredWorkers` slots are filled; the top-level `status` stays
+    // 'pending' throughout recruiting and only becomes 'accepted' once
+    // fully staffed (or 'cancelled' if the customer cancels with 0 accepts).
+    isAutobook:      { type: Boolean, default: false },
+    requiredWorkers: { type: Number, default: null },
+    workerStatuses: [{
+      worker:         { type: mongoose.Schema.Types.ObjectId, ref: 'Worker' },
+      status: {
+        type: String,
+        enum: ['pending', 'accepted', 'expired', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed', 'cancelled'],
+        default: 'pending',
+      },
+      workerSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
+      acceptedAt:     { type: Date, default: null },
+      checkInTime:    { type: Date, default: null },
+      workStartTime:  { type: Date, default: null },
+      checkOutTime:   { type: Date, default: null },
+      hoursWorked:    { type: Number, default: null },
+      hourlyRate:     { type: Number, default: null },
+      baseFeeApplied: { type: Boolean, default: false },
+      subtotal:       { type: Number, default: 0 },
+      total:          { type: Number, default: 0 },
+      paymentMethod:  { type: String, default: null },
+    }],
+
     // Status
     status: {
       type: String,
@@ -82,5 +110,8 @@ bookingSchema.index({ workers: 1, status: 1, updatedAt: -1 });
 
 // dashboard/admin status queries
 bookingSchema.index({ status: 1, createdAt: -1 });
+
+// autobook: find this worker's pending candidate requests fast
+bookingSchema.index({ isAutobook: 1, 'workerStatuses.worker': 1, 'workerStatuses.status': 1 });
 
 module.exports = mongoose.model('Booking', bookingSchema);

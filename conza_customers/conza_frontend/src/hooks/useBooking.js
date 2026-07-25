@@ -31,7 +31,40 @@ export const useBooking = (type) => {
         throw new Error('Please provide at least city and pincode');
       }
 
-      // ── Labour booking → unchanged path ─────────────────────────────────
+      // ── Labour booking: Quick Auto Book ─────────────────────────────────
+      if (type === 'labour' && bookingData.isAutobook) {
+        const { category, requiredWorkers } = bookingData;
+        const payload = {
+          category,
+          requiredWorkers,
+          houseNumber:    houseNumber || '',
+          houseName:      houseName   || '',
+          street:         street      || '',
+          address:        street      || '',
+          area:           area        || '',
+          city,
+          district:       district    || '',
+          state:          state       || '',
+          pincode,
+          latitude:       latitude  || userLat,
+          longitude:      longitude || userLng,
+          paymentMethod:  paymentMethod || 'cod',
+          description:    description   || '',
+          isImmediate:    isImmediate !== undefined ? isImmediate : true,
+          scheduledDate:    scheduledDate    || null,
+          scheduledEndDate: scheduledEndDate || null,
+          scheduledDates:   scheduledDates   || [],
+          totalDays:        totalDays        || 1,
+        };
+        const result = await bookingAPI.createAutobookBooking(payload);
+        if (result.success && result.booking?._id) {
+          await setActiveBookingId(result.booking._id);
+        }
+        setSuccess(true);
+        return true;
+      }
+
+      // ── Labour booking → unchanged path ───────────────────────────────
       if (type === 'labour') {
         const { selectedWorkers, category, subtotal, platformFee, total } = bookingData;
         const isMultiDay = !isImmediate && totalDays && totalDays > 1;

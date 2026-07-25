@@ -201,6 +201,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
 
   const [selected, setSelected] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [modalStep, setModalStep] = useState('quantity');
   const [quantity, setQuantity]   = useState(1);
 
   const displayed = allWorkers;
@@ -229,9 +230,27 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
   const handleFilterAll = useCallback(() => setFilterAvail('All'), []);
   const handleFilterAvailable = useCallback(() => setFilterAvail('Available'), []);
   const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
-  const handleOpenModal = useCallback(() => setShowModal(true), []);
+  
+  const handleOpenModal = useCallback(() => {
+    setModalStep('quantity');
+    setShowModal(true);
+  }, []);
   const handleCloseModal = useCallback(() => setShowModal(false), []);
   
+  const handleShowTimingStep = useCallback(() => setModalStep('timing'), []);
+  const handleBackToQuantity = useCallback(() => setModalStep('quantity'), []);
+  
+  const handleSelectTiming = useCallback((isImmediate) => {
+    setShowModal(false);
+    navigation.navigate('LabourCheckout', {
+      category,
+      isAutobook: true,
+      requiredWorkers: quantity,
+      presetIsImmediate: isImmediate,
+      estimateWorkers: displayed.slice(0, quantity),
+    });
+  }, [navigation, category, quantity, displayed]);
+
   const handleIncrement = useCallback(() => setQuantity((q) => Math.min(10, q + 1)), []);
   const handleDecrement = useCallback(() => setQuantity((q) => Math.max(1, q - 1)), []);
 
@@ -338,12 +357,17 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
         >
           <TouchableOpacity style={styles.modalSheet} activeOpacity={1}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>
-              How many {category}s do you need?
-            </Text>
-            <Text style={styles.modalSub}>
-              We'll match you with the highest-rated workers nearby
-            </Text>
+            {modalStep === 'quantity' && (
+              <>
+                <Text style={styles.modalTitle}>
+                  How many {category}s do you need?
+                </Text>
+                <Text style={styles.modalSub}>
+                  We'll match you with the highest-rated workers nearby
+                </Text>
+              </>
+            )}
+            {modalStep === 'quantity' && (
             <View style={styles.counterRow}>
               <TouchableOpacity
                 style={styles.counterBtn}
@@ -374,29 +398,73 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
                 </Text>
               </View>
             </View>
-            <LinearGradient
-              colors={[colors.gradientStart, colors.gradientEnd]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.modalConfirmBtn}
-            >
-              <TouchableOpacity
-                style={styles.checkoutTouchable}
-                activeOpacity={0.85}
-                onPress={handleCloseModal}
-              >
-                <Text style={styles.checkoutText}>
-                  Book {quantity} {category}{quantity > 1 ? 's' : ''} →
+            )}
+            {modalStep === 'quantity' ? (
+              <>
+                <LinearGradient
+                  colors={[colors.gradientStart, colors.gradientEnd]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.modalConfirmBtn}
+                >
+                  <TouchableOpacity
+                    style={styles.checkoutTouchable}
+                    activeOpacity={0.85}
+                    onPress={handleShowTimingStep}
+                  >
+                    <Text style={styles.checkoutText}>
+                      Book {quantity} {category}{quantity > 1 ? 's' : ''} →
+                    </Text>
+                  </TouchableOpacity>
+                </LinearGradient>
+                <TouchableOpacity
+                  onPress={handleCloseModal}
+                  style={styles.modalCancel}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.modalTitle, { fontSize: 18 }]}>Do you need it now or later?</Text>
+                <Text style={[styles.modalSub, { marginBottom: 20 }]}>
+                  We'll instantly notify every nearby {category.toLowerCase()} — first {quantity} to accept get the job.
                 </Text>
-              </TouchableOpacity>
-            </LinearGradient>
-            <TouchableOpacity
-              onPress={handleCloseModal}
-              style={styles.modalCancel}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleSelectTiming(true)}
+                  activeOpacity={0.85}
+                  style={{ marginBottom: 14 }}
+                >
+                  <LinearGradient
+                    colors={[colors.gradientStart, colors.gradientEnd]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.modalConfirmBtn}
+                  >
+                    <View style={styles.checkoutTouchable}>
+                      <Text style={styles.checkoutText}>⚡ Immediate — Need it now</Text>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleSelectTiming(false)}
+                  activeOpacity={0.85}
+                  style={{ marginBottom: 14, borderRadius: 18, borderWidth: 1.5, borderColor: colors.border }}
+                >
+                  <View style={styles.checkoutTouchable}>
+                    <Text style={[styles.checkoutText, { color: colors.textPrimary }]}>📅 Scheduled — Pick a date</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleBackToQuantity}
+                  style={styles.modalCancel}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalCancelText}>← Back</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>

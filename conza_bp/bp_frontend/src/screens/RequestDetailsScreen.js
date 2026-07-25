@@ -39,12 +39,17 @@ const RequestDetailsScreen = ({ navigation, route }) => {
   const handleAccept = useCallback(async () => {
     try {
       setUpdating(true);
-      await updateRequestStatus(request.id, 'accepted');
+      if (request.isAutobook) {
+        await usePartnerStore.getState().acceptAutobookRequest(request.id);
+      } else {
+        await updateRequestStatus(request.id, 'accepted');
+      }
       navigation.navigate('ActiveJob');
-    } catch {
+    } catch (err) {
       setUpdating(false);
+      Alert.alert('Unable to Accept', err.message || 'This request may no longer be available.');
     }
-  }, [updateRequestStatus, request.id, navigation]);
+  }, [updateRequestStatus, request, navigation]);
 
   const handleDecline = useCallback(async () => {
     try {
@@ -79,6 +84,11 @@ const RequestDetailsScreen = ({ navigation, route }) => {
           start={GRAD_START} end={GRAD_END}
           style={styles.amountBanner}
         >
+          {request.isAutobook && (
+            <View style={[styles.urgentBadge, { marginBottom: 10, marginTop: 0, alignSelf: 'center' }]}>
+              <Text style={styles.urgentText}>⚡ {request.acceptedCount}/{request.requiredWorkers} accepted — first come, first served</Text>
+            </View>
+          )}
           <Text style={styles.amountLabel}>Estimated Earning</Text>
           <Text style={styles.amountValue}>₹{request.estimatedAmount}</Text>
           <Text style={styles.amountSub}>{request.distance} · {request.timeAway}</Text>

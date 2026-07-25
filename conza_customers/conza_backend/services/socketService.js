@@ -30,6 +30,7 @@ const initSocket = (server) => {
 
     socket.on('join_booking',      (id) => socket.join(`booking_${id}`));
     socket.on('join_customer',     (id) => socket.join(`customer_${id}`));
+    socket.on('join_worker',       (id) => socket.join(`worker_${id}`));
     socket.on('join_seller',       (id) => {
       socket.join(`seller_${id}`);
       logger.info({ sellerId: id }, 'Seller joined room');
@@ -110,9 +111,12 @@ const watchChanges = () => {
           bookingId,
           status,
           bookingSnapshot,
+          isAutobook: doc?.isAutobook || false,
           // Emit work_completion_requested inline so the customer tracking screen
           // reacts immediately when labour marks work done — no separate event needed.
-          isWorkCompletion: status === 'awaiting_customer_confirmation',
+          // (For autobook bookings this coarse flag is unused; per-worker
+          // completion goes through the dedicated worker_completion_requested event.)
+          isWorkCompletion: status === 'awaiting_customer_confirmation' && !doc?.isAutobook,
         });
       });
       bookingStream.on('error', () => setTimeout(startWatching, 5000));

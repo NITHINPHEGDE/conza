@@ -22,6 +22,9 @@ const RequestCard = React.memo(({ request, onViewDetails }) => {
         <View style={styles.headerInfo}>
           <Text style={styles.userName}>{request.userName}</Text>
           <Text style={styles.subService}>{request.service} · {request.subService}</Text>
+          {request.isAutobook && (
+            <Text style={styles.autoBadge}>⚡ {request.acceptedCount}/{request.requiredWorkers} accepted — first come, first served</Text>
+          )}
         </View>
         <View style={styles.amountBadge}>
           <Text style={styles.amountText}>₹{request.estimatedAmount}</Text>
@@ -66,6 +69,7 @@ const styles = StyleSheet.create({
   headerInfo:  { flex: 1 },
   userName:    { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
   subService:  { fontSize: 12, fontWeight: '500', color: colors.textSecondary },
+  autoBadge:   { fontSize: 10, fontWeight: '700', color: '#F0A500', marginTop: 3 },
   amountBadge: { backgroundColor: colors.accentAmberSoft, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(240,165,0,0.25)' },
   amountText:  { fontSize: 14, fontWeight: '800', color: colors.accentAmber },
   metaRow:     { flexDirection: 'row', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 4 },

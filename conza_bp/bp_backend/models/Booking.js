@@ -59,7 +59,30 @@ const bookingSchema = new mongoose.Schema(
     workerCancelled: { type: Boolean, default: false },
     notes:         { type: String, default: '' },
     description:   { type: String, default: '' },
-    
+
+    // ── Quick Auto Book ──────────────────────────────────────────────────
+    isAutobook:      { type: Boolean, default: false },
+    requiredWorkers: { type: Number, default: null },
+    workerStatuses: [{
+      worker:         { type: mongoose.Schema.Types.ObjectId, ref: 'Worker' },
+      status: {
+        type: String,
+        enum: ['pending', 'accepted', 'expired', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed', 'cancelled'],
+        default: 'pending',
+      },
+      workerSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
+      acceptedAt:     { type: Date, default: null },
+      checkInTime:    { type: Date, default: null },
+      workStartTime:  { type: Date, default: null },
+      checkOutTime:   { type: Date, default: null },
+      hoursWorked:    { type: Number, default: null },
+      hourlyRate:     { type: Number, default: null },
+      baseFeeApplied: { type: Boolean, default: false },
+      subtotal:       { type: Number, default: 0 },
+      total:          { type: Number, default: 0 },
+      paymentMethod:  { type: String, default: null },
+    }],
+
     // Issue Reporting
     issueReport: {
       comment: { type: String, default: '' },
@@ -78,5 +101,8 @@ bookingSchema.index({ workers: 1, status: 1, updatedAt: -1 });
 // getBookingById: single lookup by _id (default _id index covers this — no extra needed)
 // status-only dashboard queries
 bookingSchema.index({ status: 1, createdAt: -1 });
+
+// autobook: find this worker's pending candidate requests fast
+bookingSchema.index({ isAutobook: 1, 'workerStatuses.worker': 1, 'workerStatuses.status': 1 });
 
 module.exports = mongoose.model('Booking', bookingSchema);

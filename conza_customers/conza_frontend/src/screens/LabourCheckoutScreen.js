@@ -141,7 +141,13 @@ const SelectedAddressCard = React.memo(({ address, onClear }) => {
 });
 
 const LabourCheckoutScreen = ({ route, navigation }) => {
-  const { selectedWorkers = [], category = '' } = route.params || {};
+  const {
+    selectedWorkers = [], category = '',
+    isAutobook = false, requiredWorkers = 0,
+    presetIsImmediate, estimateWorkers = [],
+  } = route.params || {};
+
+  const effectiveWorkers = isAutobook ? estimateWorkers : selectedWorkers;
 
   const [houseNumber, setHouseNumber] = useState('');
   const [houseName,   setHouseName]   = useState('');
@@ -159,7 +165,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const [fetching,    setFetching]    = useState(false);
 
   const [description, setDescription] = useState('');
-  const [bookingType, setBookingType] = useState('immediate');
+  const [bookingType, setBookingType] = useState(presetIsImmediate === false ? 'scheduled' : 'immediate');
   const [scheduledDate, setScheduledDate] = useState(new Date());
   const [scheduledTime, setScheduledTime] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -209,20 +215,35 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const totalDays = bookingType === 'scheduled' ? Math.max(scheduledDates.length, 1) : 1;
 
   const { subtotal, platformFee, total } = useMemo(() => {
+    if (isAutobook) {
+      const avgRate = effectiveWorkers.length
+        ? effectiveWorkers.reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0) / effectiveWorkers.length
+        : 0;
+      const sub = bookingType === 'scheduled'
+        ? avgRate * requiredWorkers * totalDays
+        : avgRate * requiredWorkers;
+      const fee = Math.round(sub * PLATFORM_FEE_RATE);
+      return { subtotal: Math.round(sub), platformFee: fee, total: Math.round(sub) + fee };
+    }
     const sub = bookingType === 'scheduled'
       ? selectedWorkers.reduce((sum, w) => sum + ((Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * totalDays), 0)
       : selectedWorkers.reduce((sum, w) => sum + (Number(w.pricePerDay) || 0), 0);
     const fee = Math.round(sub * PLATFORM_FEE_RATE);
     const tot = sub + fee;
     return { subtotal: sub, platformFee: fee, total: tot };
-  }, [selectedWorkers, totalDays, bookingType]);
+  }, [selectedWorkers, effectiveWorkers, requiredWorkers, totalDays, bookingType, isAutobook]);
 
   // Combined hourly rate for immediate (pay-per-hour) bookings — shown as a
   // reference only; the real amount is billed after the work is finished.
-  const hourlyRateTotal = useMemo(
-    () => selectedWorkers.reduce((sum, w) => sum + (Number(w.pricePerDay) || 0), 0),
-    [selectedWorkers]
-  );
+  const hourlyRateTotal = useMemo(() => {
+    if (isAutobook) {
+      const avgRate = effectiveWorkers.length
+        ? effectiveWorkers.reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0) / effectiveWorkers.length
+        : 0;
+      return Math.round(avgRate * requiredWorkers);
+    }
+    return selectedWorkers.reduce((sum, w) => sum + (Number(w.pricePerDay) || 0), 0);
+  }, [selectedWorkers, effectiveWorkers, requiredWorkers, isAutobook]);
 
   const handleSelectPayment = useCallback((id) => setPayment(id), []);
   const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
@@ -310,6 +331,8 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
     const ok = await submitBooking({
       selectedWorkers,
       category,
+      isAutobook,
+      requiredWorkers,
       houseNumber,
       houseName,
       street,
@@ -341,7 +364,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       }
       navigation.navigate('Status');
     }
-  }, [submitBooking, selectedWorkers, category, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, toDate, scheduledDates, totalDays, lat, lng, navigation]);
+  }, [submitBooking, selectedWorkers, category, isAutobook, requiredWorkers, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, toDate, scheduledDates, totalDays, lat, lng, navigation]);
 
   const handleToDateChange = (event, date) => {
     setShowToDatePicker(Platform.OS === 'ios');
@@ -390,10 +413,26 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         contentContainerStyle={styles.scroll}
       >
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Selected Workers</Text>
-          {selectedWorkers.map((worker) => (
-            <WorkerRow key={worker._id} worker={worker} />
-          ))}
+          {isAutobook ? (
+            <>
+              <Text style={styles.sectionTitle}>⚡ Quick Auto Book</Text>
+              <View style={styles.autobookInfoCard}>
+                <Text style={styles.autobookInfoTitle}>
+                  Sending request to {requiredWorkers} {category}{requiredWorkers > 1 ? 's' : ''}
+                </Text>
+                <Text style={styles.autobookInfoText}>
+                  We'll notify every nearby {category.toLowerCase()} the moment you confirm. The first {requiredWorkers} to accept get the job — you'll see live status for each of them.
+                </Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={styles.sectionTitle}>Selected Workers</Text>
+              {selectedWorkers.map((worker) => (
+                <WorkerRow key={worker._id} worker={worker} />
+              ))}
+            </>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -896,6 +935,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
   },
+  autobookInfoCard: {
+    backgroundColor: colors.accentYellowSoft,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.accentYellow,
+  },
+  autobookInfoTitle: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, marginBottom: 6 },
+  autobookInfoText: { fontSize: 12, color: colors.textSecondary, lineHeight: 18, fontWeight: '500' },
 
   walletBalanceRow: {
     flexDirection: 'row',

@@ -147,6 +147,14 @@ const usePartnerStore = create((set, get) => ({
             r.pincode     ? `(${r.pincode})`         : '',
           ].filter(p => p && p.trim().length > 0);
 
+          const ownWorkerId = get().worker?._id?.toString();
+          const ownEntry    = r.isAutobook
+            ? (r.workerStatuses || []).find((w) => w.worker?.toString() === ownWorkerId)
+            : null;
+          const ownEstimatedAmount = ownEntry
+            ? (Number(ownEntry.workerSnapshot?.pricePerDay) || 0)
+            : (r.total || r.estimatedAmount || 0);
+
           return {
             ...r,
             id:              r._id,
@@ -157,7 +165,7 @@ const usePartnerStore = create((set, get) => ({
             area:            r.area             || '',
             distance:        r.distance         || '2.5 km',
             timeAway:        r.timeAway         || 'Nearby',
-            estimatedAmount: r.total || r.estimatedAmount || 0,
+            estimatedAmount: ownEstimatedAmount,
             service:         r.category  || r.service || 'Service',
             subService:      r.subService || 'General',
             description:     r.description || r.notes || 'No description provided',
@@ -167,6 +175,9 @@ const usePartnerStore = create((set, get) => ({
             scheduledDates:   r.scheduledDates || [],
             totalDays:        r.totalDays || 1,
             isImmediate:      r.isImmediate !== false,
+            isAutobook:       r.isAutobook || false,
+            requiredWorkers:  r.requiredWorkers || 0,
+            acceptedCount:    r.acceptedCount || 0,
           };
         });
 
@@ -208,6 +219,23 @@ const usePartnerStore = create((set, get) => ({
   initSocketHandlers: () => {
     socket.off('booking_updated');
     socket.off('booking_status_changed');
+    socket.off('job_completed_confirmed');
+    socket.off('issue_reported');
+    socket.off('new_autobook_request');
+    socket.off('autobook_request_closed');
+    socket.off('worker_status_changed');
+    socket.off('connect');
+
+    // Join this worker's personal room so the customer backend can push
+    // autobook requests straight to them, with zero polling latency.
+    const ownWorkerId = get().worker?._id;
+    if (ownWorkerId) socket.emit('join_worker', ownWorkerId.toString());
+
+    socket.on('connect', () => {
+      const wId = get().worker?._id;
+      if (wId) socket.emit('join_worker', wId.toString());
+      get().fetchRequests();
+    });
 
     socket.on('booking_updated', (data) => {
       console.log('🔄 BP: Booking update received:', data);
@@ -226,21 +254,30 @@ const usePartnerStore = create((set, get) => ({
 
     socket.on('booking_status_changed', (data) => {
       console.log('🔄 BP: Booking status changed:', data.status);
+      const ownId = get().worker?._id?.toString();
+
+      // Autobook events carry a workerId — only apply directly to this
+      // worker's jobStatus when it's THEIR own entry that changed. Generic
+      // aggregate events (no workerId) for an autobook booking are just a
+      // signal to refresh, never to stomp jobStatus.
+      if (data.isAutobook && data.workerId && data.workerId !== ownId) return;
+
       if (get().activeJobId === data.bookingId) {
-        // Apply status directly from the socket event to avoid hitting
-        // stale Redis cache in fetchActiveJob. This is the critical fix:
-        // when the customer confirms completion, status becomes 'completed'
-        // but fetchActiveJob would return cached 'awaiting_customer_confirmation'
-        // for up to 30 seconds, blocking the CompletionModal from showing.
-        if (data.status) {
+        if (data.status && (!data.isAutobook || data.workerId === ownId)) {
           set({ jobStatus: data.status });
         }
-        // Background refetch for full document (address, amount, etc.)
-        // but only if NOT completed — once completed, activeJob data is already
-        // frozen and we don't want a stale cache response overwriting jobStatus.
         if (data.status !== 'completed') {
           get().fetchActiveJob(data.bookingId);
         }
+      }
+    });
+
+    socket.on('worker_status_changed', (data) => {
+      const ownId = get().worker?._id?.toString();
+      if (data.workerId && data.workerId !== ownId) return;
+      if (get().activeJobId === data.bookingId) {
+        set({ jobStatus: data.status });
+        get().fetchActiveJob(data.bookingId);
       }
     });
 
@@ -259,6 +296,19 @@ const usePartnerStore = create((set, get) => ({
         const { Alert } = require('react-native');
         Alert.alert('Issue Reported', 'The customer has reported an issue with the completed work. Please discuss with the customer or contact support.');
       }
+    });
+
+    // ── Quick Auto Book: instant push, no waiting for the 10s poll ──────
+    socket.on('new_autobook_request', () => {
+      get().fetchRequests();
+    });
+
+    socket.on('autobook_request_closed', (data) => {
+      set((state) => ({
+        requests: state.requests.filter((r) => r.id?.toString() !== data.bookingId?.toString()),
+      }));
+      cancelLocalAlert(data.bookingId);
+      stopNativeAlert();
     });
   },
 
@@ -283,6 +333,29 @@ const usePartnerStore = create((set, get) => ({
       await get().fetchRequests();
     } catch (err) {
       console.error('[Store] updateRequestStatus failed:', err.message);
+    }
+  },
+
+  // ── Quick Auto Book: race-safe accept ────────────────────────────────
+  acceptAutobookRequest: async (requestId) => {
+    const { api } = require('../services/apiClient');
+    try {
+      await api.patch(`/bookings/${requestId}/accept`);
+
+      await stopAlertSound();
+      stopNativeAlert();
+      cancelLocalAlert(requestId);
+
+      await get().setActiveJobId(requestId);
+      setTrackingMode(TRACKING_MODE.ACTIVE);
+      await get().fetchRequests();
+    } catch (err) {
+      // Someone else likely filled the slot first — drop it from the local
+      // list immediately and let the caller show the message.
+      set((state) => ({
+        requests: state.requests.filter((r) => r.id?.toString() !== requestId?.toString()),
+      }));
+      throw err;
     }
   },
 
@@ -487,6 +560,11 @@ lastPaymentMethod: null,
       const data = await api.get(`/bookings/${bookingId}`);
       if (data.success) {
         const r = data.booking;
+        const ownWorkerId = get().worker?._id?.toString();
+        const ownEntry = r.isAutobook
+          ? (r.workerStatuses || []).find((w) => w.worker?.toString() === ownWorkerId)
+          : null;
+
         const mapped = {
           ...r,
           id:              r._id,
@@ -494,10 +572,16 @@ lastPaymentMethod: null,
           phone:           r.user?.phone    || 'N/A',
           location:        r.city ? `${r.city}, ${r.area || ''}` : 'Location N/A',
           address:         r.address || 'Address not provided',
-          estimatedAmount: r.total || 0,
+          estimatedAmount: ownEntry ? (ownEntry.total || Number(ownEntry.workerSnapshot?.pricePerDay) || 0) : (r.total || 0),
           service:         r.category || 'Service',
         };
-        set({ activeJob: mapped, jobStatus: r.status });
+        set({
+          activeJob: mapped,
+          jobStatus: ownEntry ? ownEntry.status : r.status,
+          checkInTime: ownEntry?.checkInTime
+            ? new Date(ownEntry.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+            : get().checkInTime,
+        });
         socket.emit('join_booking', bookingId);
       }
     } catch (err) {

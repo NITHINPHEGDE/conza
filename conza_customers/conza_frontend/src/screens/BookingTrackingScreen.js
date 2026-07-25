@@ -4,6 +4,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
 import { bookingAPI } from '../api/bookingAPI';
 import { BookingTrackingSkeleton } from '../components/Skeleton';
+import SlideToast from '../components/SlideToast';
+import AutobookStatusCard from '../components/AutobookStatusCard';
 import { socket } from '../utils/socket';
 
 const getStatusDisplay = (status) => {
@@ -26,18 +28,27 @@ const DetailRow = React.memo(({ label, value }) => (
   </View>
 ));
 
-const BookingTrackingScreen = ({ navigation }) => {
+const BookingTrackingScreen = ({ navigation, route }) => {
   const activeBooking        = useAppStore((s) => s.activeBooking);
   const activeBookingId      = useAppStore((s) => s.activeBookingId);
   const fetchActiveBooking   = useAppStore((s) => s.fetchActiveBooking);
   const cancelActiveBooking  = useAppStore((s) => s.cancelActiveBooking);
   const clearActiveBooking   = useAppStore((s) => s.clearActiveBooking);
+  const autobookToast        = useAppStore((s) => s.autobookToast);
+  const clearAutobookToast   = useAppStore((s) => s.clearAutobookToast);
+
+  const focusWorkerId = route.params?.focusWorkerId;
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling]           = useState(false);
   const [confirming, setConfirming]           = useState(false);
   const [reportingIssue, setReportingIssue]   = useState(false);
   const [issueComment, setIssueComment]       = useState('');
+
+  const [confirmingWorkerId, setConfirmingWorkerId] = useState(null);
+  const [issueModalOpen, setIssueModalOpen]         = useState(false);
+  const [issueComment2, setIssueComment2]           = useState('');
+  const [reportingIssue2, setReportingIssue2]       = useState(false);
 
   // Join the booking-specific socket room so booking_status_changed events
   // are received. Re-join on reconnect to handle network interruptions.
@@ -128,6 +139,38 @@ const BookingTrackingScreen = ({ navigation }) => {
     navigation.navigate('StatusList');
   }, [clearActiveBooking, navigation]);
 
+  const handleConfirmWorker = useCallback(async (workerId) => {
+    if (!activeBookingId || !workerId) return;
+    setConfirmingWorkerId(workerId);
+    try {
+      await bookingAPI.confirmCompletion(activeBookingId, { workerId });
+      await fetchActiveBooking(activeBookingId);
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.message || err.message || 'Could not confirm worker.');
+    } finally {
+      setConfirmingWorkerId(null);
+    }
+  }, [activeBookingId, fetchActiveBooking]);
+
+  const openIssueModal2  = useCallback(() => { setIssueComment2(''); setIssueModalOpen(true); }, []);
+  const closeIssueModal2 = useCallback(() => setIssueModalOpen(false), []);
+  const submitIssue2 = useCallback(async () => {
+    if (!activeBookingId) return;
+    setReportingIssue2(true);
+    try {
+      await bookingAPI.reportIssue(activeBookingId, issueComment2);
+      await fetchActiveBooking(activeBookingId);
+      Alert.alert('Issue Reported', 'Support will review the booking.');
+      setIssueModalOpen(false);
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.message || err.message || 'Could not report issue.');
+    } finally {
+      setReportingIssue2(false);
+    }
+  }, [activeBookingId, issueComment2, fetchActiveBooking]);
+
+  const handleDismissToast = useCallback(() => clearAutobookToast(), [clearAutobookToast]);
+
   const status = useMemo(() =>
     activeBooking ? getStatusDisplay(activeBooking.status) : null,
     [activeBooking?.status]
@@ -159,6 +202,159 @@ const BookingTrackingScreen = ({ navigation }) => {
           <View style={{ width: 24 }} />
         </View>
         <BookingTrackingSkeleton />
+      </View>
+    );
+  }
+
+  // ── AUTOBOOK: separate multi-worker tracking view ──────────────────────
+  if (activeBooking.isAutobook) {
+    const entries = activeBooking.workerStatuses || [];
+    const visibleEntries = entries.filter((w) => w.status !== 'expired');
+    const acceptedCount  = entries.filter((w) => !['pending', 'expired'].includes(w.status)).length;
+    const isRecruiting   = activeBooking.status === 'pending';
+    const toastVisible   = !!autobookToast && autobookToast.bookingId?.toString() === activeBooking._id?.toString();
+
+    return (
+      <View style={styles.container}>
+        <SlideToast visible={toastVisible} message={autobookToast?.message || ''} onDismiss={handleDismissToast} />
+
+        <View style={styles.header}>
+          <View style={{ width: 24 }} />
+          <Text style={styles.headerTitle}>Quick Auto Book</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={[styles.statusCard, { borderColor: isRecruiting ? '#F0A500' : '#3B82F6' }]}>
+            <MaterialCommunityIcons name={isRecruiting ? 'radar' : 'account-group'} size={40} color={isRecruiting ? '#F0A500' : '#3B82F6'} />
+            <Text style={[styles.statusText, { color: isRecruiting ? '#F0A500' : '#3B82F6', marginTop: 10 }]}>
+              {isRecruiting ? 'Finding Workers…' : 'Workers on Your Job'}
+            </Text>
+
+            {/* Large X/N counter */}
+            <View style={styles.abCounterRow}>
+              <Text style={[styles.abCounterNum, { color: isRecruiting ? '#F0A500' : '#3B82F6' }]}>{acceptedCount}</Text>
+              <Text style={styles.abCounterSlash}>/</Text>
+              <Text style={styles.abCounterDen}>{activeBooking.requiredWorkers}</Text>
+            </View>
+            <Text style={styles.abCounterLabel}>workers accepted</Text>
+
+            {/* Slot dots progress indicator */}
+            <View style={styles.abDotsRow}>
+              {Array.from({ length: activeBooking.requiredWorkers || 0 }).map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.abDot,
+                    i < acceptedCount
+                      ? { backgroundColor: isRecruiting ? '#F0A500' : '#3B82F6' }
+                      : { backgroundColor: '#E2E8F0' },
+                  ]}
+                />
+              ))}
+            </View>
+
+            <Text style={styles.bookingId}>ID: {activeBooking._id.slice(-8).toUpperCase()}</Text>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{activeBooking.category} Workers</Text>
+            {visibleEntries.length === 0 && (
+              <Text style={{ color: '#94A3B8', fontSize: 13 }}>No workers have accepted yet.</Text>
+            )}
+            {visibleEntries.map((entry) => (
+              <AutobookStatusCard
+                key={entry.worker?.toString() || entry._id}
+                entry={entry}
+                highlighted={focusWorkerId && entry.worker?.toString() === focusWorkerId?.toString()}
+                confirming={confirmingWorkerId === entry.worker?.toString()}
+                onConfirm={() => handleConfirmWorker(entry.worker?.toString())}
+                onReportIssue={openIssueModal2}
+              />
+            ))}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Booking Details</Text>
+            <View style={styles.detailsCard}>
+              <DetailRow label="Service"   value={activeBooking.category} />
+              <DetailRow label="Location"  value={`${activeBooking.area || ''}, ${activeBooking.city}`} />
+              <DetailRow label="Address"   value={activeBooking.address || 'N/A'} />
+              <DetailRow label="Estimated Total" value={`₹${activeBooking.total}`} />
+              <DetailRow label="Payment"   value={(activeBooking.paymentMethod || '').toUpperCase()} />
+            </View>
+          </View>
+
+          {activeBooking.status === 'cancelled' && (
+            <View style={[styles.terminalCard, { backgroundColor: '#F3F4F6' }]}>
+              <Text style={[styles.terminalTitle, { color: '#6B7280' }]}>Request Cancelled</Text>
+              <Text style={styles.terminalSub}>You have cancelled this auto-book request.</Text>
+              <TouchableOpacity style={[styles.okButton, { backgroundColor: '#6B7280' }]} onPress={handleOK}>
+                <Text style={styles.okButtonText}>OK</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {activeBooking.status === 'completed' && (
+            <View style={styles.terminalCard}>
+              <Text style={styles.terminalTitle}>All Work Completed!</Text>
+              <Text style={styles.terminalSub}>Every worker on this job has finished.</Text>
+              <TouchableOpacity style={styles.okButton} onPress={handleOK}>
+                <Text style={styles.okButtonText}>OK</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {isRecruiting && (
+            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
+              <Text style={styles.cancelBtnText}>
+                {acceptedCount > 0 ? 'Stop Searching for More Workers' : 'Cancel Request'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+
+        <Modal visible={showCancelModal} transparent animationType="fade" onRequestClose={handleDismissModal}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>
+                {acceptedCount > 0 ? 'Stop Searching?' : 'Cancel Request?'}
+              </Text>
+              <Text style={styles.modalSub}>
+                {acceptedCount > 0
+                  ? `The ${acceptedCount} worker(s) who already accepted will still come and do the work. We'll just stop sending the request to anyone else.`
+                  : 'Are you sure you want to cancel this auto-book request?'}
+              </Text>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmCancel} disabled={cancelling}>
+                {cancelling ? <ActivityIndicator color="#FFF" /> : <Text style={styles.modalConfirmText}>Yes, {acceptedCount > 0 ? 'Stop Searching' : 'Cancel'}</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalDismissBtn} onPress={handleDismissModal} disabled={cancelling}>
+                <Text style={styles.modalDismissText}>No, Keep It</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={issueModalOpen} transparent animationType="fade" onRequestClose={closeIssueModal2}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <Text style={[styles.modalTitle, { fontSize: 18 }]}>Report an Issue</Text>
+              <TextInput
+                style={{ width: '100%', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, minHeight: 60, marginBottom: 12, textAlignVertical: 'top' }}
+                placeholder="Describe the issue (optional)"
+                value={issueComment2}
+                onChangeText={setIssueComment2}
+                multiline
+              />
+              <TouchableOpacity style={[styles.modalConfirmBtn, { backgroundColor: '#EF4444' }]} onPress={submitIssue2} disabled={reportingIssue2}>
+                {reportingIssue2 ? <ActivityIndicator color="#FFF" /> : <Text style={styles.modalConfirmText}>Report Issue</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalDismissBtn} onPress={closeIssueModal2} disabled={reportingIssue2}>
+                <Text style={styles.modalDismissText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }
@@ -358,8 +554,17 @@ const styles = StyleSheet.create({
     borderWidth:     2,
     marginBottom:    20,
   },
-  statusText:     { fontSize: 22, fontWeight: '800', marginTop: 10 },
-  bookingId:      { fontSize: 12, color: '#94A3B8', marginTop: 5 },
+  statusText:     { fontSize: 18, fontWeight: '800', marginTop: 10 },
+  bookingId:      { fontSize: 12, color: '#94A3B8', marginTop: 8 },
+
+  // autobook counter
+  abCounterRow:  { flexDirection: 'row', alignItems: 'baseline', marginTop: 10 },
+  abCounterNum:  { fontSize: 52, fontWeight: '900', letterSpacing: -1 },
+  abCounterSlash:{ fontSize: 32, fontWeight: '400', color: '#CBD5E1', marginHorizontal: 4 },
+  abCounterDen:  { fontSize: 32, fontWeight: '700', color: '#94A3B8' },
+  abCounterLabel:{ fontSize: 13, fontWeight: '600', color: '#64748B', marginTop: 2, marginBottom: 14 },
+  abDotsRow:     { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 10 },
+  abDot:         { width: 14, height: 14, borderRadius: 7 },
   section:        { marginBottom: 25 },
   sectionTitle:   { fontSize: 16, fontWeight: '700', color: '#1E293B', marginBottom: 12 },
   workerCard: {

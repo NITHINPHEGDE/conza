@@ -696,6 +696,13 @@ const useAppStore = create((set, get) => ({
     set({ activeBookingId: null, activeBooking: null });
   },
 
+  // ── Quick Auto Book: toast + direct-to-worker-card popup state ────────
+  autobookToast: null,
+  clearAutobookToast: () => set({ autobookToast: null }),
+
+  pendingWorkerCompletion: null,
+  clearPendingWorkerCompletion: () => set({ pendingWorkerCompletion: null }),
+
   // ── Cart ────────────────────────────────────────────────────────────────────
   cart: {},
 
@@ -971,6 +978,34 @@ const useAppStore = create((set, get) => ({
       if (get().activeBookingId?.toString() === bookingId?.toString()) {
         get().fetchActiveBooking(bookingId);
       }
+    });
+
+    socket.on('autobook_worker_accepted', (data) => {
+      const { bookingId, acceptedCount, requiredWorkers } = data;
+      set({
+        autobookToast: {
+          bookingId,
+          message: `${acceptedCount}/${requiredWorkers} workers have accepted your work`,
+        },
+      });
+      if (get().activeBookingId?.toString() === bookingId?.toString()) {
+        get().fetchActiveBooking(bookingId);
+      }
+      get().fetchLabourBookings();
+    });
+
+    socket.on('worker_completion_requested', (data) => {
+      set({ pendingWorkerCompletion: data });
+      if (get().activeBookingId?.toString() === data.bookingId?.toString()) {
+        get().fetchActiveBooking(data.bookingId);
+      }
+    });
+
+    socket.on('worker_status_changed', (data) => {
+      if (get().activeBookingId?.toString() === data.bookingId?.toString()) {
+        get().fetchActiveBooking(data.bookingId);
+      }
+      get().fetchLabourBookings();
     });
 
     socket.on('seller_order_status_changed', ({ orderId, status }) => {
