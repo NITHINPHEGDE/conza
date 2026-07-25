@@ -368,6 +368,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
               </>
             )}
             {modalStep === 'quantity' && (
+            <>
             <View style={styles.counterRow}>
               <TouchableOpacity
                 style={styles.counterBtn}
@@ -398,6 +399,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
                 </Text>
               </View>
             </View>
+            </>
             )}
             {modalStep === 'quantity' ? (
               <>
