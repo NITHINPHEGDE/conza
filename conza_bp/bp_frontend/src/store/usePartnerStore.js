@@ -277,7 +277,12 @@ const usePartnerStore = create((set, get) => ({
       if (data.workerId && data.workerId !== ownId) return;
       if (get().activeJobId === data.bookingId) {
         set({ jobStatus: data.status });
-        get().fetchActiveJob(data.bookingId);
+        // Skip fetchActiveJob on completion — status is already set and the
+        // CompletionModal triggers immediately off jobStatus. A network call
+        // here would add latency before the modal appears.
+        if (data.status !== 'completed') {
+          get().fetchActiveJob(data.bookingId);
+        }
       }
     });
 
