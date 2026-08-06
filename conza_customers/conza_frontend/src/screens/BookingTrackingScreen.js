@@ -143,7 +143,7 @@ const BookingTrackingScreen = ({ navigation, route }) => {
     if (!activeBookingId || !workerId) return;
     setConfirmingWorkerId(workerId);
     try {
-      await bookingAPI.confirmCompletion(activeBookingId, { workerId });
+      await bookingAPI.confirmCompletion(activeBookingId, workerId);
       await fetchActiveBooking(activeBookingId);
     } catch (err) {
       Alert.alert('Error', err.response?.data?.message || err.message || 'Could not confirm worker.');
