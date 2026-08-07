@@ -13,6 +13,7 @@ import { bookingAPI } from '../api/bookingAPI';
 import { authAPI    } from '../api/authAPI';
 import { walletAPI  } from '../api/walletAPI';
 import { productAPI } from '../api/productAPI';
+import { projectAPI } from '../api/projectAPI';
 
 import { socket, connectSocket } from '../utils/socket';
 
@@ -538,6 +539,76 @@ const useAppStore = create((set, get) => ({
     });
   },
 
+  // ── My Projects (customer-created, tracks labour bookings + orders) ────────
+  myProjects:             [],
+  myProjectsLoading:      false,
+  attachableItems:        { labourBookings: [], orders: [] },
+  attachableItemsLoading: false,
+
+  fetchMyProjects: async () => {
+    try {
+      set({ myProjectsLoading: true });
+      const data = await projectAPI.getMyProjects();
+      set({ myProjects: data.projects || [] });
+    } catch {
+      // keep whatever was already loaded
+    } finally {
+      set({ myProjectsLoading: false });
+    }
+  },
+
+  fetchAttachableItems: async () => {
+    try {
+      set({ attachableItemsLoading: true });
+      const data = await projectAPI.getAttachableItems();
+      set({
+        attachableItems: {
+          labourBookings: data.labourBookings || [],
+          orders:         data.orders || [],
+        },
+      });
+    } catch {
+      set({ attachableItems: { labourBookings: [], orders: [] } });
+    } finally {
+      set({ attachableItemsLoading: false });
+    }
+  },
+
+  createProject: async ({ name, description, attachments }) => {
+    const data = await projectAPI.createProject({ name, description, attachments });
+    set((s) => ({ myProjects: [data.project, ...s.myProjects] }));
+    return data.project;
+  },
+
+  updateProject: async (projectId, updates) => {
+    const data = await projectAPI.updateProject(projectId, updates);
+    set((s) => ({
+      myProjects: s.myProjects.map((p) => (p._id === projectId ? data.project : p)),
+    }));
+    return data.project;
+  },
+
+  addAttachmentToProject: async (projectId, attachment) => {
+    const data = await projectAPI.addAttachment(projectId, attachment);
+    set((s) => ({
+      myProjects: s.myProjects.map((p) => (p._id === projectId ? data.project : p)),
+    }));
+    return data.project;
+  },
+
+  removeAttachmentFromProject: async (projectId, attachmentId) => {
+    const data = await projectAPI.removeAttachment(projectId, attachmentId);
+    set((s) => ({
+      myProjects: s.myProjects.map((p) => (p._id === projectId ? data.project : p)),
+    }));
+    return data.project;
+  },
+
+  deleteProject: async (projectId) => {
+    await projectAPI.deleteProject(projectId);
+    set((s) => ({ myProjects: s.myProjects.filter((p) => p._id !== projectId) }));
+  },
+
   // ── Projects / Bookings ─────────────────────────────────────────────────────
   projects:        [],
   projectsLoading: false,
@@ -923,6 +994,7 @@ const useAppStore = create((set, get) => ({
       get().fetchActiveBookings();
       get().fetchLabourBookings();
       get().fetchProjects();
+      get().fetchMyProjects();
     });
 
     socket.on('booking_status_changed', (data) => {
@@ -1006,6 +1078,7 @@ const useAppStore = create((set, get) => ({
         get().fetchActiveBooking(data.bookingId);
       }
       get().fetchLabourBookings();
+      get().fetchMyProjects();
     });
 
     socket.on('seller_order_status_changed', ({ orderId, status }) => {
@@ -1016,6 +1089,7 @@ const useAppStore = create((set, get) => ({
             : o
         ),
       }));
+      get().fetchMyProjects();
     });
 
     socket.on('connect', () => {

@@ -7,7 +7,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import BookingScreen          from '../screens/BookingScreen';
 import WorkersNearbyScreen    from '../screens/WorkersNearbyScreen';
-import CivilEngineerScreen    from '../screens/CivilEngineerScreen';
+import ProjectsScreen         from '../screens/ProjectsScreen';
+import CreateProjectScreen    from '../screens/CreateProjectScreen';
+import ProjectDetailScreen    from '../screens/ProjectDetailScreen';
 import ProfileScreen          from '../screens/ProfileScreen';
 import LabourCheckoutScreen   from '../screens/LabourCheckoutScreen';
 import MaterialCheckoutScreen from '../screens/MaterialCheckoutScreen';
@@ -56,6 +58,15 @@ const StatusStack = () => (
   </Stack.Navigator>
 );
 
+// Projects tab stack — list → create / detail
+const ProjectsStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="ProjectsHome"  component={ProjectsScreen}      />
+    <Stack.Screen name="CreateProject" component={CreateProjectScreen} />
+    <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
+  </Stack.Navigator>
+);
+
 // Profile tab stack — profile → wallet
 const ProfileStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -72,11 +83,11 @@ export const AuthStack = () => (
 );
 
 const TAB_ICONS = {
-  Booking:      'home-variant',
-  CartTab:      'cart',
-  CivilEngineer:'account-hard-hat',
-  Status:       'bell',
-  Profile:      'account-circle',
+  Booking:  'home-variant',
+  CartTab:  'cart',
+  Projects: 'briefcase-outline',
+  Status:   'bell',
+  Profile:  'account-circle',
 };
 
 const TabIcon = ({ name, focused }) => {
@@ -131,11 +142,11 @@ const TabNavigator = () => {
         tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
       })}
     >
-      <Tab.Screen name="Booking"       component={BookingStack}       options={{ title: 'Home'           }} />
-      <Tab.Screen name="CartTab"       component={CartScreen}         options={{ title: 'Cart'           }} />
-      <Tab.Screen name="CivilEngineer" component={CivilEngineerScreen} options={{ title: 'Civil Engineer' }} />
-      <Tab.Screen name="Status"        component={StatusStack}        options={{ title: 'Status'         }} />
-      <Tab.Screen name="Profile"       component={ProfileStack}       options={{ title: 'Profile'        }} />
+      <Tab.Screen name="Booking"  component={BookingStack}  options={{ title: 'Home'     }} />
+      <Tab.Screen name="CartTab"  component={CartScreen}    options={{ title: 'Cart'     }} />
+      <Tab.Screen name="Projects" component={ProjectsStack} options={{ title: 'Projects' }} />
+      <Tab.Screen name="Status"   component={StatusStack}   options={{ title: 'Status'   }} />
+      <Tab.Screen name="Profile"  component={ProfileStack}  options={{ title: 'Profile'  }} />
     </Tab.Navigator>
   );
 };
