@@ -20,6 +20,7 @@ import LoginScreen            from '../screens/LoginScreen';
 import SignupScreen           from '../screens/SignupScreen';
 import StatusScreen           from '../screens/StatusScreen';
 import BookingTrackingScreen  from '../screens/BookingTrackingScreen';
+import OrderDetailScreen      from '../screens/OrderDetailScreen';
 import CartScreen             from '../screens/CartScreen';
 import WalletScreen           from '../screens/WalletScreen';
 import useAppStore            from '../store/useAppStore';
@@ -55,6 +56,7 @@ const StatusStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="StatusList"    component={StatusScreen}          />
     <Stack.Screen name="BookingDetail" component={BookingTrackingScreen} />
+    <Stack.Screen name="OrderDetail"   component={OrderDetailScreen}     />
   </Stack.Navigator>
 );
 

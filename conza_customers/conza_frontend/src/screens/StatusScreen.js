@@ -6,6 +6,8 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
 import { SkeletonList, BookingCardSkeleton } from '../components/Skeleton';
+import AddToProjectSheet from '../components/AddToProjectSheet';
+import SlideToast from '../components/SlideToast';
 
 const getStatusDisplay = (status) => {
   switch (status) {
@@ -30,7 +32,7 @@ const getLabourBucket = (status) => {
 const countAcceptedWorkers = (booking) =>
   (booking.workerStatuses || []).filter((w) => !['pending', 'expired'].includes(w.status)).length;
 
-const BookingCard = React.memo(({ booking, onPress }) => {
+const BookingCard = React.memo(({ booking, onPress, onAddToProject }) => {
   const s      = getStatusDisplay(booking.status);
   const worker = booking.workers?.[0];
 
@@ -63,9 +65,15 @@ const BookingCard = React.memo(({ booking, onPress }) => {
         </View>
         <View style={styles.cardBottom}>
           <Text style={styles.amountText}>₹{booking.total}</Text>
-          <View style={styles.viewBtn}>
-            <Text style={styles.viewBtnText}>View Details →</Text>
-          </View>
+        </View>
+        <View style={styles.cardActions}>
+          <TouchableOpacity style={styles.actionBtn} onPress={onPress} activeOpacity={0.8}>
+            <Text style={styles.actionBtnText}>View Details →</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addProjectBtn} onPress={onAddToProject} activeOpacity={0.8}>
+            <MaterialCommunityIcons name="briefcase-plus-outline" size={14} color="#059669" />
+            <Text style={styles.addProjectBtnText}>Add to Project</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </TouchableOpacity>
@@ -90,7 +98,7 @@ const getMaterialBucket = (status) => {
   return 'active';
 };
 
-const MaterialCard = React.memo(({ order }) => {
+const MaterialCard = React.memo(({ order, onViewDetails, onAddToProject }) => {
   const s         = getMaterialStatus(order.status);
   const itemNames = useMemo(() =>
     (order.items || []).map((i) => i.title || i.name).filter(Boolean).join(', '),
@@ -118,6 +126,15 @@ const MaterialCard = React.memo(({ order }) => {
           <Text style={styles.amountText}>₹{order.total}</Text>
           <Text style={styles.bookingIdText}>#{(order._id || '').slice(-6).toUpperCase()}</Text>
         </View>
+        <View style={styles.cardActions}>
+          <TouchableOpacity style={styles.actionBtn} onPress={onViewDetails} activeOpacity={0.8}>
+            <Text style={styles.actionBtnText}>View Details →</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addProjectBtn} onPress={onAddToProject} activeOpacity={0.8}>
+            <MaterialCommunityIcons name="briefcase-plus-outline" size={14} color="#059669" />
+            <Text style={styles.addProjectBtnText}>Add to Project</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -142,7 +159,7 @@ const getRentalBucket = (status) => {
   return 'active';
 };
 
-const RentalCard = React.memo(({ order }) => {
+const RentalCard = React.memo(({ order, onViewDetails, onAddToProject }) => {
   const s         = getRentalStatus(order.status);
   const itemNames = useMemo(() =>
     (order.items || []).map((i) => i.title || i.name).filter(Boolean).join(', '),
@@ -166,6 +183,15 @@ const RentalCard = React.memo(({ order }) => {
         <View style={styles.cardBottom}>
           <Text style={styles.amountText}>₹{order.total}</Text>
           <Text style={styles.bookingIdText}>#{(order._id || '').slice(-6).toUpperCase()}</Text>
+        </View>
+        <View style={styles.cardActions}>
+          <TouchableOpacity style={styles.actionBtn} onPress={onViewDetails} activeOpacity={0.8}>
+            <Text style={styles.actionBtnText}>View Details →</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addProjectBtn} onPress={onAddToProject} activeOpacity={0.8}>
+            <MaterialCommunityIcons name="briefcase-plus-outline" size={14} color="#059669" />
+            <Text style={styles.addProjectBtnText}>Add to Project</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -267,6 +293,9 @@ const StatusScreen = ({ navigation }) => {
 
   const [activeTab, setActiveTab] = useState('labour');
   const [filters, setFilters] = useState({ labour: 'active', order: 'active', rental: 'active' });
+  const [selectedAttachment, setSelectedAttachment] = useState(null);
+  const [showAddToProject, setShowAddToProject]     = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '' });
 
   useEffect(() => {
     fetchLabourBookings();
@@ -277,6 +306,27 @@ const StatusScreen = ({ navigation }) => {
     await setActiveBookingId(booking._id);
     navigation.navigate('BookingDetail');
   }, [setActiveBookingId, navigation]);
+
+  const handleViewOrder = useCallback((order) => {
+    navigation.navigate('OrderDetail', { orderId: order._id });
+  }, [navigation]);
+
+  const handleOpenAddToProject = useCallback((attachment) => {
+    setSelectedAttachment(attachment);
+    setShowAddToProject(true);
+  }, []);
+
+  const handleCloseAddToProject = useCallback(() => {
+    setShowAddToProject(false);
+  }, []);
+
+  const handleAddToProjectSuccess = useCallback((project, message) => {
+    setToast({ visible: true, message });
+  }, []);
+
+  const handleDismissToast = useCallback(() => {
+    setToast({ visible: false, message: '' });
+  }, []);
 
   const onRefresh = useCallback(() => {
     fetchLabourBookings();
@@ -376,17 +426,48 @@ const StatusScreen = ({ navigation }) => {
                 key={booking._id}
                 booking={booking}
                 onPress={() => handleViewBooking(booking)}
+                onAddToProject={() => handleOpenAddToProject({
+                  refModel: 'Booking',
+                  refId: booking._id,
+                  title: booking.category ? `${booking.category} Booking` : 'Labour Booking',
+                })}
               />
             ))}
             {activeTab === 'order' && currentList.map((order) => (
-              <MaterialCard key={order._id} order={order} />
+              <MaterialCard
+                key={order._id}
+                order={order}
+                onViewDetails={() => handleViewOrder(order)}
+                onAddToProject={() => handleOpenAddToProject({
+                  refModel: 'SellerOrder',
+                  refId: order._id,
+                  title: (order.items || []).map((i) => i.title || i.name).filter(Boolean).join(', ') || 'Material Order',
+                })}
+              />
             ))}
             {activeTab === 'rental' && currentList.map((order) => (
-              <RentalCard key={order._id} order={order} />
+              <RentalCard
+                key={order._id}
+                order={order}
+                onViewDetails={() => handleViewOrder(order)}
+                onAddToProject={() => handleOpenAddToProject({
+                  refModel: 'SellerOrder',
+                  refId: order._id,
+                  title: (order.items || []).map((i) => i.title || i.name).filter(Boolean).join(', ') || 'Equipment Rental',
+                })}
+              />
             ))}
           </>
         )}
       </ScrollView>
+
+      <AddToProjectSheet
+        visible={showAddToProject}
+        attachment={selectedAttachment}
+        onClose={handleCloseAddToProject}
+        onSuccess={handleAddToProjectSuccess}
+      />
+      <SlideToast visible={toast.visible} message={toast.message} onDismiss={handleDismissToast} />
     </View>
   );
 };
@@ -506,6 +587,28 @@ const styles = StyleSheet.create({
   amountText:     { fontSize: 16, fontWeight: '800', color: '#1E293B' },
   viewBtn:        { backgroundColor: '#EEF2FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   viewBtnText:    { fontSize: 12, fontWeight: '700', color: '#6366F1' },
+  cardActions:    { flexDirection: 'row', gap: 8, marginTop: 10 },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  actionBtnText:  { fontSize: 12, fontWeight: '700', color: '#6366F1' },
+  addProjectBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  addProjectBtnText: { fontSize: 12, fontWeight: '700', color: '#059669' },
   typeBadge:      { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   typeBadgeText:  { fontSize: 10, fontWeight: '700', color: '#92400E' },
   emptyState:     { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 100 },
