@@ -328,7 +328,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       return;
     }
 
-    const ok = await submitBooking({
+    const result = await submitBooking({
       selectedWorkers,
       category,
       isAutobook,
@@ -351,18 +351,14 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       latitude: lat,
       longitude: lng,
     });
-    if (ok) {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'BookingHome' }],
+    if (result) {
+      navigation.navigate('BookingConfirmation', {
+        attachment: result,
+        title: 'Booking Confirmed! ⚡',
+        message: bookingType === 'immediate'
+          ? "Your labour has been booked instantly. You'll be charged based on the actual hours worked once the job starts."
+          : 'Your labour booking has been scheduled successfully.',
       });
-      if (bookingType === 'immediate') {
-        Alert.alert(
-          'Booking Confirmed! ⚡',
-          "Your labour has been booked instantly. You'll be charged based on the actual hours worked once the job starts."
-        );
-      }
-      navigation.navigate('Status');
     }
   }, [submitBooking, selectedWorkers, category, isAutobook, requiredWorkers, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, toDate, scheduledDates, totalDays, lat, lng, navigation]);
 

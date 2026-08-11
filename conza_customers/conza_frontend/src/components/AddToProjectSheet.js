@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, Modal, ScrollView,
   TouchableOpacity, TextInput, ActivityIndicator,
@@ -40,6 +40,9 @@ const ProjectRow = React.memo(({ project, onPress, disabled }) => {
 // Bottom sheet used across the app for attaching a labour booking, material
 // order, or rental order to a project — either an existing one or a brand
 // new one created on the spot with this item pre-attached.
+// `attachment` accepts either a single { refModel, refId, title } object
+// (booking status cards, order detail) or an array of them (a multi-seller
+// material checkout that created more than one order at once).
 const AddToProjectSheet = ({ visible, attachment, onClose, onSuccess }) => {
   const {
     myProjects, myProjectsLoading, fetchMyProjects,
@@ -51,6 +54,11 @@ const AddToProjectSheet = ({ visible, attachment, onClose, onSuccess }) => {
   const [description, setDescription] = useState('');
   const [busy, setBusy]               = useState(false);
   const [error, setError]             = useState('');
+
+  const attachments = useMemo(() => {
+    if (Array.isArray(attachment)) return attachment.filter(Boolean);
+    return attachment ? [attachment] : [];
+  }, [attachment]);
 
   useEffect(() => {
     if (visible) {
@@ -68,14 +76,14 @@ const AddToProjectSheet = ({ visible, attachment, onClose, onSuccess }) => {
   }, [busy, onClose]);
 
   const handleSelectProject = useCallback(async (project) => {
-    if (!attachment || busy) return;
+    if (!attachments.length || busy) return;
     setBusy(true);
     setError('');
     try {
-      const updated = await addAttachmentToProject(project._id, {
-        refModel: attachment.refModel,
-        refId: attachment.refId,
-      });
+      let updated = project;
+      for (const a of attachments) {
+        updated = await addAttachmentToProject(updated._id, { refModel: a.refModel, refId: a.refId });
+      }
       onSuccess && onSuccess(updated, `Added to "${updated.name}"`);
       onClose();
     } catch (e) {
@@ -83,10 +91,10 @@ const AddToProjectSheet = ({ visible, attachment, onClose, onSuccess }) => {
     } finally {
       setBusy(false);
     }
-  }, [attachment, busy, addAttachmentToProject, onSuccess, onClose]);
+  }, [attachments, busy, addAttachmentToProject, onSuccess, onClose]);
 
   const handleCreateProject = useCallback(async () => {
-    if (!attachment || busy) return;
+    if (!attachments.length || busy) return;
     if (!name.trim()) {
       setError('Please give your project a name.');
       return;
@@ -97,16 +105,16 @@ const AddToProjectSheet = ({ visible, attachment, onClose, onSuccess }) => {
       const project = await createProject({
         name,
         description,
-        attachments: [{ refModel: attachment.refModel, refId: attachment.refId }],
+        attachments: attachments.map((a) => ({ refModel: a.refModel, refId: a.refId })),
       });
-      onSuccess && onSuccess(project, `Created "${project.name}" and added item`);
+      onSuccess && onSuccess(project, `Created "${project.name}" and added item${attachments.length > 1 ? 's' : ''}`);
       onClose();
     } catch (e) {
       setError(e.message || 'Could not create the project. Please try again.');
     } finally {
       setBusy(false);
     }
-  }, [attachment, busy, name, description, createProject, onSuccess, onClose]);
+  }, [attachments, busy, name, description, createProject, onSuccess, onClose]);
 
   const projects = myProjects || [];
 
@@ -124,8 +132,10 @@ const AddToProjectSheet = ({ visible, attachment, onClose, onSuccess }) => {
             <>
               <View style={styles.sheetHeader}>
                 <Text style={styles.sheetTitle}>Add to Project</Text>
-                {!!attachment?.title && (
-                  <Text style={styles.sheetSub} numberOfLines={1}>{attachment.title}</Text>
+                {!!attachments.length && (
+                  <Text style={styles.sheetSub} numberOfLines={1}>
+                    {attachments.length === 1 ? attachments[0].title : `${attachments.length} items`}
+                  </Text>
                 )}
               </View>
 
@@ -167,8 +177,10 @@ const AddToProjectSheet = ({ visible, attachment, onClose, onSuccess }) => {
                   <Text style={styles.backLink}>← Back</Text>
                 </TouchableOpacity>
                 <Text style={[styles.sheetTitle, { marginTop: 8 }]}>New Project</Text>
-                {!!attachment?.title && (
-                  <Text style={styles.sheetSub} numberOfLines={1}>Will attach: {attachment.title}</Text>
+                {!!attachments.length && (
+                  <Text style={styles.sheetSub} numberOfLines={1}>
+                    Will attach: {attachments.length === 1 ? attachments[0].title : `${attachments.length} items`}
+                  </Text>
                 )}
               </View>
 

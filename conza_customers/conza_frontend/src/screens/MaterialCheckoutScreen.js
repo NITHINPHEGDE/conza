@@ -197,7 +197,7 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
   }, [scheduledDate, scheduledTime]);
 
   const handlePlaceOrder = useCallback(async () => {
-    const ok = await submitBooking({
+    const result = await submitBooking({
       items: cartItems.map(item => ({
         id:       item.id,
         name:     item.name,
@@ -226,13 +226,13 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
       latitude: lat,
       longitude: lng,
     });
-    if (ok) {
+    if (result) {
       useAppStore.getState().clearCart();
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'BookingHome' }],
+      navigation.navigate('BookingConfirmation', {
+        attachment: result,
+        title: 'Order Placed! 📦',
+        message: 'Your material order has been placed successfully. You can track it from My Bookings.',
       });
-      navigation.navigate('Status');
     }
   }, [submitBooking, cartItems, cart, subtotal, platformFee, total, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, lat, lng, navigation]);
 

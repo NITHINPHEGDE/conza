@@ -13,6 +13,7 @@ import ProjectDetailScreen    from '../screens/ProjectDetailScreen';
 import ProfileScreen          from '../screens/ProfileScreen';
 import LabourCheckoutScreen   from '../screens/LabourCheckoutScreen';
 import MaterialCheckoutScreen from '../screens/MaterialCheckoutScreen';
+import BookingConfirmationScreen from '../screens/BookingConfirmationScreen';
 import MaterialDetailScreen   from '../screens/MaterialDetailScreen';
 import RentalDetailScreen     from '../screens/RentalDetailScreen';
 import RentalCheckoutScreen   from '../screens/RentalCheckoutScreen';
@@ -47,6 +48,7 @@ const BookingStack = () => (
     <Stack.Screen name="MaterialDetail"   component={MaterialDetailScreen}   />
     <Stack.Screen name="RentalDetail"     component={RentalDetailScreen}     />
     <Stack.Screen name="RentalCheckout"   component={RentalCheckoutScreen}   />
+    <Stack.Screen name="BookingConfirmation" component={BookingConfirmationScreen} />
     <Stack.Screen name="Wallet"           component={WalletScreen}           />
   </Stack.Navigator>
 );

@@ -61,7 +61,9 @@ export const useBooking = (type) => {
           await setActiveBookingId(result.booking._id);
         }
         setSuccess(true);
-        return true;
+        return result.success && result.booking?._id
+          ? { refModel: 'Booking', refId: result.booking._id, title: category ? `${category} Booking` : 'Labour Booking' }
+          : null;
       }
 
       // ── Labour booking → unchanged path ───────────────────────────────
@@ -104,7 +106,9 @@ export const useBooking = (type) => {
           await setActiveBookingId(result.booking._id);
         }
         setSuccess(true);
-        return true;
+        return result.success && result.booking?._id
+          ? { refModel: 'Booking', refId: result.booking._id, title: category ? `${category} Booking` : 'Labour Booking' }
+          : null;
       }
 
       // ── Material order → seller order API ───────────────────────────────
@@ -123,7 +127,7 @@ export const useBooking = (type) => {
         const sellerIds = Object.keys(bySellerMap);
         if (!sellerIds.length) throw new Error('No seller information on cart items');
 
-        let lastOrderId = null;
+        const createdOrders = [];
         for (const sellerId of sellerIds) {
           const sellerItems = bySellerMap[sellerId];
           const sellerSubtotal = sellerItems.reduce(
@@ -153,15 +157,18 @@ export const useBooking = (type) => {
 
           const result = await bookingAPI.placeSellerOrder(payload);
           if (result.success) {
-            lastOrderId = result.order._id;
             addSellerOrder(result.order);
+            createdOrders.push({
+              refModel: 'SellerOrder',
+              refId: result.order._id,
+              title: (result.order.items || []).map((i) => i.title).filter(Boolean).join(', ') || 'Material Order',
+            });
           }
         }
 
-
         clearCart();
         setSuccess(true);
-        return true;
+        return createdOrders.length ? createdOrders : null;
       }
 
       // ── Rental order → seller order API ─────────────────────────────────
@@ -200,12 +207,18 @@ export const useBooking = (type) => {
           addSellerOrder(result.order);
         }
         setSuccess(true);
-        return true;
+        return result.success
+          ? {
+              refModel: 'SellerOrder',
+              refId: result.order._id,
+              title: (result.order.items || []).map((i) => i.title).filter(Boolean).join(', ') || 'Equipment Rental',
+            }
+          : null;
       }
 
     } catch (err) {
       setError(err.message || 'Something went wrong while booking');
-      return false;
+      return null;
     } finally {
       setLoading(false);
     }

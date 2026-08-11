@@ -143,7 +143,7 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
   }, []);
 
   const handleConfirmRental = useCallback(async () => {
-    const ok = await submitBooking({
+    const result = await submitBooking({
       item,
       quantity,
       scheduledDate,
@@ -161,12 +161,12 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
       latitude: lat,
       longitude: lng,
     });
-    if (ok) {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'BookingHome' }],
+    if (result) {
+      navigation.navigate('BookingConfirmation', {
+        attachment: result,
+        title: 'Rental Booked! 🏗️',
+        message: 'Your equipment rental has been booked successfully. You can track it from My Bookings.',
       });
-      navigation.navigate('Status');
     }
   }, [submitBooking, item, quantity, scheduledDate, scheduledTime, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, lat, lng, navigation]);
 
