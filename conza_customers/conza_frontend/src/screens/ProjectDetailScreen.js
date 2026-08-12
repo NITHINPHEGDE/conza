@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  StatusBar, Alert, ActivityIndicator, Modal,
+  StatusBar, Alert, ActivityIndicator, Modal, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -177,6 +177,46 @@ const BreakdownModal = ({ visible, onClose, groups, grandTotal }) => (
   </Modal>
 );
 
+// Sleek in-app confirm modal (replaces browser window.confirm and native system Alert)
+const DeleteConfirmModal = ({ visible, title, message, onCancel, onConfirm, busy }) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <View style={styles.modalOverlay}>
+      <TouchableOpacity style={styles.modalBackdropTouch} activeOpacity={1} onPress={onCancel} />
+      <View style={styles.confirmDialogSheet}>
+        <View style={styles.confirmIconWrap}>
+          <MaterialCommunityIcons name="trash-can-outline" size={26} color={colors.danger} />
+        </View>
+        <Text style={styles.confirmTitle}>{title || 'Delete Project?'}</Text>
+        <Text style={styles.confirmSub}>{message}</Text>
+
+        <View style={styles.confirmActionRow}>
+          <TouchableOpacity
+            style={styles.cancelModalBtn}
+            onPress={onCancel}
+            disabled={busy}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.cancelModalBtnText}>Cancel</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.deleteModalBtn}
+            onPress={onConfirm}
+            disabled={busy}
+            activeOpacity={0.8}
+          >
+            {busy ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.deleteModalBtnText}>Delete</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
+);
+
 const ProjectDetailScreen = ({ route, navigation }) => {
   const { projectId } = route.params || {};
   const {
@@ -185,9 +225,12 @@ const ProjectDetailScreen = ({ route, navigation }) => {
     setActiveBookingId,
   } = useAppStore();
 
-  const [activeFilter, setActiveFilter]   = useState('all');
-  const [showBreakdown, setShowBreakdown] = useState(false);
-  const [busy, setBusy]                   = useState(false);
+  const [activeFilter, setActiveFilter]     = useState('all');
+  const [showBreakdown, setShowBreakdown]   = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [itemToRemove, setItemToRemove]     = useState(null);
+  const [busy, setBusy]                     = useState(false);
+  const [deleting, setDeleting]             = useState(false);
 
   useEffect(() => {
     fetchMyProjects();
@@ -246,58 +289,45 @@ const ProjectDetailScreen = ({ route, navigation }) => {
   }, [navigation, setActiveBookingId]);
 
   const handleRemove = useCallback((item) => {
+    setItemToRemove(item);
+  }, []);
+
+  const confirmRemoveAttachment = useCallback(async () => {
+    if (!project || !itemToRemove) return;
+    setBusy(true);
+    try {
+      await removeAttachmentFromProject(project._id, itemToRemove.attachmentId);
+      setItemToRemove(null);
+    } catch (e) {
+      const msg = e.message || 'Please try again.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Could not remove', msg);
+    } finally {
+      setBusy(false);
+    }
+  }, [project, itemToRemove, removeAttachmentFromProject]);
+
+  const handleDeleteProjectPress = useCallback(() => {
+    if (!project || busy || deleting) return;
+    setShowDeleteModal(true);
+  }, [project, busy, deleting]);
+
+  const confirmDeleteProject = useCallback(async () => {
     if (!project) return;
-    Alert.alert('Remove Attachment', `Remove "${item.title}" from this project?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          setBusy(true);
-          try {
-            await removeAttachmentFromProject(project._id, item.attachmentId);
-          } catch (e) {
-            Alert.alert('Could not remove', e.message || 'Please try again.');
-          } finally {
-            setBusy(false);
-          }
-        },
-      },
-    ]);
-  }, [project, removeAttachmentFromProject]);
-
-  const [deleting, setDeleting] = useState(false);
-
-  const handleDeleteProject = useCallback(() => {
-    if (!project || busy || deleting) return; // guards against double-tap re-firing the alert
-    Alert.alert(
-      'Delete Project',
-      `Delete "${project.name}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            setBusy(true);
-            try {
-              await deleteProject(project._id);
-              navigation.goBack();
-            } catch (e) {
-              setDeleting(false);
-              setBusy(false);
-              Alert.alert(
-                'Could not delete',
-                e?.response?.data?.message || e?.message || 'Please check your connection and try again.'
-              );
-            }
-          },
-        },
-      ],
-      { cancelable: true }
-    );
-  }, [project, busy, deleting, deleteProject, navigation]);
+    setDeleting(true);
+    setBusy(true);
+    try {
+      await deleteProject(project._id);
+      setShowDeleteModal(false);
+      navigation.goBack();
+    } catch (e) {
+      setDeleting(false);
+      setBusy(false);
+      const errMsg = e?.response?.data?.message || e?.message || 'Please check your connection and try again.';
+      if (Platform.OS === 'web') window.alert(`Could not delete: ${errMsg}`);
+      else Alert.alert('Could not delete', errMsg);
+    }
+  }, [project, deleteProject, navigation]);
 
   // Bottom-right FAB: send the customer to the Status tab, where attachments
   // are actually added via each card's existing "Add to Project" action.
@@ -336,7 +366,7 @@ const ProjectDetailScreen = ({ route, navigation }) => {
         <Text style={styles.headerTitle} numberOfLines={1}>{project.name}</Text>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={handleDeleteProject}
+          onPress={handleDeleteProjectPress}
           activeOpacity={0.7}
           disabled={busy || deleting}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -430,6 +460,26 @@ const ProjectDetailScreen = ({ route, navigation }) => {
         onClose={() => setShowBreakdown(false)}
         groups={breakdownGroups}
         grandTotal={grandTotal}
+      />
+
+      {/* Popup modal for deleting project */}
+      <DeleteConfirmModal
+        visible={showDeleteModal}
+        title="Delete Project?"
+        message={`Delete "${project.name}"? This cannot be undone.`}
+        onCancel={() => setShowDeleteModal(false)}
+        onConfirm={confirmDeleteProject}
+        busy={deleting}
+      />
+
+      {/* Popup modal for removing attachment */}
+      <DeleteConfirmModal
+        visible={!!itemToRemove}
+        title="Remove Attachment?"
+        message={itemToRemove ? `Remove "${itemToRemove.title}" from this project?` : ''}
+        onCancel={() => setItemToRemove(null)}
+        onConfirm={confirmRemoveAttachment}
+        busy={busy}
       />
 
       {busy && (
@@ -684,6 +734,86 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(250,250,247,0.6)',
     alignItems: 'center', justifyContent: 'center',
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalBackdropTouch: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  confirmDialogSheet: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  confirmIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  confirmTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  confirmSub: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  confirmActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  cancelModalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelModalBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  deleteModalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteModalBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });
 

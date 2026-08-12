@@ -1,7 +1,7 @@
-import React, { useEffect, useCallback, useMemo } from 'react';
+import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, RefreshControl,
+  TouchableOpacity, RefreshControl, Platform, Alert, Modal, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,6 +9,45 @@ import { LinearGradient } from 'expo-linear-gradient';
 import useAppStore from '../store/useAppStore';
 import { colors } from '../theme/colors';
 import { SkeletonList, ProjectCardSkeleton } from '../components/Skeleton';
+
+const DeleteConfirmModal = ({ visible, title, message, onCancel, onConfirm, busy }) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <View style={styles.modalOverlay}>
+      <TouchableOpacity style={styles.modalBackdropTouch} activeOpacity={1} onPress={onCancel} />
+      <View style={styles.confirmDialogSheet}>
+        <View style={styles.confirmIconWrap}>
+          <MaterialCommunityIcons name="trash-can-outline" size={26} color={colors.danger} />
+        </View>
+        <Text style={styles.confirmTitle}>{title || 'Delete Project?'}</Text>
+        <Text style={styles.confirmSub}>{message}</Text>
+
+        <View style={styles.confirmActionRow}>
+          <TouchableOpacity
+            style={styles.cancelModalBtn}
+            onPress={onCancel}
+            disabled={busy}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.cancelModalBtnText}>Cancel</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.deleteModalBtn}
+            onPress={onConfirm}
+            disabled={busy}
+            activeOpacity={0.8}
+          >
+            {busy ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.deleteModalBtnText}>Delete</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
+);
 
 const getProjectStatusDisplay = (status) => {
   switch (status) {
@@ -20,7 +59,7 @@ const getProjectStatusDisplay = (status) => {
   }
 };
 
-const ProjectCard = React.memo(({ project, onPress }) => {
+const ProjectCard = React.memo(({ project, onPress, onDelete }) => {
   const s = getProjectStatusDisplay(project.status);
   const bookingCount = (project.attachments || []).filter((a) => a.refModel === 'Booking').length;
   const orderCount    = (project.attachments || []).filter((a) => a.refModel === 'SellerOrder').length;
@@ -34,9 +73,23 @@ const ProjectCard = React.memo(({ project, onPress }) => {
             <MaterialCommunityIcons name={s.icon} size={14} color={s.color} />
             <Text style={[styles.statusPillText, { color: s.color }]}>{s.text}</Text>
           </View>
-          <Text style={styles.dateText}>
-            {new Date(project.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-          </Text>
+          <View style={styles.cardTopRight}>
+            <Text style={styles.dateText}>
+              {new Date(project.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+            </Text>
+            {onDelete && (
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onDelete(project);
+                }}
+                style={styles.deleteCardBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialCommunityIcons name="trash-can-outline" size={16} color={colors.danger} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
         <Text style={styles.projectName} numberOfLines={1}>{project.name}</Text>
         {!!project.description && (
@@ -59,7 +112,9 @@ const ProjectCard = React.memo(({ project, onPress }) => {
 
 const ProjectsScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { myProjects, myProjectsLoading, fetchMyProjects } = useAppStore();
+  const { myProjects, myProjectsLoading, fetchMyProjects, deleteProject } = useAppStore();
+  const [projectToDelete, setProjectToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => { fetchMyProjects(); }, []);
 
@@ -72,6 +127,25 @@ const ProjectsScreen = ({ navigation }) => {
   const handleOpen = useCallback((project) => {
     navigation.navigate('ProjectDetail', { projectId: project._id });
   }, [navigation]);
+
+  const handleDeletePress = useCallback((proj) => {
+    setProjectToDelete(proj);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!projectToDelete) return;
+    setDeleting(true);
+    try {
+      await deleteProject(projectToDelete._id);
+      setProjectToDelete(null);
+    } catch (e) {
+      const errMsg = e?.response?.data?.message || e?.message || 'Could not delete project.';
+      if (Platform.OS === 'web') window.alert(errMsg);
+      else Alert.alert('Error', errMsg);
+    } finally {
+      setDeleting(false);
+    }
+  }, [projectToDelete, deleteProject]);
 
   const sortedProjects = useMemo(
     () => [...(myProjects || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
@@ -126,11 +200,25 @@ const ProjectsScreen = ({ navigation }) => {
             </View>
           ) : (
             sortedProjects.map((project) => (
-              <ProjectCard key={project._id} project={project} onPress={() => handleOpen(project)} />
+              <ProjectCard
+                key={project._id}
+                project={project}
+                onPress={() => handleOpen(project)}
+                onDelete={handleDeletePress}
+              />
             ))
           )}
         </ScrollView>
       )}
+
+      <DeleteConfirmModal
+        visible={!!projectToDelete}
+        title="Delete Project?"
+        message={projectToDelete ? `Delete "${projectToDelete.name}"? This cannot be undone.` : ''}
+        onCancel={() => setProjectToDelete(null)}
+        onConfirm={confirmDelete}
+        busy={deleting}
+      />
     </View>
   );
 };
@@ -191,6 +279,16 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   statusPillText: { fontSize: 11, fontWeight: '700' },
+  cardTopRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  deleteCardBtn: {
+    padding: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(239,68,68,0.1)',
+  },
   dateText: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
   projectName: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
   projectDesc: { fontSize: 12, color: colors.textSecondary, marginBottom: 10, lineHeight: 17 },
@@ -211,6 +309,86 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: 13, color: colors.textMuted, textAlign: 'center', lineHeight: 19, fontWeight: '500' },
   emptyCreateBtn: { borderRadius: 14, paddingHorizontal: 22, paddingVertical: 14 },
   emptyCreateBtnText: { fontSize: 14, fontWeight: '800', color: colors.textPrimary },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalBackdropTouch: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  confirmDialogSheet: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  confirmIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  confirmTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  confirmSub: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  confirmActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  cancelModalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelModalBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  deleteModalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteModalBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
 });
 
 export default ProjectsScreen;
