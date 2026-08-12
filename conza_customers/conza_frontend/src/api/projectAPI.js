@@ -36,6 +36,11 @@ export const projectAPI = {
     return res.data;
   },
 
+  removeAttachments: async (id, attachmentIds) => {
+    const res = await api.post(`/projects/${id}/attachments/bulk-delete`, { attachmentIds });
+    return res.data;
+  },
+
   deleteProject: async (id) => {
     const res = await api.delete(`/projects/${id}`);
     return res.data;

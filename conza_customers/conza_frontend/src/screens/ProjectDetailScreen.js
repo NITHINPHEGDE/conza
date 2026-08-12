@@ -77,14 +77,36 @@ const EMPTY_COPY = {
 
 // A status card, visually matching the ones on the Status tab. Stays visible
 // (showing "Completed" / "Delivered" / "Returned" etc.) until the customer
-// explicitly removes it — never auto-hides.
-const AttachmentStatusCard = React.memo(({ item, onViewDetails, onRemove, busy }) => {
+// explicitly removes it — never auto-hides. Supports multi-selection.
+const AttachmentStatusCard = React.memo(({
+  item, onViewDetails, onRemove, busy,
+  selected, onToggleSelect,
+}) => {
   const s    = getStatusForType(item.type, item.status);
   const meta = TYPE_META[item.type] || TYPE_META.material;
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={[styles.card, selected && styles.cardSelected]}
+      onPress={() => onToggleSelect && onToggleSelect(item.attachmentId)}
+      activeOpacity={0.88}
+    >
       <View style={[styles.cardAccent, { backgroundColor: s.color }]} />
+
+      {/* Select checkbox on the left */}
+      <TouchableOpacity
+        style={styles.selectCheckboxTouch}
+        onPress={() => onToggleSelect && onToggleSelect(item.attachmentId)}
+        activeOpacity={0.7}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <MaterialCommunityIcons
+          name={selected ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
+          size={22}
+          color={selected ? colors.danger : colors.textMuted}
+        />
+      </TouchableOpacity>
+
       <View style={styles.cardBody}>
         <View style={styles.cardTop}>
           <View style={styles.statusPill}>
@@ -116,7 +138,10 @@ const AttachmentStatusCard = React.memo(({ item, onViewDetails, onRemove, busy }
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.removeBtn}
-            onPress={onRemove}
+            onPress={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
             activeOpacity={0.8}
             disabled={busy}
           >
@@ -125,7 +150,7 @@ const AttachmentStatusCard = React.memo(({ item, onViewDetails, onRemove, busy }
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 });
 
@@ -221,16 +246,18 @@ const ProjectDetailScreen = ({ route, navigation }) => {
   const { projectId } = route.params || {};
   const {
     myProjects, fetchMyProjects,
-    removeAttachmentFromProject, deleteProject,
+    removeAttachmentFromProject, removeAttachmentsFromProject, deleteProject,
     setActiveBookingId,
   } = useAppStore();
 
-  const [activeFilter, setActiveFilter]     = useState('all');
-  const [showBreakdown, setShowBreakdown]   = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [itemToRemove, setItemToRemove]     = useState(null);
-  const [busy, setBusy]                     = useState(false);
-  const [deleting, setDeleting]             = useState(false);
+  const [activeFilter, setActiveFilter]         = useState('all');
+  const [showBreakdown, setShowBreakdown]       = useState(false);
+  const [showDeleteModal, setShowDeleteModal]   = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [itemToRemove, setItemToRemove]         = useState(null);
+  const [selectedIds, setSelectedIds]           = useState([]);
+  const [busy, setBusy]                         = useState(false);
+  const [deleting, setDeleting]                 = useState(false);
 
   useEffect(() => {
     fetchMyProjects();
@@ -245,23 +272,29 @@ const ProjectDetailScreen = ({ route, navigation }) => {
 
   const attachments = project?.attachments || [];
 
+  // Cancelled orders/bookings are automatically hidden — only active items show.
+  const activeAttachments = useMemo(
+    () => attachments.filter((a) => a.status !== 'cancelled'),
+    [attachments]
+  );
+
   const counts = useMemo(() => ({
-    all:      attachments.length,
-    labour:   attachments.filter((a) => a.type === 'labour').length,
-    material: attachments.filter((a) => a.type === 'material').length,
-    vendor:   attachments.filter((a) => a.type === 'rental').length,
-  }), [attachments]);
+    all:      activeAttachments.length,
+    labour:   activeAttachments.filter((a) => a.type === 'labour').length,
+    material: activeAttachments.filter((a) => a.type === 'material').length,
+    vendor:   activeAttachments.filter((a) => a.type === 'rental').length,
+  }), [activeAttachments]);
 
   const filteredAttachments = useMemo(() => {
-    if (activeFilter === 'all') return attachments;
+    if (activeFilter === 'all') return activeAttachments;
     const wantType = filterToType[activeFilter];
-    return attachments.filter((a) => a.type === wantType);
-  }, [attachments, activeFilter]);
+    return activeAttachments.filter((a) => a.type === wantType);
+  }, [activeAttachments, activeFilter]);
 
   // Total spent always reflects the whole project, regardless of the active filter.
   const grandTotal = useMemo(
-    () => attachments.reduce((sum, a) => sum + (Number(a.total) || 0), 0),
-    [attachments]
+    () => activeAttachments.reduce((sum, a) => sum + (Number(a.total) || 0), 0),
+    [activeAttachments]
   );
 
   const breakdownGroups = useMemo(() => {
@@ -272,7 +305,7 @@ const ProjectDetailScreen = ({ route, navigation }) => {
     ];
     return groupDefs
       .map((g) => {
-        const items    = attachments.filter((a) => a.type === g.type);
+        const items    = activeAttachments.filter((a) => a.type === g.type);
         const subtotal = items.reduce((sum, a) => sum + (Number(a.total) || 0), 0);
         return { key: g.key, label: g.label, items, subtotal };
       })
@@ -306,6 +339,38 @@ const ProjectDetailScreen = ({ route, navigation }) => {
       setBusy(false);
     }
   }, [project, itemToRemove, removeAttachmentFromProject]);
+
+  const handleToggleSelect = useCallback((attachmentId) => {
+    setSelectedIds((prev) =>
+      prev.includes(attachmentId)
+        ? prev.filter((id) => id !== attachmentId)
+        : [...prev, attachmentId]
+    );
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedIds.length === filteredAttachments.length && filteredAttachments.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredAttachments.map((a) => a.attachmentId));
+    }
+  }, [selectedIds.length, filteredAttachments]);
+
+  const confirmBulkDelete = useCallback(async () => {
+    if (!project || !selectedIds.length) return;
+    setBusy(true);
+    try {
+      await removeAttachmentsFromProject(project._id, selectedIds);
+      setSelectedIds([]);
+      setShowBulkDeleteModal(false);
+    } catch (e) {
+      const msg = e.message || 'Could not remove selected attachments.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Could not remove', msg);
+    } finally {
+      setBusy(false);
+    }
+  }, [project, selectedIds, removeAttachmentsFromProject]);
 
   const handleDeleteProjectPress = useCallback(() => {
     if (!project || busy || deleting) return;
@@ -427,9 +492,41 @@ const ProjectDetailScreen = ({ route, navigation }) => {
           </View>
         </TouchableOpacity>
 
-        <Text style={styles.sectionTitle}>
-          Attachments{activeFilter !== 'all' ? ` · ${activeFilterDef?.label}` : ''} ({filteredAttachments.length})
-        </Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>
+            Attachments{activeFilter !== 'all' ? ` · ${activeFilterDef?.label}` : ''} ({filteredAttachments.length})
+          </Text>
+
+          {filteredAttachments.length > 0 && (
+            <View style={styles.bulkHeaderActions}>
+              <TouchableOpacity
+                style={styles.selectAllBtn}
+                onPress={handleSelectAll}
+                activeOpacity={0.75}
+              >
+                <MaterialCommunityIcons
+                  name={selectedIds.length === filteredAttachments.length && filteredAttachments.length > 0 ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                  size={15}
+                  color={colors.accentAmber}
+                />
+                <Text style={styles.selectAllText}>
+                  {selectedIds.length === filteredAttachments.length && filteredAttachments.length > 0 ? 'Deselect All' : 'Select All'}
+                </Text>
+              </TouchableOpacity>
+
+              {selectedIds.length > 0 && (
+                <TouchableOpacity
+                  style={styles.bulkDeleteBtn}
+                  onPress={() => setShowBulkDeleteModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons name="trash-can-outline" size={14} color="#FFF" />
+                  <Text style={styles.bulkDeleteText}>Delete ({selectedIds.length})</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
 
         {filteredAttachments.length === 0 ? (
           <View style={styles.emptyState}>
@@ -443,6 +540,8 @@ const ProjectDetailScreen = ({ route, navigation }) => {
               key={item.attachmentId}
               item={item}
               busy={busy}
+              selected={selectedIds.includes(item.attachmentId)}
+              onToggleSelect={handleToggleSelect}
               onViewDetails={() => handleViewDetails(item)}
               onRemove={() => handleRemove(item)}
             />
@@ -472,13 +571,23 @@ const ProjectDetailScreen = ({ route, navigation }) => {
         busy={deleting}
       />
 
-      {/* Popup modal for removing attachment */}
+      {/* Popup modal for single attachment removal */}
       <DeleteConfirmModal
         visible={!!itemToRemove}
         title="Remove Attachment?"
         message={itemToRemove ? `Remove "${itemToRemove.title}" from this project?` : ''}
         onCancel={() => setItemToRemove(null)}
         onConfirm={confirmRemoveAttachment}
+        busy={busy}
+      />
+
+      {/* Popup modal for mass deleting selected attachments */}
+      <DeleteConfirmModal
+        visible={showBulkDeleteModal}
+        title={`Delete ${selectedIds.length} Attachments?`}
+        message={`Remove ${selectedIds.length} selected attachment(s) from "${project.name}"? This cannot be undone.`}
+        onCancel={() => setShowBulkDeleteModal(false)}
+        onConfirm={confirmBulkDelete}
         busy={busy}
       />
 

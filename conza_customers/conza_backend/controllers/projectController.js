@@ -336,6 +336,34 @@ const removeAttachment = async (req, res, next) => {
   }
 };
 
+// @desc    Remove multiple attachments from a project
+// @route   POST /api/projects/:id/attachments/bulk-delete
+// @access  Private
+const removeAttachments = async (req, res, next) => {
+  try {
+    const { attachmentIds } = req.body;
+    const project = await Project.findOne({ _id: req.params.id, user: req.user._id });
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Project not found.' });
+    }
+
+    if (Array.isArray(attachmentIds) && attachmentIds.length) {
+      const idsSet = new Set(attachmentIds.map((id) => id.toString()));
+      project.attachments = project.attachments.filter(
+        (a) => !idsSet.has(a._id.toString())
+      );
+    }
+
+    const items = await loadAttachments(project.attachments);
+    project.status = combineStatus(items.map((i) => i.bucket));
+    await project.save();
+
+    res.json({ success: true, project: { ...project.toObject(), attachments: items } });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // @desc    Delete a project
 // @route   DELETE /api/projects/:id
 // @access  Private
@@ -359,5 +387,6 @@ module.exports = {
   updateProject,
   addAttachment,
   removeAttachment,
+  removeAttachments,
   deleteProject,
 };

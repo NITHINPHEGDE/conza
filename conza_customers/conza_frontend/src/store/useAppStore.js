@@ -617,6 +617,14 @@ const useAppStore = create((set, get) => ({
     return data.project;
   },
 
+  removeAttachmentsFromProject: async (projectId, attachmentIds) => {
+    const data = await projectAPI.removeAttachments(projectId, attachmentIds);
+    set((s) => ({
+      myProjects: s.myProjects.map((p) => (p._id === projectId ? data.project : p)),
+    }));
+    return data.project;
+  },
+
   deleteProject: async (projectId) => {
     await projectAPI.deleteProject(projectId);
     set((s) => ({ myProjects: s.myProjects.filter((p) => p._id !== projectId) }));
