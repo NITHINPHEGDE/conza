@@ -9,12 +9,14 @@ import {
   StatusBar,
   Modal,
   Dimensions,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 import { materialDescriptions, materialOffers } from '../data/dummyData';
 import useAppStore from '../store/useAppStore';
+import MaterialCard from '../components/MaterialCard';
 
 const { width } = Dimensions.get('window');
 
@@ -121,6 +123,7 @@ const QuantityDialog = React.memo(({ visible, item, onClose, onConfirm }) => {
 const MaterialDetailScreen = ({ route, navigation }) => {
   const { item } = route.params || {};
   const addToCart = useAppStore((s) => s.addToCart);
+  const allMaterials = useAppStore((s) => s.materials);
   
   const [showDialog, setShowDialog]                 = useState(false);
   const [cartAdded, setCartAdded]                   = useState(false);
@@ -177,6 +180,14 @@ const MaterialDetailScreen = ({ route, navigation }) => {
   const buyButtonColors = useMemo(() => 
     item.inStock ? [colors.gradientStart, colors.gradientEnd] : ['#ccc', '#bbb'],
     [item.inStock]
+  );
+
+  // Products from the same vendor (excluding this one)
+  const vendorProducts = useMemo(() =>
+    (allMaterials || []).filter(
+      (m) => m.sellerId && m.sellerId === item.sellerId && m.id !== item.id
+    ),
+    [allMaterials, item.sellerId, item.id]
   );
 
   return (
@@ -343,6 +354,30 @@ const MaterialDetailScreen = ({ route, navigation }) => {
             </View>
           )}
         </View>
+
+        {/* ── More from this Vendor ── */}
+        {vendorProducts.length > 0 && (
+          <View style={styles.vendorSection}>
+            <Text style={styles.vendorSectionTitle}>More from this Vendor</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.vendorScroll}
+            >
+              {vendorProducts.map((prod) => (
+                <View key={prod.id} style={styles.vendorCard}>
+                  <MaterialCard
+                    {...prod}
+                    quantity={0}
+                    onUpdate={() => {}}
+                    onImagePress={() => navigation.push('MaterialDetail', { item: prod })}
+                    onAddToCart={() => addToCart(prod)}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         <View style={{ height: 110 }} />
       </ScrollView>
@@ -856,6 +891,25 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: colors.textPrimary,
+  },
+  vendorSection: {
+    marginTop: 24,
+    marginBottom: 10,
+  },
+  vendorSectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    letterSpacing: 0.3,
+  },
+  vendorScroll: {
+    paddingHorizontal: 20,
+    gap: 14,
+  },
+  vendorCard: {
+    width: 220,
   },
 });
 

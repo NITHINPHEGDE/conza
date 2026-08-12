@@ -146,29 +146,29 @@ const MaterialCard = React.memo(({
         {inStock ? (
           qty > 0 ? (
             /* ── Qty stepper — same pill shape ── */
-            <LinearGradient
-              colors={[colors.gradientStart, colors.gradientEnd]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.stepperPill}
-            >
-              <TouchableOpacity style={styles.stepBtn} onPress={handleMinus} activeOpacity={0.75}>
-                <Text style={styles.stepSymbol}>−</Text>
-              </TouchableOpacity>
-
-              <TextInput
-                style={styles.stepInput}
-                value={String(qty)}
-                onChangeText={handleTextChange}
-                keyboardType="numeric"
-                maxLength={4}
-                selectTextOnFocus
-              />
-
-              <TouchableOpacity style={styles.stepBtn} onPress={handlePlus} activeOpacity={0.75}>
-                <Text style={styles.stepSymbol}>+</Text>
-              </TouchableOpacity>
-            </LinearGradient>
+            <View style={styles.stepperWrap}>
+              <LinearGradient
+                colors={[colors.gradientStart, colors.gradientEnd]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.stepperPill}
+              >
+                <TouchableOpacity style={styles.stepBtn} onPress={handleMinus} activeOpacity={0.75}>
+                  <Text style={styles.stepSymbol}>−</Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.stepInput}
+                  value={String(qty)}
+                  onChangeText={handleTextChange}
+                  keyboardType="numeric"
+                  maxLength={4}
+                  selectTextOnFocus
+                />
+                <TouchableOpacity style={styles.stepBtn} onPress={handlePlus} activeOpacity={0.75}>
+                  <Text style={styles.stepSymbol}>+</Text>
+                </TouchableOpacity>
+              </LinearGradient>
+            </View>
           ) : (
             /* ── Default add-to-cart pill ── */
             <TouchableOpacity
@@ -337,34 +337,41 @@ const styles = StyleSheet.create({
   },
 
   // ── Stepper pill (replaces cart pill when qty > 0) ──
+  stepperWrap: {
+    borderRadius: 50,
+    overflow: 'hidden',
+  },
   stepperPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 50,
     paddingVertical: 4,
-    paddingHorizontal: 4,
+    paddingLeft: 4,
+    paddingRight: 4,
   },
   stepBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.28)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+    flexGrow: 0,
   },
-  stepSymbol: { fontSize: 18, fontWeight: '800', color: colors.textPrimary, lineHeight: 22 },
+  stepSymbol: { fontSize: 20, fontWeight: '700', color: colors.textPrimary, lineHeight: 24 },
   stepInput: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
     fontSize: 15,
     fontWeight: '800',
     color: colors.textPrimary,
     textAlign: 'center',
     textAlignVertical: 'center',
     includeFontPadding: false,
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
     paddingVertical: 0,
-    height: 34,
+    height: 36,
+    minWidth: 30,
   },
 });
 

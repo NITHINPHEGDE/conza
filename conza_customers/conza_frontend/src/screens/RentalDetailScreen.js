@@ -16,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import useAppStore from '../store/useAppStore';
+import RentalCard from '../components/RentalCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HERO_PAGE_WIDTH = SCREEN_WIDTH - 40; // heroWrapper has 20px margin on each side
@@ -290,9 +292,18 @@ const ScheduleModal = React.memo(({ visible, item, onClose, onProceed }) => {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const RentalDetailScreen = ({ route, navigation }) => {
   const { item } = route.params;
+  const rentalItems = useAppStore((s) => s.rentalItems);
+  const addToCart   = useAppStore((s) => s.addToCart);
   const [showBookNow,  setShowBookNow]  = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  const vendorProducts = useMemo(() =>
+    (rentalItems || []).filter(
+      (m) => m.sellerId && m.sellerId === item.sellerId && m.id !== item.id
+    ),
+    [rentalItems, item.sellerId, item.id]
+  );
 
   const description = useMemo(() => item.description || 'High quality rental equipment for your construction needs.', [item.description]);
 
@@ -486,6 +497,28 @@ const RentalDetailScreen = ({ route, navigation }) => {
           <Text style={styles.sectionTitle}>Pricing</Text>
           {renderedPricing}
         </View>
+
+        {/* ── More from this Vendor ── */}
+        {vendorProducts.length > 0 && (
+          <View style={styles.vendorSection}>
+            <Text style={styles.vendorSectionTitle}>More products from this vendor</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.vendorScroll}
+            >
+              {vendorProducts.map((prod) => (
+                <View key={prod.id} style={styles.vendorCard}>
+                  <RentalCard
+                    item={prod}
+                    onPress={() => navigation.push('RentalDetail', { item: prod })}
+                    onAddToCart={() => addToCart(prod)}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         <View style={{ height: 120 }} />
       </ScrollView>
@@ -846,6 +879,25 @@ const styles = StyleSheet.create({
   modalProceedText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
   modalCancel: { paddingVertical: 10, alignItems: 'center' },
   modalCancelText: { fontSize: 14, color: colors.textMuted, fontWeight: '600' },
+  vendorSection: {
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  vendorSectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    letterSpacing: 0.3,
+  },
+  vendorScroll: {
+    paddingHorizontal: 20,
+    gap: 14,
+  },
+  vendorCard: {
+    width: 220,
+  },
 });
 
 export default RentalDetailScreen;
