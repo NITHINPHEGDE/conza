@@ -208,7 +208,7 @@ const MaterialCard = React.memo(({
               style={styles.addCartBtn}
             >
               <MaterialCommunityIcons
-                name={cartAdded ? 'check-circle' : 'cart-plus'}
+                name={cartAdded ? 'check-circle' : 'cart'}
                 size={14}
                 color={colors.textPrimary}
               />
@@ -218,7 +218,11 @@ const MaterialCard = React.memo(({
             </LinearGradient>
           ) : (
             <View style={[styles.addCartBtn, styles.addCartBtnDisabled]}>
-              <MaterialCommunityIcons name="cart-off" size={14} color={colors.textMuted} />
+              <MaterialCommunityIcons
+  name={cartAdded ? 'check-circle' : 'cart-outline'}
+  size={17}
+  color={colors.textPrimary}
+/>
               <Text style={styles.addCartBtnTextDisabled}>Unavailable</Text>
             </View>
           )}

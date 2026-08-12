@@ -88,7 +88,7 @@ const RentalCard = React.memo(({ item, onPress, onAddToCart }) => {
               style={styles.addCartBtn}
             >
               <MaterialCommunityIcons
-                name={added ? 'check-circle' : 'cart-plus'}
+                name={added ? 'check-circle' : 'cart'}
                 size={14}
                 color={colors.textPrimary}
               />
