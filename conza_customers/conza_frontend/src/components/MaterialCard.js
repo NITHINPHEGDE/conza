@@ -171,36 +171,39 @@ const MaterialCard = React.memo(({
             </View>
           ) : (
             /* ── Default add-to-cart pill ── */
-            <TouchableOpacity
-              onPress={cartAdded ? undefined : handleAddToCart}
-              activeOpacity={0.85}
-              style={styles.cartPillWrap}
-            >
+            <View style={styles.cartPillWrap}>
               <LinearGradient
                 colors={cartAdded ? ['#22c55e', '#16a34a'] : [colors.gradientStart, colors.gradientEnd]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.cartPill}
               >
-                <MaterialCommunityIcons
-                  name={cartAdded ? 'check-circle' : 'cart'}
-                  size={16}
-                  color={colors.textPrimary}
-                />
-                <Text style={styles.cartPillText}>
-                  {cartAdded ? 'Added to Cart' : 'Add to Cart'}
-                </Text>
+                <TouchableOpacity
+                  style={styles.cartPillLeft}
+                  onPress={cartAdded ? undefined : handleAddToCart}
+                  activeOpacity={0.85}
+                >
+                  <MaterialCommunityIcons
+                    name={cartAdded ? 'check-circle' : 'cart'}
+                    size={16}
+                    color={colors.textPrimary}
+                  />
+                  <Text style={styles.cartPillText}>
+                    {cartAdded ? 'Added to Cart' : 'Add to Cart'}
+                  </Text>
+                </TouchableOpacity>
+
                 {/* ⊕ circle — tapping this kicks off qty stepper */}
                 <TouchableOpacity
                   style={styles.plusCircle}
                   onPress={handleAdd}
-                  activeOpacity={0.8}
+                  activeOpacity={0.7}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <MaterialCommunityIcons name="plus" size={15} color={colors.textPrimary} />
                 </TouchableOpacity>
               </LinearGradient>
-            </TouchableOpacity>
+            </View>
           )
         ) : (
           <View style={[styles.cartPill, styles.cartPillDisabled]}>
@@ -308,6 +311,13 @@ const styles = StyleSheet.create({
     paddingRight: 5,
     paddingVertical: 8,    // slender
     borderRadius: 50,
+  },
+  cartPillLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   cartPillDisabled: {
     backgroundColor: colors.surfaceElevated,

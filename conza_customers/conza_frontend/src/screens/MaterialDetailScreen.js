@@ -124,6 +124,11 @@ const MaterialDetailScreen = ({ route, navigation }) => {
   const { item } = route.params || {};
   const addToCart = useAppStore((s) => s.addToCart);
   const allMaterials = useAppStore((s) => s.materials);
+  const cart = useAppStore((s) => s.cart);
+
+  const handleUpdateQuantity = useCallback((id, newQty) => {
+    addToCart({ id, _setQty: newQty });
+  }, [addToCart]);
   
   const [showDialog, setShowDialog]                 = useState(false);
   const [cartAdded, setCartAdded]                   = useState(false);
@@ -368,8 +373,8 @@ const MaterialDetailScreen = ({ route, navigation }) => {
                 <View key={prod.id} style={styles.vendorCard}>
                   <MaterialCard
                     {...prod}
-                    quantity={0}
-                    onUpdate={() => {}}
+                    quantity={Number(cart[prod.id]) || 0}
+                    onUpdate={handleUpdateQuantity}
                     onImagePress={() => navigation.push('MaterialDetail', { item: prod })}
                     onAddToCart={() => addToCart(prod)}
                   />
