@@ -21,173 +21,223 @@ const RentalCard = React.memo(({ item, onPress, onAddToCart }) => {
 
   const imageSource = useMemo(() => ({ uri: item.image }), [item.image]);
 
-  const availBadgeStyle = useMemo(() => [
-    styles.availBadge,
-    { backgroundColor: item.available ? 'rgba(46,139,87,0.12)' : 'rgba(224,59,59,0.12)' }
-  ], [item.available]);
-
-  const availDotStyle = useMemo(() => [
-    styles.availDot,
-    { backgroundColor: item.available ? colors.success : colors.danger }
-  ], [item.available]);
-
-  const availTextStyle = useMemo(() => [
-    styles.availText,
-    { color: item.available ? colors.success : colors.danger }
-  ], [item.available]);
+  const hasDiscount = Number(item.mrp) > Number(item.pricePerDay);
+  const locationLabel = item.sellerCity || item.distance;
 
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={handlePress}
-      activeOpacity={0.85}
-    >
+    <TouchableOpacity style={styles.card} onPress={handlePress} activeOpacity={0.9}>
+
+      {/* ── Image ── */}
       <View style={styles.imageWrapper}>
         <Image source={imageSource} style={styles.image} resizeMode="cover" />
-        <LinearGradient
-          colors={['rgba(0,0,0,0.28)', 'transparent']}
-          style={styles.imageTopFade}
-          pointerEvents="none"
-        />
-        <View style={availBadgeStyle}>
-          <View style={availDotStyle} />
-          <Text style={availTextStyle}>
+        {/* Availability badge — top right */}
+        <View style={[styles.availBadge, {
+          backgroundColor: item.available ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+        }]}>
+          <View style={[styles.availDot, {
+            backgroundColor: item.available ? '#22c55e' : '#ef4444',
+          }]} />
+          <Text style={[styles.availText, {
+            color: item.available ? '#22c55e' : '#ef4444',
+          }]}>
             {item.available ? 'Available' : 'Booked'}
           </Text>
         </View>
+        {/* Rating badge — top left */}
         <View style={styles.ratingBadge}>
-          <MaterialCommunityIcons name="star" size={11} color={colors.accentAmber} />
+          <MaterialCommunityIcons name="star" size={10} color={colors.accentAmber} />
           <Text style={styles.ratingText}>{item.rating}</Text>
         </View>
       </View>
 
-      <View style={styles.details}>
-        <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.seller} numberOfLines={1}>by {item.seller}</Text>
-        
-        <View style={styles.distanceRow}>
-          <MaterialCommunityIcons name="map-marker" size={12} color={colors.textMuted} />
-          <Text style={styles.distanceText}>{item.distance}</Text>
-        </View>
-
-        <View style={styles.priceChip}>
+      {/* ── Price block ── */}
+      <View style={styles.priceBlock}>
+        <View style={styles.priceRow}>
+          {hasDiscount ? (
+            <Text style={styles.mrpStrike}>₹{item.mrp}</Text>
+          ) : null}
           <Text style={styles.price}>₹{item.pricePerDay}</Text>
-          <Text style={styles.unit}>/day</Text>
+          <Text style={styles.unitLabel}>/ day</Text>
         </View>
+        {hasDiscount ? (
+          <View style={styles.discountPill}>
+            <Text style={styles.discountText}>{item.discountPercent}% off</Text>
+          </View>
+        ) : null}
+      </View>
 
-        <TouchableOpacity
-          onPress={handleAddToCart}
-          activeOpacity={0.85}
-          disabled={!item.available}
-        >
-          {item.available ? (
+      {/* ── Divider ── */}
+      <View style={styles.divider} />
+
+      {/* ── Meta row: name/seller left | distance right ── */}
+      <View style={styles.metaRow}>
+        <View style={styles.metaLeft}>
+          <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+          {item.seller ? (
+            <Text style={styles.seller} numberOfLines={1}>by {item.seller}</Text>
+          ) : null}
+        </View>
+        {locationLabel ? (
+          <View style={styles.distanceWrap}>
+            <MaterialCommunityIcons name="map-marker" size={13} color={colors.textMuted} />
+            <Text style={styles.distanceText} numberOfLines={1}>{locationLabel}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* ── Add to Cart pill ── */}
+      <View style={styles.cartRow}>
+        {item.available ? (
+          <TouchableOpacity
+            onPress={handleAddToCart}
+            activeOpacity={0.85}
+            style={styles.cartPillWrap}
+          >
             <LinearGradient
-              colors={added ? [colors.success, colors.success] : [colors.gradientStart, colors.gradientEnd]}
+              colors={added ? ['#22c55e', '#16a34a'] : [colors.gradientStart, colors.gradientEnd]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={styles.addCartBtn}
+              style={styles.cartPill}
             >
               <MaterialCommunityIcons
                 name={added ? 'check-circle' : 'cart'}
-                size={14}
+                size={18}
                 color={colors.textPrimary}
               />
-              <Text style={styles.addCartBtnText}>
-                {added ? 'Added' : 'Add to Cart'}
+              <Text style={styles.cartPillText}>
+                {added ? 'Added to Cart' : 'Add to Cart'}
               </Text>
+              <View style={styles.qtyCircle}>
+                <MaterialCommunityIcons name="plus" size={16} color={colors.textPrimary} />
+              </View>
             </LinearGradient>
-          ) : (
-            <View style={[styles.addCartBtn, styles.addCartBtnDisabled]}>
-              <MaterialCommunityIcons name="cart-off" size={14} color={colors.textMuted} />
-              <Text style={styles.addCartBtnTextDisabled}>Unavailable</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.cartPill, styles.cartPillDisabled]}>
+            <MaterialCommunityIcons name="cart-off" size={16} color={colors.textMuted} />
+            <Text style={styles.cartPillTextDisabled}>Unavailable</Text>
+          </View>
+        )}
       </View>
+
     </TouchableOpacity>
   );
 });
-
 
 const styles = StyleSheet.create({
   card: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
     shadowColor: colors.cardShadow,
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
   },
-  imageWrapper: {
-    width: '100%',
-    height: 112,
-    backgroundColor: colors.surfaceElevated,
-    position: 'relative',
-  },
+
+  // Image
+  imageWrapper: { width: '100%', height: 130, position: 'relative', backgroundColor: colors.surfaceElevated },
   image: { width: '100%', height: '100%' },
-  imageTopFade: { position: 'absolute', top: 0, left: 0, right: 0, height: 40 },
+
+  // Availability badge (top-right)
   availBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 20,
-    gap: 4,
+    position: 'absolute', top: 8, right: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20,
   },
   availDot: { width: 5, height: 5, borderRadius: 3 },
   availText: { fontSize: 10, fontWeight: '700' },
+
+  // Rating badge (top-left)
   ratingBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 20,
+    position: 'absolute', top: 8, left: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: 6, paddingVertical: 3, borderRadius: 20,
   },
   ratingText: { fontSize: 10, fontWeight: '800', color: colors.textPrimary },
-  details: { padding: 12 },
-  name: { fontSize: 13, fontWeight: '800', color: colors.textPrimary, marginBottom: 2 },
-  seller: { fontSize: 11, color: colors.textMuted, marginBottom: 5, fontWeight: '500' },
-  distanceRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 10 },
-  distanceText: { fontSize: 11, color: colors.textSecondary, fontWeight: '600' },
-  priceChip: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    alignSelf: 'flex-start',
-    gap: 2,
-    backgroundColor: colors.accentYellowSoft,
-    borderWidth: 1,
-    borderColor: 'rgba(245,200,66,0.3)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginBottom: 10,
-  },
-  price: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
-  unit: { fontSize: 10, color: colors.textSecondary, fontWeight: '600' },
-  addCartBtn: {
+
+  // Price block
+  priceBlock: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    flexWrap: 'wrap',
     gap: 6,
-    borderRadius: 11,
-    paddingVertical: 9,
   },
-  addCartBtnDisabled: { backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.borderLight },
-  addCartBtnText: { fontSize: 12, fontWeight: '800', color: colors.textPrimary },
-  addCartBtnTextDisabled: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, flexShrink: 1 },
+  mrpStrike: { fontSize: 12, color: colors.textMuted, fontWeight: '600', textDecorationLine: 'line-through' },
+  price: { fontSize: 20, fontWeight: '900', color: colors.textPrimary },
+  unitLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
+  discountPill: {
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    borderRadius: 20,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  discountText: { fontSize: 10, fontWeight: '800', color: '#ef4444' },
+
+  // Divider
+  divider: { height: 1, backgroundColor: colors.borderLight, marginHorizontal: 12 },
+
+  // Meta row
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  metaLeft: { flex: 1, minWidth: 0 },
+  name: { fontSize: 13, fontWeight: '800', color: colors.textPrimary, marginBottom: 1 },
+  seller: { fontSize: 11, color: colors.textMuted, fontWeight: '500' },
+  distanceWrap: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 },
+  distanceText: { fontSize: 11, color: colors.textMuted, fontWeight: '600', maxWidth: 80 },
+
+  // Cart pill
+  cartRow: { paddingHorizontal: 12, paddingBottom: 12 },
+  cartPillWrap: { borderRadius: 50, overflow: 'hidden' },
+  cartPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 16,
+    paddingRight: 6,
+    paddingVertical: 11,
+    borderRadius: 50,
+  },
+  cartPillDisabled: {
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    justifyContent: 'center',
+    paddingRight: 16,
+    gap: 8,
+  },
+  cartPillText: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: 0.4,
+  },
+  cartPillTextDisabled: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  qtyCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
 });
 
 export default RentalCard;
