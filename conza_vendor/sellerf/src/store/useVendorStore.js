@@ -277,25 +277,33 @@ const normalizeOrder = (o) => ({
   })),
 });
 
-const normalizeProduct = (p) => ({
-  id:          p._id?.toString() || p.id,
-  name:        p.title,
-  brand:       p.brand          || '',
-  image:       p.images?.[0]    || null,
-  images:      p.images         || [],
-  price:       p.price,
-  unit:        p.unit,
-  stock:       p.stock,
-  sold:        p.sold           || 0,
-  sku:         p.sku            || '',
-  category:    p.category,
-  type:        p.type,
-  active:      p.isAvailable,
-  lowStock:    p.stock <= (p.lowStockAt || 5),
-  description: p.description    || '',
-  deposit:     p.deposit        || 0,
-  minRentalDays: p.minRentalDays || 1,
-  rentalPrice: p.rentalPrice    || p.price,
-});
+const normalizeProduct = (p) => {
+  const price = p.price;
+  const mrp   = (p.mrp !== undefined && p.mrp !== null && Number(p.mrp) > Number(price)) ? Number(p.mrp) : null;
+  const discountPercent = mrp ? Math.round(((mrp - price) / mrp) * 100) : 0;
+
+  return {
+    id:          p._id?.toString() || p.id,
+    name:        p.title,
+    brand:       p.brand          || '',
+    image:       p.images?.[0]    || null,
+    images:      p.images         || [],
+    price:       p.price,
+    mrp,
+    discountPercent,
+    unit:        p.unit,
+    stock:       p.stock,
+    sold:        p.sold           || 0,
+    sku:         p.sku            || '',
+    category:    p.category,
+    type:        p.type,
+    active:      p.isAvailable,
+    lowStock:    p.stock <= (p.lowStockAt || 5),
+    description: p.description    || '',
+    deposit:     p.deposit        || 0,
+    minRentalDays: p.minRentalDays || 1,
+    rentalPrice: p.rentalPrice    || p.price,
+  };
+};
 
 export default useVendorStore;

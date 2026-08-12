@@ -94,7 +94,7 @@ const createProduct = async (req, res) => {
   try {
     const {
       title, description, brand, category, unit, type,
-      price, rentalPrice, deposit, minRentalDays,
+      price, mrp, rentalPrice, deposit, minRentalDays,
       stock, sku, minOrder, weight, hsnCode, lowStockAt,
       images, // now just an array of Cloudinary URLs sent from frontend
     } = req.body;
@@ -109,6 +109,7 @@ const createProduct = async (req, res) => {
       unit:         unit         || 'piece',
       type,
       price:        Number(price),
+      mrp:          (mrp !== undefined && mrp !== null && mrp !== '') ? Number(mrp) : null,
       rentalPrice:  rentalPrice  ? Number(rentalPrice)  : null,
       deposit:      deposit      ? Number(deposit)      : 0,
       minRentalDays: minRentalDays ? Number(minRentalDays) : 1,
@@ -140,7 +141,7 @@ const updateProduct = async (req, res) => {
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
 
     const {
-      title, description, brand, category, unit, price, rentalPrice,
+      title, description, brand, category, unit, price, mrp, rentalPrice,
       deposit, minRentalDays, stock, sku, minOrder, weight, hsnCode,
       isAvailable, lowStockAt,
       images,      // full replacement array of Cloudinary URLs if provided
@@ -159,6 +160,7 @@ const updateProduct = async (req, res) => {
     if (category !== undefined)      product.category      = category;
     if (unit !== undefined)          product.unit          = unit;
     if (price !== undefined)         product.price         = Number(price);
+    if (mrp !== undefined)           product.mrp           = (mrp === null || mrp === '') ? null : Number(mrp);
     if (rentalPrice !== undefined)   product.rentalPrice   = Number(rentalPrice);
     if (deposit !== undefined)       product.deposit       = Number(deposit);
     if (minRentalDays !== undefined) product.minRentalDays = Number(minRentalDays);

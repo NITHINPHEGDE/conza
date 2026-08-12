@@ -164,10 +164,21 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
         <View style={styles.priceStockRow}>
           <View>
             <Text style={styles.priceLabel}>Price</Text>
-            <Text style={styles.priceText}>
-              ₹{item.price.toLocaleString('en-IN')}
-              <Text style={styles.unitText}> /{item.unit}</Text>
-            </Text>
+            {item.mrp && item.mrp > item.price ? (
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={styles.priceText}>
+                  ₹{item.price.toLocaleString('en-IN')}
+                  <Text style={styles.unitText}> /{item.unit}</Text>
+                </Text>
+                <Text style={styles.mrpStrikeText}>₹{item.mrp.toLocaleString('en-IN')}</Text>
+                <Text style={styles.discountBadgeText}>{item.discountPercent}% OFF</Text>
+              </View>
+            ) : (
+              <Text style={styles.priceText}>
+                ₹{item.price.toLocaleString('en-IN')}
+                <Text style={styles.unitText}> /{item.unit}</Text>
+              </Text>
+            )}
           </View>
           <View style={styles.stockBlock}>
             <Text style={styles.priceLabel}>Stock</Text>
@@ -276,10 +287,21 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
         <View style={styles.priceStockRow}>
           <View>
             <Text style={styles.priceLabel}>Rental Rate</Text>
-            <Text style={styles.priceText}>
-              ₹{(item.rentalPrice || item.price || 0).toLocaleString('en-IN')}
-              <Text style={styles.unitText}> /day</Text>
-            </Text>
+            {item.mrp && item.mrp > (item.rentalPrice || item.price || 0) ? (
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={styles.priceText}>
+                  ₹{(item.rentalPrice || item.price || 0).toLocaleString('en-IN')}
+                  <Text style={styles.unitText}> /day</Text>
+                </Text>
+                <Text style={styles.mrpStrikeText}>₹{item.mrp.toLocaleString('en-IN')}</Text>
+                <Text style={styles.discountBadgeText}>{item.discountPercent}% OFF</Text>
+              </View>
+            ) : (
+              <Text style={styles.priceText}>
+                ₹{(item.rentalPrice || item.price || 0).toLocaleString('en-IN')}
+                <Text style={styles.unitText}> /day</Text>
+              </Text>
+            )}
             <Text style={styles.depositText}>Deposit: ₹{item.deposit.toLocaleString('en-IN')}</Text>
           </View>
           <View style={styles.stockBlock}>
@@ -610,6 +632,9 @@ const InventoryScreen = ({ navigation }) => {
                       <View style={styles.modalGridCell}>
                         <Text style={styles.modalCellLabel}>Rental Rate</Text>
                         <Text style={styles.modalCellValue}>₹{(viewProduct.rentalPrice || viewProduct.price || 0).toLocaleString('en-IN')}/day</Text>
+                        {viewProduct.mrp && viewProduct.mrp > (viewProduct.rentalPrice || viewProduct.price || 0) ? (
+                          <Text style={styles.modalMrpText}>₹{viewProduct.mrp.toLocaleString('en-IN')} · {viewProduct.discountPercent}% OFF</Text>
+                        ) : null}
                       </View>
                       <View style={styles.modalGridCell}>
                         <Text style={styles.modalCellLabel}>Security Deposit</Text>
@@ -629,6 +654,9 @@ const InventoryScreen = ({ navigation }) => {
                       <View style={styles.modalGridCell}>
                         <Text style={styles.modalCellLabel}>Price</Text>
                         <Text style={styles.modalCellValue}>₹{(viewProduct.price || 0).toLocaleString('en-IN')}</Text>
+                        {viewProduct.mrp && viewProduct.mrp > (viewProduct.price || 0) ? (
+                          <Text style={styles.modalMrpText}>₹{viewProduct.mrp.toLocaleString('en-IN')} · {viewProduct.discountPercent}% OFF</Text>
+                        ) : null}
                       </View>
                       <View style={styles.modalGridCell}>
                         <Text style={styles.modalCellLabel}>Unit</Text>
@@ -775,6 +803,8 @@ const styles = StyleSheet.create({
   priceLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
   priceText: { fontSize: 22, fontWeight: '900', color: colors.accentAmber },
   unitText: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
+  mrpStrikeText: { fontSize: 13, fontWeight: '600', color: colors.textMuted, textDecorationLine: 'line-through' },
+  discountBadgeText: { fontSize: 11, fontWeight: '800', color: colors.white, backgroundColor: colors.red, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden' },
   depositText: { fontSize: 11, color: colors.textSecondary, fontWeight: '500', marginTop: 3 },
   stockBlock: { alignItems: 'flex-end' },
   stockBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
@@ -838,6 +868,7 @@ const styles = StyleSheet.create({
   modalGridCell: { width: '47%', backgroundColor: colors.surfaceElevated, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
   modalCellLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   modalCellValue: { fontSize: 14, fontWeight: '800', color: colors.textPrimary },
+  modalMrpText: { fontSize: 11, fontWeight: '600', color: colors.textMuted, marginTop: 3, textDecorationLine: 'line-through' },
   modalSectionTitle: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, marginBottom: 8 },
   modalDescText: { fontSize: 13, color: colors.textSecondary, lineHeight: 20, marginBottom: 20 },
   modalCloseBtn: { marginHorizontal: 20, backgroundColor: colors.textPrimary, paddingVertical: 14, borderRadius: 16, alignItems: 'center' },

@@ -48,6 +48,7 @@ const EditEquipmentScreen = ({ navigation, route }) => {
   const [brand, setBrand] = useState(item?.brand || '');
   const [category, setCategory] = useState(item?.category || '');
   const [unit, setUnit] = useState(item?.unit || 'unit');
+  const [mrpPerDay, setMrpPerDay] = useState(item?.mrp != null ? String(item.mrp) : '');
   const [pricePerDay, setPricePerDay] = useState(
     item?.rentalPrice != null ? String(item.rentalPrice) :
     item?.pricePerDay != null ? String(item.pricePerDay) :
@@ -94,7 +95,9 @@ const EditEquipmentScreen = ({ navigation, route }) => {
   const handleSave = async () => {
     if (!name.trim())        { Alert.alert('Missing Field', 'Please enter equipment name.');    return; }
     if (!category)           { Alert.alert('Missing Field', 'Please select a category.');       return; }
-    if (!pricePerDay.trim()) { Alert.alert('Missing Field', 'Please enter price per day.');     return; }
+    if (!mrpPerDay.trim())   { Alert.alert('Missing Field', 'Please enter M.R.P. per day.');     return; }
+    if (!pricePerDay.trim()) { Alert.alert('Missing Field', 'Please enter discount price per day.'); return; }
+    if (parseFloat(mrpPerDay) < parseFloat(pricePerDay)) { Alert.alert('Invalid Price', 'M.R.P. cannot be less than the discount price.'); return; }
     if (!totalUnits.trim())  { Alert.alert('Missing Field', 'Please enter total units.');       return; }
 
     setLoading(true);
@@ -120,6 +123,7 @@ const EditEquipmentScreen = ({ navigation, route }) => {
         unit,
         type:          'rental',
         price:         parseFloat(pricePerDay),
+        mrp:           parseFloat(mrpPerDay),
         rentalPrice:   parseFloat(pricePerDay),
         deposit:       parseFloat(deposit || '0'),
         minRentalDays: parseInt(minDays || '1'),
@@ -237,17 +241,31 @@ const EditEquipmentScreen = ({ navigation, route }) => {
           <Text style={styles.sectionTitle}>Rental Pricing</Text>
           <View style={styles.rowInputs}>
             <View style={styles.halfField}>
-              <Text style={styles.fieldLabel}>Price per Day (₹) *</Text>
+              <Text style={styles.fieldLabel}>M.R.P. per Day (₹) *</Text>
+              <TextInput style={styles.input} placeholder="0.00"
+                placeholderTextColor={colors.textMuted} value={mrpPerDay}
+                onChangeText={setMrpPerDay} keyboardType="numeric" />
+            </View>
+            <View style={styles.halfField}>
+              <Text style={styles.fieldLabel}>Discount Price per Day (₹) *</Text>
               <TextInput style={styles.input} placeholder="0.00"
                 placeholderTextColor={colors.textMuted} value={pricePerDay}
                 onChangeText={setPricePerDay} keyboardType="numeric" />
             </View>
+          </View>
+          {mrpPerDay && pricePerDay && parseFloat(mrpPerDay) > parseFloat(pricePerDay) ? (
+            <Text style={styles.discountHint}>
+              {Math.round(((parseFloat(mrpPerDay) - parseFloat(pricePerDay)) / parseFloat(mrpPerDay)) * 100)}% OFF will be shown to customers
+            </Text>
+          ) : null}
+          <View style={styles.rowInputs}>
             <View style={styles.halfField}>
               <Text style={styles.fieldLabel}>Security Deposit (₹)</Text>
               <TextInput style={styles.input} placeholder="0.00"
                 placeholderTextColor={colors.textMuted} value={deposit}
                 onChangeText={setDeposit} keyboardType="numeric" />
             </View>
+            <View style={styles.halfField} />
           </View>
           <View style={styles.rowInputs}>
             <View style={styles.halfField}>
@@ -367,6 +385,7 @@ const styles = StyleSheet.create({
   textArea: { minHeight: 90, paddingTop: 12 },
   rowInputs: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   halfField: { flex: 1 },
+  discountHint: { fontSize: 11, fontWeight: '700', color: colors.success, marginBottom: 12, marginTop: -6 },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border },
   chipActive: { backgroundColor: colors.accentAmberSoft, borderColor: colors.accentAmber },

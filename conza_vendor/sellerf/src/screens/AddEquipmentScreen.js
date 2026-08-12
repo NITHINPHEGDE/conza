@@ -68,6 +68,7 @@ const AddEquipmentScreen = ({ navigation }) => {
     const [brand, setBrand] = useState('');
     const [category, setCategory] = useState('');
     const [unit, setUnit] = useState('unit');
+    const [mrpPerDay, setMrpPerDay] = useState('');
     const [pricePerDay, setPricePerDay] = useState('');
     const [deposit, setDeposit] = useState('');
     const [totalUnits, setTotalUnits] = useState('');
@@ -107,7 +108,9 @@ const AddEquipmentScreen = ({ navigation }) => {
     const handleAdd = async () => {
         if (!name.trim())        { Alert.alert('Missing Field', 'Please enter equipment name.'); return; }
         if (!category)           { Alert.alert('Missing Field', 'Please select a category.'); return; }
-        if (!pricePerDay.trim()) { Alert.alert('Missing Field', 'Please enter price per day.'); return; }
+        if (!mrpPerDay.trim())   { Alert.alert('Missing Field', 'Please enter M.R.P. per day.'); return; }
+        if (!pricePerDay.trim()) { Alert.alert('Missing Field', 'Please enter discount price per day.'); return; }
+        if (parseFloat(mrpPerDay) < parseFloat(pricePerDay)) { Alert.alert('Invalid Price', 'M.R.P. cannot be less than the discount price.'); return; }
         if (!totalUnits.trim())  { Alert.alert('Missing Field', 'Please enter total units.'); return; }
 
         setLoading(true);
@@ -130,6 +133,7 @@ const AddEquipmentScreen = ({ navigation }) => {
                 unit,
                 type:          'rental',
                 price:         parseFloat(pricePerDay),
+                mrp:           parseFloat(mrpPerDay),
                 rentalPrice:   parseFloat(pricePerDay),
                 deposit:       deposit ? parseFloat(deposit) : 0,
                 minRentalDays: minDays ? parseInt(minDays) : 1,
@@ -294,7 +298,19 @@ const AddEquipmentScreen = ({ navigation }) => {
                     <Text style={styles.sectionTitle}>Rental Pricing</Text>
                     <View style={styles.rowInputs}>
                         <View style={styles.halfField}>
-                            <Field label="Price Per Day (₹) *">
+                            <Field label="M.R.P. Per Day (₹) *">
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="0"
+                                    placeholderTextColor={colors.textMuted}
+                                    keyboardType="numeric"
+                                    value={mrpPerDay}
+                                    onChangeText={setMrpPerDay}
+                                />
+                            </Field>
+                        </View>
+                        <View style={styles.halfField}>
+                            <Field label="Discount Price Per Day (₹) *">
                                 <TextInput
                                     style={styles.input}
                                     placeholder="0"
@@ -305,6 +321,13 @@ const AddEquipmentScreen = ({ navigation }) => {
                                 />
                             </Field>
                         </View>
+                    </View>
+                    {mrpPerDay && pricePerDay && parseFloat(mrpPerDay) > parseFloat(pricePerDay) ? (
+                        <Text style={styles.discountHint}>
+                            {Math.round(((parseFloat(mrpPerDay) - parseFloat(pricePerDay)) / parseFloat(mrpPerDay)) * 100)}% OFF will be shown to customers
+                        </Text>
+                    ) : null}
+                    <View style={styles.rowInputs}>
                         <View style={styles.halfField}>
                             <Field label="Security Deposit (₹)">
                                 <TextInput
@@ -317,6 +340,7 @@ const AddEquipmentScreen = ({ navigation }) => {
                                 />
                             </Field>
                         </View>
+                        <View style={styles.halfField} />
                     </View>
                     <Field label="Minimum Rental Days">
                         <TextInput
@@ -462,6 +486,7 @@ const styles = StyleSheet.create({
 
     rowInputs: { flexDirection: 'row', gap: 10 },
     halfField: { flex: 1 },
+    discountHint: { fontSize: 11, fontWeight: '700', color: colors.success, marginBottom: 10, marginTop: -6 },
 
     // Chips (kept for unit picker)
     chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

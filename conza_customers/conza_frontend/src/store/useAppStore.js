@@ -401,28 +401,34 @@ const useAppStore = create((set, get) => ({
       const apiCategories = await catsPromise;
 
       if (data.success && data.products?.length) {
-        const normalized = data.products.map((p) => ({
-          id:          p._id?.toString() || p.id,
-          name:        p.title,
-          price:       p.price,
-          seller:      p.seller?.shopName || p.seller?.name || 'Vendor',
-          unit:        `per ${p.unit || 'piece'}`,
-          distance:    '—',
-          image:       p.images?.[0] || null,
-          images:      Array.isArray(p.images) && p.images.length ? p.images : (p.images?.[0] ? [p.images[0]] : []),
-          inStock:     (p.stock > 0) && p.isAvailable,
-          rating:      4.5,
-          returnable:  false,
-          replaceable: false,
-          returnPolicy: 'Contact seller for return policy.',
-          replacementPolicy: 'Contact seller for replacement policy.',
-          sellerId:    p.seller?._id?.toString(),
-          sellerPhone: p.seller?.phone,
-          sellerCity:  p.seller?.city,
-          category:    p.category,
-          brand:       p.brand || '',
-          description: p.description || '',
-        }));
+        const normalized = data.products.map((p) => {
+          const mrp = (p.mrp !== undefined && p.mrp !== null && Number(p.mrp) > Number(p.price)) ? Number(p.mrp) : null;
+          const discountPercent = mrp ? Math.round(((mrp - p.price) / mrp) * 100) : 0;
+          return {
+            id:          p._id?.toString() || p.id,
+            name:        p.title,
+            price:       p.price,
+            mrp,
+            discountPercent,
+            seller:      p.seller?.shopName || p.seller?.name || 'Vendor',
+            unit:        `per ${p.unit || 'piece'}`,
+            distance:    '—',
+            image:       p.images?.[0] || null,
+            images:      Array.isArray(p.images) && p.images.length ? p.images : (p.images?.[0] ? [p.images[0]] : []),
+            inStock:     (p.stock > 0) && p.isAvailable,
+            rating:      4.5,
+            returnable:  false,
+            replaceable: false,
+            returnPolicy: 'Contact seller for return policy.',
+            replacementPolicy: 'Contact seller for replacement policy.',
+            sellerId:    p.seller?._id?.toString(),
+            sellerPhone: p.seller?.phone,
+            sellerCity:  p.seller?.city,
+            category:    p.category,
+            brand:       p.brand || '',
+            description: p.description || '',
+          };
+        });
         set({
           materials: normalized,
           materialCategories: buildCategoryList(apiCategories, normalized, { allEmoji: '🧱' }),
@@ -492,27 +498,34 @@ const useAppStore = create((set, get) => ({
       const apiCategories = await catsPromise;
 
       if (data.success && data.products?.length) {
-        const normalized = data.products.map((p) => ({
-          id:          p._id?.toString() || p.id,
-          name:        p.title,
-          category:    (p.category || 'Other').toLowerCase().replace(/\s+/g, '_'),
-          emoji:       '🏗️',
-          pricePerDay: p.rentalPrice || p.price,
-          distance:    '—',
-          image:       p.images?.[0] || null,
-          images:      Array.isArray(p.images) && p.images.length ? p.images : (p.images?.[0] ? [p.images[0]] : []),
-          available:   p.isAvailable && (p.stock > 0),
-          rating:      4.5,
-          seller:      p.seller?.shopName || p.seller?.name || 'Vendor',
-          sellerId:    p.seller?._id?.toString(),
-          sellerPhone: p.seller?.phone,
-          sellerCity:  p.seller?.city,
-          description: p.description || '',
-          deposit:     p.deposit || 0,
-          minDays:     p.minRentalDays || 1,
-          features:    [],
-          specs:       [],
-        }));
+        const normalized = data.products.map((p) => {
+          const pricePerDay = p.rentalPrice || p.price;
+          const mrp = (p.mrp !== undefined && p.mrp !== null && Number(p.mrp) > Number(pricePerDay)) ? Number(p.mrp) : null;
+          const discountPercent = mrp ? Math.round(((mrp - pricePerDay) / mrp) * 100) : 0;
+          return {
+            id:          p._id?.toString() || p.id,
+            name:        p.title,
+            category:    (p.category || 'Other').toLowerCase().replace(/\s+/g, '_'),
+            emoji:       '🏗️',
+            pricePerDay,
+            mrp,
+            discountPercent,
+            distance:    '—',
+            image:       p.images?.[0] || null,
+            images:      Array.isArray(p.images) && p.images.length ? p.images : (p.images?.[0] ? [p.images[0]] : []),
+            available:   p.isAvailable && (p.stock > 0),
+            rating:      4.5,
+            seller:      p.seller?.shopName || p.seller?.name || 'Vendor',
+            sellerId:    p.seller?._id?.toString(),
+            sellerPhone: p.seller?.phone,
+            sellerCity:  p.seller?.city,
+            description: p.description || '',
+            deposit:     p.deposit || 0,
+            minDays:     p.minRentalDays || 1,
+            features:    [],
+            specs:       [],
+          };
+        });
 
         set({
           rentalItems: normalized,

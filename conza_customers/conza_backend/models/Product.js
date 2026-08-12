@@ -15,7 +15,8 @@ const productSchema = new mongoose.Schema(
     // 'material' | 'rental'
     type:         { type: String, enum: ['material', 'rental'], required: true },
 
-    price:        { type: Number, required: true },       // sale price or per-day rental price
+    price:        { type: Number, required: true },       // discount / selling price (sale price or per-day rental)
+    mrp:          { type: Number, default: null },        // M.R.P. / original price before discount
     rentalPrice:  { type: Number, default: null },        // alias / convenience field for rental
     deposit:      { type: Number, default: 0 },           // rental deposit amount
     minRentalDays:{ type: Number, default: 1 },

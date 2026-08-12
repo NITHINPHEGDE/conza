@@ -16,6 +16,8 @@ const MaterialCard = React.memo(({
   name, 
   seller, 
   price, 
+  mrp,
+  discountPercent,
   unit, 
   distance,
   image, 
@@ -45,6 +47,8 @@ const MaterialCard = React.memo(({
     Number(quantity) > 0 && styles.cardActive,
   ], [quantity]);
 
+  const hasDiscount = Number(mrp) > Number(price);
+
   const stockBadgeStyle = useMemo(() => [
     styles.stockBadge,
     { backgroundColor: inStock ? 'rgba(46,139,87,0.12)' : 'rgba(224,59,59,0.12)' }
@@ -66,7 +70,7 @@ const MaterialCard = React.memo(({
     // so the detail screen's image carousel only ever had one photo to
     // show even when the vendor had uploaded several during listing.
     onImagePress && onImagePress({
-      id, name, seller, price, unit, distance,
+      id, name, seller, price, mrp, discountPercent, unit, distance,
       image, images,
       rating, inStock, quantity,
       category, brand, description,
@@ -74,7 +78,7 @@ const MaterialCard = React.memo(({
       returnable, replaceable, returnPolicy, replacementPolicy,
     });
   }, [
-    onImagePress, id, name, seller, price, unit, distance,
+    onImagePress, id, name, seller, price, mrp, discountPercent, unit, distance,
     image, images, rating, inStock, quantity,
     category, brand, description, sellerId, sellerPhone, sellerCity,
     returnable, replaceable, returnPolicy, replacementPolicy,
@@ -114,6 +118,11 @@ const MaterialCard = React.memo(({
           style={styles.imageTopFade}
           pointerEvents="none"
         />
+        {hasDiscount ? (
+          <View style={styles.discountBadge}>
+            <Text style={styles.discountBadgeText}>{discountPercent}% OFF</Text>
+          </View>
+        ) : null}
         <View style={stockBadgeStyle}>
           <View style={stockDotStyle} />
           <Text style={stockTextStyle}>
@@ -137,6 +146,11 @@ const MaterialCard = React.memo(({
 
         <View style={styles.priceRow}>
           <View style={styles.priceCol}>
+            {hasDiscount ? (
+              <Text style={styles.mrpStrike} numberOfLines={1}>
+                ₹{((Number(mrp) || 0) * (Number(quantity) > 0 ? Number(quantity) : 1)).toLocaleString('en-IN')}
+              </Text>
+            ) : null}
             <Text style={styles.price} numberOfLines={1}>
               ₹{((Number(price) || 0) * (Number(quantity) > 0 ? Number(quantity) : 1)).toLocaleString('en-IN')}
             </Text>
@@ -237,6 +251,8 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: '100%' },
   imageTopFade: { position: 'absolute', top: 0, left: 0, right: 0, height: 40 },
   stockBadge: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, gap: 4 },
+  discountBadge: { position: 'absolute', bottom: 8, left: 8, backgroundColor: colors.danger, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  discountBadgeText: { fontSize: 9, fontWeight: '800', color: colors.white },
   stockDot: { width: 5, height: 5, borderRadius: 3 },
   stockText: { fontSize: 10, fontWeight: '700' },
   ratingBadge: { position: 'absolute', top: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.95)', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 20 },
@@ -248,6 +264,7 @@ const styles = StyleSheet.create({
   distanceText: { fontSize: 11, color: colors.textSecondary, fontWeight: '600' },
   priceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 6 },
   priceCol: { flex: 1, minWidth: 0, flexShrink: 1 },
+  mrpStrike: { fontSize: 11, color: colors.textMuted, fontWeight: '600', textDecorationLine: 'line-through' },
   price: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
   unit: { fontSize: 10, color: colors.textMuted, fontWeight: '500' },
   addBtn: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.accentYellowSoft, borderWidth: 1, borderColor: 'rgba(245,200,66,0.35)', alignItems: 'center', justifyContent: 'center' },

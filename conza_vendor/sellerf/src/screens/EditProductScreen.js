@@ -43,6 +43,7 @@ const EditProductScreen = ({ navigation, route }) => {
   const [category, setCategory] = useState(item?.category || '');
   const [unit, setUnit] = useState(item?.unit || '');
   const [price, setPrice] = useState(item?.price != null ? String(item.price) : '');
+  const [mrp, setMrp] = useState(item?.mrp != null ? String(item.mrp) : '');
   const [stock, setStock] = useState(item?.stock != null ? String(item.stock) : '');
   const [sku, setSku] = useState(item?.sku || '');
   const [description, setDescription] = useState(item?.description || '');
@@ -82,7 +83,9 @@ const EditProductScreen = ({ navigation, route }) => {
   const handleSave = async () => {
     if (!name.trim()) { Alert.alert('Missing Field', 'Please enter a product name.'); return; }
     if (!category)    { Alert.alert('Missing Field', 'Please select a category.');    return; }
-    if (!price)       { Alert.alert('Missing Field', 'Please enter a price.');         return; }
+    if (!price)       { Alert.alert('Missing Field', 'Please enter a selling price.');  return; }
+    if (!mrp)          { Alert.alert('Missing Field', 'Please enter the M.R.P. / original price.'); return; }
+    if (parseFloat(mrp) < parseFloat(price)) { Alert.alert('Invalid Price', 'M.R.P. cannot be less than the selling price.'); return; }
 
     setLoading(true);
     try {
@@ -107,6 +110,7 @@ const EditProductScreen = ({ navigation, route }) => {
         category,
         unit,
         price:       parseFloat(price),
+        mrp:         parseFloat(mrp),
         stock:       parseInt(stock || '0'),
         sku,
         description,
@@ -219,18 +223,28 @@ const EditProductScreen = ({ navigation, route }) => {
           <Text style={styles.sectionTitle}>Pricing & Stock</Text>
           <View style={styles.rowInputs}>
             <View style={styles.halfField}>
-              <Text style={styles.fieldLabel}>Unit Price (₹) *</Text>
+              <Text style={styles.fieldLabel}>M.R.P. / Original Price (₹) *</Text>
+              <TextInput style={styles.input} placeholder="0.00"
+                placeholderTextColor={colors.textMuted} value={mrp}
+                onChangeText={setMrp} keyboardType="numeric" />
+            </View>
+            <View style={styles.halfField}>
+              <Text style={styles.fieldLabel}>Discount / Selling Price (₹) *</Text>
               <TextInput style={styles.input} placeholder="0.00"
                 placeholderTextColor={colors.textMuted} value={price}
                 onChangeText={setPrice} keyboardType="numeric" />
             </View>
-            <View style={styles.halfField}>
-              <Text style={styles.fieldLabel}>Stock Quantity *</Text>
-              <TextInput style={styles.input} placeholder="0"
-                placeholderTextColor={colors.textMuted} value={stock}
-                onChangeText={setStock} keyboardType="numeric" />
-            </View>
           </View>
+          {mrp && price && parseFloat(mrp) > parseFloat(price) ? (
+            <Text style={styles.discountHint}>
+              {Math.round(((parseFloat(mrp) - parseFloat(price)) / parseFloat(mrp)) * 100)}% OFF will be shown to customers
+            </Text>
+          ) : null}
+          <Field label="Stock Quantity *">
+            <TextInput style={styles.input} placeholder="0"
+              placeholderTextColor={colors.textMuted} value={stock}
+              onChangeText={setStock} keyboardType="numeric" />
+          </Field>
           <Field label="Minimum Order Quantity">
             <TextInput style={styles.input} placeholder="e.g. 10"
               placeholderTextColor={colors.textMuted} value={minOrder}
@@ -334,6 +348,7 @@ const styles = StyleSheet.create({
   textArea: { minHeight: 90, paddingTop: 12 },
   rowInputs: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   halfField: { flex: 1 },
+  discountHint: { fontSize: 11, fontWeight: '700', color: colors.success, marginBottom: 12, marginTop: -4 },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: colors.surfaceElevated, borderWidth: 1, borderColor: colors.border },
   chipActive: { backgroundColor: colors.accentAmberSoft, borderColor: colors.accentAmber },
