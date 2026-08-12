@@ -266,26 +266,38 @@ const ProjectDetailScreen = ({ route, navigation }) => {
     ]);
   }, [project, removeAttachmentFromProject]);
 
+  const [deleting, setDeleting] = useState(false);
+
   const handleDeleteProject = useCallback(() => {
-    if (!project) return;
-    Alert.alert('Delete Project', `Delete "${project.name}"? This cannot be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setBusy(true);
-          try {
-            await deleteProject(project._id);
-            navigation.goBack();
-          } catch (e) {
-            Alert.alert('Could not delete', e.message || 'Please try again.');
-            setBusy(false);
-          }
+    if (!project || busy || deleting) return; // guards against double-tap re-firing the alert
+    Alert.alert(
+      'Delete Project',
+      `Delete "${project.name}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            setBusy(true);
+            try {
+              await deleteProject(project._id);
+              navigation.goBack();
+            } catch (e) {
+              setDeleting(false);
+              setBusy(false);
+              Alert.alert(
+                'Could not delete',
+                e?.response?.data?.message || e?.message || 'Please check your connection and try again.'
+              );
+            }
+          },
         },
-      },
-    ]);
-  }, [project, deleteProject, navigation]);
+      ],
+      { cancelable: true }
+    );
+  }, [project, busy, deleting, deleteProject, navigation]);
 
   // Bottom-right FAB: send the customer to the Status tab, where attachments
   // are actually added via each card's existing "Add to Project" action.
@@ -322,8 +334,18 @@ const ProjectDetailScreen = ({ route, navigation }) => {
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{project.name}</Text>
-        <TouchableOpacity style={styles.backBtn} onPress={handleDeleteProject} activeOpacity={0.7}>
-          <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.danger} />
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={handleDeleteProject}
+          activeOpacity={0.7}
+          disabled={busy || deleting}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          {deleting ? (
+            <ActivityIndicator size="small" color={colors.danger} />
+          ) : (
+            <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.danger} />
+          )}
         </TouchableOpacity>
       </View>
       <View style={styles.divider} />
