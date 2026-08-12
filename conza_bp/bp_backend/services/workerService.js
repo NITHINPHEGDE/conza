@@ -251,15 +251,30 @@ const updateWorkerLocation = async (workerId, latitude, longitude) => {
   }
 
   if (buffered) {
-    // Return lightweight response from Redis — no DB read needed
-    // Update lastLocationAt in memory for auto-offline check accuracy
+    // Normal path: only update lastLocationAt in MongoDB.
+    // The actual coordinates are flushed from the Redis buffer every 15 s
+    // by the background job — this keeps DB write load low.
+    //
+    // Exception: if the worker's stored location is still [0,0] (first ever
+    // ping after account creation or a long gap), write coordinates directly
+    // this one time so the customer app's geo-query can find them immediately
+    // instead of waiting up to 15 s for the first buffer flush.
+    const existing = await Worker.findById(workerId).select('location').lean();
+    const [storedLng, storedLat] = existing?.location?.coordinates || [0, 0];
+    const isAtOrigin = storedLng === 0 && storedLat === 0;
+
+    const updateFields = isAtOrigin
+      ? { location: { type: 'Point', coordinates: [longitude, latitude] }, lastLocationAt: new Date(), isOnline: true }
+      : { lastLocationAt: new Date(), isOnline: true };
+
     const worker = await Worker.findByIdAndUpdate(
       workerId,
-      { lastLocationAt: new Date(), isOnline: true },
+      updateFields,
       { new: true, select: '-password' }
     );
     if (!worker) throw new AppError('Worker not found.', 404);
-    // Overlay buffered coordinates so response reflects the latest ping
+    // Overlay the buffered coordinates on the response so the caller always
+    // sees the latest position, even when we didn't write it to Mongo yet.
     worker.location = { type: 'Point', coordinates: [longitude, latitude] };
     return worker;
   }

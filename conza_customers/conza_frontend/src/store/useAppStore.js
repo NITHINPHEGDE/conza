@@ -928,10 +928,10 @@ const useAppStore = create((set, get) => ({
 
     socket.on('worker_updated', ({ workerId, fullDocument }) => {
       if (!workerId || !fullDocument) return;
-      // Patch the worker in place wherever they currently appear instead of
-      // refetching every category from the API. If they aren't loaded in
-      // any category yet there's nothing to patch, and no one is looking
-      // at them right now, so there's no need to eagerly fetch.
+      // Patch the worker in place wherever they currently appear. If they
+      // aren't in any category yet but are now visible (verified, active,
+      // available), add them so a newly-logged-in worker appears immediately
+      // without requiring a manual pull-to-refresh.
       set((state) => {
         const category = fullDocument.category;
         if (!category || !state.workersByCategory[category]) return {};
@@ -939,7 +939,50 @@ const useAppStore = create((set, get) => ({
         const exists = current.some(
           (w) => w._id?.toString() === workerId || w.id?.toString() === workerId
         );
-        if (!exists) return {};
+
+        // Worker is newly visible — add them to the list
+        const isVisible =
+          fullDocument.isVerified === true &&
+          fullDocument.status !== 'suspended' &&
+          fullDocument.isAvailable !== false;
+
+        if (!exists) {
+          if (!isVisible) return {};
+          // Build a shape that matches what getNearbyWorkers returns
+          const newWorker = {
+            id:           workerId,
+            _id:          workerId,
+            name:         fullDocument.fullName || '',
+            initials:     (fullDocument.fullName || '??')
+              .split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+            category:     fullDocument.category,
+            skills:       fullDocument.skills || [],
+            pricePerDay:  fullDocument.minCharge || 0,
+            minCharge:    fullDocument.minCharge || 0,
+            baseCharge:   fullDocument.baseCharge || 0,
+            perDayCharge: fullDocument.perDayCharge || 0,
+            rating:       fullDocument.rating || 5.0,
+            totalJobs:    fullDocument.totalJobs || 0,
+            distance:     fullDocument.locationText || 'Nearby',
+            distanceKm:   null,
+            available:    true,
+            isOnline:     true,
+            isVerified:   true,
+            bio:          fullDocument.bio || '',
+            experience:   fullDocument.experience || null,
+            locationText: fullDocument.locationText || '',
+            memberSince:  fullDocument.memberSince || '',
+            profileImage: fullDocument.profileImage || null,
+          };
+          return {
+            workersByCategory: {
+              ...state.workersByCategory,
+              [category]: [...current, newWorker],
+            },
+          };
+        }
+
+        // Worker already in list — patch their fields
         return {
           workersByCategory: {
             ...state.workersByCategory,
@@ -947,14 +990,16 @@ const useAppStore = create((set, get) => ({
               w._id?.toString() === workerId || w.id?.toString() === workerId
                 ? {
                     ...w,
-                    name: fullDocument.fullName ?? w.name,
-                    skills: fullDocument.skills ?? w.skills,
-                    pricePerDay: fullDocument.minCharge ?? w.pricePerDay,
-                    minCharge: fullDocument.minCharge ?? w.minCharge,
-                    baseCharge: fullDocument.baseCharge ?? w.baseCharge,
-                    perDayCharge: fullDocument.perDayCharge ?? w.perDayCharge,
-                    rating: fullDocument.rating ?? w.rating,
-                    isVerified: fullDocument.isVerified ?? w.isVerified,
+                    name:         fullDocument.fullName        ?? w.name,
+                    skills:       fullDocument.skills          ?? w.skills,
+                    pricePerDay:  fullDocument.minCharge       ?? w.pricePerDay,
+                    minCharge:    fullDocument.minCharge       ?? w.minCharge,
+                    baseCharge:   fullDocument.baseCharge      ?? w.baseCharge,
+                    perDayCharge: fullDocument.perDayCharge    ?? w.perDayCharge,
+                    rating:       fullDocument.rating          ?? w.rating,
+                    isVerified:   fullDocument.isVerified      ?? w.isVerified,
+                    available:    isVisible,
+                    isOnline:     fullDocument.isOnline        ?? w.isOnline,
                   }
                 : w
             ),

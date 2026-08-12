@@ -95,7 +95,15 @@ const isRoutineLocationPing = (c) => {
   if (!keys.every((k) => PING_ONLY_FIELDS.has(k))) return false;
   // An explicit "went offline" flip must still be broadcast so customers
   // see it immediately — only suppress when the worker stayed/came online.
-  return c.fullDocument?.isOnline !== false;
+  if (c.fullDocument?.isOnline === false) return false;
+  // A worker transitioning from offline → online (login / re-activation)
+  // must also be broadcast — suppressing it is what caused newly-active
+  // workers to never appear in the customer app until a manual refresh.
+  // The change stream doesn't expose the previous value directly, but if
+  // isOnline is in updatedFields it means the value just changed — treat
+  // that as a meaningful availability transition, not a routine ping.
+  if (keys.includes('isOnline')) return false;
+  return true;
 };
 
 const watchChanges = () => {
