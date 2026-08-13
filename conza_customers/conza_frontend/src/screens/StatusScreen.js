@@ -70,10 +70,12 @@ const BookingCard = React.memo(({ booking, onPress, onAddToProject }) => {
           <TouchableOpacity style={styles.actionBtn} onPress={onPress} activeOpacity={0.8}>
             <Text style={styles.actionBtnText}>View Details →</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.addProjectBtn} onPress={onAddToProject} activeOpacity={0.8}>
-            <MaterialCommunityIcons name="briefcase-plus-outline" size={14} color="#059669" />
-            <Text style={styles.addProjectBtnText}>Add to Project</Text>
-          </TouchableOpacity>
+          {booking.status !== 'cancelled' && (
+            <TouchableOpacity style={styles.addProjectBtn} onPress={onAddToProject} activeOpacity={0.8}>
+              <MaterialCommunityIcons name="briefcase-plus-outline" size={14} color="#059669" />
+              <Text style={styles.addProjectBtnText}>Add to Project</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -130,10 +132,12 @@ const MaterialCard = React.memo(({ order, onViewDetails, onAddToProject }) => {
           <TouchableOpacity style={styles.actionBtn} onPress={onViewDetails} activeOpacity={0.8}>
             <Text style={styles.actionBtnText}>View Details →</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.addProjectBtn} onPress={onAddToProject} activeOpacity={0.8}>
-            <MaterialCommunityIcons name="briefcase-plus-outline" size={14} color="#059669" />
-            <Text style={styles.addProjectBtnText}>Add to Project</Text>
-          </TouchableOpacity>
+          {order.status !== 'cancelled' && (
+            <TouchableOpacity style={styles.addProjectBtn} onPress={onAddToProject} activeOpacity={0.8}>
+              <MaterialCommunityIcons name="briefcase-plus-outline" size={14} color="#059669" />
+              <Text style={styles.addProjectBtnText}>Add to Project</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
@@ -188,10 +192,12 @@ const RentalCard = React.memo(({ order, onViewDetails, onAddToProject }) => {
           <TouchableOpacity style={styles.actionBtn} onPress={onViewDetails} activeOpacity={0.8}>
             <Text style={styles.actionBtnText}>View Details →</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.addProjectBtn} onPress={onAddToProject} activeOpacity={0.8}>
-            <MaterialCommunityIcons name="briefcase-plus-outline" size={14} color="#059669" />
-            <Text style={styles.addProjectBtnText}>Add to Project</Text>
-          </TouchableOpacity>
+          {order.status !== 'cancelled' && (
+            <TouchableOpacity style={styles.addProjectBtn} onPress={onAddToProject} activeOpacity={0.8}>
+              <MaterialCommunityIcons name="briefcase-plus-outline" size={14} color="#059669" />
+              <Text style={styles.addProjectBtnText}>Add to Project</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
