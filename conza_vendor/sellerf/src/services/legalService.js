@@ -1,6 +1,6 @@
 // Fetches Legal (Terms/Privacy) and About Us content from the admin backend public endpoints.
 const ADMIN_API_BASE_URL =
-  process.env.EXPO_PUBLIC_ADMIN_API_URL || 'https://conza-production-8ba6.up.railway.app/api';
+  process.env.EXPO_PUBLIC_ADMIN_API_URL || 'https://conza-production-35e9.up.railway.app/api';
 
 export const fetchVendorLegal = async () => {
   const response = await fetch(

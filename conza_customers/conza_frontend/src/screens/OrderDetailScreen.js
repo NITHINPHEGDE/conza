@@ -200,14 +200,16 @@ const OrderDetailScreen = ({ route, navigation }) => {
           </>
         )}
 
-        <TouchableOpacity
-          style={styles.addToProjectBtn}
-          onPress={() => setShowAddToProject(true)}
-          activeOpacity={0.85}
-        >
-          <MaterialCommunityIcons name="briefcase-plus-outline" size={18} color={colors.textPrimary} />
-          <Text style={styles.addToProjectBtnText}>Add to Project</Text>
-        </TouchableOpacity>
+        {order.status !== 'cancelled' && (
+          <TouchableOpacity
+            style={styles.addToProjectBtn}
+            onPress={() => setShowAddToProject(true)}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="briefcase-plus-outline" size={18} color={colors.textPrimary} />
+            <Text style={styles.addToProjectBtnText}>Add to Project</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       <AddToProjectSheet
