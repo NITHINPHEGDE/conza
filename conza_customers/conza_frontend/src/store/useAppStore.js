@@ -1053,14 +1053,14 @@ const useAppStore = create((set, get) => ({
         }));
       }
 
+      // Use the cache-busted fetchActiveBooking for the detail view — do NOT
+      // call fetchLabourBookings/fetchActiveBookings here because those hit the
+      // Redis-cached getMyBookings endpoint (20s TTL) and will overwrite the
+      // optimistic status update above with the old stale value, causing the
+      // outer status card to briefly flip back to the previous status.
       if (bookingId && get().activeBookingId?.toString() === bookingId?.toString()) {
         get().fetchActiveBooking(bookingId);
       }
-
-      get().fetchActiveBookings();
-      get().fetchLabourBookings();
-      get().fetchProjects();
-      get().fetchMyProjects();
     });
 
     socket.on('booking_status_changed', (data) => {
@@ -1087,6 +1087,8 @@ const useAppStore = create((set, get) => ({
         }));
       }
 
+      // Same rationale as booking_updated: don't call fetchLabourBookings here —
+      // it would return a stale cached status and stomp the update above.
       if (bookingId && get().activeBookingId?.toString() === bookingId?.toString()) {
         get().fetchActiveBooking(bookingId);
       }
@@ -1096,6 +1098,9 @@ const useAppStore = create((set, get) => ({
       const { bookingId } = data;
       if (!bookingId) return;
 
+      // Optimistically update the booking status in every list so the
+      // customer's Status tab shows 'Confirm Work Completion' immediately
+      // without waiting on a network round-trip.
       set((s) => ({
         activeBookings: s.activeBookings.map((b) =>
           b._id?.toString() === bookingId?.toString()
@@ -1111,11 +1116,18 @@ const useAppStore = create((set, get) => ({
           s.activeBooking?._id?.toString() === bookingId?.toString()
             ? { ...s.activeBooking, status: 'awaiting_customer_confirmation' }
             : s.activeBooking,
+        // Prime activeBookingId so the Alert's 'View & Confirm' navigation
+        // works even if this isn't the customer's current tracked booking.
+        // For manual bookings the customer may have multiple independent
+        // bookings; we always point at the one that just finished.
+        activeBookingId: bookingId,
       }));
 
-      if (get().activeBookingId?.toString() === bookingId?.toString()) {
-        get().fetchActiveBooking(bookingId);
-      }
+      // Always fetch authoritative data for this booking so the detail
+      // screen is ready before the customer taps 'View & Confirm'.
+      get().fetchActiveBooking(bookingId);
+
+      set({ pendingWorkerCompletion: data });
     });
 
     socket.on('autobook_worker_accepted', (data) => {
