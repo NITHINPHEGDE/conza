@@ -557,6 +557,22 @@ const confirmCompletion = async (req, res) => {
         `bookings:user:${req.user._id}:*`
       );
 
+      // ── Invalidate the BP-side cache too ────────────────────────────
+      // getBookingById() on the bp backend (hit by the worker app's
+      // fetchActiveJob fallback / reconnect-reconciliation path) caches
+      // its response for up to ~60s (30s TTL + up to 30s jitter). If the
+      // socket event below is missed (worker's app briefly disconnected —
+      // very common on mobile), that fallback fetch is the ONLY other way
+      // the worker app learns the job is done. Without this, the fallback
+      // itself can keep serving the stale pre-completion booking for up
+      // to a minute, so the worker screen looks permanently stuck on
+      // "waiting for customer approval" instead of self-healing.
+      await Promise.allSettled([
+        invalidateCache(`bp:booking:${bookingId}`),
+        invalidateCache(`bp:worker:${workerId}:requests:pending:*`),
+        invalidateCache(`bp:worker:${workerId}:history:*`),
+      ]).catch(() => {});
+
       try {
         const io = getIO();
         io.to(`customer_${req.user._id}`).emit('booking_updated', {
@@ -592,6 +608,20 @@ const confirmCompletion = async (req, res) => {
       `bookings:detail:${booking._id}`,
       `bookings:user:${req.user._id}:*`
     );
+
+    // ── Invalidate the BP-side cache too ──────────────────────────────
+    // Same reasoning as the autobook branch above: without this, a
+    // worker whose socket connection missed the 'job_completed_confirmed'
+    // event falls back to a stale cached getBookingById() response
+    // (up to ~60s) that still shows 'awaiting_customer_confirmation',
+    // leaving the screen stuck even after the customer has confirmed.
+    await Promise.allSettled([
+      invalidateCache(`bp:booking:${bookingId}`),
+      ...(booking.workers || []).flatMap((wId) => [
+        invalidateCache(`bp:worker:${wId}:requests:pending:*`),
+        invalidateCache(`bp:worker:${wId}:history:*`),
+      ]),
+    ]).catch(() => {});
 
     try {
       const io = getIO();
