@@ -1,5 +1,5 @@
 // src/screens/ActiveJobScreen.js
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, Modal, StatusBar, Alert, Linking,
@@ -210,7 +210,6 @@ const ActiveJobScreen = ({ navigation }) => {
   const startWork      = usePartnerStore(selectStartWork);
   const completeJob    = usePartnerStore(selectCompleteJob);
   const resetActiveJob = usePartnerStore(selectResetActiveJob);
-  const [showModal, setShowModal] = useState(false);
 
   const stepStatuses = useMemo(() => {
     const order = ['pending', 'accepted', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed'];
@@ -233,6 +232,18 @@ const ActiveJobScreen = ({ navigation }) => {
     });
   }, [jobStatus]);
 
+  // Safety-net: while waiting on the customer's confirmation, re-sync
+  // straight from the server every few seconds. This self-heals if a
+  // socket event was ever missed (dropped connection, backgrounded app,
+  // etc.) instead of leaving the worker stuck on "Waiting for Customer".
+  useEffect(() => {
+    if (jobStatus !== 'awaiting_customer_confirmation' || !activeJob?.id) return;
+    const interval = setInterval(() => {
+      usePartnerStore.getState().fetchActiveJob(activeJob.id);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [jobStatus, activeJob?.id]);
+
   const handleWorkDone = useCallback(async () => {
     // Instead of showing modal directly, ask customer for confirmation
     await usePartnerStore.getState().updateRequestStatus(activeJob.id, 'awaiting_customer_confirmation');
@@ -240,7 +251,6 @@ const ActiveJobScreen = ({ navigation }) => {
   }, [activeJob]);
 
   const handleFinished = useCallback(async (paymentType) => {
-    setShowModal(false);
     await completeJob(paymentType === 'online' ? 'upi' : 'cod');
     resetActiveJob();
     navigation.navigate('Tabs', { screen: 'Home' });
@@ -352,19 +362,19 @@ const ActiveJobScreen = ({ navigation }) => {
         <StatusCard
           step={1} title="Waiting for Arrival"
           description="You've accepted the job. Head to the customer's location."
-          status={jobStatus === 'accepted' ? 'active' : 'done'} buttonLabel="Mark as Arrived"
+          status={stepStatuses[0]} buttonLabel="Mark as Arrived"
           onPress={markArrived}
         />
         <StatusCard
           step={2} title="At Location"
           description="You've reached the site. Click below to start the work timer."
-          status={jobStatus === 'arrived' ? 'active' : (['in_progress', 'completed'].includes(jobStatus) ? 'done' : 'pending')} buttonLabel="Start Work ▶"
+          status={stepStatuses[1]} buttonLabel="Start Work ▶"
           onPress={startWork}
         />
         <StatusCard
           step={3} title="Work in Progress"
           description="Finish the work and collect payment from the customer."
-          status={jobStatus === 'in_progress' ? 'active' : (['awaiting_customer_confirmation', 'completed'].includes(jobStatus) ? 'done' : 'pending')} buttonLabel="Work Completed ✓"
+          status={stepStatuses[2]} buttonLabel="Work Completed ✓"
           onPress={handleWorkDone} isLast
         />
 
@@ -377,7 +387,7 @@ const ActiveJobScreen = ({ navigation }) => {
       </ScrollView>
 
       <CompletionModal
-        visible={jobStatus === 'completed' && showModal === false} // Only show if completed via customer confirmation
+        visible={jobStatus === 'completed'}
         amount={activeJob.estimatedAmount}
         onFinished={handleFinished}
       />

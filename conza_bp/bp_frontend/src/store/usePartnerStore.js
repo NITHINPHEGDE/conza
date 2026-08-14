@@ -235,6 +235,13 @@ const usePartnerStore = create((set, get) => ({
       const wId = get().worker?._id;
       if (wId) socket.emit('join_worker', wId.toString());
       get().fetchRequests();
+
+      // Reconnects (network blips, app background/foreground) drop room
+      // membership server-side, including the per-booking `booking_${id}`
+      // room used for status updates. Rejoin it and pull the authoritative
+      // status so a worker never gets stuck on a stale local jobStatus.
+      const jobId = get().activeJobId;
+      if (jobId) get().fetchActiveJob(jobId);
     });
 
     socket.on('booking_updated', (data) => {
@@ -329,10 +336,14 @@ const usePartnerStore = create((set, get) => ({
       if (status === 'accepted') {
         await get().setActiveJobId(requestId);
         setTrackingMode(TRACKING_MODE.ACTIVE);   // worker is now en-route
-      }
-      if (status === 'cancelled' && get().activeJobId === requestId) {
+      } else if (status === 'cancelled' && get().activeJobId === requestId) {
         await get().setActiveJobId(null);
         setTrackingMode(TRACKING_MODE.IDLE);     // back to waiting
+      } else if (get().activeJobId === requestId) {
+        // Update local state immediately instead of waiting on a socket
+        // round-trip — fixes "Work Completed" not reliably flipping the
+        // UI to Awaiting Confirmation.
+        set({ jobStatus: status });
       }
 
       await get().fetchRequests();
@@ -553,8 +564,13 @@ lastPaymentMethod: null,
       await AsyncStorage.removeItem('activeJobId');
     }
     set({ activeJobId: id });
-    if (id) get().fetchActiveJob(id);
-    else set({ activeJob: null });
+    if (id) {
+      // Await this so callers (accept flow, boot-time restore) don't
+      // navigate to the Active Job screen before `activeJob` is populated.
+      await get().fetchActiveJob(id);
+    } else {
+      set({ activeJob: null });
+    }
   },
 
   fetchActiveJob: async (id) => {

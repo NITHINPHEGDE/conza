@@ -1,0 +1,17 @@
+
+
+fix(bp): resolve job progress workflow desync issues
+
+- await fetchActiveJob in setActiveJobId to prevent "no active job"
+  flash right after accepting a request
+- wire ActiveJobScreen's StatusCards to the already-correct
+  stepStatuses array instead of buggy inline ternaries, fixing
+  "At Location" reverting to grey/pending after Work Completed
+- set jobStatus locally in updateRequestStatus for all active-job
+  transitions, not just accepted/cancelled, so UI no longer waits
+  on a socket round-trip to advance
+- rejoin the booking_<id> socket room on every reconnect (network
+  blips, app backgrounding) so status events aren't silently missed
+- add a 4s polling fallback while awaiting customer confirmation to
+  self-heal from any dropped socket event
+- remove dead showModal state/condition in CompletionModal

@@ -16,17 +16,21 @@ const routes = require('./routes')
 
 const app = express()
 
-// Security middleware
-app.use(helmet({ crossOriginResourcePolicy: false }))
-app.use(cors({
+// CORS — must be before helmet so preflight OPTIONS requests are handled first
+const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, native fetch, postman) or any web origin
+    // Allow requests with no origin (mobile apps, Postman) or any web origin
     callback(null, true)
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-}))
+}
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions)) // Handle preflight for all routes
+
+// Security middleware
+app.use(helmet({ crossOriginResourcePolicy: false }))
 
 // Rate limiting
 const limiter = rateLimit({
