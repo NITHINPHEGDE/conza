@@ -1098,9 +1098,6 @@ const useAppStore = create((set, get) => ({
       const { bookingId } = data;
       if (!bookingId) return;
 
-      // Optimistically update the booking status in every list so the
-      // customer's Status tab shows 'Confirm Work Completion' immediately
-      // without waiting on a network round-trip.
       set((s) => ({
         activeBookings: s.activeBookings.map((b) =>
           b._id?.toString() === bookingId?.toString()
@@ -1116,18 +1113,17 @@ const useAppStore = create((set, get) => ({
           s.activeBooking?._id?.toString() === bookingId?.toString()
             ? { ...s.activeBooking, status: 'awaiting_customer_confirmation' }
             : s.activeBooking,
-        // Prime activeBookingId so the Alert's 'View & Confirm' navigation
-        // works even if this isn't the customer's current tracked booking.
-        // For manual bookings the customer may have multiple independent
-        // bookings; we always point at the one that just finished.
-        activeBookingId: bookingId,
+        // Manual bookings never triggered the "Work Completed — Confirm to
+        // release payment" popup because nothing set this field for them —
+        // only the autobook path did. Reuse the same field/shape so the
+        // existing Alert in App.js (which already handles this) fires here
+        // too, instead of the update happening silently in the background.
+        pendingWorkerCompletion: { bookingId, workerId: null, workerName: null },
       }));
 
-      // Always fetch authoritative data for this booking so the detail
-      // screen is ready before the customer taps 'View & Confirm'.
-      get().fetchActiveBooking(bookingId);
-
-      set({ pendingWorkerCompletion: data });
+      if (get().activeBookingId?.toString() === bookingId?.toString()) {
+        get().fetchActiveBooking(bookingId);
+      }
     });
 
     socket.on('autobook_worker_accepted', (data) => {
