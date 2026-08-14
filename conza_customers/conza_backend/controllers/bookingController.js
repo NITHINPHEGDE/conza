@@ -141,6 +141,36 @@ const createBooking = async (req, res) => {
     // Invalidate the user's booking list cache
     await invalidateCache(`bookings:user:${req.user._id}:*`).catch(() => {});
 
+    // ── Notify the assigned worker(s) in real time ───────────────────────
+    // A push notification alone is not enough: it silently does nothing if
+    // the worker has no valid pushToken, hasn't granted notification
+    // permission, or the app is backgrounded/killed on some platforms.
+    // getWorkerRequests() caches each worker's pending-list response for up
+    // to ~45s (15s TTL + up to 30s jitter) — without invalidating that here,
+    // a worker who already has a cached "no requests" response keeps seeing
+    // that stale empty list for up to 45s even though this brand-new
+    // request now exists for them, while a worker who happens to get the
+    // push sees it instantly. That gap is what makes it look like some
+    // workers "never got the request" when they're actually just waiting
+    // out a stale cache.
+    if (bookingType === 'labour' && workerIds && workerIds.length > 0) {
+      await Promise.allSettled(
+        workerIds.map((wId) => invalidateCache(`bp:worker:${wId}:requests:pending:*`))
+      ).catch(() => {});
+
+      try {
+        const { getIO } = require('../services/socketService');
+        const io = getIO();
+        // 'worker_<id>' is the same personal room workers already join on
+        // connect (see autobook's 'new_autobook_request' for precedent) —
+        // gives an instantly-online worker a zero-latency nudge to refetch,
+        // the same way autobook requests already do.
+        workerIds.forEach((wId) => {
+          io.to(`worker_${wId}`).emit('new_request', { bookingId: booking._id.toString() });
+        });
+      } catch (_) {}
+    }
+
     // Notify the customer's personal socket room (not broadcast to all)
     try {
       const { getIO } = require('../services/socketService');

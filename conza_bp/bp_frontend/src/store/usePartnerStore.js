@@ -221,6 +221,7 @@ const usePartnerStore = create((set, get) => ({
     socket.off('booking_status_changed');
     socket.off('job_completed_confirmed');
     socket.off('issue_reported');
+    socket.off('new_request');
     socket.off('new_autobook_request');
     socket.off('autobook_request_closed');
     socket.off('worker_status_changed');
@@ -308,6 +309,15 @@ const usePartnerStore = create((set, get) => ({
         const { Alert } = require('react-native');
         Alert.alert('Issue Reported', 'The customer has reported an issue with the completed work. Please discuss with the customer or contact support.');
       }
+    });
+
+    // ── Manual booking: instant nudge, no waiting for the 10s poll ──────
+    // Companion to 'new_autobook_request' below — manual (customer picks
+    // specific workers) bookings previously had no real-time signal at
+    // all, so an online worker without a working push notification could
+    // sit on a stale cached "no requests" response for up to ~45s.
+    socket.on('new_request', () => {
+      get().fetchRequests();
     });
 
     // ── Quick Auto Book: instant push, no waiting for the 10s poll ──────
