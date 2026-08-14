@@ -66,49 +66,88 @@ export const useBooking = (type) => {
           : null;
       }
 
-      // ── Labour booking → unchanged path ───────────────────────────────
+      // ── Labour booking (manual selection) → ONE booking per worker ────
+      // Bug fix: previously every selected worker (A, B, C) was bundled
+      // into a single shared Booking document (workers: [a,b,c]) with one
+      // shared status/total/checkInTime/etc. Since every status-mutating
+      // endpoint (accept, checkIn, complete...) treats a booking as
+      // belonging to a single worker, whichever worker acted first (A)
+      // silently took over the entire document — flipping status away
+      // from 'pending' for B and C (so their copy of the request
+      // disappeared), collecting the full combined total (₹600 instead
+      // of ₹200 each), and leaving only one status card for the customer.
+      //
+      // Fix: mirror the existing "group by seller → one order per seller"
+      // pattern already used for material orders above. Each selected
+      // worker gets their own independent Booking document with their
+      // own price, so each worker gets their own request, their own
+      // accept/status lifecycle, their own payment, and the customer gets
+      // one status card per worker.
       if (type === 'labour') {
-        const { selectedWorkers, category, subtotal, platformFee, total } = bookingData;
-        const isMultiDay = !isImmediate && totalDays && totalDays > 1;
-        const sub = isMultiDay
-          ? (selectedWorkers || []).reduce((s, w) => s + ((Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * totalDays), 0)
-          : (selectedWorkers || []).reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0);
-        const fee = Math.round(sub * 0.05);
-        const payload = {
-          bookingType:   'labour',
-          category,
-          workers:        (selectedWorkers || []).map((w) => w._id || w.id),
-          workerSnapshot: selectedWorkers || [],
-          subtotal:       sub,
-          platformFee:    fee,
-          total:          sub + fee,
-          houseNumber:    houseNumber || '',
-          houseName:      houseName   || '',
-          street:         street      || '',
-          address:        street      || '',
-          area:           area        || '',
-          city,
-          district:       district    || '',
-          state:          state       || '',
-          pincode,
-          latitude:       latitude  || userLat,
-          longitude:      longitude || userLng,
-          paymentMethod:  paymentMethod || 'cod',
-          description:    description   || '',
-          isImmediate:    isImmediate !== undefined ? isImmediate : true,
-          scheduledDate:    scheduledDate    || null,
-          scheduledEndDate: scheduledEndDate || null,
-          scheduledDates:   scheduledDates   || [],
-          totalDays:        totalDays        || 1,
-        };
-        const result = await bookingAPI.createBooking(payload);
-        if (result.success && result.booking?._id) {
-          await setActiveBookingId(result.booking._id);
+        const { selectedWorkers, category } = bookingData;
+        const workersList = selectedWorkers || [];
+        if (!workersList.length) {
+          throw new Error('Please select at least one worker');
         }
+        const isMultiDay = !isImmediate && totalDays && totalDays > 1;
+
+        const createdBookings = [];
+        for (const worker of workersList) {
+          const sub = isMultiDay
+            ? (Number(worker.perDayCharge) || Number(worker.pricePerDay) || 0) * totalDays
+            : (Number(worker.pricePerDay) || 0);
+          const fee = Math.round(sub * 0.05);
+
+          const payload = {
+            bookingType:   'labour',
+            category,
+            workers:        [worker._id || worker.id],
+            workerSnapshot: [worker],
+            subtotal:       sub,
+            platformFee:    fee,
+            total:          sub + fee,
+            houseNumber:    houseNumber || '',
+            houseName:      houseName   || '',
+            street:         street      || '',
+            address:        street      || '',
+            area:           area        || '',
+            city,
+            district:       district    || '',
+            state:          state       || '',
+            pincode,
+            latitude:       latitude  || userLat,
+            longitude:      longitude || userLng,
+            paymentMethod:  paymentMethod || 'cod',
+            description:    description   || '',
+            isImmediate:    isImmediate !== undefined ? isImmediate : true,
+            scheduledDate:    scheduledDate    || null,
+            scheduledEndDate: scheduledEndDate || null,
+            scheduledDates:   scheduledDates   || [],
+            totalDays:        totalDays        || 1,
+          };
+
+          const result = await bookingAPI.createBooking(payload);
+          if (result.success && result.booking?._id) {
+            createdBookings.push({
+              refModel: 'Booking',
+              refId:    result.booking._id,
+              title:    category
+                ? `${category} Booking — ${worker.fullName || worker.name || 'Worker'}`
+                : 'Labour Booking',
+            });
+          }
+        }
+
+        if (createdBookings.length) {
+          // "Resume tracking" banner can only point at one job at a time —
+          // point it at the most recently created one. The Status tab
+          // (which lists every booking document independently) is the
+          // real source of truth for all of them, not just this pointer.
+          await setActiveBookingId(createdBookings[createdBookings.length - 1].refId);
+        }
+
         setSuccess(true);
-        return result.success && result.booking?._id
-          ? { refModel: 'Booking', refId: result.booking._id, title: category ? `${category} Booking` : 'Labour Booking' }
-          : null;
+        return createdBookings.length ? createdBookings : null;
       }
 
       // ── Material order → seller order API ───────────────────────────────
