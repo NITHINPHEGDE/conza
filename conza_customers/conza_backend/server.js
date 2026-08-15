@@ -61,6 +61,7 @@ app.use('/api/workers',  apiLimiter,  workerRoutes);
 app.use('/api/bookings', apiLimiter,  bookingRoutes);
 app.use('/api/complaints', apiLimiter, complaintRoutes);
 app.use('/api/projects', apiLimiter,  projectRoutes);
+app.use('/api/internal', require('./routes/internalSocketRoutes'));
 
 // ── Seller routes ──
 app.use('/api/seller/auth',     authLimiter, sellerAuthRoutes);

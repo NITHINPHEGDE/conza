@@ -5,6 +5,7 @@ const logger  = require('../utils/logger');
 const { withCache, invalidateCache } = require('../utils/cacheHelpers');
 const { getDistanceInMeters } = require('../utils/geoUtils');
 const { calculateHourlyCharge } = require('../utils/billingUtils');
+const { notifyCustomerBackend } = require('../utils/notifyCustomerBackend');
 require('../models/User');
 
 const ARRIVAL_RADIUS_METERS = 50;
@@ -260,14 +261,19 @@ const updateBookingStatus = async (req, res) => {
         const { getIO } = require('../services/socketService');
         const io = getIO();
         if (status === 'awaiting_customer_confirmation') {
-          io.to(`customer_${booking.user}`).emit('worker_completion_requested', {
+          const completionPayload = {
             bookingId, workerId: workerIdStr,
             workerName: entry.workerSnapshot?.name || entry.workerSnapshot?.fullName || 'Your worker',
-          });
+          };
+          // Local emit is a no-op for the customer (their socket lives on the
+          // customer backend, not this one) — kept for any same-server
+          // listeners. The relay below is what actually reaches the customer.
+          io.to(`customer_${booking.user}`).emit('worker_completion_requested', completionPayload);
+          notifyCustomerBackend(`customer_${booking.user}`, 'worker_completion_requested', completionPayload);
         } else {
-          io.to(`customer_${booking.user}`).emit('booking_updated', {
-            operationType: 'update', bookingId, status: booking.status,
-          });
+          const updatedPayload = { operationType: 'update', bookingId, status: booking.status };
+          io.to(`customer_${booking.user}`).emit('booking_updated', updatedPayload);
+          notifyCustomerBackend(`customer_${booking.user}`, 'booking_updated', updatedPayload);
         }
         io.to(`booking_${bookingId}`).emit('worker_status_changed', {
           bookingId, workerId: workerIdStr, status: entry.status, isAutobook: true,
@@ -398,6 +404,12 @@ const updateBookingStatus = async (req, res) => {
         io.to(`booking_${bookingId}`).emit('work_completion_requested', { bookingId });
         // Also emit standard status change
         io.to(`booking_${bookingId}`).emit('booking_status_changed', { bookingId, status });
+
+        // The customer's socket is connected to the customer backend, a
+        // separate deployment from this one — relay so it actually arrives.
+        notifyCustomerBackend(`customer_${booking.user}`, 'work_completion_requested', { bookingId });
+        notifyCustomerBackend(`booking_${bookingId}`, 'work_completion_requested', { bookingId });
+        notifyCustomerBackend(`booking_${bookingId}`, 'booking_status_changed', { bookingId, status });
       } catch (err) {
         logger.error({ err }, 'Failed to emit work_completion_requested');
       }
