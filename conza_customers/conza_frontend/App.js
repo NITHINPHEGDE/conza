@@ -11,7 +11,7 @@ import './src/hooks/useAuth';
 import { useAuth } from './src/hooks/useAuth';
 import useAppStore from './src/store/useAppStore';
 import BookingTrackingScreen from './src/screens/BookingTrackingScreen';
-import WorkCompletionPopup from './src/components/WorkCompletionPopup';
+import WorkCompletionToast from './src/components/WorkCompletionToast';
 
 const Stack = createNativeStackNavigator();
 export const navigationRef = createNavigationContainerRef();
@@ -92,10 +92,10 @@ export default function App() {
           )}
         </Stack.Navigator>
       </NavigationContainer>
-      <WorkCompletionPopup
+      <WorkCompletionToast
         visible={!!pendingWorkerCompletion}
         workerName={pendingWorkerCompletion?.workerName}
-        onConfirmPress={handleWorkCompletionPress}
+        onPress={handleWorkCompletionPress}
         onDismiss={clearPendingWorkerCompletion}
       />
     </SafeAreaProvider>
