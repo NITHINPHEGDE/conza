@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
 import { SkeletonList, BookingCardSkeleton } from '../components/Skeleton';
@@ -303,10 +304,19 @@ const StatusScreen = ({ navigation }) => {
   const [showAddToProject, setShowAddToProject]     = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '' });
 
-  useEffect(() => {
-    fetchLabourBookings();
-    fetchMySellerOrders();
-  }, []);
+  // Bottom-tab screens stay mounted after their first visit, so a plain
+  // mount-only effect never re-fires — a booking (especially Quick Auto
+  // Book, created from a different tab) created after the Status tab was
+  // already visited once would silently never appear here, since the
+  // real-time socket handler only updates bookings already in the list,
+  // it never inserts brand-new ones. Refetch every time this tab is
+  // actually focused instead, so newly created bookings always show up.
+  useFocusEffect(
+    useCallback(() => {
+      fetchLabourBookings();
+      fetchMySellerOrders();
+    }, [fetchLabourBookings, fetchMySellerOrders])
+  );
 
   const handleViewBooking = useCallback(async (booking) => {
     await setActiveBookingId(booking._id);

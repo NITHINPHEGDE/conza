@@ -1064,6 +1064,7 @@ const useAppStore = create((set, get) => ({
     });
 
     socket.on('booking_status_changed', (data) => {
+      console.log('🔔 booking_status_changed received:', data);
       const { bookingId, status, bookingSnapshot, isWorkCompletion } = data;
 
       if (bookingId && status) {

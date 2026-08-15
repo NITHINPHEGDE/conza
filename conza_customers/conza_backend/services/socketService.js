@@ -106,6 +106,39 @@ const watchChanges = () => {
           });
         }
 
+        // ── Quick Auto Book: detect a worker finishing their own part ──────
+        // For autobook bookings the top-level `status` never passes through
+        // 'awaiting_customer_confirmation' — only that individual worker's
+        // entry inside workerStatuses[] does. The worker app's own (separate)
+        // backend deployment emits 'worker_completion_requested' for this,
+        // but that only reaches this server if both deployments share the
+        // same Redis adapter instance — not guaranteed. Detect it directly
+        // here instead, from this server's own change stream, so the
+        // customer's popup fires reliably regardless of the other service.
+        if (
+          userId &&
+          doc?.isAutobook &&
+          c.operationType === 'update' &&
+          c.updateDescription?.updatedFields
+        ) {
+          const updatedFields = c.updateDescription.updatedFields;
+          const justCompletedIdx = Object.keys(updatedFields)
+            .map((k) => k.match(/^workerStatuses\.(\d+)\.status$/))
+            .filter(Boolean)
+            .find((m) => updatedFields[m[0]] === 'awaiting_customer_confirmation');
+
+          if (justCompletedIdx) {
+            const entry = (doc.workerStatuses || [])[Number(justCompletedIdx[1])];
+            if (entry) {
+              io.to(`customer_${userId}`).emit('worker_completion_requested', {
+                bookingId,
+                workerId: entry.worker?.toString() || null,
+                workerName: entry.workerSnapshot?.name || entry.workerSnapshot?.fullName || 'Your worker',
+              });
+            }
+          }
+        }
+
         // Notify booking-specific room (BookingTrackingScreen detail)
         io.to(`booking_${bookingId}`).emit('booking_status_changed', {
           bookingId,
