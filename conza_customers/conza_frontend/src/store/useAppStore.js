@@ -1064,7 +1064,7 @@ const useAppStore = create((set, get) => ({
     });
 
     socket.on('booking_status_changed', (data) => {
-      const { bookingId, status, bookingSnapshot } = data;
+      const { bookingId, status, bookingSnapshot, isWorkCompletion } = data;
 
       if (bookingId && status) {
         set((s) => ({
@@ -1085,6 +1085,10 @@ const useAppStore = create((set, get) => ({
                 : { ...s.activeBooking, status }
               : s.activeBooking,
         }));
+      }
+
+      if (isWorkCompletion && bookingId) {
+        set({ pendingWorkerCompletion: { bookingId, workerId: null, workerName: null } });
       }
 
       // Same rationale as booking_updated: don't call fetchLabourBookings here —

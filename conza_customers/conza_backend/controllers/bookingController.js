@@ -333,6 +333,10 @@ const createAutobookBooking = async (req, res) => {
 
     await invalidateCache(`bookings:user:${req.user._id}:*`).catch(() => {});
 
+    await Promise.allSettled(
+      candidates.map((w) => invalidateCache(`bp:worker:${w._id}:requests:pending:*`))
+    ).catch(() => {});
+
     // ── Broadcast to every candidate worker instantly ──────────────────────
     try {
       const { getIO } = require('../services/socketService');

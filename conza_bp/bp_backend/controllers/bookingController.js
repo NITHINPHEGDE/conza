@@ -251,6 +251,11 @@ const updateBookingStatus = async (req, res) => {
 
       await booking.save();
 
+      await Promise.allSettled([
+        invalidateCache(`bp:worker:${workerIdStr}:requests:pending:*`, `bp:worker:${workerIdStr}:history:*`, `bp:booking:${bookingId}`),
+        invalidateCache(`bookings:user:${booking.user}:*`, `bookings:detail:${bookingId}`),
+      ]);
+
       try {
         const { getIO } = require('../services/socketService');
         const io = getIO();
@@ -270,11 +275,6 @@ const updateBookingStatus = async (req, res) => {
       } catch (err) {
         logger.error({ err }, 'Failed to emit autobook worker status event');
       }
-
-      await Promise.allSettled([
-        invalidateCache(`bp:worker:${workerIdStr}:requests:pending:*`, `bp:worker:${workerIdStr}:history:*`, `bp:booking:${bookingId}`),
-        invalidateCache(`bookings:user:${booking.user}:*`, `bookings:detail:${bookingId}`),
-      ]);
 
       logger.info({ bookingId, workerId: workerIdStr, status: entry.status }, 'Autobook worker status updated');
       return res.json({ success: true, booking });
@@ -374,6 +374,21 @@ const updateBookingStatus = async (req, res) => {
       await Worker.updateMany({ _id: { $in: booking.workers } }, { isAvailable: true });
     }
 
+    await Promise.allSettled(
+      booking.workers.map((wId) =>
+        invalidateCache(
+          `bp:worker:${wId}:requests:pending:*`,
+          `bp:worker:${wId}:history:*`,
+          `bp:booking:${bookingId}`
+        )
+      )
+    );
+
+    await invalidateCache(
+      `bookings:user:${booking.user}:*`,
+      `bookings:detail:${bookingId}`
+    ).catch(() => {});
+
     // Emit socket event to customer for confirmation
     if (status === 'awaiting_customer_confirmation') {
       try {
@@ -409,24 +424,6 @@ const updateBookingStatus = async (req, res) => {
         logger.error({ err }, 'Failed to emit booking status event');
       }
     }
-
-    // Invalidate worker-side cache (BP backend)
-    await Promise.allSettled(
-      booking.workers.map((wId) =>
-        invalidateCache(
-          `bp:worker:${wId}:requests:pending:*`,
-          `bp:worker:${wId}:history:*`,
-          `bp:booking:${bookingId}`
-        )
-      )
-    );
-
-    // Invalidate customer-side cache so fetchActiveBookings() returns
-    // fresh status instead of serving the stale cached value
-    await invalidateCache(
-      `bookings:user:${booking.user}:*`,
-      `bookings:detail:${bookingId}`
-    ).catch(() => {});
 
     logger.info({ bookingId, status }, 'Booking status updated');
     res.json({ success: true, booking });
