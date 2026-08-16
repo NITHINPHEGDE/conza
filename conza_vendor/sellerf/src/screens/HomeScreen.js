@@ -20,9 +20,10 @@ const HomeScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { mode, loadMode, canToggle } = useModeStore();
   const {
-    vendor, kpi, chartData, dashLoading, dashData,
+    kpi, chartData, dashLoading, dashData,
     fetchDashboard, getFilteredOrders, fetchOrders, refreshSeller,
   } = useVendorStore();
+  const vendor       = useVendorStore((s) => s.getVendor());
   const materialOrders = useVendorStore((s) => s.materialOrders);
   const rentalOrders   = useVendorStore((s) => s.rentalOrders);
 

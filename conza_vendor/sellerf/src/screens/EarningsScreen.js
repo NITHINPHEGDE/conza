@@ -39,9 +39,10 @@ const EarningsScreen = () => {
   const insets  = useSafeAreaInsets();
   const { mode, canToggle } = useModeStore();
   const {
-    vendor, chartData, fetchDashboard, dashLoading, dashData,
+    chartData, fetchDashboard, dashLoading, dashData,
     materialOrders, rentalOrders, fetchOrders,
   } = useVendorStore();
+  const vendor = useVendorStore((s) => s.getVendor());
 
   useEffect(() => {
     fetchDashboard();

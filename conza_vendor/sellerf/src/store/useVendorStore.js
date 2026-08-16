@@ -47,17 +47,21 @@ const useVendorStore = create((set, get) => ({
     useModeStore.getState().setModeFromSellerType('both');
   },
 
-  // ── Vendor alias (kept for backwards-compat with existing UI) ────────────
-  get vendor() {
-    const s = get().seller;
+  // ── Vendor alias — use as a Zustand selector: useVendorStore(s => s.getVendor()) ──
+  // (A plain JS getter on the store object is NOT reactive in Zustand — switching
+  //  to a regular function makes Zustand's shallow-diff work correctly so screens
+  //  re-render when isVerified / status / walletBalance change after refreshSeller.)
+  getVendor: () => {
+    const s        = get().seller;
+    const dashData = get().dashData;
     return {
       name:          s?.name          || '',
       shopName:      s?.shopName      || '',
       walletBalance: s?.walletBalance || 0,
       isVerified:    s?.isVerified    || false,
       status:        s?.status        || 'pending_verification',
-      monthEarnings: get().dashData?.vendor?.monthEarnings || 0,
-      growth:        get().dashData?.vendor?.growth        || '+0%',
+      monthEarnings: dashData?.vendor?.monthEarnings || 0,
+      growth:        dashData?.vendor?.growth        || '+0%',
     };
   },
 
