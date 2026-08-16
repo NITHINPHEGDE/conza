@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { LinearGradient }    from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useShallow }        from 'zustand/react/shallow';
 import useModeStore          from '../store/useModeStore';
 import useVendorStore        from '../store/useVendorStore';
 import ModeToggle            from '../components/ModeToggle';
@@ -23,7 +24,7 @@ const HomeScreen = ({ navigation }) => {
     kpi, chartData, dashLoading, dashData,
     fetchDashboard, getFilteredOrders, fetchOrders, refreshSeller,
   } = useVendorStore();
-  const vendor       = useVendorStore((s) => s.getVendor());
+  const vendor       = useVendorStore(useShallow((s) => s.getVendor()));
   const materialOrders = useVendorStore((s) => s.materialOrders);
   const rentalOrders   = useVendorStore((s) => s.rentalOrders);
 
