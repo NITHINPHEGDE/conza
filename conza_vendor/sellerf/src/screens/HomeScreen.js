@@ -18,23 +18,34 @@ const GRAD = { start: { x: 0, y: 0 }, end: { x: 1, y: 0 } };
 
 const HomeScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { mode, loadMode } = useModeStore();
+  const { mode, loadMode, canToggle } = useModeStore();
   const {
     vendor, kpi, chartData, dashLoading, dashData,
-    fetchDashboard, getFilteredOrders, fetchOrders,
+    fetchDashboard, getFilteredOrders, fetchOrders, refreshSeller,
   } = useVendorStore();
   const materialOrders = useVendorStore((s) => s.materialOrders);
   const rentalOrders   = useVendorStore((s) => s.rentalOrders);
 
   const refresh = useCallback(async () => {
-    await Promise.all([fetchDashboard(), fetchOrders(mode)]);
+    await Promise.all([fetchDashboard(), fetchOrders(mode), refreshSeller()]);
   }, [mode]);
 
   useEffect(() => {
     loadMode();
     fetchDashboard();
     fetchOrders(mode);
+    refreshSeller();
   }, []);
+
+  // Re-check verification/profile status whenever the Home tab regains
+  // focus — e.g. admin approves the vendor while the app is already open
+  // and the seller just switches back to this tab.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      refreshSeller();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   useEffect(() => {
     fetchOrders(mode);
@@ -67,7 +78,7 @@ const HomeScreen = ({ navigation }) => {
           <Text style={styles.greeting}>Good Morning 👋</Text>
           <Text style={styles.vendorName} numberOfLines={1}>{vendor.shopName}</Text>
         </View>
-        <ModeToggle />
+        {canToggle && <ModeToggle />}
         <View style={styles.topRight}>
           <View style={styles.walletBadge}>
             <Text style={styles.walletLabel}>Wallet</Text>

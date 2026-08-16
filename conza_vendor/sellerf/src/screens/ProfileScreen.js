@@ -241,7 +241,7 @@ const MenuItem = ({ icon, label, sub, danger, value, onPress }) => (
 // ── Main Screen ───────────────────────────────────────────────────────────────
 const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
-  const { mode } = useModeStore();
+  const { mode, canToggle } = useModeStore();
   const { seller, clearSeller } = useVendorStore();
   const [faqsVisible,         setFaqsVisible]         = useState(false);
   const [helpArticlesVisible, setHelpArticlesVisible] = useState(false);
@@ -254,7 +254,7 @@ const ProfileScreen = () => {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Profile</Text>
-        <ModeToggle />
+        {canToggle && <ModeToggle />}
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>

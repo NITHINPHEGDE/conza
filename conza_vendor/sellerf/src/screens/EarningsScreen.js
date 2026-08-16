@@ -37,7 +37,7 @@ const HistoryRow = ({ order }) => {
 
 const EarningsScreen = () => {
   const insets  = useSafeAreaInsets();
-  const { mode } = useModeStore();
+  const { mode, canToggle } = useModeStore();
   const {
     vendor, chartData, fetchDashboard, dashLoading, dashData,
     materialOrders, rentalOrders, fetchOrders,
@@ -99,7 +99,7 @@ const EarningsScreen = () => {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Earnings</Text>
-        <ModeToggle />
+        {canToggle && <ModeToggle />}
       </View>
 
       {dashLoading ? (

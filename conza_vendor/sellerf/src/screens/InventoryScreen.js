@@ -381,7 +381,7 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 const InventoryScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { mode } = useModeStore();
+  const { mode, canToggle } = useModeStore();
 
   const {
     fetchInventory, getFilteredInventory, inventoryLoading,
@@ -495,7 +495,7 @@ const InventoryScreen = ({ navigation }) => {
           {isRental ? 'Equipment' : 'Inventory'}
         </Text>
         <View style={styles.headerRight}>
-          <ModeToggle />
+          {canToggle && <ModeToggle />}
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={() => navigation.navigate(isRental ? 'AddEquipment' : 'AddProduct')}

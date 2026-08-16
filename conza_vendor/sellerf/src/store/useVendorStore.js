@@ -3,6 +3,7 @@ import { create }       from 'zustand';
 import AsyncStorage     from '@react-native-async-storage/async-storage';
 import { api }          from '../services/apiClient';
 import { socket, connectSocket } from '../utils/socket';
+import useModeStore      from './useModeStore';
 
 const useVendorStore = create((set, get) => ({
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -12,12 +13,38 @@ const useVendorStore = create((set, get) => ({
 
   setSeller: (seller) => {
     set({ seller });
-    if (seller) connectSocket(seller._id);
+    if (seller) {
+      connectSocket(seller._id);
+      // Lock the material/rental mode to what this vendor registered as —
+      // only 'both' vendors keep the toggle and access to both listing types.
+      useModeStore.getState().setModeFromSellerType(seller.sellerType);
+    }
+  },
+
+  // Re-fetches the logged-in seller's own profile (name, status, isVerified,
+  // wallet, etc.) from the server. The seller object is only ever populated
+  // once at login/app-boot, so anything admin changes afterwards (like
+  // approving verification) never reaches an already-open session unless we
+  // explicitly refetch it — this is what makes that happen.
+  refreshSeller: async () => {
+    try {
+      const data = await api.get('/auth/me');
+      if (data.success && data.seller) {
+        set((state) => ({ seller: { ...state.seller, ...data.seller } }));
+        useModeStore.getState().setModeFromSellerType(data.seller.sellerType);
+      }
+    } catch (err) {
+      // best-effort — keep whatever seller data we already have locally
+      console.warn('[refreshSeller] failed:', err.message);
+    }
   },
 
   clearSeller: () => {
     set({ seller: null });
     socket.disconnect();
+    // Reset mode lock so a different account logging in on the same device
+    // isn't left stuck on the previous vendor's locked mode.
+    useModeStore.getState().setModeFromSellerType('both');
   },
 
   // ── Vendor alias (kept for backwards-compat with existing UI) ────────────
@@ -27,6 +54,8 @@ const useVendorStore = create((set, get) => ({
       name:          s?.name          || '',
       shopName:      s?.shopName      || '',
       walletBalance: s?.walletBalance || 0,
+      isVerified:    s?.isVerified    || false,
+      status:        s?.status        || 'pending_verification',
       monthEarnings: get().dashData?.vendor?.monthEarnings || 0,
       growth:        get().dashData?.vendor?.growth        || '+0%',
     };

@@ -404,7 +404,7 @@ const RentalOrderCard = ({ order, onViewDetails, onAccept, onReject, onStatusCha
 // ── Main Screen ───────────────────────────────────────────────────────────────
 const OrdersScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { mode } = useModeStore();
+  const { mode, canToggle } = useModeStore();
   const { getFilteredOrders, fetchOrders, ordersLoading, updateOrderStatus } = useVendorStore();
   const materialOrders = useVendorStore((s) => s.materialOrders);
   const rentalOrders   = useVendorStore((s) => s.rentalOrders);
@@ -489,7 +489,7 @@ const OrdersScreen = ({ navigation }) => {
         <Text style={styles.headerTitle}>
           {isMaterials ? 'Material Orders' : 'Rental Orders'}
         </Text>
-        <ModeToggle />
+        {canToggle && <ModeToggle />}
       </View>
 
       {/* Tabs */}
