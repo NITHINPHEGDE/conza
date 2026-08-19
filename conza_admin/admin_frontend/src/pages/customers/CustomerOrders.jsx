@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import customerService from '../../services/customerService'
-import Table from '../../components/common/Table/Table'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import Button from '../../components/common/Button/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import StatusBadge from '../../components/common/StatusBadge'
+import Button from '../../components/common/Button'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 export default function CustomerOrders() {
   const { id } = useParams()

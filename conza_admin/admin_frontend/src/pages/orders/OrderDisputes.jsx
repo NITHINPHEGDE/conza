@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Eye, CheckCircle, XCircle } from 'lucide-react'
-import Table from '../../components/common/Table/Table'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import Button from '../../components/common/Button/Button'
-import Modal from '../../components/common/Modal/Modal'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import StatusBadge from '../../components/common/StatusBadge'
+import Button from '../../components/common/Button'
+import Modal from '../../components/common/Modal'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 const mockDisputes = [
   { id: 'OD001', orderId: 'ORD002', customer: 'Priya Patel', vendor: 'SteelWorld India', issue: 'Wrong grade delivered', amount: 3200, status: 'open' },

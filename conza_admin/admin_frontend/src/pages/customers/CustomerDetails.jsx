@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Trash2, User, MapPin, Phone, Mail, Calendar, Wallet, ShoppingCart, CalendarCheck } from 'lucide-react'
 import useCustomerStore from '../../store/customers/useCustomerStore'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import Button from '../../components/common/Button/Button'
-import Modal from '../../components/common/Modal/Modal'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import StatusBadge from '../../components/common/StatusBadge'
+import Button from '../../components/common/Button'
+import Modal from '../../components/common/Modal'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 export default function CustomerDetails() {
   const { id } = useParams()

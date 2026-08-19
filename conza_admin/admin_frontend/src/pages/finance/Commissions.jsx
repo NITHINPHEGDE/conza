@@ -1,6 +1,6 @@
 import useFinanceStore from '../../store/finance/useFinanceStore'
-import Table from '../../components/common/Table/Table'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 export default function Commissions() {
   const { commissions } = useFinanceStore()

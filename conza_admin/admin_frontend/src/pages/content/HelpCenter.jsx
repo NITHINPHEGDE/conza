@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import PageWrapper from '../../components/layout/PageWrapper/PageWrapper'
-import Button from '../../components/common/Button/Button'
-import Input from '../../components/common/Input/Input'
-import Modal from '../../components/common/Modal/Modal'
-import SearchBar from '../../components/common/SearchBar/SearchBar'
-import Table from '../../components/common/Table/Table'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
+import PageWrapper from '../../components/layout/PageWrapper'
+import Button from '../../components/common/Button'
+import Input from '../../components/common/Input'
+import Modal from '../../components/common/Modal'
+import SearchBar from '../../components/common/SearchBar'
+import Table from '../../components/common/Table'
+import StatusBadge from '../../components/common/StatusBadge'
 
 const initialArticles = [
   { id: 1, title: 'How to Book a Service', category: 'Customers', status: 'published', views: 1240 },

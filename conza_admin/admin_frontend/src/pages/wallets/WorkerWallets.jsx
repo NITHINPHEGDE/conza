@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Plus, Minus, HardHat } from 'lucide-react'
 import { mockWorkers } from '../../mock/workers'
-import Table from '../../components/common/Table/Table'
-import Button from '../../components/common/Button/Button'
-import Modal from '../../components/common/Modal/Modal'
-import Input from '../../components/common/Input/Input'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import Button from '../../components/common/Button'
+import Modal from '../../components/common/Modal'
+import Input from '../../components/common/Input'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 export default function WorkerWallets() {
   const [workers, setWorkers] = useState(mockWorkers.map((w) => ({ ...w, walletBalance: w.earnings.pending })))

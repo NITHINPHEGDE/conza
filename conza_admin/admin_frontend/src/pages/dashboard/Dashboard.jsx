@@ -6,13 +6,13 @@ import {
   CheckCircle, XCircle, Star, MapPin, Eye, Loader2
 } from 'lucide-react'
 import useDashboardStore from '../../store/dashboard/useDashboardStore'
-import RevenueChart from '../../components/charts/RevenueChart/RevenueChart'
-import BookingChart from '../../components/charts/BookingChart/BookingChart'
-import UserGrowthChart from '../../components/charts/UserGrowthChart/UserGrowthChart'
-import WorkerMap from '../../components/maps/WorkerMap/WorkerMap'
-import VendorMap from '../../components/maps/VendorMap/VendorMap'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import Button from '../../components/common/Button/Button'
+import RevenueChart from '../../components/charts/RevenueChart'
+import BookingChart from '../../components/charts/BookingChart'
+import UserGrowthChart from '../../components/charts/UserGrowthChart'
+import WorkerMap from '../../components/maps/WorkerMap'
+import VendorMap from '../../components/maps/VendorMap'
+import StatusBadge from '../../components/common/StatusBadge'
+import Button from '../../components/common/Button'
 
 const StatCard = ({ title, value, icon: Icon, trend, trendValue, color }) => (
   <div className="bg-surface rounded-xl border border-border p-5 card-shadow hover:card-shadow-hover transition-shadow">

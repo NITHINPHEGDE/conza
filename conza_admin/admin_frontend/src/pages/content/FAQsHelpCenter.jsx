@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Edit, Trash2, Plus, HelpCircle, BookOpen, Loader } from 'lucide-react'
-import Table from '../../components/common/Table/Table'
-import Button from '../../components/common/Button/Button'
-import Modal from '../../components/common/Modal/Modal'
-import Input from '../../components/common/Input/Input'
-import Select from '../../components/common/Select/Select'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import Button from '../../components/common/Button'
+import Modal from '../../components/common/Modal'
+import Input from '../../components/common/Input'
+import Select from '../../components/common/Select'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 import { useToastStore } from '../../store/notifications/useToastStore'
 import {
   getFAQs, createFAQ, updateFAQ, deleteFAQ,

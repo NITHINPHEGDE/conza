@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
-import Table from '../../components/common/Table/Table'
-import Button from '../../components/common/Button/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import Button from '../../components/common/Button'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 const initialFeatured = [
   { id: '1', title: 'Concrete Mixer', vendor: 'RentEquip Bangalore', category: 'Equipment', price: 800, featuredSince: '2024-06-01' },

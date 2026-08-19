@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { Edit, Trash2, Plus } from 'lucide-react'
-import Table from '../../components/common/Table/Table'
-import Button from '../../components/common/Button/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import Button from '../../components/common/Button'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 import serviceCategoryService from '../../services/serviceCategoryService'
 
 export default function Categories() {

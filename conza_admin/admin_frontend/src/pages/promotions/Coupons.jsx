@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Edit, Trash2, Plus, Tag } from 'lucide-react'
-import Table from '../../components/common/Table/Table'
-import Button from '../../components/common/Button/Button'
-import Modal from '../../components/common/Modal/Modal'
-import Input from '../../components/common/Input/Input'
-import Select from '../../components/common/Select/Select'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import Button from '../../components/common/Button'
+import Modal from '../../components/common/Modal'
+import Input from '../../components/common/Input'
+import Select from '../../components/common/Select'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 const mockCoupons = [
   { id: '1', code: 'CONZA20', discount: 20, type: 'percentage', maxDiscount: 500, minOrder: 1000, usageLimit: 100, used: 45, status: 'active', expiry: '2024-07-31' },

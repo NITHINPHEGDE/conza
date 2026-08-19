@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import Sidebar from '../components/layout/Sidebar/Sidebar'
-import Header from '../components/layout/Header/Header'
-import Footer from '../components/layout/Footer/Footer'
-import PageWrapper from '../components/layout/PageWrapper/PageWrapper'
+import Sidebar from '../components/layout/Sidebar'
+import Header from '../components/layout/Header'
+import Footer from '../components/layout/Footer'
+import PageWrapper from '../components/layout/PageWrapper'
 
 export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true)

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Star, Trash2 } from 'lucide-react'
-import Table from '../../components/common/Table/Table'
-import Button from '../../components/common/Button/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import Button from '../../components/common/Button'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 const initialFeatured = [
   { id: '1', title: 'Portland Cement 50kg', vendor: 'BuildMart Pro', category: 'Cement', price: 380, featuredSince: '2024-06-01' },

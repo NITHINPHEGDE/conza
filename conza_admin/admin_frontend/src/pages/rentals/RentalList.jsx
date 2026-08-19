@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, CheckCircle, XCircle, Truck } from 'lucide-react'
 import useRentalStore from '../../store/rentals/useRentalStore'
-import Table from '../../components/common/Table/Table'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import Button from '../../components/common/Button/Button'
-import Modal from '../../components/common/Modal/Modal'
-import SearchBar from '../../components/common/SearchBar/SearchBar'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import StatusBadge from '../../components/common/StatusBadge'
+import Button from '../../components/common/Button'
+import Modal from '../../components/common/Modal'
+import SearchBar from '../../components/common/SearchBar'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 export default function RentalList() {
   const { rentals, fetchRentals, updateRental, deleteRental, loading, error } = useRentalStore()

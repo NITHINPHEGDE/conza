@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { RefreshCw, Save, CheckSquare, Square } from 'lucide-react'
-import PageWrapper from '../../components/layout/PageWrapper/PageWrapper'
-import Button from '../../components/common/Button/Button'
-import Table from '../../components/common/Table/Table'
+import PageWrapper from '../../components/layout/PageWrapper'
+import Button from '../../components/common/Button'
+import Table from '../../components/common/Table'
 import roleService from '../../services/roleService'
 import useAuthStore from '../../store/auth/useAuthStore'
 

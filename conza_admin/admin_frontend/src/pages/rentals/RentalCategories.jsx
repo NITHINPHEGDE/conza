@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Edit, Trash2, Plus, ImagePlus } from 'lucide-react'
-import Table from '../../components/common/Table/Table'
-import Button from '../../components/common/Button/Button'
-import Modal from '../../components/common/Modal/Modal'
-import Input from '../../components/common/Input/Input'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import Button from '../../components/common/Button'
+import Modal from '../../components/common/Modal'
+import Input from '../../components/common/Input'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 import rentalCategoryService from '../../services/rentalCategoryService'
 
 export default function RentalCategories() {

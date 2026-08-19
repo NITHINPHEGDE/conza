@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { DollarSign, Percent, Save, Truck, Package, HardHat } from 'lucide-react'
-import PageWrapper from '../../components/layout/PageWrapper/PageWrapper'
-import Button from '../../components/common/Button/Button'
-import Input from '../../components/common/Input/Input'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import PageWrapper from '../../components/layout/PageWrapper'
+import Button from '../../components/common/Button'
+import Input from '../../components/common/Input'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 const initialPricing = {
   labour: {

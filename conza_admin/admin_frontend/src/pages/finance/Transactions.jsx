@@ -1,7 +1,7 @@
 import useFinanceStore from '../../store/finance/useFinanceStore'
-import Table from '../../components/common/Table/Table'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import StatusBadge from '../../components/common/StatusBadge'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 export default function Transactions() {
   const { transactions } = useFinanceStore()

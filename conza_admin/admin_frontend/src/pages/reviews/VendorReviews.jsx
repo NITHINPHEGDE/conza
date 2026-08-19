@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Trash2, Flag } from 'lucide-react'
 import { mockVendorReviews } from '../../mock/vendors'
-import Table from '../../components/common/Table/Table'
-import StarRating from '../../components/common/StarRating/StarRating'
-import Button from '../../components/common/Button/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import StarRating from '../../components/common/StarRating'
+import Button from '../../components/common/Button'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 export default function VendorReviews() {
   const [reviews, setReviews] = useState(mockVendorReviews)

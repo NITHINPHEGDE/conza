@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import PageWrapper from '../../components/layout/PageWrapper/PageWrapper'
-import Button from '../../components/common/Button/Button'
-import Input from '../../components/common/Input/Input'
-import Modal from '../../components/common/Modal/Modal'
-import Table from '../../components/common/Table/Table'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
+import PageWrapper from '../../components/layout/PageWrapper'
+import Button from '../../components/common/Button'
+import Input from '../../components/common/Input'
+import Modal from '../../components/common/Modal'
+import Table from '../../components/common/Table'
+import StatusBadge from '../../components/common/StatusBadge'
 
 const initialBanners = [
   { id: 1, title: 'Summer Sale - 20% Off', position: 'home_top', status: 'active', startDate: '2024-06-01', endDate: '2024-06-30', clicks: 3420 },

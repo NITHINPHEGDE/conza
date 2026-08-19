@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Package, Store, Tag, Box, DollarSign, FileText, Star } from 'lucide-react'
 import useMaterialStore from '../../store/materials/useMaterialStore'
-import Button from '../../components/common/Button/Button'
-import Input from '../../components/common/Input/Input'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import Modal from '../../components/common/Modal/Modal'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Button from '../../components/common/Button'
+import Input from '../../components/common/Input'
+import StatusBadge from '../../components/common/StatusBadge'
+import Modal from '../../components/common/Modal'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 export default function MaterialDetails() {
   const { id } = useParams()

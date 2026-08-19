@@ -1,8 +1,8 @@
 import { useParams } from 'react-router-dom'
 import { mockVendorReviews } from '../../mock/vendors'
-import Table from '../../components/common/Table/Table'
-import StarRating from '../../components/common/StarRating/StarRating'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import StarRating from '../../components/common/StarRating'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 export default function VendorReviews() {
   const { id } = useParams()

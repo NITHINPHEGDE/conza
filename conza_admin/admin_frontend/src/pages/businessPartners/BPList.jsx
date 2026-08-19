@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Eye, Ban, CheckCircle, Handshake } from 'lucide-react'
-import Table from '../../components/common/Table/Table'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import Button from '../../components/common/Button/Button'
-import Modal from '../../components/common/Modal/Modal'
-import SearchBar from '../../components/common/SearchBar/SearchBar'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import StatusBadge from '../../components/common/StatusBadge'
+import Button from '../../components/common/Button'
+import Modal from '../../components/common/Modal'
+import SearchBar from '../../components/common/SearchBar'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 const mockBPs = [
   { id: '1', name: 'Vijay Enterprises', phone: '+91 9876543230', email: 'vijay@enterprises.com', territory: 'Bangalore North', workersOnboarded: 45, vendorsOnboarded: 12, referrals: 89, commission: 45000, status: 'active' },

@@ -1,9 +1,9 @@
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Clock, CheckCircle, Circle } from 'lucide-react'
 import { mockBookingTimeline } from '../../mock/bookings'
-import Button from '../../components/common/Button/Button'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Button from '../../components/common/Button'
+import StatusBadge from '../../components/common/StatusBadge'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 export default function BookingTimeline() {
   const { id } = useParams()

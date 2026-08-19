@@ -1,7 +1,7 @@
-import Table from '../../components/common/Table/Table'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import Button from '../../components/common/Button/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import StatusBadge from '../../components/common/StatusBadge'
+import Button from '../../components/common/Button'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 const mockOutOfStock = [
   { id: '1', product: 'AAC Blocks 600×200×150', vendor: 'QuickBuild Supply', category: 'Blocks', lastStock: '2024-06-15' },

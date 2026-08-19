@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Mail } from 'lucide-react'
-import Button from '../../components/common/Button/Button'
-import Input from '../../components/common/Input/Input'
+import Button from '../../components/common/Button'
+import Input from '../../components/common/Input'
 
 export default function ForgotPassword() {
   const navigate = useNavigate()

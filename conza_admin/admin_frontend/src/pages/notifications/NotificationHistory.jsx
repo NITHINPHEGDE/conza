@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Bell, Smartphone, MessageSquare, Mail } from 'lucide-react'
-import Table from '../../components/common/Table/Table'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import StatusBadge from '../../components/common/StatusBadge'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 const mockHistory = [
   { id: '1', type: 'push', title: 'New Booking Alert', audience: 'Workers', sent: 342, delivered: 338, failed: 4, date: '2024-06-20T14:00:00Z' },

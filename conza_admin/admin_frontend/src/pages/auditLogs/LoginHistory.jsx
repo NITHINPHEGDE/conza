@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
-import PageWrapper from '../../components/layout/PageWrapper/PageWrapper'
-import SearchBar from '../../components/common/SearchBar/SearchBar'
-import Table from '../../components/common/Table/Table'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
+import PageWrapper from '../../components/layout/PageWrapper'
+import SearchBar from '../../components/common/SearchBar'
+import Table from '../../components/common/Table'
+import StatusBadge from '../../components/common/StatusBadge'
 import { useDebounce } from '../../hooks/useDebounce'
 import auditLogService from '../../services/auditLogService'
 

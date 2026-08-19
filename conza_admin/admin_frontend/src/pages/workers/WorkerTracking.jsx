@@ -1,5 +1,5 @@
-import WorkerMap from '../../components/maps/WorkerMap/WorkerMap'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import WorkerMap from '../../components/maps/WorkerMap'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 export default function WorkerTracking() {
   return (

@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import PageWrapper from '../../components/layout/PageWrapper/PageWrapper'
-import RevenueChart from '../../components/charts/RevenueChart/RevenueChart'
-import Table from '../../components/common/Table/Table'
-import Select from '../../components/common/Select/Select'
+import PageWrapper from '../../components/layout/PageWrapper'
+import RevenueChart from '../../components/charts/RevenueChart'
+import Table from '../../components/common/Table'
+import Select from '../../components/common/Select'
 
 const revenueStats = {
   totalRevenue: 2840000,

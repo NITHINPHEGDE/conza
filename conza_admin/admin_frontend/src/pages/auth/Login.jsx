@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { HardHat } from 'lucide-react'
-import Button from '../../components/common/Button/Button'
-import Input from '../../components/common/Input/Input'
+import Button from '../../components/common/Button'
+import Input from '../../components/common/Input'
 import useAuthStore from '../../store/auth/useAuthStore'
 import authService from '../../services/authService'
 

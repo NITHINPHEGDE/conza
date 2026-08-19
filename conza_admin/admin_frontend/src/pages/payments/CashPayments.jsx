@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Banknote } from 'lucide-react'
-import Table from '../../components/common/Table/Table'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import SearchBar from '../../components/common/SearchBar/SearchBar'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import StatusBadge from '../../components/common/StatusBadge'
+import SearchBar from '../../components/common/SearchBar'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 const mockCash = [
   { id: 'CASH001', customer: 'Ananya R', worker: 'Ravi Kumar', amount: 960, status: 'collected', date: '2024-06-20T14:00:00Z' },

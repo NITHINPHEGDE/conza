@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Save, Info, Loader } from 'lucide-react'
-import Button from '../../components/common/Button/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Button from '../../components/common/Button'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 import { useToastStore } from '../../store/notifications/useToastStore'
 import { getAboutContent, saveAboutContent } from '../../services/legalService'
 

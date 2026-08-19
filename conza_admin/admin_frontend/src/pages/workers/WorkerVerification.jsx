@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle, XCircle, Eye, FileText } from 'lucide-react'
 import useWorkerStore from '../../store/workers/useWorkerStore'
-import Table from '../../components/common/Table/Table'
-import StatusBadge from '../../components/common/StatusBadge/StatusBadge'
-import Button from '../../components/common/Button/Button'
-import Modal from '../../components/common/Modal/Modal'
-import Breadcrumb from '../../components/layout/Breadcrumb/Breadcrumb'
+import Table from '../../components/common/Table'
+import StatusBadge from '../../components/common/StatusBadge'
+import Button from '../../components/common/Button'
+import Modal from '../../components/common/Modal'
+import Breadcrumb from '../../components/layout/Breadcrumb'
 
 export default function WorkerVerification() {
   const { workers, updateWorkerStatus, verifyWorker } = useWorkerStore()
