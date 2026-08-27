@@ -29,7 +29,7 @@ const RentalCard = React.memo(({ item, onPress, onAddToCart }) => {
 
       {/* ── Image ── */}
       <View style={styles.imageWrapper}>
-       <Image source={imageSource} style={styles.image} resizeMode="contain" />>
+       <Image source={imageSource} style={styles.image} resizeMode="contain" />
         {/* Availability badge — top right */}
         <View style={[styles.availBadge, {
           backgroundColor: item.available ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
