@@ -1,5 +1,5 @@
 import { Truck, Package, CheckCircle, MapPin } from 'lucide-react'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const trackingSteps = [
   { status: 'confirmed', label: 'Order Confirmed', completed: true, time: '2024-06-20 10:00 AM' },

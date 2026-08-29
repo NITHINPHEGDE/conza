@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { HardHat } from 'lucide-react'
-import Button from '../../components/common/Button'
-import Input from '../../components/common/Input'
-import useAuthStore from '../../store/auth/useAuthStore'
-import authService from '../../services/authService'
+import Button from '../components/common/Button'
+import Input from '../components/common/Input'
+import useAuthStore from '../store/auth/useAuthStore'
+import authService from '../services/authService'
 
 export default function Login() {
   const navigate = useNavigate()

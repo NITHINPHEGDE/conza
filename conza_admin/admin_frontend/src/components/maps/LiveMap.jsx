@@ -1,7 +1,7 @@
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet'
-import { mockWorkers } from '../../../mock/workers'
-import { mockVendors } from '../../../mock/vendors'
-import { mockBookings } from '../../../mock/bookings'
+import { mockWorkers } from '../../mock/workers'
+import { mockVendors } from '../../mock/vendors'
+import { mockBookings } from '../../mock/bookings'
 import L from 'leaflet'
 
 const workerIcon = new L.DivIcon({

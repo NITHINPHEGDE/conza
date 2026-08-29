@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Download, FileText } from 'lucide-react'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const reportTypes = [
   { id: 'daily', label: 'Daily Report', description: 'Daily revenue, bookings, and orders summary' },

@@ -1,5 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const ratingDistribution = [
   { rating: '5 Star', count: 450 },

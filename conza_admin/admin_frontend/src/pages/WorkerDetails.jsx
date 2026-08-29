@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, HardHat, Phone, Mail, MapPin, Star, Calendar, CheckCircle, XCircle, Wallet, Briefcase, ShieldCheck, IndianRupee } from 'lucide-react'
-import useWorkerStore from '../../store/workers/useWorkerStore'
-import workerService from '../../services/workerService'
-import StatusBadge from '../../components/common/StatusBadge'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import useWorkerStore from '../store/workers/useWorkerStore'
+import workerService from '../services/workerService'
+import StatusBadge from '../components/common/StatusBadge'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function WorkerDetails() {
   const { id } = useParams()

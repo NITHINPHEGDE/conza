@@ -1,5 +1,5 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { mockVendorGrowthData } from '../../../mock/dashboard'
+import { mockVendorGrowthData } from '../../mock/dashboard'
 
 export default function VendorGrowthChart() {
   return (

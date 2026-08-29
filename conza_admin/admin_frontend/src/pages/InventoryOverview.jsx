@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Package, AlertTriangle, XCircle, TrendingUp, Tags, Truck, ChevronRight } from 'lucide-react'
-import inventoryService from '../../services/inventoryService'
-import materialService from '../../services/materialService'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import inventoryService from '../services/inventoryService'
+import materialService from '../services/materialService'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function InventoryOverview() {
   const [overview, setOverview] = useState({ total: 0, lowStock: 0, outOfStock: 0, active: 0 })

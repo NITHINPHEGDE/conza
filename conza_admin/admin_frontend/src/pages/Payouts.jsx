@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { CheckCircle, XCircle } from 'lucide-react'
-import useFinanceStore from '../../store/finance/useFinanceStore'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import Button from '../../components/common/Button'
-import Modal from '../../components/common/Modal'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import useFinanceStore from '../store/finance/useFinanceStore'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import Button from '../components/common/Button'
+import Modal from '../components/common/Modal'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function Payouts() {
   const { payouts } = useFinanceStore()

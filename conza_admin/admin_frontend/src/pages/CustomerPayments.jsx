@@ -1,10 +1,10 @@
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { mockCustomerPayments } from '../../mock/customers'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import { mockCustomerPayments } from '../mock/customers'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function CustomerPayments() {
   const { id } = useParams()

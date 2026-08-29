@@ -1,5 +1,5 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { mockServiceData } from '../../../mock/dashboard'
+import { mockServiceData } from '../../mock/dashboard'
 
 const COLORS = ['#F5C842', '#F0A500', '#2E8B57', '#3B82F6', '#E03B3B', '#6366F1']
 

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { TrendingUp, Wallet, Users, Store } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import useFinanceStore from '../../store/finance/useFinanceStore'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import useFinanceStore from '../store/finance/useFinanceStore'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const mockRevenueByPeriod = {
   daily: [

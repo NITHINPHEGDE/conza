@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, CheckCircle, XCircle, Package } from 'lucide-react'
-import useMaterialStore from '../../store/materials/useMaterialStore'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import Button from '../../components/common/Button'
-import Modal from '../../components/common/Modal'
-import SearchBar from '../../components/common/SearchBar'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import useMaterialStore from '../store/materials/useMaterialStore'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import Button from '../components/common/Button'
+import Modal from '../components/common/Modal'
+import SearchBar from '../components/common/SearchBar'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function MaterialList() {
   const { materials, fetchMaterials, updateMaterial, deleteMaterial, loading, error } = useMaterialStore()

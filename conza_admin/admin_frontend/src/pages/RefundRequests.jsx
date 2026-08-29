@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { CheckCircle, XCircle } from 'lucide-react'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import Button from '../../components/common/Button'
-import Modal from '../../components/common/Modal'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import Button from '../components/common/Button'
+import Modal from '../components/common/Modal'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const mockRefunds = [
   { id: 'REF001', orderId: 'ORD002', customer: 'Priya Patel', amount: 3200, reason: 'Wrong item delivered', status: 'pending' },

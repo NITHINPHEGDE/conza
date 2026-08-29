@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Trash2, Flag } from 'lucide-react'
-import Table from '../../components/common/Table'
-import StarRating from '../../components/common/StarRating'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Table from '../components/common/Table'
+import StarRating from '../components/common/StarRating'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const mockProductReviews = [
   { id: '1', product: 'Portland Cement 50kg', customer: 'Rahul Sharma', rating: 5, comment: 'Great quality, fast delivery', date: '2024-06-20T12:00:00Z' },

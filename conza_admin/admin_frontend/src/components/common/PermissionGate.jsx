@@ -1,4 +1,4 @@
-import { usePermission } from '../../../hooks/usePermission'
+import { usePermission } from '../../hooks/usePermission'
 
 /**
  * Renders children only when the current admin has the required permission.

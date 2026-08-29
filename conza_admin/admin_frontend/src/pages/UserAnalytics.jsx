@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import PageWrapper from '../../components/layout/PageWrapper'
-import UserGrowthChart from '../../components/charts/UserGrowthChart'
-import Table from '../../components/common/Table'
-import Select from '../../components/common/Select'
+import PageWrapper from '../components/layout/PageWrapper'
+import UserGrowthChart from '../components/charts/UserGrowthChart'
+import Table from '../components/common/Table'
+import Select from '../components/common/Select'
 
 const userStats = {
   totalUsers: 58240,

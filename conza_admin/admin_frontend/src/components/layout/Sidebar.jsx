@@ -6,8 +6,8 @@ import {
   Map, Bell, TicketCheck, Star, Gift, FileText, BarChart3, ShieldCheck,
   ScrollText, ChevronDown, ChevronRight, Menu, X, DollarSign
 } from 'lucide-react'
-import useAuthStore from '../../../store/auth/useAuthStore'
-import { usePermission } from '../../../hooks/usePermission'
+import useAuthStore from '../../store/auth/useAuthStore'
+import { usePermission } from '../../hooks/usePermission'
 
 // permission: the permission key required to see this item/group.
 // null means always visible (e.g. Dashboard for super_admin).

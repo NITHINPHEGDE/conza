@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Eye, CheckCircle, MessageSquare } from 'lucide-react'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const mockTickets = [
   { id: 'TKT001', user: 'Rahul Sharma', type: 'customer', subject: 'App not loading', priority: 'high', status: 'open', date: '2024-06-20T11:00:00Z' },

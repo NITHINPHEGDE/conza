@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
-import useMapStore from '../../../store/maps/useMapStore'
+import useMapStore from '../../store/maps/useMapStore'
 
 const vendorIcon = new L.DivIcon({
   className: 'custom-div-icon',

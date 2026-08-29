@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
-import PageWrapper from '../../components/layout/PageWrapper'
-import SearchBar from '../../components/common/SearchBar'
-import Table from '../../components/common/Table'
-import Select from '../../components/common/Select'
-import StatusBadge from '../../components/common/StatusBadge'
-import { useDebounce } from '../../hooks/useDebounce'
-import auditLogService from '../../services/auditLogService'
+import PageWrapper from '../components/layout/PageWrapper'
+import SearchBar from '../components/common/SearchBar'
+import Table from '../components/common/Table'
+import Select from '../components/common/Select'
+import StatusBadge from '../components/common/StatusBadge'
+import { useDebounce } from '../hooks/useDebounce'
+import auditLogService from '../services/auditLogService'
 
 const MODULE_OPTIONS = [
   'All', 'Admins', 'Customers', 'Workers', 'Vendors', 'Bookings', 'Orders',

@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
-import Table from '../../components/common/Table'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Table from '../components/common/Table'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const mockCommissions = [
   { id: '1', bpId: '1', source: 'Worker Referral - Suresh Kumar', amount: 500, date: '2024-06-20' },

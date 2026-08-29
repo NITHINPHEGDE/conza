@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import LiveMap from '../../components/maps/LiveMap'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import LiveMap from '../components/maps/LiveMap'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function LiveTracking() {
   const [filters, setFilters] = useState({ showWorkers: true, showVendors: true, showJobs: true })

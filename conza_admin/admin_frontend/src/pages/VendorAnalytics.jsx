@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import PageWrapper from '../../components/layout/PageWrapper'
-import VendorGrowthChart from '../../components/charts/VendorGrowthChart'
-import Table from '../../components/common/Table'
-import Select from '../../components/common/Select'
+import PageWrapper from '../components/layout/PageWrapper'
+import VendorGrowthChart from '../components/charts/VendorGrowthChart'
+import Table from '../components/common/Table'
+import Select from '../components/common/Select'
 
 const vendorStats = {
   totalVendors: 1240,

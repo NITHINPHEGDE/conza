@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Save, Info, Loader } from 'lucide-react'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
-import { useToastStore } from '../../store/notifications/useToastStore'
-import { getAboutContent, saveAboutContent } from '../../services/legalService'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
+import { useToastStore } from '../store/notifications/useToastStore'
+import { getAboutContent, saveAboutContent } from '../services/legalService'
 
 export default function AboutUs() {
   const addToast = useToastStore((s) => s.addToast)

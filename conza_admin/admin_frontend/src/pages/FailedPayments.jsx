@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { XCircle, RefreshCw } from 'lucide-react'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const mockFailed = [
   { id: 'FP001', customer: 'Ananya R', amount: 960, reason: 'Insufficient funds', retryCount: 2, date: '2024-06-20T12:00:00Z' },

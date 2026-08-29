@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Trash2, Store, Phone, Mail, MapPin, Star, Calendar, Wallet, ShoppingCart, FileText, ShieldCheck } from 'lucide-react'
-import useVendorStore from '../../store/vendors/useVendorStore'
-import StatusBadge from '../../components/common/StatusBadge'
-import Button from '../../components/common/Button'
-import Modal from '../../components/common/Modal'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import useVendorStore from '../store/vendors/useVendorStore'
+import StatusBadge from '../components/common/StatusBadge'
+import Button from '../components/common/Button'
+import Modal from '../components/common/Modal'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function VendorDetails() {
   const { id } = useParams()

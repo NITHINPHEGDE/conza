@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Edit, Trash2, Plus, Gift } from 'lucide-react'
-import Table from '../../components/common/Table'
-import Button from '../../components/common/Button'
-import Modal from '../../components/common/Modal'
-import Input from '../../components/common/Input'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Table from '../components/common/Table'
+import Button from '../components/common/Button'
+import Modal from '../components/common/Modal'
+import Input from '../components/common/Input'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const mockReferrals = [
   { id: '1', name: 'Refer & Earn', referrerBonus: 100, refereeBonus: 50, minOrder: 500, status: 'active' },

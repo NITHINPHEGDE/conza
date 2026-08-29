@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Save, FileText, Loader } from 'lucide-react'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
-import { useToastStore } from '../../store/notifications/useToastStore'
-import { getLegal, saveLegal } from '../../services/legalService'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
+import { useToastStore } from '../store/notifications/useToastStore'
+import { getLegal, saveLegal } from '../services/legalService'
 
 const categories = [
   { key: 'customer', label: 'Customer App' },

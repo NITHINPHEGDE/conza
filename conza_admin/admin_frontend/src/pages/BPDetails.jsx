@@ -1,8 +1,8 @@
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Handshake, Phone, Mail, MapPin, Users, Store, Gift, Wallet } from 'lucide-react'
-import Button from '../../components/common/Button'
-import StatusBadge from '../../components/common/StatusBadge'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Button from '../components/common/Button'
+import StatusBadge from '../components/common/StatusBadge'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const mockBPs = [
   { id: '1', name: 'Vijay Enterprises', phone: '+91 9876543230', email: 'vijay@enterprises.com', territory: 'Bangalore North', workersOnboarded: 45, vendorsOnboarded: 12, referrals: 89, commission: 45000, status: 'active', address: '45, MG Road, Bangalore' },

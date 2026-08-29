@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ImagePlus } from 'lucide-react'
-import Button from '../../components/common/Button'
-import Input from '../../components/common/Input'
-import Breadcrumb from '../../components/layout/Breadcrumb'
-import serviceCategoryService from '../../services/serviceCategoryService'
+import Button from '../components/common/Button'
+import Input from '../components/common/Input'
+import Breadcrumb from '../components/layout/Breadcrumb'
+import serviceCategoryService from '../services/serviceCategoryService'
 
 export default function AddCategory() {
   const navigate = useNavigate()

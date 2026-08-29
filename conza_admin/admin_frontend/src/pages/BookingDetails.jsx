@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, User, HardHat, MapPin, DollarSign, Clock, FileText } from 'lucide-react'
-import bookingService from '../../services/bookingService'
-import useBookingStore from '../../store/bookings/useBookingStore'
-import StatusBadge from '../../components/common/StatusBadge'
-import StarRating from '../../components/common/StarRating'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import bookingService from '../services/bookingService'
+import useBookingStore from '../store/bookings/useBookingStore'
+import StatusBadge from '../components/common/StatusBadge'
+import StarRating from '../components/common/StarRating'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function BookingDetails() {
   const { id } = useParams()

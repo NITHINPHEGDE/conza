@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, User, Store, Package, DollarSign, Truck, Calendar } from 'lucide-react'
-import orderService from '../../services/orderService'
-import Button from '../../components/common/Button'
-import StatusBadge from '../../components/common/StatusBadge'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import orderService from '../services/orderService'
+import Button from '../components/common/Button'
+import StatusBadge from '../components/common/StatusBadge'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function OrderDetails() {
   const { id } = useParams()

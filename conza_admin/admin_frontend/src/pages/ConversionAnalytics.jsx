@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import PageWrapper from '../../components/layout/PageWrapper'
-import ServiceChart from '../../components/charts/ServiceChart'
-import Table from '../../components/common/Table'
-import Select from '../../components/common/Select'
+import PageWrapper from '../components/layout/PageWrapper'
+import ServiceChart from '../components/charts/ServiceChart'
+import Table from '../components/common/Table'
+import Select from '../components/common/Select'
 
 const conversionStats = {
   visitorToSignup: 24.5,

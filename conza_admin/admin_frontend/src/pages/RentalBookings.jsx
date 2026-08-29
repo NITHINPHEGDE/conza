@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Eye, Truck } from 'lucide-react'
-import useBookingStore from '../../store/bookings/useBookingStore'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import Button from '../../components/common/Button'
-import SearchBar from '../../components/common/SearchBar'
-import Select from '../../components/common/Select'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import useBookingStore from '../store/bookings/useBookingStore'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import Button from '../components/common/Button'
+import SearchBar from '../components/common/SearchBar'
+import Select from '../components/common/Select'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function RentalBookings() {
   const { getBookingsByType } = useBookingStore()

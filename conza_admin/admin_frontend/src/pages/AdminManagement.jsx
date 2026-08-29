@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Users, Plus, Trash2, Mail, Lock, RefreshCw } from 'lucide-react'
-import PageWrapper from '../../components/layout/PageWrapper'
-import Button from '../../components/common/Button'
-import Input from '../../components/common/Input'
-import Modal from '../../components/common/Modal'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import api from '../../services/api'
+import PageWrapper from '../components/layout/PageWrapper'
+import Button from '../components/common/Button'
+import Input from '../components/common/Input'
+import Modal from '../components/common/Modal'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import api from '../services/api'
 
 const ROLE_MAP = {
   super_admin: 'Super Admin',

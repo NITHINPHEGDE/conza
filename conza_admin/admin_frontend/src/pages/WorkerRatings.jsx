@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import workerService from '../../services/workerService'
-import Table from '../../components/common/Table'
-import StarRating from '../../components/common/StarRating'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import workerService from '../services/workerService'
+import Table from '../components/common/Table'
+import StarRating from '../components/common/StarRating'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function WorkerRatings() {
   const { id } = useParams()

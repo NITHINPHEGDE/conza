@@ -1,4 +1,4 @@
-import { useToastStore } from '../../../store/notifications/useToastStore'
+import { useToastStore } from '../../store/notifications/useToastStore'
 
 export function Toaster() {
   const toasts = useToastStore((s) => s.toasts)

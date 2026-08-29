@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
-import PageWrapper from '../../components/layout/PageWrapper'
-import SearchBar from '../../components/common/SearchBar'
-import Table from '../../components/common/Table'
-import Select from '../../components/common/Select'
-import { useDebounce } from '../../hooks/useDebounce'
-import auditLogService from '../../services/auditLogService'
+import PageWrapper from '../components/layout/PageWrapper'
+import SearchBar from '../components/common/SearchBar'
+import Table from '../components/common/Table'
+import Select from '../components/common/Select'
+import { useDebounce } from '../hooks/useDebounce'
+import auditLogService from '../services/auditLogService'
 
 const ACTION_TYPES = [
   'All', 'approval', 'suspension', 'wallet', 'payout', 'removal',

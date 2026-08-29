@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const mockData = [
   { month: 'Jan', amount: 85000 },

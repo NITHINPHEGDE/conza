@@ -742,19 +742,25 @@ const submitReview = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Worker not found' });
     }
 
+    const customerName = req.user.fullName || req.user.username || 'Customer';
+
     const review = await Review.findOneAndUpdate(
       { bookingId: bookingId.toString(), entityType: 'worker', entityId: targetWorkerId.toString() },
       {
-        entityType: 'worker',
-        entityId:   targetWorkerId.toString(),
-        entityName: worker.fullName,
-        bookingId:  bookingId.toString(),
-        customer:   req.user.fullName || req.user.username || 'Customer',
-        customerId: req.user._id.toString(),
-        rating:     numericRating,
-        comment:    comment || '',
-        status:     'published',
-        isVerified: true,
+        $set: {
+          entityName: worker.fullName,
+          customer:   customerName,
+          customerId: req.user._id.toString(),
+          rating:     numericRating,
+          comment:    comment || '',
+          status:     'published',
+          isVerified: true,
+        },
+        $setOnInsert: {
+          entityType: 'worker',
+          entityId:   targetWorkerId.toString(),
+          bookingId:  bookingId.toString(),
+        },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
@@ -778,7 +784,8 @@ const submitReview = async (req, res) => {
 
     res.json({ success: true, review });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    logger.error({ err, bookingId: req.params.id, userId: req.user?._id }, 'submitReview failed');
+    res.status(500).json({ success: false, message: err.message, code: err.code });
   }
 };
 

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import materialService from '../../services/materialService'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import materialService from '../services/materialService'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function LowStock() {
   const [items, setItems] = useState([])

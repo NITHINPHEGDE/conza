@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Edit, Trash2, Plus, Wallet } from 'lucide-react'
-import Table from '../../components/common/Table'
-import Button from '../../components/common/Button'
-import Modal from '../../components/common/Modal'
-import Input from '../../components/common/Input'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Table from '../components/common/Table'
+import Button from '../components/common/Button'
+import Modal from '../components/common/Modal'
+import Input from '../components/common/Input'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const mockCashback = [
   { id: '1', name: 'Summer Cashback', percentage: 10, maxCashback: 200, minOrder: 1000, status: 'active', startDate: '2024-06-01', endDate: '2024-06-30' },

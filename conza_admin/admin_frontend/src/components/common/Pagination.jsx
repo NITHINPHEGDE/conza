@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import Button from '../Button/Button'
+import Button from './Button'
 
 export default function Pagination({ currentPage, totalPages, onPageChange, totalItems }) {
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1)

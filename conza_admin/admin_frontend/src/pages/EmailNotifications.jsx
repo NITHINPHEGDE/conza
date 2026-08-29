@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Send, Mail } from 'lucide-react'
-import Button from '../../components/common/Button'
-import Input from '../../components/common/Input'
-import Select from '../../components/common/Select'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Button from '../components/common/Button'
+import Input from '../components/common/Input'
+import Select from '../components/common/Select'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function EmailNotifications() {
   const [form, setForm] = useState({ subject: '', body: '', target: 'all' })

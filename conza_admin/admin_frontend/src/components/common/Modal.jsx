@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import Button from '../Button/Button'
+import Button from './Button'
 
 export default function Modal({ isOpen, onClose, title, children, footer, size = 'md' }) {
   const overlayRef = useRef(null)

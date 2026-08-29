@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const mockReferrals = [
   { id: '1', bpId: '1', name: 'Suresh Kumar', type: 'worker', date: '2024-06-20', status: 'active' },

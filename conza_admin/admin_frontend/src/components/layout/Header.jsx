@@ -1,5 +1,5 @@
 import { Search, Bell, User } from 'lucide-react'
-import SearchBar from '../../common/SearchBar/SearchBar'
+import SearchBar from '../common/SearchBar'
 
 export default function Header({ sidebarOpen, setSidebarOpen }) {
   return (

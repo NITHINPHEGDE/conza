@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle, XCircle, Eye, Store } from 'lucide-react'
-import useVendorStore from '../../store/vendors/useVendorStore'
-import Table from '../../components/common/Table'
-import Button from '../../components/common/Button'
-import Modal from '../../components/common/Modal'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import useVendorStore from '../store/vendors/useVendorStore'
+import Table from '../components/common/Table'
+import Button from '../components/common/Button'
+import Modal from '../components/common/Modal'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 export default function VendorVerification() {
   const { vendors, updateVendorStatus } = useVendorStore()

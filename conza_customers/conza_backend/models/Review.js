@@ -23,5 +23,8 @@ const reviewSchema = new mongoose.Schema(
 
 reviewSchema.index({ entityType: 1, entityId: 1, createdAt: -1 });
 reviewSchema.index({ bookingId: 1 });
+// Unique per (booking × worker) so upsert is safe from race-condition
+// duplicate-key errors (concurrent resubmissions hit the same doc).
+reviewSchema.index({ bookingId: 1, entityType: 1, entityId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Review', reviewSchema);

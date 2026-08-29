@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Edit, Trash2, Plus, HelpCircle } from 'lucide-react'
-import Table from '../../components/common/Table'
-import Button from '../../components/common/Button'
-import Modal from '../../components/common/Modal'
-import Input from '../../components/common/Input'
-import Breadcrumb from '../../components/layout/Breadcrumb'
-import SearchBar from '../../components/common/SearchBar'
+import Table from '../components/common/Table'
+import Button from '../components/common/Button'
+import Modal from '../components/common/Modal'
+import Input from '../components/common/Input'
+import Breadcrumb from '../components/layout/Breadcrumb'
+import SearchBar from '../components/common/SearchBar'
 
 const mockFAQs = [
   { id: '1', question: 'How do I book a worker?', answer: 'Open the app, select a category, choose workers, and confirm booking.', category: 'General', status: 'active' },

@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Eye, CheckCircle, ArrowUp } from 'lucide-react'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import Button from '../../components/common/Button'
-import Breadcrumb from '../../components/layout/Breadcrumb'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import Button from '../components/common/Button'
+import Breadcrumb from '../components/layout/Breadcrumb'
 
 const mockEscalations = [
   { id: 'ESC001', complaintId: 'C001', user: 'Rahul Sharma', subject: 'Worker did not arrive', escalatedTo: 'Manager', status: 'open', date: '2024-06-20T12:00:00Z' },

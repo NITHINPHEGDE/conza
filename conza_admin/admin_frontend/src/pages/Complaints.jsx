@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Eye, Phone, User, Loader } from 'lucide-react'
-import Table from '../../components/common/Table'
-import StatusBadge from '../../components/common/StatusBadge'
-import Button from '../../components/common/Button'
-import Modal from '../../components/common/Modal'
-import SearchBar from '../../components/common/SearchBar'
-import Select from '../../components/common/Select'
-import Breadcrumb from '../../components/layout/Breadcrumb'
-import { useToastStore } from '../../store/notifications/useToastStore'
-import complaintService from '../../services/complaintService'
+import Table from '../components/common/Table'
+import StatusBadge from '../components/common/StatusBadge'
+import Button from '../components/common/Button'
+import Modal from '../components/common/Modal'
+import SearchBar from '../components/common/SearchBar'
+import Select from '../components/common/Select'
+import Breadcrumb from '../components/layout/Breadcrumb'
+import { useToastStore } from '../store/notifications/useToastStore'
+import complaintService from '../services/complaintService'
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All Status' },
