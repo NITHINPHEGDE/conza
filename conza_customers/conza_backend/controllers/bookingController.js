@@ -748,7 +748,10 @@ const submitReview = async (req, res) => {
       { bookingId: bookingId.toString(), entityType: 'worker', entityId: targetWorkerId.toString() },
       {
         $set: {
+          entityType: 'worker',
+          entityId:   targetWorkerId.toString(),
           entityName: worker.fullName,
+          bookingId:  bookingId.toString(),
           customer:   customerName,
           customerId: req.user._id.toString(),
           rating:     numericRating,
@@ -756,13 +759,8 @@ const submitReview = async (req, res) => {
           status:     'published',
           isVerified: true,
         },
-        $setOnInsert: {
-          entityType: 'worker',
-          entityId:   targetWorkerId.toString(),
-          bookingId:  bookingId.toString(),
-        },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: false }
     );
 
     // Recompute this worker's average rating across every visible review
