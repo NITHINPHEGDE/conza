@@ -737,7 +737,12 @@ const submitReview = async (req, res) => {
       }
     }
 
-    const worker = await Worker.findById(targetWorkerId);
+    let worker;
+    try {
+      worker = await Worker.findById(targetWorkerId);
+    } catch (findWorkerErr) {
+      return res.status(400).json({ success: false, message: 'Invalid worker reference on this booking' });
+    }
     if (!worker) {
       return res.status(404).json({ success: false, message: 'Worker not found' });
     }
@@ -813,7 +818,18 @@ const submitReview = async (req, res) => {
     res.json({ success: true, review });
   } catch (err) {
     logger.error({ err, bookingId: req.params.id, userId: req.user?._id }, 'submitReview failed');
-    res.status(500).json({ success: false, message: err.message, code: err.code });
+    try {
+      const Sentry = require('@sentry/node');
+      Sentry.captureException(err, {
+        extra: { bookingId: req.params.id, userId: req.user?._id, body: req.body },
+      });
+    } catch (_) {}
+    res.status(500).json({
+      success: false,
+      message: err.message,
+      code: err.code,
+      name: err.name,
+    });
   }
 };
 
