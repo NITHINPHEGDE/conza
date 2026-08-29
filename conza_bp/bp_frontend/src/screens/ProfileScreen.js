@@ -13,7 +13,7 @@ import { stopLocationTracking } from '../services/locationService';
 import { uploadImageToCloudinary } from '../utils/cloudinary';
 import { colors } from '../theme/colors';
 
-import { getCategoriesAPI } from '../services/workerService';
+import { getCategoriesAPI, getMyReviewsAPI } from '../services/workerService';
 // CATEGORIES is now fetched dynamically inside CategoryPicker below.
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
@@ -227,6 +227,27 @@ const MenuItem = React.memo(({ icon, label, sub, danger, onPress }) => (
   </TouchableOpacity>
 ));
 
+// ── Review Card ───────────────────────────────────────────────────────────────
+const ReviewCard = React.memo(({ review }) => (
+  <View style={styles.reviewCard}>
+    <View style={styles.reviewHeader}>
+      <Text style={styles.reviewCustomer} numberOfLines={1}>{review.customer || 'Customer'}</Text>
+      <Text style={styles.reviewDate}>{new Date(review.createdAt).toLocaleDateString()}</Text>
+    </View>
+    <View style={styles.reviewStarsRow}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <MaterialCommunityIcons
+          key={star}
+          name={star <= review.rating ? 'star' : 'star-outline'}
+          size={14}
+          color={colors.accentAmber}
+        />
+      ))}
+    </View>
+    {!!review.comment && <Text style={styles.reviewComment}>{review.comment}</Text>}
+  </View>
+));
+
 // ── Profile Screen ────────────────────────────────────────────────────────────
 const ProfileScreen = ({ navigation }) => {
   const insets        = useSafeAreaInsets();
@@ -236,6 +257,26 @@ const ProfileScreen = ({ navigation }) => {
   const rating        = usePartnerStore((s) => s.worker?.rating ?? 5.0);
   const updateProfile = usePartnerStore((s) => s.updateWorkerProfile);
   const [editVisible, setEditVisible] = useState(false);
+
+  // Reviews & ratings left by customers — pulled from the shared reviews
+  // collection (written by the customer app once a booking is confirmed).
+  const [reviews, setReviews]               = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const res = await getMyReviewsAPI();
+        if (isMounted) setReviews(res.reviews || []);
+      } catch (err) {
+        console.error('[Profile] Failed to load reviews:', err);
+      } finally {
+        if (isMounted) setReviewsLoading(false);
+      }
+    })();
+    return () => { isMounted = false; };
+  }, []);
 
   const initials = useMemo(() =>
     (profile.fullName || profile.name || 'W').split(' ').map((n) => n[0]).join('').toUpperCase(),
@@ -319,6 +360,20 @@ const ProfileScreen = ({ navigation }) => {
             )}
           </View>
         )}
+
+        {/* Reviews & Ratings */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Reviews & Ratings</Text>
+          {reviewsLoading ? (
+            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+              <ActivityIndicator color={colors.accentAmber} />
+            </View>
+          ) : reviews.length > 0 ? (
+            reviews.map((review) => <ReviewCard key={review._id} review={review} />)
+          ) : (
+            <Text style={styles.reviewEmpty}>No reviews yet. Completed jobs rated by customers will show up here.</Text>
+          )}
+        </View>
 
         {/* Legal */}
         <View style={styles.section}>
@@ -421,6 +476,17 @@ const styles = StyleSheet.create({
   menuLabel:  { fontSize: 14, fontWeight: '600', color: colors.textPrimary, marginBottom: 2 },
   menuSub:    { fontSize: 11, color: colors.textMuted, fontWeight: '400' },
   version:    { textAlign: 'center', marginTop: 28, fontSize: 12, color: colors.textMuted, fontWeight: '500' },
+
+  reviewCard: {
+    paddingVertical: 12, paddingHorizontal: 16,
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  reviewHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  reviewCustomer: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, flex: 1, marginRight: 8 },
+  reviewDate:     { fontSize: 11, color: colors.textMuted, fontWeight: '500' },
+  reviewStarsRow: { flexDirection: 'row', gap: 2, marginBottom: 4 },
+  reviewComment:  { fontSize: 12, color: colors.textSecondary, lineHeight: 17 },
+  reviewEmpty:    { fontSize: 12, color: colors.textMuted, paddingHorizontal: 16, paddingVertical: 14, fontWeight: '500' },
 
   // Modal
   modalContainer: { flex: 1, backgroundColor: colors.background },

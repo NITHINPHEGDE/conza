@@ -6,6 +6,7 @@ import { bookingAPI } from '../api/bookingAPI';
 import { BookingTrackingSkeleton } from '../components/Skeleton';
 import SlideToast from '../components/SlideToast';
 import AutobookStatusCard from '../components/AutobookStatusCard';
+import RatingReviewModal from '../components/RatingReviewModal';
 import { socket } from '../utils/socket';
 
 const getStatusDisplay = (status) => {
@@ -42,13 +43,17 @@ const BookingTrackingScreen = ({ navigation, route }) => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling]           = useState(false);
   const [confirming, setConfirming]           = useState(false);
-  const [reportingIssue, setReportingIssue]   = useState(false);
-  const [issueComment, setIssueComment]       = useState('');
 
   const [confirmingWorkerId, setConfirmingWorkerId] = useState(null);
   const [issueModalOpen, setIssueModalOpen]         = useState(false);
   const [issueComment2, setIssueComment2]           = useState('');
   const [reportingIssue2, setReportingIssue2]       = useState(false);
+
+  // Rating & review — shown right after the customer confirms a job as
+  // completed (single-worker flow and each worker in the autobook flow).
+  // `ratingTarget` holds the worker being rated; null hides the modal.
+  const [ratingTarget, setRatingTarget]         = useState(null);
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   // Join the booking-specific socket room so booking_status_changed events
   // are received. Re-join on reconnect to handle network interruptions.
@@ -110,29 +115,22 @@ const BookingTrackingScreen = ({ navigation, route }) => {
     if (!activeBookingId) return;
     setConfirming(true);
     try {
+      const workerForRating = activeBooking?.workers?.[0];
       await bookingAPI.confirmCompletion(activeBookingId);
       await fetchActiveBooking(activeBookingId);
+      if (workerForRating) {
+        setRatingTarget({
+          workerId:    (workerForRating._id || workerForRating).toString(),
+          workerName:  workerForRating.fullName,
+          workerImage: workerForRating.profileImage,
+        });
+      }
     } catch (err) {
       Alert.alert('Error', err.response?.data?.message || err.message || 'Could not confirm completion.');
     } finally {
       setConfirming(false);
     }
-  }, [activeBookingId, fetchActiveBooking]);
-
-  const handleReportIssue = useCallback(async () => {
-    if (!activeBookingId) return;
-    setReportingIssue(true);
-    try {
-      await bookingAPI.reportIssue(activeBookingId, issueComment);
-      await fetchActiveBooking(activeBookingId);
-      Alert.alert('Issue Reported', 'We have notified the worker. Support will review your booking.');
-      setIssueComment('');
-    } catch (err) {
-      Alert.alert('Error', err.response?.data?.message || err.message || 'Could not report issue.');
-    } finally {
-      setReportingIssue(false);
-    }
-  }, [activeBookingId, issueComment, fetchActiveBooking]);
+  }, [activeBookingId, fetchActiveBooking, activeBooking]);
 
   const handleOK = useCallback(async () => {
     await clearActiveBooking();
@@ -143,14 +141,21 @@ const BookingTrackingScreen = ({ navigation, route }) => {
     if (!activeBookingId || !workerId) return;
     setConfirmingWorkerId(workerId);
     try {
+      const entry = activeBooking?.workerStatuses?.find((w) => w.worker?.toString() === workerId.toString());
       await bookingAPI.confirmCompletion(activeBookingId, workerId);
       await fetchActiveBooking(activeBookingId);
+      const snap = entry?.workerSnapshot || {};
+      setRatingTarget({
+        workerId,
+        workerName:  snap.name || snap.fullName,
+        workerImage: snap.profileImage || snap.image,
+      });
     } catch (err) {
       Alert.alert('Error', err.response?.data?.message || err.message || 'Could not confirm worker.');
     } finally {
       setConfirmingWorkerId(null);
     }
-  }, [activeBookingId, fetchActiveBooking]);
+  }, [activeBookingId, fetchActiveBooking, activeBooking]);
 
   const openIssueModal2  = useCallback(() => { setIssueComment2(''); setIssueModalOpen(true); }, []);
   const closeIssueModal2 = useCallback(() => setIssueModalOpen(false), []);
@@ -168,6 +173,25 @@ const BookingTrackingScreen = ({ navigation, route }) => {
       setReportingIssue2(false);
     }
   }, [activeBookingId, issueComment2, fetchActiveBooking]);
+
+  const handleSubmitRating = useCallback(async (rating, comment) => {
+    if (!activeBookingId || !ratingTarget?.workerId) return;
+    setSubmittingReview(true);
+    try {
+      await bookingAPI.submitReview(activeBookingId, {
+        workerId: ratingTarget.workerId,
+        rating,
+        comment,
+      });
+      setRatingTarget(null);
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.message || err.message || 'Could not submit your review.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  }, [activeBookingId, ratingTarget]);
+
+  const handleSkipRating = useCallback(() => setRatingTarget(null), []);
 
   const handleDismissToast = useCallback(() => clearAutobookToast(), [clearAutobookToast]);
 
@@ -355,6 +379,15 @@ const BookingTrackingScreen = ({ navigation, route }) => {
             </View>
           </View>
         </Modal>
+
+        <RatingReviewModal
+          visible={!!ratingTarget}
+          workerName={ratingTarget?.workerName}
+          workerImage={ratingTarget?.workerImage}
+          submitting={submittingReview}
+          onSubmit={handleSubmitRating}
+          onSkip={handleSkipRating}
+        />
       </View>
     );
   }
@@ -486,46 +519,29 @@ const BookingTrackingScreen = ({ navigation, route }) => {
             <Text style={styles.modalSub}>
               The worker has marked the job as completed. Please confirm if you are satisfied with the work.
             </Text>
-            
-            <TouchableOpacity 
-              style={[styles.modalConfirmBtn, { backgroundColor: '#10B981', marginBottom: 16 }]} 
-              onPress={handleConfirmCompletion} 
-              disabled={confirming || reportingIssue}
+
+            <TouchableOpacity
+              style={[styles.modalConfirmBtn, { backgroundColor: '#10B981', marginBottom: 0 }]}
+              onPress={handleConfirmCompletion}
+              disabled={confirming}
             >
               {confirming
                 ? <ActivityIndicator color="#FFF" />
                 : <Text style={styles.modalConfirmText}>✓ Confirm Work Completed</Text>
               }
             </TouchableOpacity>
-
-            <View style={{ width: '100%', height: 1, backgroundColor: '#E2E8F0', marginBottom: 16 }} />
-            
-            <Text style={{ fontSize: 14, fontWeight: '600', color: '#64748B', alignSelf: 'flex-start', marginBottom: 8 }}>
-              Not satisfied? Report an issue:
-            </Text>
-            
-            <TextInput
-              style={{ width: '100%', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, minHeight: 60, marginBottom: 12, textAlignVertical: 'top' }}
-              placeholder="Describe the issue (optional)"
-              value={issueComment}
-              onChangeText={setIssueComment}
-              multiline
-            />
-            
-            <TouchableOpacity 
-              style={[styles.modalConfirmBtn, { backgroundColor: '#EF4444', marginBottom: 0 }]} 
-              onPress={handleReportIssue} 
-              disabled={confirming || reportingIssue}
-            >
-              {reportingIssue
-                ? <ActivityIndicator color="#FFF" />
-                : <Text style={styles.modalConfirmText}>Report Issue</Text>
-              }
-            </TouchableOpacity>
-
           </View>
         </View>
       </Modal>
+
+      <RatingReviewModal
+        visible={!!ratingTarget}
+        workerName={ratingTarget?.workerName}
+        workerImage={ratingTarget?.workerImage}
+        submitting={submittingReview}
+        onSubmit={handleSubmitRating}
+        onSkip={handleSkipRating}
+      />
     </View>
   );
 };

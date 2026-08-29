@@ -1,4 +1,5 @@
 const Booking = require('../models/Booking')
+const Review = require('../models/Review')
 const { sendSuccess, sendPaginated } = require('../utils/response')
 const { createError } = require('../utils/error')
 
@@ -26,7 +27,8 @@ exports.getBookingById = async (req, res, next) => {
   try {
     const booking = await Booking.findById(req.params.id).populate('user', 'fullName phone')
     if (!booking) return next(createError(404, 'Booking not found.'))
-    sendSuccess(res, 200, 'Booking fetched', { booking })
+    const reviews = await Review.find({ bookingId: req.params.id, entityType: 'worker' }).sort({ createdAt: -1 })
+    sendSuccess(res, 200, 'Booking fetched', { booking, reviews })
   } catch (err) {
     next(err)
   }

@@ -4,6 +4,7 @@ import { ArrowLeft, User, HardHat, MapPin, DollarSign, Clock, FileText } from 'l
 import bookingService from '../../services/bookingService'
 import useBookingStore from '../../store/bookings/useBookingStore'
 import StatusBadge from '../../components/common/StatusBadge'
+import StarRating from '../../components/common/StarRating'
 import Button from '../../components/common/Button'
 import Breadcrumb from '../../components/layout/Breadcrumb'
 
@@ -22,6 +23,7 @@ export default function BookingDetails() {
           ...doc,
           id: doc._id,
           user: doc.user?.fullName || doc.user?.phone || 'N/A',
+          reviews: res.reviews || [],
         })
       }
       setLoading(false)
@@ -96,6 +98,28 @@ export default function BookingDetails() {
                 <p className="text-xs text-textMuted mb-1">Notes</p>
                 <p className="text-sm text-textSecondary">{booking.notes}</p>
               </div>
+            )}
+          </div>
+
+          <div className="bg-surface rounded-xl border border-border p-6">
+            <h3 className="text-lg font-semibold text-textPrimary mb-4">Reviews & Ratings</h3>
+            {booking.reviews && booking.reviews.length > 0 ? (
+              <div className="space-y-4">
+                {booking.reviews.map((review) => (
+                  <div key={review._id} className="border-b border-border last:border-b-0 pb-4 last:pb-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-textPrimary">{review.customer}</span>
+                      <span className="text-xs text-textMuted">{new Date(review.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <StarRating rating={review.rating} />
+                    {review.comment && (
+                      <p className="text-sm text-textSecondary mt-2">{review.comment}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-textMuted">No reviews or ratings submitted for this booking yet.</p>
             )}
           </div>
         </div>

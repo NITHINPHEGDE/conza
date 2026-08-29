@@ -183,7 +183,7 @@ export default function WorkerDetails() {
           <div className="bg-surface rounded-xl border border-border p-6">
             <h3 className="text-lg font-semibold text-textPrimary mb-4">Actions</h3>
             <div className="space-y-2">
-              <Link to={`/workers/${id}/ratings`}><Button variant="outline" className="w-full justify-start">View Ratings</Button></Link>
+              <Link to={`/workers/${id}/ratings`}><Button variant="outline" className="w-full justify-start">View Reviews & Ratings</Button></Link>
               <Link to={`/workers/${id}/earnings`}><Button variant="outline" className="w-full justify-start">Earnings History</Button></Link>
               <Link to={`/workers/tracking`}><Button variant="outline" className="w-full justify-start">Live Tracking</Button></Link>
             </div>

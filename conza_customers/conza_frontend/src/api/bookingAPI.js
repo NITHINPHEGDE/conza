@@ -37,6 +37,11 @@ export const bookingAPI = {
     return res.data;
   },
 
+  submitReview: async (id, { workerId, rating, comment }) => {
+    const res = await api.patch(`/bookings/${id}/review`, { workerId, rating, comment });
+    return res.data;
+  },
+
   // ── Seller orders (material / rental) ──────────────────────────────────
   placeSellerOrder: async (data) => {
     const res = await api.post('/orders/seller', data);

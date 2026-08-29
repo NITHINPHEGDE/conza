@@ -5,6 +5,7 @@ const { cloudinary } = require('../config/cloudinary');
 const logger         = require('../utils/logger');
 const Worker           = require('../models/Worker');
 const ServiceCategory  = require('../models/ServiceCategory');
+const Review           = require('../models/Review');
 
 // GET /api/workers/categories — public, used on the sign-up / edit-profile screens
 const getCategories = asyncHandler(async (req, res) => {
@@ -123,4 +124,17 @@ const updateProfile = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, worker });
 });
 
-module.exports = { toggleOnline, updateLocation, updateProfileImage, getUploadSignature, updateProfile, getCategories };
+// GET /api/workers/reviews — reviews & ratings left for the logged-in
+// worker by customers, read from the shared `reviews` collection (written
+// by the customer app once a booking is confirmed as completed).
+const getMyReviews = asyncHandler(async (req, res) => {
+  const reviews = await Review.find({
+    entityType: 'worker',
+    entityId:   req.worker._id.toString(),
+    status:     { $ne: 'hidden' },
+  }).sort({ createdAt: -1 });
+
+  res.status(200).json({ success: true, reviews });
+});
+
+module.exports = { toggleOnline, updateLocation, updateProfileImage, getUploadSignature, updateProfile, getCategories, getMyReviews };

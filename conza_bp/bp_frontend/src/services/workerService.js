@@ -20,3 +20,5 @@ export const updateProfileImageAPI = async (imageUri) => {
 };
 
 export const updateProfileAPI = (updates) => api.patch('/workers/profile', updates);
+
+export const getMyReviewsAPI = () => api.get('/workers/reviews');

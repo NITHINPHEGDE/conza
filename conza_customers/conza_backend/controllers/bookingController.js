@@ -20,6 +20,7 @@ const getRedlock = () => {
 const Booking         = require('../models/Booking');
 const Worker           = require('../models/Worker');
 const ServiceCategory  = require('../models/ServiceCategory');
+const Review           = require('../models/Review');
 
 // Category names must match tolerantly (case/whitespace) — mirrors the
 // matcher already used by workerController's getNearbyWorkers.
@@ -690,4 +691,95 @@ const reportIssue = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-module.exports = { createBooking, createAutobookBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue };// 
+
+// PATCH /api/bookings/:id/review — customer rates & reviews the worker
+// right after confirming the job as completed. Upserted on (bookingId,
+// entityId) so a resubmission edits the same review instead of creating a
+// duplicate. Also recomputes the worker's average `rating` so it stays in
+// sync everywhere (customer app, bp app, admin) without a separate job.
+const submitReview = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { workerId, rating, comment } = req.body;
+
+    const numericRating = Number(rating);
+    if (!numericRating || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({ success: false, message: 'A rating between 1 and 5 is required' });
+    }
+
+    const booking = await Booking.findOne({ _id: bookingId, user: req.user._id });
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    let targetWorkerId = workerId;
+
+    if (booking.isAutobook) {
+      if (!targetWorkerId) {
+        return res.status(400).json({ success: false, message: 'workerId is required for this booking' });
+      }
+      const entry = booking.workerStatuses.find((w) => w.worker.toString() === targetWorkerId.toString());
+      if (!entry) {
+        return res.status(404).json({ success: false, message: 'Worker not found on this booking' });
+      }
+      if (entry.status !== 'completed') {
+        return res.status(400).json({ success: false, message: 'You can only review a worker after their job is completed' });
+      }
+    } else {
+      if (booking.status !== 'completed') {
+        return res.status(400).json({ success: false, message: 'You can only review this booking after it is completed' });
+      }
+      if (!targetWorkerId) {
+        targetWorkerId = booking.workers?.[0]?.toString();
+      }
+      if (!targetWorkerId || !booking.workers.some((w) => w.toString() === targetWorkerId.toString())) {
+        return res.status(400).json({ success: false, message: 'Worker not found on this booking' });
+      }
+    }
+
+    const worker = await Worker.findById(targetWorkerId);
+    if (!worker) {
+      return res.status(404).json({ success: false, message: 'Worker not found' });
+    }
+
+    const review = await Review.findOneAndUpdate(
+      { bookingId: bookingId.toString(), entityType: 'worker', entityId: targetWorkerId.toString() },
+      {
+        entityType: 'worker',
+        entityId:   targetWorkerId.toString(),
+        entityName: worker.fullName,
+        bookingId:  bookingId.toString(),
+        customer:   req.user.fullName || req.user.username || 'Customer',
+        customerId: req.user._id.toString(),
+        rating:     numericRating,
+        comment:    comment || '',
+        status:     'published',
+        isVerified: true,
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    // Recompute this worker's average rating across every visible review
+    const agg = await Review.aggregate([
+      { $match: { entityType: 'worker', entityId: targetWorkerId.toString(), status: { $ne: 'hidden' } } },
+      { $group: { _id: null, avg: { $avg: '$rating' } } },
+    ]);
+    if (agg[0]?.avg != null) {
+      await Worker.findByIdAndUpdate(targetWorkerId, { rating: Math.round(agg[0].avg * 10) / 10 });
+    }
+
+    try {
+      const { getIO } = require('../services/socketService');
+      const io = getIO();
+      io.to(`worker_${targetWorkerId}`).emit('new_review', {
+        bookingId, rating: numericRating, comment: comment || '',
+      });
+    } catch (_) {}
+
+    res.json({ success: true, review });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { createBooking, createAutobookBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue, submitReview }; 

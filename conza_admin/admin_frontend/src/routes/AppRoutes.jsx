@@ -164,7 +164,7 @@ export default function AppRoutes() {
             <Route path="/workers" element={<WorkerList />} />
             <Route path="/workers/:id" element={<WorkerDetails />} />
             <Route path="/workers/verification" element={<WorkerVerification />} />
-            <Route path="/workers/ratings" element={<WorkerRatings />} />
+            <Route path="/workers/:id/ratings" element={<WorkerRatings />} />
             <Route path="/workers/earnings" element={<WorkerEarnings />} />
             <Route path="/workers/tracking" element={<WorkerTracking />} />
           </Route>

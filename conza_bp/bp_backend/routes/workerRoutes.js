@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { toggleOnline, updateLocation, updateProfileImage, getUploadSignature, updateProfile, getCategories } = require('../controllers/workerController');
+const { toggleOnline, updateLocation, updateProfileImage, getUploadSignature, updateProfile, getCategories, getMyReviews } = require('../controllers/workerController');
 const { protect, requireActive } = require('../middleware/auth');
 const { locationRules }  = require('../validators/workerValidators');
 const { upload }         = require('../config/cloudinary');
@@ -9,6 +9,11 @@ router.get('/categories',       getCategories);
 
 // All routes below require authentication
 router.use(protect);
+
+// Reviews & ratings are read-only — a worker can still view their own even
+// if their account has since been suspended.
+router.get('/reviews', getMyReviews);
+
 // Suspended workers cannot perform any of these actions
 router.use(requireActive);
 
