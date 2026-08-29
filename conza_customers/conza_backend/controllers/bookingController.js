@@ -744,33 +744,63 @@ const submitReview = async (req, res) => {
 
     const customerName = req.user.fullName || req.user.username || 'Customer';
 
-    const review = await Review.findOneAndUpdate(
-      { bookingId: bookingId.toString(), entityType: 'worker', entityId: targetWorkerId.toString() },
-      {
-        $set: {
-          entityType: 'worker',
-          entityId:   targetWorkerId.toString(),
-          entityName: worker.fullName,
-          bookingId:  bookingId.toString(),
-          customer:   customerName,
-          customerId: req.user._id.toString(),
-          rating:     numericRating,
-          comment:    comment || '',
-          status:     'published',
-          isVerified: true,
-        },
+    const reviewFilter = { bookingId: bookingId.toString(), entityType: 'worker', entityId: targetWorkerId.toString() };
+    const reviewUpdate = {
+      $set: {
+        entityType: 'worker',
+        entityId:   targetWorkerId.toString(),
+        entityName: worker.fullName,
+        bookingId:  bookingId.toString(),
+        customer:   customerName,
+        customerId: req.user._id.toString(),
+        rating:     numericRating,
+        comment:    comment || '',
+        status:     'published',
+        isVerified: true,
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: false }
-    );
+    };
 
-    // Recompute this worker's average rating across every visible review
-    const agg = await Review.aggregate([
-      { $match: { entityType: 'worker', entityId: targetWorkerId.toString(), status: { $ne: 'hidden' } } },
-      { $group: { _id: null, avg: { $avg: '$rating' } } },
-    ]);
-    if (agg[0]?.avg != null) {
-      await Worker.findByIdAndUpdate(targetWorkerId, { rating: Math.round(agg[0].avg * 10) / 10 });
+    let review;
+    try {
+      review = await Review.findOneAndUpdate(
+        reviewFilter,
+        reviewUpdate,
+        { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: false }
+      );
+    } catch (upsertErr) {
+      // A double-tap / retry can race the upsert and hit the unique
+      // (bookingId, entityType, entityId) index with a duplicate-key error
+      // even though the review was actually saved by the other in-flight
+      // request. Treat that as a normal update instead of failing the request.
+      if (upsertErr?.code === 11000) {
+        review = await Review.findOneAndUpdate(reviewFilter, reviewUpdate, { new: true, runValidators: false });
+      } else {
+        throw upsertErr;
+      }
     }
+
+    if (!review) {
+      return res.status(500).json({ success: false, message: 'Could not save your review, please try again' });
+    }
+
+    // Recompute this worker's average rating across every visible review.
+    // Wrapped so a failure here (e.g. worker removed mid-flight) never turns
+    // an already-saved review into a 500 for the customer.
+    try {
+      const agg = await Review.aggregate([
+        { $match: { entityType: 'worker', entityId: targetWorkerId.toString(), status: { $ne: 'hidden' } } },
+        { $group: { _id: null, avg: { $avg: '$rating' } } },
+      ]);
+      if (agg[0]?.avg != null) {
+        await Worker.findByIdAndUpdate(targetWorkerId, { rating: Math.round(agg[0].avg * 10) / 10 });
+      }
+    } catch (aggErr) {
+      logger.warn({ err: aggErr, bookingId: req.params.id }, 'submitReview rating recompute failed (non-fatal)');
+    }
+
+    try {
+      await invalidateCache(`bookings:detail:${booking._id}`, `bookings:user:${req.user._id}:*`);
+    } catch (_) {}
 
     try {
       const { getIO } = require('../services/socketService');

@@ -412,10 +412,16 @@ const BookingTrackingScreen = ({ navigation, route }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Worker Information</Text>
             <View style={styles.workerCard}>
-              <Image
-                source={{ uri: worker.profileImage || 'https://via.placeholder.com/100' }}
-                style={styles.workerImage}
-              />
+              {worker.profileImage ? (
+                <Image
+                  source={{ uri: worker.profileImage }}
+                  style={styles.workerImage}
+                />
+              ) : (
+                <View style={[styles.workerImage, styles.workerImagePlaceholder]}>
+                  <MaterialCommunityIcons name="account" size={28} color="#94A3B8" />
+                </View>
+              )}
               <View style={styles.workerDetails}>
                 <Text style={styles.workerName}>{worker.fullName}</Text>
                 <Text style={styles.workerCategory}>{worker.category}</Text>
@@ -596,6 +602,7 @@ const styles = StyleSheet.create({
     shadowRadius:    4,
   },
   workerImage:    { width: 60, height: 60, borderRadius: 30, backgroundColor: '#E2E8F0' },
+  workerImagePlaceholder: { alignItems: 'center', justifyContent: 'center' },
   workerDetails:  { flex: 1, marginLeft: 15 },
   workerName:     { fontSize: 16, fontWeight: '700', color: '#1E293B' },
   workerCategory: { fontSize: 14, color: '#64748B' },
