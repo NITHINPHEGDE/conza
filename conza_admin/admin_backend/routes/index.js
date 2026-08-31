@@ -29,6 +29,7 @@ router.use('/rental-categories', require('./rentalCategory.routes'))
 router.use('/inventory', require('./inventory.routes'))
 router.use('/business-partners', require('./businessPartner.routes'))
 router.use('/pricing', require('./pricing.routes'))
+router.use('/pricing-config', require('./pricingConfig.routes'))
 router.use('/maps', require('./map.routes'))
 
 module.exports = router

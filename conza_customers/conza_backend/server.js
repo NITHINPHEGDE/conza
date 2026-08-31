@@ -26,6 +26,7 @@ const http = require('http');
 const { initSocket } = require('./services/socketService');
 
 connectDB();
+require('./config/adminDb');
 require('./config/redis').getRedis().connect().catch(() => {});
 
 const app    = express();

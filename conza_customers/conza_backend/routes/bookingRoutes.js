@@ -1,10 +1,11 @@
 const express = require('express');
 const router  = express.Router();
-const { createBooking, createAutobookBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue, submitReview } = require('../controllers/bookingController');
+const { createBooking, createAutobookBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue, submitReview, getLabourBillPreview } = require('../controllers/bookingController');
 const { protect, checkSuspended } = require('../middleware/authMiddleware');
 
 router.post('/',       protect, checkSuspended, createBooking);
 router.post('/autobook', protect, checkSuspended, createAutobookBooking);
+router.post('/labour/bill-preview', protect, getLabourBillPreview);
 router.get('/my',      protect, getMyBookings);
 router.get('/:id',     protect, getBookingById);
 router.patch('/:id/cancel', protect, checkSuspended, cancelBooking);

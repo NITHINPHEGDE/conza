@@ -12,6 +12,11 @@ export const bookingAPI = {
     return res.data;
   },
 
+  getLabourBillPreview: async (data) => {
+    const res = await api.post('/bookings/labour/bill-preview', data);
+    return res.data;
+  },
+
   getMyBookings: async () => {
     const res = await api.get('/bookings/my');
     return res.data;

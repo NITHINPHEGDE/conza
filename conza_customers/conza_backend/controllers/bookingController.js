@@ -21,6 +21,7 @@ const Booking         = require('../models/Booking');
 const Worker           = require('../models/Worker');
 const ServiceCategory  = require('../models/ServiceCategory');
 const Review           = require('../models/Review');
+const { getLabourPricingConfig, isCurrentlyPeakHour, computeLabourBill } = require('../utils/pricingEngine');
 
 // Category names must match tolerantly (case/whitespace) — mirrors the
 // matcher already used by workerController's getNearbyWorkers.
@@ -68,7 +69,54 @@ const createBooking = async (req, res) => {
       notes, description, isImmediate
     } = req.body;
 
-    if (!bookingType || !city || !pincode || !total) {
+    if (!bookingType || !city || !pincode) {
+      return res.status(400).json({ success: false, message: 'Missing required booking fields' });
+    }
+
+    // ── Server-side billing (Finance → Pricing → Labour) ──────────────────
+    // For labour bookings, the customer-facing figures the client sent
+    // (subtotal/platformFee/total) are only a display estimate. The
+    // authoritative bill is always recomputed here from the admin panel's
+    // Labour pricing config so it can never be tampered with client-side
+    // and always reflects the latest admin settings.
+    let billing = null;
+    let computedSubtotal = subtotal || 0;
+    let computedPlatformFee = platformFee || 0;
+    let computedTotal = total;
+
+    if (bookingType === 'labour') {
+      const rawBase = Array.isArray(workerSnapshot) && workerSnapshot.length
+        ? workerSnapshot.reduce((sum, w) => {
+            const isMultiDay = !isImmediate && totalDays && totalDays > 1;
+            const perUnit = isMultiDay
+              ? (Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * totalDays
+              : (Number(w.pricePerDay) || 0);
+            return sum + perUnit;
+          }, 0)
+        : (subtotal || 0);
+
+      const config = await getLabourPricingConfig();
+      const bill = computeLabourBill(rawBase, config, { peakHour: isImmediate ? isCurrentlyPeakHour() : false });
+
+      billing = {
+        baseCost: bill.baseCost,
+        costRate: bill.costRate,
+        costRateAmount: bill.costRateAmount,
+        peakHourApplied: bill.peakHourApplied,
+        peakHourMultiplier: bill.peakHourMultiplier,
+        minBookingFeeApplied: bill.minBookingFeeApplied,
+        minBookingFee: bill.minBookingFee,
+        serviceCharge: bill.serviceCharge,
+        platformCommission: bill.platformCommission,
+        platformCommissionAmount: bill.platformCommissionAmount,
+        cancellationFee: bill.cancellationFee,
+      };
+      computedSubtotal = bill.subtotal;
+      computedPlatformFee = bill.serviceCharge + bill.platformCommissionAmount;
+      computedTotal = bill.total;
+    }
+
+    if (!computedTotal) {
       return res.status(400).json({ success: false, message: 'Missing required booking fields' });
     }
 
@@ -93,14 +141,14 @@ const createBooking = async (req, res) => {
 
     try {
       // Deduct from wallet if payment method is wallet
-      if ((paymentMethod === 'wallet') && total > 0) {
+      if ((paymentMethod === 'wallet') && computedTotal > 0) {
         const User = require('../models/User');
         const freshUser = await User.findById(req.user._id).select('walletBalance');
         if (!freshUser) throw new Error('User not found');
-        if ((freshUser.walletBalance || 0) < total) {
+        if ((freshUser.walletBalance || 0) < computedTotal) {
           return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
         }
-        await User.findByIdAndUpdate(req.user._id, { $inc: { walletBalance: -total } });
+        await User.findByIdAndUpdate(req.user._id, { $inc: { walletBalance: -computedTotal } });
       }
 
       booking = await Booking.create({
@@ -121,9 +169,10 @@ const createBooking = async (req, res) => {
         pincode,
         latitude:       latitude        || null,
         longitude:      longitude       || null,
-        subtotal:       subtotal        || 0,
-        platformFee:    platformFee     || 0,
-        total,
+        subtotal:       computedSubtotal,
+        platformFee:    computedPlatformFee,
+        total:          computedTotal,
+        billing:        billing         || undefined,
         paymentMethod:  paymentMethod   || 'cod',
         scheduledDate:    scheduledDate    || null,
         scheduledEndDate: scheduledEndDate || null,
@@ -284,8 +333,26 @@ const createAutobookBooking = async (req, res) => {
     // after each worker's job finishes (see bp bookingController).
     const avgRate    = candidates.reduce((s, w) => s + (Number(w.minCharge) || 0), 0) / candidates.length;
     const isMultiDay = !isImmediate && totalDays && totalDays > 1;
-    const estimatedSubtotal = Math.round(isMultiDay ? avgRate * need * totalDays : avgRate * need);
-    const fee = Math.round(estimatedSubtotal * 0.05);
+    const rawBase    = isMultiDay ? avgRate * need * totalDays : avgRate * need;
+
+    // ── Server-side billing (Finance → Pricing → Labour) ──────────────────
+    const labourConfig = await getLabourPricingConfig();
+    const bill = computeLabourBill(rawBase, labourConfig, { peakHour: isImmediate ? isCurrentlyPeakHour() : false });
+    const estimatedSubtotal = bill.subtotal;
+    const fee = bill.serviceCharge + bill.platformCommissionAmount;
+    const billing = {
+      baseCost: bill.baseCost,
+      costRate: bill.costRate,
+      costRateAmount: bill.costRateAmount,
+      peakHourApplied: bill.peakHourApplied,
+      peakHourMultiplier: bill.peakHourMultiplier,
+      minBookingFeeApplied: bill.minBookingFeeApplied,
+      minBookingFee: bill.minBookingFee,
+      serviceCharge: bill.serviceCharge,
+      platformCommission: bill.platformCommission,
+      platformCommissionAmount: bill.platformCommissionAmount,
+      cancellationFee: bill.cancellationFee,
+    };
 
     if ((paymentMethod === 'wallet') && (estimatedSubtotal + fee) > 0) {
       const User = require('../models/User');
@@ -319,6 +386,7 @@ const createAutobookBooking = async (req, res) => {
       subtotal:    estimatedSubtotal,
       platformFee: fee,
       total:       estimatedSubtotal + fee,
+      billing,
       paymentMethod: paymentMethod || 'cod',
       scheduledDate:    scheduledDate    || null,
       scheduledEndDate: scheduledEndDate || null,
@@ -833,4 +901,61 @@ const submitReview = async (req, res) => {
   }
 };
 
-module.exports = { createBooking, createAutobookBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue, submitReview }; 
+// ── POST /api/bookings/labour/bill-preview ─────────────────────────────────
+// Live billing preview shown on the checkout screen's final billing summary,
+// BEFORE a booking is created — computed the exact same way (same admin
+// pricing config, same rules) as the authoritative bill createBooking /
+// createAutobookBooking will persist, so what the customer sees matches
+// what they're actually charged.
+const getLabourBillPreview = async (req, res) => {
+  try {
+    const {
+      workers = [], totalDays = 1, isImmediate = true,
+      isAutobook = false, requiredWorkers = 0,
+    } = req.body;
+
+    const config = await getLabourPricingConfig();
+    const peak = isImmediate ? isCurrentlyPeakHour() : false;
+    const isMultiDay = !isImmediate && totalDays && totalDays > 1;
+
+    if (isAutobook) {
+      const need = parseInt(requiredWorkers) || 0;
+      const avgRate = workers.length
+        ? workers.reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0) / workers.length
+        : 0;
+      const rawBase = isMultiDay ? avgRate * need * totalDays : avgRate * need;
+      const bill = computeLabourBill(rawBase, config, { peakHour: peak });
+      return res.json({ success: true, config, summary: bill });
+    }
+
+    const perWorker = (workers || []).map((w) => {
+      const rawBase = isMultiDay
+        ? (Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * totalDays
+        : (Number(w.pricePerDay) || 0);
+      return computeLabourBill(rawBase, config, { peakHour: peak });
+    });
+
+    const summary = perWorker.reduce((acc, b) => ({
+      baseCost: acc.baseCost + b.baseCost,
+      costRateAmount: acc.costRateAmount + b.costRateAmount,
+      subtotal: acc.subtotal + b.subtotal,
+      serviceCharge: acc.serviceCharge + b.serviceCharge,
+      platformCommissionAmount: acc.platformCommissionAmount + b.platformCommissionAmount,
+      cancellationFee: acc.cancellationFee + b.cancellationFee,
+      total: acc.total + b.total,
+      peakHourApplied: acc.peakHourApplied || b.peakHourApplied,
+      minBookingFeeApplied: acc.minBookingFeeApplied || b.minBookingFeeApplied,
+    }), {
+      baseCost: 0, costRateAmount: 0, subtotal: 0, serviceCharge: 0,
+      platformCommissionAmount: 0, cancellationFee: 0, total: 0,
+      peakHourApplied: false, minBookingFeeApplied: false,
+    });
+
+    res.json({ success: true, config, isPeakHour: peak, perWorker, summary });
+  } catch (err) {
+    logger.error({ err }, 'getLabourBillPreview failed');
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { createBooking, createAutobookBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue, submitReview, getLabourBillPreview }; 

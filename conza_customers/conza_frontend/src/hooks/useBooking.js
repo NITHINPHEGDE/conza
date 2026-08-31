@@ -93,6 +93,10 @@ export const useBooking = (type) => {
 
         const createdBookings = [];
         for (const worker of workersList) {
+          // These are a display-only estimate sent along with the request —
+          // the backend always recomputes the authoritative bill from the
+          // admin panel's Finance → Pricing → Labour settings and ignores
+          // any client-supplied figures for the actual charge.
           const sub = isMultiDay
             ? (Number(worker.perDayCharge) || Number(worker.pricePerDay) || 0) * totalDays
             : (Number(worker.pricePerDay) || 0);

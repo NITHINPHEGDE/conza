@@ -37,6 +37,25 @@ const bookingSchema = new mongoose.Schema(
       type: String, enum: ['cod', 'upi', 'card', 'wallet', 'pending'], default: 'cod',
     },
 
+    // ── Billing breakdown (Finance → Pricing → Labour, admin-configured) ──
+    // Populated server-side from the admin panel's Labour pricing settings
+    // at booking-creation time so the customer's final bill always reflects
+    // Platform Commission, Cost Rate, Service Charge, Min Booking Fee,
+    // Cancellation Fee, and Peak Hour Multiplier exactly as configured.
+    billing: {
+      baseCost:                 { type: Number, default: 0 },
+      costRate:                 { type: Number, default: 0 },
+      costRateAmount:           { type: Number, default: 0 },
+      peakHourApplied:          { type: Boolean, default: false },
+      peakHourMultiplier:       { type: Number, default: 1 },
+      minBookingFeeApplied:     { type: Boolean, default: false },
+      minBookingFee:            { type: Number, default: 0 },
+      serviceCharge:            { type: Number, default: 0 },
+      platformCommission:       { type: Number, default: 0 },
+      platformCommissionAmount: { type: Number, default: 0 },
+      cancellationFee:          { type: Number, default: 0 },
+    },
+
     // ── Quick Auto Book ──────────────────────────────────────────────────
     // When true, this booking was broadcast to every nearby worker in the
     // category. Workers accept independently (workerStatuses) until

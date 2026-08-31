@@ -1,14 +1,15 @@
-import { useState } from 'react'
-import { DollarSign, Percent, Save, Truck, Package, HardHat } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { DollarSign, Percent, Save, Truck, Package, HardHat, Loader2 } from 'lucide-react'
 import PageWrapper from '../components/layout/PageWrapper'
 import Button from '../components/common/Button'
 import Input from '../components/common/Input'
 import Breadcrumb from '../components/layout/Breadcrumb'
+import pricingConfigService from '../services/pricingConfigService'
 
 const initialPricing = {
   labour: {
     platformCommission: 12,
-    gstRate: 18,
+    costRate: 18,
     serviceCharge: 25,
     minBookingFee: 50,
     cancellationFee: 30,
@@ -36,6 +37,31 @@ export default function PricingManagement() {
   const [pricing, setPricing] = useState(initialPricing)
   const [activeCategory, setActiveCategory] = useState('labour')
   const [saved, setSaved] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    const load = async () => {
+      try {
+        const res = await pricingConfigService.getAll()
+        if (mounted && res.success && res.pricing) {
+          setPricing(prev => ({
+            labour: { ...prev.labour, ...res.pricing.labour },
+            materials: { ...prev.materials, ...res.pricing.materials },
+            rentals: { ...prev.rentals, ...res.pricing.rentals },
+          }))
+        }
+      } catch (err) {
+        // Keep defaults if the fetch fails; admin can still edit and save.
+        console.error('Failed to load pricing config:', err)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
 
   const categories = [
     { key: 'labour', label: 'Labour', icon: HardHat },
@@ -54,10 +80,19 @@ export default function PricingManagement() {
     setSaved(false)
   }
 
-  const handleSave = () => {
-    // API call to save pricing
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  const handleSave = async () => {
+    try {
+      setSaving(true)
+      const res = await pricingConfigService.save(activeCategory, pricing[activeCategory])
+      if (res.success) {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 2000)
+      }
+    } catch (err) {
+      console.error('Failed to save pricing config:', err)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const current = pricing[activeCategory]
@@ -90,7 +125,10 @@ export default function PricingManagement() {
               <DollarSign size={20} className="text-accentAmber" />
               {categories.find(c => c.key === activeCategory)?.label} Pricing Settings
             </h2>
-            {saved && <span className="text-sm text-success font-medium">Saved successfully!</span>}
+            <div className="flex items-center gap-3">
+              {loading && <Loader2 size={16} className="animate-spin text-textMuted" />}
+              {saved && <span className="text-sm text-success font-medium">Saved successfully!</span>}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -110,20 +148,37 @@ export default function PricingManagement() {
               <p className="text-xs text-textMuted">Percentage taken from each transaction</p>
             </div>
 
-            {/* GST Rate */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-textSecondary flex items-center gap-2">
-                <Percent size={14} />
-                GST Rate (%)
-              </label>
-              <Input
-                type="number"
-                value={current.gstRate}
-                onChange={(e) => handleChange('gstRate', parseFloat(e.target.value))}
-                min={0}
-                max={100}
-              />
-            </div>
+            {/* Cost Rate (labour) / GST Rate (materials & rentals) */}
+            {activeCategory === 'labour' ? (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-textSecondary flex items-center gap-2">
+                  <Percent size={14} />
+                  Cost Rate (%)
+                </label>
+                <Input
+                  type="number"
+                  value={current.costRate}
+                  onChange={(e) => handleChange('costRate', parseFloat(e.target.value))}
+                  min={0}
+                  max={100}
+                />
+                <p className="text-xs text-textMuted">Markup applied on top of the worker's base rate</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-textSecondary flex items-center gap-2">
+                  <Percent size={14} />
+                  GST Rate (%)
+                </label>
+                <Input
+                  type="number"
+                  value={current.gstRate}
+                  onChange={(e) => handleChange('gstRate', parseFloat(e.target.value))}
+                  min={0}
+                  max={100}
+                />
+              </div>
+            )}
 
             {/* Category-specific fields */}
             {activeCategory === 'labour' && (
@@ -241,9 +296,9 @@ export default function PricingManagement() {
           </div>
 
           <div className="flex justify-end pt-4 border-t border-border">
-            <Button onClick={handleSave} className="flex items-center gap-2">
-              <Save size={16} />
-              Save Pricing Settings
+            <Button onClick={handleSave} disabled={saving} className="flex items-center gap-2">
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {saving ? 'Saving...' : 'Save Pricing Settings'}
             </Button>
           </div>
         </div>
