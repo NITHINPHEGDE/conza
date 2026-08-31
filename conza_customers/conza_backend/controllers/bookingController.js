@@ -21,7 +21,7 @@ const Booking         = require('../models/Booking');
 const Worker           = require('../models/Worker');
 const ServiceCategory  = require('../models/ServiceCategory');
 const Review           = require('../models/Review');
-const { getLabourPricingConfig, isCurrentlyPeakHour, computeLabourBill } = require('../utils/pricingEngine');
+const { getLabourPricingConfig, getLabourPricingConfigFresh, computeLabourBill } = require('../utils/pricingEngine');
 
 // Category names must match tolerantly (case/whitespace) — mirrors the
 // matcher already used by workerController's getNearbyWorkers.
@@ -96,7 +96,7 @@ const createBooking = async (req, res) => {
         : (subtotal || 0);
 
       const config = await getLabourPricingConfig();
-      const bill = computeLabourBill(rawBase, config, { peakHour: isImmediate ? isCurrentlyPeakHour() : false });
+      const bill = computeLabourBill(rawBase, config);
 
       billing = {
         baseCost: bill.baseCost,
@@ -337,7 +337,7 @@ const createAutobookBooking = async (req, res) => {
 
     // ── Server-side billing (Finance → Pricing → Labour) ──────────────────
     const labourConfig = await getLabourPricingConfig();
-    const bill = computeLabourBill(rawBase, labourConfig, { peakHour: isImmediate ? isCurrentlyPeakHour() : false });
+    const bill = computeLabourBill(rawBase, labourConfig);
     const estimatedSubtotal = bill.subtotal;
     const fee = bill.serviceCharge + bill.platformCommissionAmount;
     const billing = {
@@ -914,8 +914,9 @@ const getLabourBillPreview = async (req, res) => {
       isAutobook = false, requiredWorkers = 0,
     } = req.body;
 
-    const config = await getLabourPricingConfig();
-    const peak = isImmediate ? isCurrentlyPeakHour() : false;
+    // Always read fresh from the admin DB (no Redis cache) so the config
+    // returned to the checkout screen is never stale after an admin save.
+    const config = await getLabourPricingConfigFresh();
     const isMultiDay = !isImmediate && totalDays && totalDays > 1;
 
     if (isAutobook) {
@@ -924,34 +925,25 @@ const getLabourBillPreview = async (req, res) => {
         ? workers.reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0) / workers.length
         : 0;
       const rawBase = isMultiDay ? avgRate * need * totalDays : avgRate * need;
-      const bill = computeLabourBill(rawBase, config, { peakHour: peak });
+      const bill = computeLabourBill(rawBase, config);
       return res.json({ success: true, config, summary: bill });
     }
 
+    // Sum all workers' raw costs to get a single combined base, then run
+    // computeLabourBill ONCE. This ensures serviceCharge, cancellationFee,
+    // minBookingFee and platformCommission are applied at the booking level —
+    // not multiplied by the number of workers.
     const perWorker = (workers || []).map((w) => {
       const rawBase = isMultiDay
         ? (Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * totalDays
         : (Number(w.pricePerDay) || 0);
-      return computeLabourBill(rawBase, config, { peakHour: peak });
+      return rawBase;
     });
 
-    const summary = perWorker.reduce((acc, b) => ({
-      baseCost: acc.baseCost + b.baseCost,
-      costRateAmount: acc.costRateAmount + b.costRateAmount,
-      subtotal: acc.subtotal + b.subtotal,
-      serviceCharge: acc.serviceCharge + b.serviceCharge,
-      platformCommissionAmount: acc.platformCommissionAmount + b.platformCommissionAmount,
-      cancellationFee: acc.cancellationFee + b.cancellationFee,
-      total: acc.total + b.total,
-      peakHourApplied: acc.peakHourApplied || b.peakHourApplied,
-      minBookingFeeApplied: acc.minBookingFeeApplied || b.minBookingFeeApplied,
-    }), {
-      baseCost: 0, costRateAmount: 0, subtotal: 0, serviceCharge: 0,
-      platformCommissionAmount: 0, cancellationFee: 0, total: 0,
-      peakHourApplied: false, minBookingFeeApplied: false,
-    });
+    const totalRawBase = perWorker.reduce((s, n) => s + n, 0);
+    const summary = computeLabourBill(totalRawBase, config);
 
-    res.json({ success: true, config, isPeakHour: peak, perWorker, summary });
+    res.json({ success: true, config, summary });
   } catch (err) {
     logger.error({ err }, 'getLabourBillPreview failed');
     res.status(500).json({ success: false, message: err.message });

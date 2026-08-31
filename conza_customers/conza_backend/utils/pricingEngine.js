@@ -15,9 +15,14 @@ const DEFAULT_LABOUR_CONFIG = {
 };
 
 const CACHE_KEY = 'pricing:config:labour';
-const CACHE_TTL = 60; // seconds — admin changes reflect within a minute
+// Primary path: the admin backend actively busts this key on save (see
+// conza_admin/admin_backend/config/customersRedis.js → bustPricingConfigCache),
+// so changes reflect on the very next request. This short TTL is only a
+// safety net for deployments where that bust can't reach this Redis.
+const CACHE_TTL = 15; // seconds
 
 // ── Fetch the admin-configured Labour pricing (Finance → Pricing → Labour)
+// Cached version — used on every booking creation (hot path).
 const getLabourPricingConfig = async () => {
   try {
     return await withCache(CACHE_KEY, CACHE_TTL, async () => {
@@ -31,18 +36,28 @@ const getLabourPricingConfig = async () => {
   }
 };
 
-// ── Peak-hour check ─────────────────────────────────────────────────────
-// Common peak windows for home-service demand: 7–10 AM and 6–9 PM.
-const isCurrentlyPeakHour = (date = new Date()) => {
-  const hour = date.getHours();
-  return (hour >= 7 && hour < 10) || (hour >= 18 && hour < 21);
+// Fresh (no-cache) version — used by bill-preview so the config the user
+// sees always reflects the latest admin save, without waiting for TTL or a
+// cache bust to propagate.
+const getLabourPricingConfigFresh = async () => {
+  try {
+    const doc = await PricingConfigAdmin.findOne({ category: 'labour' }).lean();
+    if (!doc || !doc.settings) return DEFAULT_LABOUR_CONFIG;
+    const fresh = { ...DEFAULT_LABOUR_CONFIG, ...doc.settings };
+    return fresh;
+  } catch (err) {
+    logger.warn({ err }, 'Failed to fetch fresh labour pricing config, using defaults');
+    return DEFAULT_LABOUR_CONFIG;
+  }
 };
 
 // ── Core billing calculation ────────────────────────────────────────────
+// Order: base → ×peakHourMultiplier (always) → +costRate% → minBookingFee
+//        floor → +serviceCharge → +platformCommission%
 // rawBase: raw worker cost before any admin-configured adjustments
 //          (e.g. pricePerDay, or perDayCharge * totalDays, or
 //          avgRate * requiredWorkers for autobook).
-const computeLabourBill = (rawBase, config, { peakHour } = {}) => {
+const computeLabourBill = (rawBase, config) => {
   const platformCommission = Number(config.platformCommission) || 0;
   const costRate = Number(config.costRate) || 0;
   const serviceCharge = Number(config.serviceCharge) || 0;
@@ -52,19 +67,14 @@ const computeLabourBill = (rawBase, config, { peakHour } = {}) => {
 
   const baseCost = Math.round(Number(rawBase) || 0);
 
-  // Cost Rate — markup applied on top of the worker's base rate.
-  const costRateAmount = Math.round(baseCost * (costRate / 100));
-  let adjustedBase = baseCost + costRateAmount;
+  // 1. Peak Hour Multiplier — ALWAYS applied (admin-configured rate).
+  const afterPeak = Math.round(baseCost * peakHourMultiplier);
 
-  // Peak Hour Multiplier — applied only during configured peak windows.
-  const isPeak = peakHour !== undefined ? peakHour : isCurrentlyPeakHour();
-  let peakHourApplied = false;
-  if (isPeak && peakHourMultiplier > 1) {
-    adjustedBase = Math.round(adjustedBase * peakHourMultiplier);
-    peakHourApplied = true;
-  }
+  // 2. Cost Rate — markup on top of the peak-adjusted base.
+  const costRateAmount = Math.round(afterPeak * (costRate / 100));
+  let adjustedBase = afterPeak + costRateAmount;
 
-  // Min Booking Fee — floor applied to the adjusted subtotal.
+  // 3. Min Booking Fee — floor applied to the adjusted subtotal.
   let subtotal = adjustedBase;
   let minBookingFeeApplied = false;
   if (minBookingFee > 0 && subtotal < minBookingFee) {
@@ -72,8 +82,8 @@ const computeLabourBill = (rawBase, config, { peakHour } = {}) => {
     minBookingFeeApplied = true;
   }
 
-  // Service Charge — flat fee added once.
-  // Platform Commission — percentage of the subtotal.
+  // 4. Service Charge — flat fee added once.
+  // 5. Platform Commission — percentage of the subtotal.
   const platformCommissionAmount = Math.round(subtotal * (platformCommission / 100));
   const total = subtotal + serviceCharge + platformCommissionAmount;
 
@@ -81,8 +91,7 @@ const computeLabourBill = (rawBase, config, { peakHour } = {}) => {
     baseCost,
     costRate,
     costRateAmount,
-    isPeakHour: isPeak,
-    peakHourApplied,
+    peakHourApplied: true,
     peakHourMultiplier,
     subtotal,
     minBookingFee,
@@ -95,4 +104,5 @@ const computeLabourBill = (rawBase, config, { peakHour } = {}) => {
   };
 };
 
-module.exports = { getLabourPricingConfig, isCurrentlyPeakHour, computeLabourBill, DEFAULT_LABOUR_CONFIG };
+module.exports = { getLabourPricingConfig, getLabourPricingConfigFresh, computeLabourBill, DEFAULT_LABOUR_CONFIG };
+

@@ -1,6 +1,7 @@
 const PricingConfig = require('../models/PricingConfig')
 const { sendSuccess } = require('../utils/response')
 const { createError } = require('../utils/error')
+const { bustPricingConfigCache } = require('../config/customersRedis')
 
 // Defaults mirror the admin frontend's PricingManagement.jsx so a category
 // that has never been saved still returns sensible values.
@@ -83,6 +84,13 @@ exports.upsertPricingConfig = async (req, res, next) => {
       },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     )
+
+    // Instantly invalidate the customer app's cached copy of this pricing
+    // config (Redis, shared with conza_customers/conza_backend) so the
+    // checkout screen's live billing reflects this save on its very next
+    // request instead of waiting out the cache TTL. Best-effort — if Redis
+    // is unreachable the customer backend's short TTL still self-heals.
+    await bustPricingConfigCache(category)
 
     req.auditTarget = `Pricing Config - ${category}`
     req.auditDetails = `Updated ${category} pricing settings`

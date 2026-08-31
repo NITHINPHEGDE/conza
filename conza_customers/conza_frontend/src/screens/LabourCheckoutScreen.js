@@ -24,9 +24,34 @@ import { useBooking } from '../hooks/useBooking';
 import SavedAddressSheet from '../components/SavedAddressSheet';
 import { bookingAPI } from '../api/bookingAPI';
 
-// Fallback rate used only if the live billing preview hasn't loaded yet
-// (e.g. first render, or the backend/admin pricing config is unreachable).
-const FALLBACK_PLATFORM_FEE_RATE = 0.05;
+// Client-side billing helper — mirrors pricingEngine.computeLabourBill.
+// Used when the backend bill-preview hasn't returned yet (first render,
+// network error, etc.) so the displayed total is always consistent with
+// the config rates shown on screen.
+const computeLocalBill = (rawBase, config) => {
+  const peakHourMultiplier = Number(config.peakHourMultiplier) || 1;
+  const costRate = Number(config.costRate) || 0;
+  const platformCommission = Number(config.platformCommission) || 0;
+  const serviceCharge = Number(config.serviceCharge) || 0;
+  const minBookingFee = Number(config.minBookingFee) || 0;
+  const cancellationFee = Number(config.cancellationFee) || 0;
+
+  const baseCost = Math.round(Number(rawBase) || 0);
+  // 1. Peak Hour Multiplier — ALWAYS applied.
+  const afterPeak = Math.round(baseCost * peakHourMultiplier);
+  // 2. Cost Rate — markup on the peak-adjusted base.
+  const costRateAmount = Math.round(afterPeak * (costRate / 100));
+  let subtotal = afterPeak + costRateAmount;
+  let minBookingFeeApplied = false;
+  if (minBookingFee > 0 && subtotal < minBookingFee) {
+    subtotal = minBookingFee;
+    minBookingFeeApplied = true;
+  }
+  // 3. Service Charge + Platform Commission.
+  const platformCommissionAmount = Math.round(subtotal * (platformCommission / 100));
+  const total = subtotal + serviceCharge + platformCommissionAmount;
+  return { baseCost, costRateAmount, subtotal, serviceCharge, platformCommissionAmount, cancellationFee, total, minBookingFeeApplied, peakHourApplied: true };
+};
 
 const PAYMENT_METHODS = [
   {
@@ -223,6 +248,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   // always the true, currently-configured values — never hardcoded here.
   const [billLoading, setBillLoading] = useState(false);
   const [billBreakdown, setBillBreakdown] = useState(null);
+  const [adminConfig, setAdminConfig] = useState(null);
 
   const localFallbackSubtotal = useMemo(() => {
     if (isAutobook) {
@@ -248,6 +274,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       }));
       if (!workersPayload.length) {
         setBillBreakdown(null);
+        setAdminConfig(null);
         return;
       }
       try {
@@ -261,9 +288,12 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         });
         if (!cancelled && result?.success) {
           setBillBreakdown(isAutobook ? result.summary : result.summary);
+          if (result.config) setAdminConfig(result.config);
         }
-      } catch (_) {
+      } catch (err) {
         // Live pricing unreachable — UI falls back to the local estimate below.
+        // Log so errors are visible during development.
+        console.warn('[BillPreview] fetch failed:', err?.message || err);
       } finally {
         if (!cancelled) setBillLoading(false);
       }
@@ -272,9 +302,22 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
     return () => { cancelled = true; };
   }, [selectedWorkers, effectiveWorkers, requiredWorkers, totalDays, bookingType, isAutobook]);
 
-  const { subtotal, platformFee, total, costRateAmount, serviceCharge, platformCommissionAmount, cancellationFee, peakHourApplied, minBookingFeeApplied } = useMemo(() => {
+  const {
+    subtotal, platformFee, total, costRateAmount, serviceCharge,
+    platformCommissionAmount, cancellationFee, peakHourApplied, minBookingFeeApplied,
+    platformCommissionPct, costRatePct, peakHourMultiplierCfg, minBookingFeeCfg, baseCost
+  } = useMemo(() => {
+    const config = adminConfig || {
+      platformCommission: 12,
+      costRate: 18,
+      serviceCharge: 25,
+      minBookingFee: 50,
+      cancellationFee: 30,
+      peakHourMultiplier: 1.5,
+    };
     if (billBreakdown) {
       return {
+        baseCost: billBreakdown.baseCost,
         subtotal: billBreakdown.subtotal,
         platformFee: billBreakdown.serviceCharge + billBreakdown.platformCommissionAmount,
         total: billBreakdown.total,
@@ -284,17 +327,33 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         cancellationFee: billBreakdown.cancellationFee,
         peakHourApplied: billBreakdown.peakHourApplied,
         minBookingFeeApplied: billBreakdown.minBookingFeeApplied,
+        platformCommissionPct: config.platformCommission || 12,
+        costRatePct: config.costRate || 18,
+        peakHourMultiplierCfg: config.peakHourMultiplier || 1.5,
+        minBookingFeeCfg: config.minBookingFee || 50,
       };
     }
     // Fallback estimate while the live bill is loading / unreachable.
-    const sub = localFallbackSubtotal;
-    const fee = Math.round(sub * FALLBACK_PLATFORM_FEE_RATE);
+    // Uses the same formula as pricingEngine.computeLabourBill so the total
+    // shown is always consistent with the rates displayed on screen.
+    const fb = computeLocalBill(localFallbackSubtotal, config);
     return {
-      subtotal: sub, platformFee: fee, total: sub + fee,
-      costRateAmount: 0, serviceCharge: 0, platformCommissionAmount: fee,
-      cancellationFee: 0, peakHourApplied: false, minBookingFeeApplied: false,
+      baseCost: fb.baseCost,
+      subtotal: fb.subtotal,
+      platformFee: fb.serviceCharge + fb.platformCommissionAmount,
+      total: fb.total,
+      costRateAmount: fb.costRateAmount,
+      serviceCharge: fb.serviceCharge,
+      platformCommissionAmount: fb.platformCommissionAmount,
+      cancellationFee: fb.cancellationFee,
+      peakHourApplied: false,
+      minBookingFeeApplied: fb.minBookingFeeApplied,
+      platformCommissionPct: config.platformCommission || 12,
+      costRatePct: config.costRate || 18,
+      peakHourMultiplierCfg: config.peakHourMultiplier || 1.5,
+      minBookingFeeCfg: config.minBookingFee || 50,
     };
-  }, [billBreakdown, localFallbackSubtotal]);
+  }, [billBreakdown, adminConfig, localFallbackSubtotal]);
 
   // Combined hourly rate for immediate (pay-per-hour) bookings — shown as a
   // reference only; the real amount is billed after the work is finished.
@@ -729,6 +788,35 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
               <Text style={styles.billTotalLabel}>Combined Hourly Rate</Text>
               <Text style={styles.billTotalValue}>₹{hourlyRateTotal.toLocaleString()}/hr</Text>
             </View>
+
+            <View style={styles.billDivider} />
+
+            <Text style={styles.appliedPricingHeader}>Applied at final billing (from Conza pricing)</Text>
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Platform Commission</Text>
+              <Text style={styles.billValue}>{platformCommissionPct}%</Text>
+            </View>
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Cost Rate</Text>
+              <Text style={styles.billValue}>{costRatePct}%</Text>
+            </View>
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Service Charge</Text>
+              <Text style={styles.billValue}>₹{serviceCharge.toLocaleString()}</Text>
+            </View>
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Peak Hour Multiplier</Text>
+              <Text style={[styles.billValue, { color: '#F59E0B', fontWeight: '700' }]}>
+                ×{peakHourMultiplierCfg}
+              </Text>
+            </View>
+            <Text style={styles.billNote}>Cancellation fee: ₹{cancellationFee.toLocaleString()} if cancelled after a worker accepts.</Text>
+
+            <View style={styles.billDivider} />
+            <View style={styles.billRow}>
+              <Text style={styles.billTotalLabel}>Estimated Total (per hour)</Text>
+              <Text style={styles.billTotalValue}>₹{total.toLocaleString()}</Text>
+            </View>
           </View>
         ) : (
           <>
@@ -749,57 +837,41 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
             </View>
 
             <View style={styles.billSection}>
-              <View style={styles.billSectionHeaderRow}>
-                <Text style={styles.billSectionTitle}>Billing Details</Text>
-                {billLoading && <ActivityIndicator size="small" color={colors.accentAmber} />}
-              </View>
               <View style={styles.billRow}>
                 <Text style={styles.billLabel}>
-                  Base Cost ({selectedWorkers.length} worker{selectedWorkers.length > 1 ? 's' : ''} × {totalDays} day{totalDays > 1 ? 's' : ''})
+                  Subtotal ({selectedWorkers.length} worker{selectedWorkers.length > 1 ? 's' : ''} × {totalDays} day{totalDays > 1 ? 's' : ''})
                 </Text>
-                <Text style={styles.billValue}>₹{Math.max(subtotal - costRateAmount, 0).toLocaleString()}</Text>
-              </View>
-              {costRateAmount > 0 && (
-                <View style={styles.billRow}>
-                  <Text style={styles.billLabel}>Cost Rate Adjustment</Text>
-                  <Text style={styles.billValue}>₹{costRateAmount.toLocaleString()}</Text>
-                </View>
-              )}
-              {peakHourApplied && (
-                <View style={styles.billRow}>
-                  <Text style={styles.billLabel}>Peak Hour Surcharge Applied</Text>
-                  <Text style={styles.billValue}>Yes</Text>
-                </View>
-              )}
-              {minBookingFeeApplied && (
-                <View style={styles.billRow}>
-                  <Text style={styles.billLabel}>Minimum Booking Fee Applied</Text>
-                  <Text style={styles.billValue}>Yes</Text>
-                </View>
-              )}
-              <View style={styles.billDivider} />
-              <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Subtotal</Text>
                 <Text style={styles.billValue}>₹{subtotal.toLocaleString()}</Text>
+              </View>
+
+              <View style={styles.billDivider} />
+
+              <Text style={styles.appliedPricingHeader}>Applied at final billing (from Conza pricing)</Text>
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>Platform Commission</Text>
+                <Text style={styles.billValue}>{platformCommissionPct}%</Text>
+              </View>
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>Cost Rate</Text>
+                <Text style={styles.billValue}>{costRatePct}%</Text>
               </View>
               <View style={styles.billRow}>
                 <Text style={styles.billLabel}>Service Charge</Text>
                 <Text style={styles.billValue}>₹{serviceCharge.toLocaleString()}</Text>
               </View>
               <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Platform Commission</Text>
-                <Text style={styles.billValue}>₹{platformCommissionAmount.toLocaleString()}</Text>
+                <Text style={styles.billLabel}>Peak Hour Multiplier</Text>
+                <Text style={[styles.billValue, { color: '#F59E0B', fontWeight: '700' }]}>
+                  ×{peakHourMultiplierCfg}
+                </Text>
               </View>
+              <Text style={styles.billNote}>Cancellation fee: ₹{cancellationFee.toLocaleString()} if cancelled after a worker accepts.</Text>
+
               <View style={styles.billDivider} />
               <View style={styles.billRow}>
                 <Text style={styles.billTotalLabel}>Total Amount</Text>
                 <Text style={styles.billTotalValue}>₹{total.toLocaleString()}</Text>
               </View>
-              {cancellationFee > 0 && (
-                <Text style={styles.billNote}>
-                  A cancellation fee of ₹{cancellationFee.toLocaleString()} applies if this booking is cancelled.
-                </Text>
-              )}
             </View>
           </>
         )}
@@ -1109,13 +1181,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(245,200,66,0.25)',
   },
-  billSectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+  appliedPricingHeader: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 10,
   },
-  billSectionTitle: { fontSize: 14, fontWeight: '800', color: colors.textPrimary },
   billRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

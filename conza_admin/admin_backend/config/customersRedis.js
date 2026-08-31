@@ -46,4 +46,23 @@ const bustCustomerSessionCache = async (userId) => {
   }
 }
 
-module.exports = { getCustomersRedis, bustCustomerSessionCache }
+/**
+ * Bust the customer backend's cached pricing config (see
+ * conza_customers/conza_backend/utils/pricingEngine.js — `withCache('pricing:config:<category>', ...)`)
+ * so that a Finance → Pricing save in the admin panel is reflected in the
+ * customer app's live billing preview / booking totals immediately, instead
+ * of waiting out the cache TTL.
+ *
+ * @param {string} category — 'labour' | 'materials' | 'rentals'
+ */
+const bustPricingConfigCache = async (category) => {
+  try {
+    const redis = getCustomersRedis()
+    if (!redis) return
+    await redis.del(`pricing:config:${category}`)
+  } catch (_) {
+    // best-effort — never throw
+  }
+}
+
+module.exports = { getCustomersRedis, bustCustomerSessionCache, bustPricingConfigCache }
