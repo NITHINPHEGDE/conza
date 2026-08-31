@@ -68,7 +68,7 @@ jobs:
         working-directory: conza_customers/conza_backend
         run: railway up --service conza-backend --detach
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_CONZA }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_CONZA || secrets.RAILWAY_TOKEN }}
 
   # ──────────────────────────────────────────────────
   # 3. Deploy bp_backend to Railway
@@ -90,7 +90,7 @@ jobs:
         working-directory: conza_bp/bp_backend
         run: railway up --service bp-backend --detach
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_BP }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_BP || secrets.RAILWAY_TOKEN }}
 
   # ──────────────────────────────────────────────────
   # 4. EAS Build for mobile apps (optional — comment
