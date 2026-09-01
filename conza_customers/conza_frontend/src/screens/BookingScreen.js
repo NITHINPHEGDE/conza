@@ -232,7 +232,6 @@ const MaterialView = React.memo(() => {
 
   const [query,       setQuery]       = useState('');
   const [selectedCat, setSelectedCat] = useState('all');
-  const [showFilter,  setShowFilter]  = useState(false);
 
   // Self-heals the "skeleton → No materials found" glitch: if this tab is
   // opened before/around the app-boot fetchMaterials() call has actually
@@ -279,13 +278,13 @@ const MaterialView = React.memo(() => {
   }, [navigation, getCartItems, cart]);
 
   const handleClearQuery = useCallback(() => setQuery(''), []);
-  const handleOpenFilter = useCallback(() => setShowFilter(true), []);
-  const handleCloseFilter = useCallback(() => setShowFilter(false), []);
   const handleClearCat = useCallback(() => setSelectedCat('all'), []);
-  
+
+  // Selecting a category tile no longer opens/closes a modal — categories
+  // stay permanently visible above the material grid, exactly like tapping
+  // a chip just re-filters the list in place.
   const handleSelectCat = useCallback((id) => {
-    setSelectedCat(id);
-    setShowFilter(false);
+    setSelectedCat((prev) => (prev === id ? 'all' : id));
   }, []);
 
   const handleAddMaterialToCart = useCallback((item) => {
@@ -305,24 +304,32 @@ const MaterialView = React.memo(() => {
     </View>
   ), [cart, handleUpdateQuantity, handleImagePress, handleAddMaterialToCart]);
 
-  const renderCatItem = useCallback(({ item: cat }) => (
-    <TouchableOpacity
-      key={cat.id}
-      style={[styles.catCard, selectedCat === cat.id && styles.catCardSelected]}
-      onPress={() => handleSelectCat(cat.id)}
-      activeOpacity={0.75}
-    >
-      {cat.image ? (
-        <Image source={{ uri: cat.image }} style={styles.catImage} />
-      ) : (
-        <Text style={styles.catEmoji}>{cat.emoji}</Text>
-      )}
-      <Text style={[styles.catLabel, selectedCat === cat.id && styles.catLabelSelected]}>
-        {cat.label}
-      </Text>
-      {selectedCat === cat.id && <View style={styles.catSelectedDot} />}
-    </TouchableOpacity>
-  ), [selectedCat, handleSelectCat]);
+  // Always-visible category grid tile (replaces the old Filter-modal chip).
+  const renderCategoryTile = useCallback((cat) => {
+    const isSelected = selectedCat === cat.id;
+    return (
+      <TouchableOpacity
+        key={cat.id}
+        style={styles.categoryTile}
+        onPress={() => handleSelectCat(cat.id)}
+        activeOpacity={0.75}
+      >
+        <View style={[styles.categoryTileImageWrap, isSelected && styles.categoryTileImageWrapSelected]}>
+          {cat.image ? (
+            <Image source={{ uri: cat.image }} style={styles.categoryTileImage} />
+          ) : (
+            <Text style={styles.categoryTileEmoji}>{cat.emoji}</Text>
+          )}
+        </View>
+        <Text
+          style={[styles.categoryTileLabel, isSelected && styles.categoryTileLabelSelected]}
+          numberOfLines={2}
+        >
+          {cat.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [selectedCat, handleSelectCat]);
 
   const listHeader = useMemo(() => (
     <View>
@@ -344,19 +351,16 @@ const MaterialView = React.memo(() => {
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity
-          style={[styles.filterBtn, selectedCat !== 'all' && styles.filterBtnActive]}
-          activeOpacity={0.8}
-          onPress={handleOpenFilter}
-        >
-          <View style={styles.filterIconBadge}>
-            <MaterialCommunityIcons name="tune-variant" size={13} color="#16A34A" />
-          </View>
-          <Text style={[styles.filterBtnText, selectedCat !== 'all' && styles.filterBtnTextActive]}>
-            {selectedCat !== 'all' ? activeCat?.label : 'Filter'}
-          </Text>
-        </TouchableOpacity>
       </View>
+
+      {/* Categories — always visible, scrolls with the page like the
+          reference design. Tapping a tile filters the grid below;
+          tapping the active tile again clears the filter. */}
+      <SectionHeader title="Categories" />
+      <View style={styles.categoryGrid}>
+        {materialCategories.map((cat) => renderCategoryTile(cat))}
+      </View>
+
       {selectedCat !== 'all' && (
         <View style={styles.activeCatRow}>
           {activeCat?.image ? (
@@ -370,8 +374,10 @@ const MaterialView = React.memo(() => {
           </TouchableOpacity>
         </View>
       )}
+
+      <SectionHeader title={selectedCat !== 'all' ? activeCat?.label || 'Materials' : 'All Materials'} />
     </View>
-  ), [query, handleClearQuery, selectedCat, activeCat, handleOpenFilter, handleClearCat]);
+  ), [query, handleClearQuery, selectedCat, activeCat, materialCategories, renderCategoryTile, handleClearCat]);
 
   const listEmpty = useMemo(() => (
     materialsFetched ? (
@@ -438,45 +444,6 @@ const MaterialView = React.memo(() => {
           </LinearGradient>
         </View>
       )}
-      
-      {/* Filter Modal */}
-      <Modal
-        visible={showFilter}
-        transparent
-        animationType="slide"
-        onRequestClose={handleCloseFilter}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={handleCloseFilter}
-        >
-          <TouchableOpacity style={styles.modalSheet} activeOpacity={1}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Filter by Category</Text>
-            <Text style={styles.modalSub}>Select a category to filter materials</Text>
-            
-            <FlatList
-              data={materialCategories}
-              keyExtractor={(item) => item.id}
-              renderItem={renderCatItem}
-              numColumns={3}
-              columnWrapperStyle={{ gap: 12, marginBottom: 12 }}
-              contentContainerStyle={{ paddingVertical: 10 }}
-              scrollEnabled={false}
-              extraData={selectedCat}
-            />
-
-            <TouchableOpacity
-              onPress={handleCloseFilter}
-              style={styles.modalCancel}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.modalCancelText}>Close</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
     </View>
   );
 });
@@ -1174,6 +1141,44 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.accentAmber,
   },
+
+  // Always-visible category grid (Order Material section)
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 8,
+    rowGap: 18,
+  },
+  categoryTile: { width: '22%', alignItems: 'center' },
+  categoryTileImageWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+    borderWidth: 1.3,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  categoryTileImageWrapSelected: {
+    backgroundColor: '#FFFDF0',
+    borderColor: colors.accentYellow,
+    borderWidth: 2,
+  },
+  categoryTileImage: { width: 46, height: 46, borderRadius: 10, resizeMode: 'cover' },
+  categoryTileEmoji: { fontSize: 26 },
+  categoryTileLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+  categoryTileLabelSelected: { color: colors.accentAmber },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
