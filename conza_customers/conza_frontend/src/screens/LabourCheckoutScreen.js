@@ -28,28 +28,33 @@ import { bookingAPI } from '../api/bookingAPI';
 // Used when the backend bill-preview hasn't returned yet (first render,
 // network error, etc.) so the displayed total is always consistent with
 // the config rates shown on screen.
+// Final bill = (hourlyRate × surge) + service + gst + platform.
 const computeLocalBill = (rawBase, config) => {
   const peakHourMultiplier = Number(config.peakHourMultiplier) || 1;
-  const costRate = Number(config.costRate) || 0;
+  const costRate = Number(config.costRate) || 0; // GST %
   const platformCommission = Number(config.platformCommission) || 0;
   const serviceCharge = Number(config.serviceCharge) || 0;
   const minBookingFee = Number(config.minBookingFee) || 0;
   const cancellationFee = Number(config.cancellationFee) || 0;
 
   const baseCost = Math.round(Number(rawBase) || 0);
-  // 1. Peak Hour Multiplier — ALWAYS applied.
-  const afterPeak = Math.round(baseCost * peakHourMultiplier);
-  // 2. Cost Rate — markup on the peak-adjusted base.
-  const costRateAmount = Math.round(afterPeak * (costRate / 100));
-  let subtotal = afterPeak + costRateAmount;
+  // 1. Surge (Peak Hour Multiplier) — ALWAYS applied to the hourly rate.
+  const afterSurge = Math.round(baseCost * peakHourMultiplier);
+  // 2. Min Booking Fee — floor applied BEFORE gst / platform / service so
+  //    those never compound on top of each other.
+  let subtotal = afterSurge;
   let minBookingFeeApplied = false;
   if (minBookingFee > 0 && subtotal < minBookingFee) {
     subtotal = minBookingFee;
     minBookingFeeApplied = true;
   }
-  // 3. Service Charge + Platform Commission.
+  // 3. GST — percentage of the surged base.
+  const costRateAmount = Math.round(subtotal * (costRate / 100));
+  // 4. Platform Commission — percentage of the SAME surged base (not the
+  //    GST-inclusive amount).
   const platformCommissionAmount = Math.round(subtotal * (platformCommission / 100));
-  const total = subtotal + serviceCharge + platformCommissionAmount;
+  // 5. Final bill.
+  const total = subtotal + serviceCharge + costRateAmount + platformCommissionAmount;
   return { baseCost, costRateAmount, subtotal, serviceCharge, platformCommissionAmount, cancellationFee, total, minBookingFeeApplied, peakHourApplied: true };
 };
 
@@ -793,22 +798,22 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
 
             <Text style={styles.appliedPricingHeader}>Applied at final billing (from Conza pricing)</Text>
             <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Platform Commission</Text>
-              <Text style={styles.billValue}>{platformCommissionPct}%</Text>
-            </View>
-            <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Cost Rate</Text>
-              <Text style={styles.billValue}>{costRatePct}%</Text>
+              <Text style={styles.billLabel}>Surge (Peak Hour Multiplier)</Text>
+              <Text style={[styles.billValue, { color: '#F59E0B', fontWeight: '700' }]}>
+                ×{peakHourMultiplierCfg}
+              </Text>
             </View>
             <View style={styles.billRow}>
               <Text style={styles.billLabel}>Service Charge</Text>
               <Text style={styles.billValue}>₹{serviceCharge.toLocaleString()}</Text>
             </View>
             <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Peak Hour Multiplier</Text>
-              <Text style={[styles.billValue, { color: '#F59E0B', fontWeight: '700' }]}>
-                ×{peakHourMultiplierCfg}
-              </Text>
+              <Text style={styles.billLabel}>GST ({costRatePct}%)</Text>
+              <Text style={styles.billValue}>₹{costRateAmount.toLocaleString()}</Text>
+            </View>
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Platform Commission ({platformCommissionPct}%)</Text>
+              <Text style={styles.billValue}>₹{platformCommissionAmount.toLocaleString()}</Text>
             </View>
             <Text style={styles.billNote}>Cancellation fee: ₹{cancellationFee.toLocaleString()} if cancelled after a worker accepts.</Text>
 
@@ -848,22 +853,22 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
 
               <Text style={styles.appliedPricingHeader}>Applied at final billing (from Conza pricing)</Text>
               <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Platform Commission</Text>
-                <Text style={styles.billValue}>{platformCommissionPct}%</Text>
-              </View>
-              <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Cost Rate</Text>
-                <Text style={styles.billValue}>{costRatePct}%</Text>
+                <Text style={styles.billLabel}>Surge (Peak Hour Multiplier)</Text>
+                <Text style={[styles.billValue, { color: '#F59E0B', fontWeight: '700' }]}>
+                  ×{peakHourMultiplierCfg}
+                </Text>
               </View>
               <View style={styles.billRow}>
                 <Text style={styles.billLabel}>Service Charge</Text>
                 <Text style={styles.billValue}>₹{serviceCharge.toLocaleString()}</Text>
               </View>
               <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Peak Hour Multiplier</Text>
-                <Text style={[styles.billValue, { color: '#F59E0B', fontWeight: '700' }]}>
-                  ×{peakHourMultiplierCfg}
-                </Text>
+                <Text style={styles.billLabel}>GST ({costRatePct}%)</Text>
+                <Text style={styles.billValue}>₹{costRateAmount.toLocaleString()}</Text>
+              </View>
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>Platform Commission ({platformCommissionPct}%)</Text>
+                <Text style={styles.billValue}>₹{platformCommissionAmount.toLocaleString()}</Text>
               </View>
               <Text style={styles.billNote}>Cancellation fee: ₹{cancellationFee.toLocaleString()} if cancelled after a worker accepts.</Text>
 

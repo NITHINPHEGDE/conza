@@ -52,14 +52,17 @@ const getLabourPricingConfigFresh = async () => {
 };
 
 // ── Core billing calculation ────────────────────────────────────────────
-// Order: base → ×peakHourMultiplier (always) → +costRate% → minBookingFee
-//        floor → +serviceCharge → +platformCommission%
+// Order: (hourlyRate × surge) → minBookingFee floor → + service + gst +
+//        platform, all computed once → final bill.
+// GST (costRate) and Platform Commission are both calculated as a
+// percentage of the SAME surged/floored base — never stacked on top of
+// each other — then added alongside the flat Service Charge.
 // rawBase: raw worker cost before any admin-configured adjustments
 //          (e.g. pricePerDay, or perDayCharge * totalDays, or
 //          avgRate * requiredWorkers for autobook).
 const computeLabourBill = (rawBase, config) => {
   const platformCommission = Number(config.platformCommission) || 0;
-  const costRate = Number(config.costRate) || 0;
+  const costRate = Number(config.costRate) || 0; // GST %
   const serviceCharge = Number(config.serviceCharge) || 0;
   const minBookingFee = Number(config.minBookingFee) || 0;
   const cancellationFee = Number(config.cancellationFee) || 0;
@@ -67,25 +70,27 @@ const computeLabourBill = (rawBase, config) => {
 
   const baseCost = Math.round(Number(rawBase) || 0);
 
-  // 1. Peak Hour Multiplier — ALWAYS applied (admin-configured rate).
-  const afterPeak = Math.round(baseCost * peakHourMultiplier);
+  // 1. Surge (Peak Hour Multiplier) — ALWAYS applied to the hourly rate.
+  const afterSurge = Math.round(baseCost * peakHourMultiplier);
 
-  // 2. Cost Rate — markup on top of the peak-adjusted base.
-  const costRateAmount = Math.round(afterPeak * (costRate / 100));
-  let adjustedBase = afterPeak + costRateAmount;
-
-  // 3. Min Booking Fee — floor applied to the adjusted subtotal.
-  let subtotal = adjustedBase;
+  // 2. Min Booking Fee — floor applied to the surged base, BEFORE gst /
+  //    platform / service are calculated, so it never compounds with them.
+  let subtotal = afterSurge;
   let minBookingFeeApplied = false;
   if (minBookingFee > 0 && subtotal < minBookingFee) {
     subtotal = minBookingFee;
     minBookingFeeApplied = true;
   }
 
-  // 4. Service Charge — flat fee added once.
-  // 5. Platform Commission — percentage of the subtotal.
+  // 3. GST — percentage of the surged base.
+  const costRateAmount = Math.round(subtotal * (costRate / 100));
+
+  // 4. Platform Commission — percentage of the surged base (NOT of the
+  //    GST-inclusive amount — this was the tax-on-tax compounding bug).
   const platformCommissionAmount = Math.round(subtotal * (platformCommission / 100));
-  const total = subtotal + serviceCharge + platformCommissionAmount;
+
+  // 5. Final bill = (hourlyRate × surge) + service + gst + platform.
+  const total = subtotal + serviceCharge + costRateAmount + platformCommissionAmount;
 
   return {
     baseCost,
