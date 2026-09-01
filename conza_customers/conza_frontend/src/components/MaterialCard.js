@@ -93,7 +93,7 @@ const MaterialCard = React.memo(({
 
       {/* ── Image ── */}
       <TouchableOpacity style={styles.imageWrapper} onPress={handleImagePress} activeOpacity={0.9}>
-       <Image source={imageSource} style={styles.image} resizeMode="contain" />>
+       <Image source={imageSource} style={styles.image} resizeMode="contain" />
         {/* Stock badge — top right */}
         <View style={[styles.stockBadge, { backgroundColor: inStock ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)' }]}>
           <View style={[styles.stockDot, { backgroundColor: inStock ? '#22c55e' : '#ef4444' }]} />

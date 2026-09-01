@@ -358,7 +358,9 @@ const MaterialView = React.memo(() => {
           tapping the active tile again clears the filter. */}
       <SectionHeader title="Categories" />
       <View style={styles.categoryGrid}>
-        {materialCategories.map((cat) => renderCategoryTile(cat))}
+        {materialCategories
+          .filter((cat) => cat.id !== 'all')
+          .map((cat) => renderCategoryTile(cat))}
       </View>
 
       {selectedCat !== 'all' && (
@@ -1146,20 +1148,21 @@ const styles = StyleSheet.create({
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    justifyContent: 'flex-start',
+    paddingHorizontal: 12,
     marginBottom: 8,
-    rowGap: 18,
+    rowGap: 14,
+    columnGap: 6,
   },
-  categoryTile: { width: '22%', alignItems: 'center' },
+  categoryTile: { width: '18%', alignItems: 'center' },
   categoryTileImageWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
+    width: 54,
+    height: 54,
+    borderRadius: 16,
     backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
     borderWidth: 1.3,
     borderColor: colors.border,
     overflow: 'hidden',
@@ -1169,14 +1172,14 @@ const styles = StyleSheet.create({
     borderColor: colors.accentYellow,
     borderWidth: 2,
   },
-  categoryTileImage: { width: 46, height: 46, borderRadius: 10, resizeMode: 'cover' },
-  categoryTileEmoji: { fontSize: 26 },
+  categoryTileImage: { width: 38, height: 38, borderRadius: 8, resizeMode: 'cover' },
+  categoryTileEmoji: { fontSize: 22 },
   categoryTileLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 14,
+    lineHeight: 13,
   },
   categoryTileLabelSelected: { color: colors.accentAmber },
 
