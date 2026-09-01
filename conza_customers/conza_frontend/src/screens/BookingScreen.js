@@ -492,11 +492,21 @@ const RentalView = React.memo(() => {
   const rentalError       = useAppStore((s) => s.rentalError);
   const fetchRental       = useAppStore((s) => s.fetchRentalData);
   const addToRentalCart   = useAppStore((s) => s.addToRentalCart);
+  const rentalCart        = useAppStore((s) => s.rentalCart);
+
+  const rentalCartCount = rentalCart.length;
+  const rentalCartTotal = useMemo(
+    () => rentalCart.reduce((sum, r) => sum + (Number(r.pricePerDay) || 0), 0),
+    [rentalCart]
+  );
 
   const handleAddToCart = useCallback((item) => {
     addToRentalCart(item);
-    Alert.alert('Added to Cart', `${item.name} added to your cart.`, [{ text: 'OK' }]);
   }, [addToRentalCart]);
+
+  const handleRentalCheckoutBar = useCallback(() => {
+    navigation.navigate('CartTab');
+  }, [navigation]);
 
   const [query,       setQuery]       = useState('');
   const [selectedCat, setSelectedCat] = useState('all');
@@ -612,7 +622,7 @@ const RentalView = React.memo(() => {
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={styles.rentalGridRow}
-        contentContainerStyle={styles.rentalGridList}
+        contentContainerStyle={[styles.rentalGridList, rentalCartCount > 0 && { paddingBottom: 100 }]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={listEmpty}
         renderItem={renderItem}
@@ -621,6 +631,37 @@ const RentalView = React.memo(() => {
         windowSize={5}
         removeClippedSubviews={true}
       />
+
+      {/* Rental cart checkout bar — mirrors MaterialView's bar exactly */}
+      {rentalCartCount > 0 && (
+        <View style={styles.materialCheckoutBar}>
+          <View style={styles.materialCheckoutLeft}>
+            <View style={styles.materialCheckoutBadge}>
+              <Text style={styles.materialCheckoutBadgeText}>{rentalCartCount}</Text>
+            </View>
+            <View>
+              <Text style={styles.materialCheckoutLabel}>
+                {rentalCartCount} item{rentalCartCount > 1 ? 's' : ''} added
+              </Text>
+              <Text style={styles.materialCheckoutTotal}>₹{rentalCartTotal.toLocaleString()}/day</Text>
+            </View>
+          </View>
+          <LinearGradient
+            colors={[colors.gradientStart, colors.gradientEnd]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.materialCheckoutBtn}
+          >
+            <TouchableOpacity
+              style={styles.materialCheckoutBtnTouch}
+              activeOpacity={0.85}
+              onPress={handleRentalCheckoutBar}
+            >
+              <Text style={styles.materialCheckoutBtnText}>View Cart →</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      )}
 
       {/* Filter Modal */}
       <Modal

@@ -49,12 +49,15 @@ const CartScreen = () => {
     });
   }, [navigation, cart, getCartItems]);
 
-  const handleRentalCheckout = useCallback((item) => {
+  const handleRentalCheckout = useCallback(() => {
+    if (rentalCart.length === 0) return;
+    // Navigate to RentalCheckout with the first item;
+    // the customer books each rental individually from there.
     navigation.navigate('Booking', {
       screen: 'RentalCheckout',
-      params: { item, quantity: 1 },
+      params: { item: rentalCart[0], quantity: 1 },
     });
-  }, [navigation]);
+  }, [navigation, rentalCart]);
 
   const renderMaterialItem = useCallback(({ item }) => (
     <View style={styles.cartItem}>
@@ -84,24 +87,15 @@ const CartScreen = () => {
         <Text style={styles.itemSub}>by {item.seller}</Text>
         <Text style={styles.itemPrice}>₹{item.pricePerDay}/day</Text>
       </View>
-      <View style={styles.rentalActions}>
-        <TouchableOpacity
-          style={styles.checkoutSmallBtn}
-          onPress={() => handleRentalCheckout(item)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.checkoutSmallText}>Book</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.removeBtn}
-          onPress={() => removeFromRentalCart(item.id)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.removeBtnText}>✕</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={styles.removeBtn}
+        onPress={() => removeFromRentalCart(item.id)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.removeBtnText}>✕</Text>
+      </TouchableOpacity>
     </View>
-  ), [handleRentalCheckout, removeFromRentalCart]);
+  ), [removeFromRentalCart]);
 
   const isEmpty = materialItems.length === 0 && rentalCart.length === 0;
 
@@ -158,6 +152,20 @@ const CartScreen = () => {
                     ))}
                     <View style={styles.sectionSummary}>
                       <Text style={styles.sectionTotal}>Est. ₹{rentalTotal.toLocaleString('en-IN')}/day</Text>
+                      <LinearGradient
+                        colors={[colors.gradientStart, colors.gradientEnd]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.checkoutBtn}
+                      >
+                        <TouchableOpacity
+                          style={styles.checkoutBtnTouch}
+                          onPress={handleRentalCheckout}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.checkoutBtnText}>Proceed to Checkout →</Text>
+                        </TouchableOpacity>
+                      </LinearGradient>
                     </View>
                   </View>
                 )}
@@ -218,14 +226,6 @@ const styles = StyleSheet.create({
   },
   qtyBtnText: { fontSize: 16, fontWeight: '800' },
   qtyValue: { minWidth: 28, textAlign: 'center', fontSize: 13, fontWeight: '700', color: colors.textPrimary },
-  rentalActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  checkoutSmallBtn: {
-    backgroundColor: colors.accentYellow,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-  },
-  checkoutSmallText: { fontSize: 12, fontWeight: '800', color: '#111' },
   removeBtn: {
     width: 28,
     height: 28,
