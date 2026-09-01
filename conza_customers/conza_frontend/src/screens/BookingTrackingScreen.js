@@ -202,6 +202,11 @@ const BookingTrackingScreen = ({ navigation, route }) => {
 
   const worker = activeBooking?.workers?.[0];
 
+  // Nothing about billing is shown for an immediate labour booking until the
+  // customer has confirmed the work as complete — the true amount (surge,
+  // service, gst, platform) is only known and calculated at that point.
+  const isImmediateLabour = activeBooking?.bookingType === 'labour' && activeBooking?.isImmediate === true;
+
   const statusCardStyle = useMemo(() =>
     status ? [styles.statusCard, { borderColor: status.color }] : styles.statusCard,
     [status?.color]
@@ -304,7 +309,15 @@ const BookingTrackingScreen = ({ navigation, route }) => {
               <DetailRow label="Service"   value={activeBooking.category} />
               <DetailRow label="Location"  value={`${activeBooking.area || ''}, ${activeBooking.city}`} />
               <DetailRow label="Address"   value={activeBooking.address || 'N/A'} />
-              <DetailRow label="Estimated Total" value={`₹${activeBooking.total}`} />
+              {activeBooking.isImmediate ? (
+                activeBooking.status === 'completed' ? (
+                  <DetailRow label="Total Amount" value={`₹${activeBooking.total}`} />
+                ) : (
+                  <DetailRow label="Billing" value="Calculated once every worker's job is confirmed complete" />
+                )
+              ) : (
+                <DetailRow label="Estimated Total" value={`₹${activeBooking.total}`} />
+              )}
               <DetailRow label="Payment"   value={(activeBooking.paymentMethod || '').toUpperCase()} />
             </View>
           </View>
@@ -443,12 +456,34 @@ const BookingTrackingScreen = ({ navigation, route }) => {
             <DetailRow label="Service"      value={activeBooking.category} />
             <DetailRow label="Location"     value={`${activeBooking.area}, ${activeBooking.city}`} />
             <DetailRow label="Address"      value={activeBooking.address || 'N/A'} />
-            {activeBooking.baseFeeApplied ? (
-              <DetailRow label="Billing"        value="Base fee (< 1 hr)" />
-            ) : !!activeBooking.hoursWorked && (
-              <DetailRow label="Hours Worked"   value={`${activeBooking.hoursWorked} hr${activeBooking.hoursWorked === 1 ? '' : 's'}`} />
+            {isImmediateLabour ? (
+              activeBooking.status === 'completed' ? (
+                <>
+                  <DetailRow label="Combined Hourly Rate" value={`₹${activeBooking.hourlyRate ?? 0}/hr`} />
+                  {activeBooking.baseFeeApplied ? (
+                    <DetailRow label="Billing" value="Base Price (job under 1 hr)" />
+                  ) : !!activeBooking.hoursWorked && (
+                    <DetailRow label="Hours Worked" value={`${activeBooking.hoursWorked} hr${activeBooking.hoursWorked === 1 ? '' : 's'}`} />
+                  )}
+                  <DetailRow label="Surge (Peak Hour Multiplier)" value={`×${activeBooking.billing?.peakHourMultiplier ?? 1}`} />
+                  <DetailRow label="Service Charge" value={`₹${activeBooking.billing?.serviceCharge ?? 0}`} />
+                  <DetailRow label={`GST (${activeBooking.billing?.costRate ?? 0}%)`} value={`₹${activeBooking.billing?.costRateAmount ?? 0}`} />
+                  <DetailRow label={`Platform Commission (${activeBooking.billing?.platformCommission ?? 0}%)`} value={`₹${activeBooking.billing?.platformCommissionAmount ?? 0}`} />
+                  <DetailRow label="Total Amount" value={`₹${activeBooking.total}`} />
+                </>
+              ) : (
+                <DetailRow label="Billing" value="Calculated after work is confirmed complete" />
+              )
+            ) : (
+              <>
+                {activeBooking.baseFeeApplied ? (
+                  <DetailRow label="Billing"        value="Base fee (< 1 hr)" />
+                ) : !!activeBooking.hoursWorked && (
+                  <DetailRow label="Hours Worked"   value={`${activeBooking.hoursWorked} hr${activeBooking.hoursWorked === 1 ? '' : 's'}`} />
+                )}
+                <DetailRow label="Total Amount" value={`₹${activeBooking.total}`} />
+              </>
             )}
-            <DetailRow label="Total Amount" value={`₹${activeBooking.total}`} />
             <DetailRow label="Payment"      value={activeBooking.paymentMethod.toUpperCase()} />
           </View>
         </View>

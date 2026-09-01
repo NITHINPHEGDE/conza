@@ -82,7 +82,10 @@ const watchChanges = () => {
           paymentMethod: doc.paymentMethod,
           bookingType:  doc.bookingType,
           workers:      doc.workers || [],
+          workerSnapshot: doc.workerSnapshot || [],
           workerCancelled: doc.workerCancelled || false,
+          isImmediate:  doc.isImmediate,
+          requiredWorkers: doc.requiredWorkers,
           address:      doc.address,
           latitude:     doc.latitude,
           longitude:    doc.longitude,
@@ -136,6 +139,44 @@ const watchChanges = () => {
                 workerName: entry.workerSnapshot?.name || entry.workerSnapshot?.fullName || 'Your worker',
               });
             }
+          }
+        }
+
+        // ── Manual booking: detect a labour accepting / cancelling ────────
+        // Manual (non-autobook) bookings flip a single top-level `status`
+        // directly (no per-worker sub-status like autobook), so seeing it
+        // change to 'accepted' or 'cancelled' here always means a labour on
+        // this manual job just acted on it — covers both immediate and
+        // scheduled manual bookings. `workerCancelled` is only ever set by
+        // the worker app's cancel action, so it's what distinguishes a
+        // worker-initiated cancellation from the customer cancelling their
+        // own still-pending request (which must NOT trigger this popup).
+        if (
+          userId &&
+          !doc?.isAutobook &&
+          c.operationType === 'update' &&
+          c.updateDescription?.updatedFields &&
+          Object.prototype.hasOwnProperty.call(c.updateDescription.updatedFields, 'status')
+        ) {
+          const newStatus   = c.updateDescription.updatedFields.status;
+          const workerNames = (doc.workerSnapshot || [])
+            .map((w) => w?.name || w?.fullName)
+            .filter(Boolean);
+
+          if (newStatus === 'accepted') {
+            io.to(`customer_${userId}`).emit('manual_labour_accepted', {
+              bookingId,
+              category:    doc.category,
+              isImmediate: doc.isImmediate,
+              workers:     workerNames,
+            });
+          } else if (newStatus === 'cancelled' && doc.workerCancelled) {
+            io.to(`customer_${userId}`).emit('manual_labour_cancelled', {
+              bookingId,
+              category:    doc.category,
+              isImmediate: doc.isImmediate,
+              workers:     workerNames,
+            });
           }
         }
 

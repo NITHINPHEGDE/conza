@@ -795,6 +795,22 @@ const useAppStore = create((set, get) => ({
   pendingWorkerCompletion: null,
   clearPendingWorkerCompletion: () => set({ pendingWorkerCompletion: null }),
 
+  // ── Manual booking accept/cancel + Quick Auto Book no-acceptance ──────
+  // Same "stays on screen until the user taps close" behaviour as the work
+  // completion banner above, but queued: if more than one of these arrives
+  // before the customer dismisses the current one, they're shown in order,
+  // one at a time.
+  labourPopupQueue: [],
+  pushLabourPopup: (popup) =>
+    set((s) => ({
+      labourPopupQueue: [
+        ...s.labourPopupQueue,
+        { id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, ...popup },
+      ],
+    })),
+  dismissLabourPopup: (id) =>
+    set((s) => ({ labourPopupQueue: s.labourPopupQueue.filter((p) => p.id !== id) })),
+
   // ── Cart ────────────────────────────────────────────────────────────────────
   cart: {},
 
@@ -883,6 +899,9 @@ const useAppStore = create((set, get) => ({
     socket.off('worker_updated');
     socket.off('worker_availability_changed');
     socket.off('worker_went_offline');
+    socket.off('manual_labour_accepted');
+    socket.off('manual_labour_cancelled');
+    socket.off('autobook_no_acceptance');
     socket.off('connect');
 
     socket.on('worker_availability_changed', (data) => {
@@ -1150,6 +1169,65 @@ const useAppStore = create((set, get) => ({
       if (get().activeBookingId?.toString() === data.bookingId?.toString()) {
         get().fetchActiveBooking(data.bookingId);
       }
+    });
+
+    // ── Manual booking: one or more labour accepted the work request ─────
+    // Fires for both immediate and scheduled manual bookings — the backend
+    // only emits this when the change stream sees a manual (non-autobook)
+    // booking's status flip to 'accepted'.
+    socket.on('manual_labour_accepted', (data) => {
+      const { bookingId, category, isImmediate, workers } = data || {};
+      const names = Array.isArray(workers) ? workers.filter(Boolean) : [];
+      const who =
+        names.length === 0 ? 'A worker' : names.length === 1 ? names[0] : `${names.length} workers`;
+      get().pushLabourPopup({
+        type: 'manual_accepted',
+        bookingId,
+        title: names.length > 1 ? 'Workers Accepted' : 'Worker Accepted',
+        message: `${who} accepted your ${category || 'labour'} booking${isImmediate ? '' : ' (scheduled)'}. Tap to view.`,
+      });
+      if (get().activeBookingId?.toString() === bookingId?.toString()) {
+        get().fetchActiveBooking(bookingId);
+      }
+      get().fetchLabourBookings();
+    });
+
+    // ── Manual booking: one or more labour cancelled the work request ────
+    // Distinguished from the customer cancelling their own booking — the
+    // backend only emits this when the worker app's cancel action set
+    // booking.workerCancelled, not for a customer-initiated cancel.
+    socket.on('manual_labour_cancelled', (data) => {
+      const { bookingId, category, isImmediate, workers } = data || {};
+      const names = Array.isArray(workers) ? workers.filter(Boolean) : [];
+      const who =
+        names.length === 0 ? 'A worker' : names.length === 1 ? names[0] : `${names.length} workers`;
+      get().pushLabourPopup({
+        type: 'manual_cancelled',
+        bookingId,
+        title: 'Booking Cancelled',
+        message: `${who} cancelled your ${category || 'labour'} booking${isImmediate ? '' : ' (scheduled)'}. Tap to view.`,
+      });
+      if (get().activeBookingId?.toString() === bookingId?.toString()) {
+        get().fetchActiveBooking(bookingId);
+      }
+      get().fetchLabourBookings();
+    });
+
+    // ── Quick Auto Book: nobody in the required category accepted in time ─
+    socket.on('autobook_no_acceptance', (data) => {
+      const { bookingId, category, requiredWorkers } = data || {};
+      get().pushLabourPopup({
+        type: 'autobook_no_accept',
+        bookingId,
+        title: 'No Workers Accepted',
+        message: `No ${category || 'labour'} workers accepted your Quick Auto Book request${
+          requiredWorkers ? ` (needed ${requiredWorkers})` : ''
+        }. Tap to try again.`,
+      });
+      if (get().activeBookingId?.toString() === bookingId?.toString()) {
+        get().fetchActiveBooking(bookingId);
+      }
+      get().fetchLabourBookings();
     });
 
     socket.on('worker_status_changed', (data) => {

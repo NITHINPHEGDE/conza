@@ -5,11 +5,14 @@ const logger = require('./logger');
 // Fallback values used if the admin panel has never saved labour pricing
 // yet, or if the admin database is temporarily unreachable — keeps the
 // customer app fully functional either way.
+// NOTE: there is no global minBookingFee here anymore — the minimum
+// charge is per-category (ServiceCategory.baseCharge, set in the admin
+// panel's Categories screen) and is passed into computeLabourBill()
+// directly by the caller.
 const DEFAULT_LABOUR_CONFIG = {
   platformCommission: 12,
   costRate: 18,
   serviceCharge: 25,
-  minBookingFee: 50,
   cancellationFee: 30,
   peakHourMultiplier: 1.5,
 };
@@ -52,7 +55,7 @@ const getLabourPricingConfigFresh = async () => {
 };
 
 // ── Core billing calculation ────────────────────────────────────────────
-// Order: (hourlyRate × surge) → minBookingFee floor → + service + gst +
+// Order: (hourlyRate × surge) → minimum-charge floor → + service + gst +
 //        platform, all computed once → final bill.
 // GST (costRate) and Platform Commission are both calculated as a
 // percentage of the SAME surged/floored base — never stacked on top of
@@ -60,11 +63,17 @@ const getLabourPricingConfigFresh = async () => {
 // rawBase: raw worker cost before any admin-configured adjustments
 //          (e.g. pricePerDay, or perDayCharge * totalDays, or
 //          avgRate * requiredWorkers for autobook).
-const computeLabourBill = (rawBase, config) => {
+// categoryMinCharge: the MINIMUM charge floor for this specific labour
+//          category — ServiceCategory.baseCharge, set per-category in the
+//          admin panel's Categories screen (NOT a global admin setting;
+//          every category has its own value, e.g. Painter ₹99, Carpenter
+//          ₹0). Callers must fetch this from ServiceCategory and pass it
+//          in explicitly.
+const computeLabourBill = (rawBase, config, categoryMinCharge) => {
   const platformCommission = Number(config.platformCommission) || 0;
   const costRate = Number(config.costRate) || 0; // GST %
   const serviceCharge = Number(config.serviceCharge) || 0;
-  const minBookingFee = Number(config.minBookingFee) || 0;
+  const minBookingFee = Number(categoryMinCharge) || 0;
   const cancellationFee = Number(config.cancellationFee) || 0;
   const peakHourMultiplier = Number(config.peakHourMultiplier) || 1;
 
@@ -73,8 +82,9 @@ const computeLabourBill = (rawBase, config) => {
   // 1. Surge (Peak Hour Multiplier) — ALWAYS applied to the hourly rate.
   const afterSurge = Math.round(baseCost * peakHourMultiplier);
 
-  // 2. Min Booking Fee — floor applied to the surged base, BEFORE gst /
-  //    platform / service are calculated, so it never compounds with them.
+  // 2. Minimum charge (per-category) — floor applied to the surged base,
+  //    BEFORE gst / platform / service are calculated, so it never
+  //    compounds with them.
   let subtotal = afterSurge;
   let minBookingFeeApplied = false;
   if (minBookingFee > 0 && subtotal < minBookingFee) {

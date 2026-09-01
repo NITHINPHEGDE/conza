@@ -225,11 +225,6 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
           </>
         )}
 
-        {/* ── Floating rating chip ── */}
-        <View style={styles.floatingRating}>
-          <Text style={styles.ratingText}>★ {item.rating}</Text>
-        </View>
-
         {/* ── Footer with HIGHLIGHTED text ── */}
         <View style={styles.footer}>
           {/* Label with frosted highlight backdrop */}
@@ -362,25 +357,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: colors.textPrimary,
     includeFontPadding: false,
-  },
-
-  // ── Floating rating ──
-  floatingRating: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    backgroundColor: 'rgba(255, 215, 0, 0.18)',
-    borderRadius: 10,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.35)',
-  },
-  ratingText: {
-    color: '#FFD700',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.2,
   },
 
   // ── Footer ──

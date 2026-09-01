@@ -10,7 +10,6 @@ const DEFAULT_SETTINGS = {
     platformCommission: 12,
     costRate: 18,
     serviceCharge: 25,
-    minBookingFee: 50,
     cancellationFee: 30,
     peakHourMultiplier: 1.5,
   },

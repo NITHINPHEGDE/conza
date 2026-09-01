@@ -29,6 +29,91 @@ const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const categoryMatcher = (category) =>
   category ? { $regex: `^${escapeRegex(category.trim())}$`, $options: 'i' } : undefined;
 
+// ── Final hourly bill (labour, immediate bookings only) ────────────────
+// Nothing about billing is shown to the customer until they tap "Confirm
+// Work Completed" — at that point we compute the true final amount from
+// the admin-configured Labour pricing (surge → service → gst → platform),
+// using the actual hours worked, and persist it so the status screen
+// reflects the exact same number from then on.
+//
+// Base Price rule: each service category has its OWN admin-configured
+// Base Price (ServiceCategory.baseCharge, set per-category in Finance →
+// Categories) — just like it has its own hourly rate. Whenever the job
+// ran under 1 hour, the proportional hourly × fraction calculation is
+// skipped entirely and that category's flat Base Price is used as the
+// base instead. It's only once the job reaches 1 full hour or more that
+// the hourly rate × hours takes over. Either way, the resulting base
+// still goes through the exact same pipeline: surge → service → gst →
+// platform.
+const computeFinalHourlyBase = (hourlyRateInput, workerSnapshot, hoursWorkedInput, categoryBaseCharge) => {
+  const snapshot = Array.isArray(workerSnapshot) ? workerSnapshot : [];
+  const combinedHourlyRate = Number(hourlyRateInput) ||
+    snapshot.reduce((sum, w) => sum + (Number(w.pricePerDay) || 0), 0);
+  const parsedHours = Number(hoursWorkedInput);
+  const hoursWorked = Number.isFinite(parsedHours) && parsedHours > 0 ? parsedHours : 0;
+  const isUnderAnHour = hoursWorked < 1;
+  const rawBase = isUnderAnHour ? (Number(categoryBaseCharge) || 0) : combinedHourlyRate * hoursWorked;
+  return {
+    combinedHourlyRate,
+    hoursWorked,
+    baseFeeApplied: isUnderAnHour,
+    rawBase,
+  };
+};
+
+const ACTIVE_WORKER_STATUSES = ['accepted', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed'];
+
+// ── Quick Auto Book: auto-expire if the required category never accepts ──
+// This project has no cron/queue infra, so this is scheduled with a plain
+// setTimeout right after the autobook request is created (see
+// createAutobookBooking below). If the process restarts before it fires the
+// timer is lost — same in-memory tradeoff already accepted elsewhere in
+// this codebase (no persistent job queue exists here).
+const AUTOBOOK_NO_ACCEPT_TIMEOUT_MS = parseInt(process.env.AUTOBOOK_NO_ACCEPT_TIMEOUT_MS) || 5 * 60 * 1000;
+
+const checkAutobookNoAcceptance = async (bookingId, userId) => {
+  try {
+    const booking = await Booking.findById(bookingId);
+    if (!booking || !booking.isAutobook || booking.status !== 'pending') return;
+
+    const acceptedCount = (booking.workerStatuses || []).filter((w) =>
+      ACTIVE_WORKER_STATUSES.includes(w.status)
+    ).length;
+    if (acceptedCount > 0) return;
+
+    const pendingEntries = booking.workerStatuses.filter((w) => w.status === 'pending');
+    pendingEntries.forEach((w) => { w.status = 'expired'; });
+    booking.status = 'cancelled';
+    await booking.save();
+
+    await invalidateCache(
+      `bookings:detail:${booking._id}`,
+      `bookings:user:${userId}:*`
+    ).catch(() => {});
+
+    try {
+      const { getIO } = require('../services/socketService');
+      const io = getIO();
+      io.to(`customer_${userId}`).emit('booking_updated', {
+        operationType:   'update',
+        bookingId:       booking._id.toString(),
+        status:          'cancelled',
+        bookingSnapshot: null,
+      });
+      io.to(`customer_${userId}`).emit('autobook_no_acceptance', {
+        bookingId:       booking._id.toString(),
+        category:        booking.category,
+        requiredWorkers: booking.requiredWorkers,
+      });
+      pendingEntries.forEach((w) => {
+        io.to(`worker_${w.worker}`).emit('autobook_request_closed', { bookingId: booking._id.toString() });
+      });
+    } catch (_) {}
+  } catch (err) {
+    logger.error({ err, bookingId }, 'checkAutobookNoAcceptance failed');
+  }
+};
+
 const sendPushNotification = async (pushToken, title, body, data = {}) => {
   try {
     const res = await fetch('https://exp.host/--/api/v2/push/send', {
@@ -95,8 +180,11 @@ const createBooking = async (req, res) => {
           }, 0)
         : (subtotal || 0);
 
-      const config = await getLabourPricingConfig();
-      const bill = computeLabourBill(rawBase, config);
+      const [config, categoryDoc] = await Promise.all([
+        getLabourPricingConfig(),
+        ServiceCategory.findOne({ name: categoryMatcher(category) }).select('baseCharge').lean(),
+      ]);
+      const bill = computeLabourBill(rawBase, config, categoryDoc?.baseCharge);
 
       billing = {
         baseCost: bill.baseCost,
@@ -420,6 +508,11 @@ const createAutobookBooking = async (req, res) => {
 
     res.status(201).json({ success: true, booking, candidateCount: candidates.length });
 
+    // ── Auto-expire if nobody in this category accepts in time ───────────
+    setTimeout(() => {
+      checkAutobookNoAcceptance(booking._id.toString(), req.user._id.toString());
+    }, AUTOBOOK_NO_ACCEPT_TIMEOUT_MS);
+
     // Push notifications — fire and forget, after responding
     const pushPromises = candidates
       .filter((w) => w.pushToken)
@@ -614,12 +707,57 @@ const confirmCompletion = async (req, res) => {
         return res.status(400).json({ success: false, message: 'This worker is not awaiting confirmation' });
       }
 
+      // ── Finalize this worker's bill now, on confirmation ────────────────
+      // Nothing was shown for this worker's cost before now — compute the
+      // true final amount (surge → service → gst → platform) from the
+      // actual hours worked and persist it so the status card reflects the
+      // exact same number going forward.
+      if (booking.bookingType === 'labour' && booking.isImmediate) {
+        const [config, categoryDoc] = await Promise.all([
+          getLabourPricingConfigFresh(),
+          ServiceCategory.findOne({ name: categoryMatcher(booking.category) }).select('baseCharge').lean(),
+        ]);
+        const { combinedHourlyRate, hoursWorked, baseFeeApplied, rawBase } = computeFinalHourlyBase(
+          entry.hourlyRate,
+          entry.workerSnapshot ? [entry.workerSnapshot] : [],
+          entry.hoursWorked,
+          categoryDoc?.baseCharge
+        );
+        const bill = computeLabourBill(rawBase, config, categoryDoc?.baseCharge);
+
+        entry.hourlyRate = combinedHourlyRate;
+        entry.hoursWorked = hoursWorked;
+        // True whenever the job ran under 1 hour — the admin's flat Base
+        // Price was used instead of an hourly × fraction calculation.
+        entry.baseFeeApplied = baseFeeApplied;
+        entry.subtotal = bill.subtotal;
+        entry.total = bill.total;
+        entry.billing = {
+          costRate: bill.costRate,
+          costRateAmount: bill.costRateAmount,
+          peakHourMultiplier: bill.peakHourMultiplier,
+          serviceCharge: bill.serviceCharge,
+          platformCommission: bill.platformCommission,
+          platformCommissionAmount: bill.platformCommissionAmount,
+          cancellationFee: bill.cancellationFee,
+        };
+      }
+
       entry.status = 'completed';
 
       const allDone = booking.workerStatuses
         .filter((w) => !['pending', 'expired'].includes(w.status))
         .every((w) => w.status === 'completed');
-      if (allDone) booking.status = 'completed';
+      if (allDone) {
+        booking.status = 'completed';
+        // Roll the finalized per-worker totals up into the booking-level
+        // total shown on the summary card once every worker is confirmed.
+        if (booking.bookingType === 'labour' && booking.isImmediate) {
+          const finishedEntries = booking.workerStatuses.filter((w) => w.status === 'completed');
+          booking.subtotal = finishedEntries.reduce((sum, w) => sum + (Number(w.subtotal) || 0), 0);
+          booking.total    = finishedEntries.reduce((sum, w) => sum + (Number(w.total) || 0), 0);
+        }
+      }
 
       await booking.save();
 
@@ -664,9 +802,50 @@ const confirmCompletion = async (req, res) => {
       return res.json({ success: true, booking });
     }
 
-    // ── MANUAL booking — unchanged ─────────────────────────────────────
+    // ── MANUAL booking ────────────────────────────────────────────────
     if (booking.status !== 'awaiting_customer_confirmation') {
       return res.status(400).json({ success: false, message: 'Booking is not awaiting confirmation' });
+    }
+
+    // ── Finalize the bill now, on confirmation ──────────────────────────
+    // Nothing was shown to the customer about cost before now — compute the
+    // true final amount (surge → service → gst → platform) from the actual
+    // hours worked and persist it so the status card reflects the exact
+    // same number from this point on.
+    if (booking.bookingType === 'labour' && booking.isImmediate) {
+      const [config, categoryDoc] = await Promise.all([
+        getLabourPricingConfigFresh(),
+        ServiceCategory.findOne({ name: categoryMatcher(booking.category) }).select('baseCharge').lean(),
+      ]);
+      const { combinedHourlyRate, hoursWorked, baseFeeApplied, rawBase } = computeFinalHourlyBase(
+        booking.hourlyRate,
+        booking.workerSnapshot,
+        booking.hoursWorked,
+        categoryDoc?.baseCharge
+      );
+      const bill = computeLabourBill(rawBase, config, categoryDoc?.baseCharge);
+
+      booking.hourlyRate     = combinedHourlyRate;
+      booking.hoursWorked    = hoursWorked;
+      // True whenever the job ran under 1 hour — the admin's flat Base
+      // Price was used instead of an hourly × fraction calculation.
+      booking.baseFeeApplied = baseFeeApplied;
+      booking.subtotal       = bill.subtotal;
+      booking.platformFee    = bill.serviceCharge + bill.platformCommissionAmount;
+      booking.total          = bill.total;
+      booking.billing        = {
+        baseCost: bill.baseCost,
+        costRate: bill.costRate,
+        costRateAmount: bill.costRateAmount,
+        peakHourApplied: bill.peakHourApplied,
+        peakHourMultiplier: bill.peakHourMultiplier,
+        minBookingFeeApplied: bill.minBookingFeeApplied,
+        minBookingFee: bill.minBookingFee,
+        serviceCharge: bill.serviceCharge,
+        platformCommission: bill.platformCommission,
+        platformCommissionAmount: bill.platformCommissionAmount,
+        cancellationFee: bill.cancellationFee,
+      };
     }
 
     booking.status = 'completed';
@@ -911,12 +1090,17 @@ const getLabourBillPreview = async (req, res) => {
   try {
     const {
       workers = [], totalDays = 1, isImmediate = true,
-      isAutobook = false, requiredWorkers = 0,
+      isAutobook = false, requiredWorkers = 0, category = '',
     } = req.body;
 
     // Always read fresh from the admin DB (no Redis cache) so the config
-    // returned to the checkout screen is never stale after an admin save.
-    const config = await getLabourPricingConfigFresh();
+    // and per-category minimum charge returned to the checkout screen are
+    // never stale after an admin save.
+    const [config, categoryDoc] = await Promise.all([
+      getLabourPricingConfigFresh(),
+      ServiceCategory.findOne({ name: categoryMatcher(category) }).select('baseCharge').lean(),
+    ]);
+    const categoryBaseCharge = categoryDoc?.baseCharge || 0;
     const isMultiDay = !isImmediate && totalDays && totalDays > 1;
 
     if (isAutobook) {
@@ -925,14 +1109,14 @@ const getLabourBillPreview = async (req, res) => {
         ? workers.reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0) / workers.length
         : 0;
       const rawBase = isMultiDay ? avgRate * need * totalDays : avgRate * need;
-      const bill = computeLabourBill(rawBase, config);
-      return res.json({ success: true, config, summary: bill });
+      const bill = computeLabourBill(rawBase, config, categoryBaseCharge);
+      return res.json({ success: true, config: { ...config, categoryBaseCharge }, summary: bill });
     }
 
     // Sum all workers' raw costs to get a single combined base, then run
     // computeLabourBill ONCE. This ensures serviceCharge, cancellationFee,
-    // minBookingFee and platformCommission are applied at the booking level —
-    // not multiplied by the number of workers.
+    // the per-category minimum charge, and platformCommission are applied
+    // at the booking level — not multiplied by the number of workers.
     const perWorker = (workers || []).map((w) => {
       const rawBase = isMultiDay
         ? (Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * totalDays
@@ -941,9 +1125,9 @@ const getLabourBillPreview = async (req, res) => {
     });
 
     const totalRawBase = perWorker.reduce((s, n) => s + n, 0);
-    const summary = computeLabourBill(totalRawBase, config);
+    const summary = computeLabourBill(totalRawBase, config, categoryBaseCharge);
 
-    res.json({ success: true, config, summary });
+    res.json({ success: true, config: { ...config, categoryBaseCharge }, summary });
   } catch (err) {
     logger.error({ err }, 'getLabourBillPreview failed');
     res.status(500).json({ success: false, message: err.message });

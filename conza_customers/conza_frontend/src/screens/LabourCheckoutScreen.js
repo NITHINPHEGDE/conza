@@ -29,19 +29,21 @@ import { bookingAPI } from '../api/bookingAPI';
 // network error, etc.) so the displayed total is always consistent with
 // the config rates shown on screen.
 // Final bill = (hourlyRate × surge) + service + gst + platform.
-const computeLocalBill = (rawBase, config) => {
+// categoryMinCharge: this category's own minimum charge (ServiceCategory.
+// baseCharge, set per-category in the admin panel) — NOT a global value.
+const computeLocalBill = (rawBase, config, categoryMinCharge) => {
   const peakHourMultiplier = Number(config.peakHourMultiplier) || 1;
   const costRate = Number(config.costRate) || 0; // GST %
   const platformCommission = Number(config.platformCommission) || 0;
   const serviceCharge = Number(config.serviceCharge) || 0;
-  const minBookingFee = Number(config.minBookingFee) || 0;
+  const minBookingFee = Number(categoryMinCharge) || 0;
   const cancellationFee = Number(config.cancellationFee) || 0;
 
   const baseCost = Math.round(Number(rawBase) || 0);
   // 1. Surge (Peak Hour Multiplier) — ALWAYS applied to the hourly rate.
   const afterSurge = Math.round(baseCost * peakHourMultiplier);
-  // 2. Min Booking Fee — floor applied BEFORE gst / platform / service so
-  //    those never compound on top of each other.
+  // 2. Minimum charge (per-category) — floor applied BEFORE gst / platform
+  //    / service so those never compound on top of each other.
   let subtotal = afterSurge;
   let minBookingFeeApplied = false;
   if (minBookingFee > 0 && subtotal < minBookingFee) {
@@ -290,6 +292,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
           isImmediate: bookingType === 'immediate',
           isAutobook,
           requiredWorkers,
+          category,
         });
         if (!cancelled && result?.success) {
           setBillBreakdown(isAutobook ? result.summary : result.summary);
@@ -316,10 +319,13 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       platformCommission: 12,
       costRate: 18,
       serviceCharge: 25,
-      minBookingFee: 50,
       cancellationFee: 30,
       peakHourMultiplier: 1.5,
+      categoryBaseCharge: 0,
     };
+    // The per-category minimum charge (NOT a global value) — comes back
+    // from the backend alongside the rest of the admin config.
+    const categoryMinCharge = config.categoryBaseCharge || 0;
     if (billBreakdown) {
       return {
         baseCost: billBreakdown.baseCost,
@@ -335,13 +341,13 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         platformCommissionPct: config.platformCommission || 12,
         costRatePct: config.costRate || 18,
         peakHourMultiplierCfg: config.peakHourMultiplier || 1.5,
-        minBookingFeeCfg: config.minBookingFee || 50,
+        minBookingFeeCfg: categoryMinCharge,
       };
     }
     // Fallback estimate while the live bill is loading / unreachable.
     // Uses the same formula as pricingEngine.computeLabourBill so the total
     // shown is always consistent with the rates displayed on screen.
-    const fb = computeLocalBill(localFallbackSubtotal, config);
+    const fb = computeLocalBill(localFallbackSubtotal, config, categoryMinCharge);
     return {
       baseCost: fb.baseCost,
       subtotal: fb.subtotal,
@@ -356,7 +362,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       platformCommissionPct: config.platformCommission || 12,
       costRatePct: config.costRate || 18,
       peakHourMultiplierCfg: config.peakHourMultiplier || 1.5,
-      minBookingFeeCfg: config.minBookingFee || 50,
+      minBookingFeeCfg: categoryMinCharge,
     };
   }, [billBreakdown, adminConfig, localFallbackSubtotal]);
 

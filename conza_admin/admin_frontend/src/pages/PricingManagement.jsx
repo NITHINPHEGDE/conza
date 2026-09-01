@@ -11,7 +11,6 @@ const initialPricing = {
     platformCommission: 12,
     costRate: 18,
     serviceCharge: 25,
-    minBookingFee: 50,
     cancellationFee: 30,
     peakHourMultiplier: 1.5,
   },
@@ -190,14 +189,9 @@ export default function PricingManagement() {
                     value={current.serviceCharge}
                     onChange={(e) => handleChange('serviceCharge', parseFloat(e.target.value))}
                   />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-textSecondary">Min Booking Fee (₹)</label>
-                  <Input
-                    type="number"
-                    value={current.minBookingFee}
-                    onChange={(e) => handleChange('minBookingFee', parseFloat(e.target.value))}
-                  />
+                  <p className="text-xs text-textMuted">
+                    Minimum charge is set per-category instead — see Categories → Base Price.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-textSecondary">Cancellation Fee (₹)</label>

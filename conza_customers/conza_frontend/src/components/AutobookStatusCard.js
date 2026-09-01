@@ -52,6 +52,46 @@ const AutobookStatusCard = React.memo(({ entry, highlighted, onConfirm, onReport
           </TouchableOpacity>
         </View>
       )}
+
+      {entry.status === 'completed' && !!entry.total && (
+        <View style={styles.billBox}>
+          <View style={styles.billRow}>
+            <Text style={styles.billLabel}>Hourly Rate</Text>
+            <Text style={styles.billValue}>₹{entry.hourlyRate ?? 0}/hr</Text>
+          </View>
+          {entry.baseFeeApplied ? (
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Billing</Text>
+              <Text style={styles.billValue}>Base Price (job under 1 hr)</Text>
+            </View>
+          ) : !!entry.hoursWorked && (
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Hours Worked</Text>
+              <Text style={styles.billValue}>{entry.hoursWorked} hr{entry.hoursWorked === 1 ? '' : 's'}</Text>
+            </View>
+          )}
+          <View style={styles.billRow}>
+            <Text style={styles.billLabel}>Surge</Text>
+            <Text style={styles.billValue}>×{entry.billing?.peakHourMultiplier ?? 1}</Text>
+          </View>
+          <View style={styles.billRow}>
+            <Text style={styles.billLabel}>Service Charge</Text>
+            <Text style={styles.billValue}>₹{entry.billing?.serviceCharge ?? 0}</Text>
+          </View>
+          <View style={styles.billRow}>
+            <Text style={styles.billLabel}>GST ({entry.billing?.costRate ?? 0}%)</Text>
+            <Text style={styles.billValue}>₹{entry.billing?.costRateAmount ?? 0}</Text>
+          </View>
+          <View style={styles.billRow}>
+            <Text style={styles.billLabel}>Platform Commission ({entry.billing?.platformCommission ?? 0}%)</Text>
+            <Text style={styles.billValue}>₹{entry.billing?.platformCommissionAmount ?? 0}</Text>
+          </View>
+          <View style={[styles.billRow, styles.billTotalRow]}>
+            <Text style={styles.billTotalLabel}>Total</Text>
+            <Text style={styles.billTotalValue}>₹{entry.total}</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 });
@@ -70,6 +110,13 @@ const styles = StyleSheet.create({
   confirmBtnText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
   issueBtn: { flex: 1, borderRadius: 12, paddingVertical: 11, alignItems: 'center', borderWidth: 1.5, borderColor: '#EF4444' },
   issueBtnText: { color: '#EF4444', fontWeight: '700', fontSize: 13 },
+  billBox: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  billRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  billLabel: { fontSize: 12, color: '#64748B', fontWeight: '500' },
+  billValue: { fontSize: 12, color: '#1E293B', fontWeight: '700' },
+  billTotalRow: { marginTop: 4, marginBottom: 0 },
+  billTotalLabel: { fontSize: 13, color: '#1E293B', fontWeight: '800' },
+  billTotalValue: { fontSize: 14, color: '#10B981', fontWeight: '800' },
 });
 
 export default AutobookStatusCard;

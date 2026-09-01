@@ -12,6 +12,7 @@ import { useAuth } from './src/hooks/useAuth';
 import useAppStore from './src/store/useAppStore';
 import BookingTrackingScreen from './src/screens/BookingTrackingScreen';
 import WorkCompletionToast from './src/components/WorkCompletionToast';
+import LabourEventToast from './src/components/LabourEventToast';
 
 const Stack = createNativeStackNavigator();
 export const navigationRef = createNavigationContainerRef();
@@ -25,6 +26,8 @@ export default function App() {
   const pendingWorkerCompletion = useAppStore((s) => s.pendingWorkerCompletion);
   const clearPendingWorkerCompletion = useAppStore((s) => s.clearPendingWorkerCompletion);
   const setActiveBookingId = useAppStore((s) => s.setActiveBookingId);
+  const labourPopupQueue = useAppStore((s) => s.labourPopupQueue);
+  const dismissLabourPopup = useAppStore((s) => s.dismissLabourPopup);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -56,6 +59,28 @@ export default function App() {
     }
     clearPendingWorkerCompletion();
   }, [pendingWorkerCompletion]);
+
+  // Manual-booking labour accepted/cancelled + Quick Auto Book "nobody
+  // accepted" popups — same global, stays-until-closed pattern as the work
+  // completion banner above. Queued in the store so if several arrive
+  // before the customer dismisses one, they're shown one at a time.
+  const currentLabourPopup = labourPopupQueue[0] || null;
+
+  const handleLabourPopupPress = useCallback(async () => {
+    if (!currentLabourPopup) return;
+    await setActiveBookingId(currentLabourPopup.bookingId);
+    if (navigationRef.isReady()) {
+      navigationRef.navigate('Main', {
+        screen: 'Status',
+        params: { screen: 'BookingDetail' },
+      });
+    }
+    dismissLabourPopup(currentLabourPopup.id);
+  }, [currentLabourPopup]);
+
+  const handleLabourPopupDismiss = useCallback(() => {
+    if (currentLabourPopup) dismissLabourPopup(currentLabourPopup.id);
+  }, [currentLabourPopup]);
 
   if (!initialized && userProfile === null) {
     return (
@@ -97,6 +122,15 @@ export default function App() {
         workerName={pendingWorkerCompletion?.workerName}
         onPress={handleWorkCompletionPress}
         onDismiss={clearPendingWorkerCompletion}
+      />
+      <LabourEventToast
+        visible={!!currentLabourPopup}
+        title={currentLabourPopup?.title}
+        message={currentLabourPopup?.message}
+        variant={currentLabourPopup?.type}
+        onPress={handleLabourPopupPress}
+        onDismiss={handleLabourPopupDismiss}
+        stacked={!!pendingWorkerCompletion}
       />
     </SafeAreaProvider>
   );

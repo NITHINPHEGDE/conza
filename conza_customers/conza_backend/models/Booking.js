@@ -42,6 +42,10 @@ const bookingSchema = new mongoose.Schema(
     // at booking-creation time so the customer's final bill always reflects
     // Platform Commission, Cost Rate, Service Charge, Min Booking Fee,
     // Cancellation Fee, and Peak Hour Multiplier exactly as configured.
+    // NOTE: `minBookingFee` here holds the per-CATEGORY minimum charge
+    // (ServiceCategory.baseCharge, set in the admin panel's Categories
+    // screen for that specific labour category) — there is no longer a
+    // single global minimum booking fee.
     billing: {
       baseCost:                 { type: Number, default: 0 },
       costRate:                 { type: Number, default: 0 },
@@ -81,6 +85,19 @@ const bookingSchema = new mongoose.Schema(
       baseFeeApplied: { type: Boolean, default: false },
       subtotal:       { type: Number, default: 0 },
       total:          { type: Number, default: 0 },
+      // Per-worker billing breakdown (autobook) — populated on customer
+      // confirmation only, mirroring the top-level `billing` block, so the
+      // status card can show surge/service/gst/platform per worker once
+      // that worker's job is confirmed complete.
+      billing: {
+        costRate:                 { type: Number, default: 0 },
+        costRateAmount:           { type: Number, default: 0 },
+        peakHourMultiplier:       { type: Number, default: 1 },
+        serviceCharge:            { type: Number, default: 0 },
+        platformCommission:       { type: Number, default: 0 },
+        platformCommissionAmount: { type: Number, default: 0 },
+        cancellationFee:          { type: Number, default: 0 },
+      },
       paymentMethod:  { type: String, default: null },
     }],
 
@@ -102,6 +119,9 @@ const bookingSchema = new mongoose.Schema(
     workStartTime: { type: Date, default: null },   // when worker actually starts the job (status → in_progress)
     hoursWorked:   { type: Number, default: null },  // billed hours for immediate/hourly bookings
     hourlyRate:    { type: Number, default: null },  // combined per-hour rate of assigned workers
+    // true when hoursWorked < 1hr and the admin's min booking fee floor was
+    // applied instead of a straight hourly calculation, at final billing.
+    baseFeeApplied: { type: Boolean, default: false },
     workerCancelled: { type: Boolean, default: false },
     notes:         { type: String, default: '' },
     description:   { type: String, default: '' },
