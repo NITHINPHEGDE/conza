@@ -820,13 +820,20 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
                 );
               })}
 
-              <View style={styles.billDivider} />
-              <View style={styles.billRow}>
-                <Text style={styles.billTotalLabel}>Minimum Charge (if {'<'} 1 hr)</Text>
-                <Text style={[styles.billTotalValue, { color: '#2563EB' }]}>
-                  ₹{selectedWorkers.reduce((s, w) => s + (Number(w.baseCharge) || 0), 0).toLocaleString()}
-                </Text>
-              </View>
+              {(() => {
+                const baseTotal = selectedWorkers.reduce((s, w) => s + (Number(w.baseCharge) || 0), 0);
+                return (
+                  <>
+                    <View style={styles.billDivider} />
+                    <View style={styles.billRow}>
+                      <Text style={styles.billTotalLabel}>Minimum Charge (if {'<'} 1 hr)</Text>
+                      <Text style={[styles.billTotalValue, { color: '#2563EB' }]}>
+                        ₹{baseTotal.toLocaleString()}
+                      </Text>
+                    </View>
+                  </>
+                );
+              })()}
             </View>
 
             {/* ── Tier 2: Over 1 hour → Hourly Rate ──────────────────────── */}
@@ -850,35 +857,38 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
                 <Text style={styles.billTotalLabel}>Combined Hourly Rate</Text>
                 <Text style={styles.billTotalValue}>₹{hourlyRateTotal.toLocaleString()}/hr</Text>
               </View>
+
+              <View style={styles.billDivider} />
+              <Text style={styles.appliedPricingHeader}>Additional charges applied</Text>
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>Surge (Peak Hour Multiplier)</Text>
+                <Text style={[styles.billValue, { color: '#F59E0B', fontWeight: '700' }]}>
+                  ×{peakHourMultiplierCfg}
+                </Text>
+              </View>
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>Service Charge</Text>
+                <Text style={styles.billValue}>₹{serviceCharge.toLocaleString()}</Text>
+              </View>
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>GST ({costRatePct}%)</Text>
+                <Text style={styles.billValue}>₹{costRateAmount.toLocaleString()}</Text>
+              </View>
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>Platform Commission ({platformCommissionPct}%)</Text>
+                <Text style={styles.billValue}>₹{platformCommissionAmount.toLocaleString()}</Text>
+              </View>
+
+              <View style={styles.billDivider} />
+              <View style={styles.billRow}>
+                <Text style={styles.billTotalLabel}>Estimated Total (if {'>'} 1 hr)</Text>
+                <Text style={styles.billTotalValue}>₹{total.toLocaleString()}</Text>
+              </View>
             </View>
 
-            <View style={styles.billDivider} />
-            <Text style={styles.appliedPricingHeader}>Additional charges applied at final billing</Text>
-            <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Surge (Peak Hour Multiplier)</Text>
-              <Text style={[styles.billValue, { color: '#F59E0B', fontWeight: '700' }]}>
-                ×{peakHourMultiplierCfg}
-              </Text>
-            </View>
-            <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Service Charge</Text>
-              <Text style={styles.billValue}>₹{serviceCharge.toLocaleString()}</Text>
-            </View>
-            <View style={styles.billRow}>
-              <Text style={styles.billLabel}>GST ({costRatePct}%)</Text>
-              <Text style={styles.billValue}>₹{costRateAmount.toLocaleString()}</Text>
-            </View>
-            <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Platform Commission ({platformCommissionPct}%)</Text>
-              <Text style={styles.billValue}>₹{platformCommissionAmount.toLocaleString()}</Text>
-            </View>
-            <Text style={styles.billNote}>Cancellation fee: ₹{cancellationFee.toLocaleString()} if cancelled after a worker accepts.</Text>
-
-            <View style={styles.billDivider} />
-            <View style={styles.billRow}>
-              <Text style={styles.billTotalLabel}>Estimated Total (per hour, if {'>'} 1 hr)</Text>
-              <Text style={styles.billTotalValue}>₹{total.toLocaleString()}</Text>
-            </View>
+            <Text style={[styles.billNote, { marginTop: 10 }]}>
+              Cancellation fee: ₹{cancellationFee.toLocaleString()} if cancelled after a worker accepts.
+            </Text>
           </View>
         ) : (
           <>

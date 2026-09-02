@@ -358,13 +358,12 @@ const updateBookingStatus = async (req, res) => {
       const { billedHours, subtotal, baseFeeApplied } = calculateHourlyCharge(
         booking.workStartTime, booking.checkOutTime, hourlyRate, combinedBaseCharge
       );
-      const platformFee = Math.round(subtotal * 0.05);
 
       booking.hoursWorked    = billedHours;
       booking.hourlyRate     = hourlyRate;
       booking.subtotal       = subtotal;
-      booking.platformFee    = platformFee;
-      booking.total          = subtotal + platformFee;
+      booking.platformFee    = 0;
+      booking.total          = subtotal;
       booking.baseFeeApplied = baseFeeApplied;
     }
 
