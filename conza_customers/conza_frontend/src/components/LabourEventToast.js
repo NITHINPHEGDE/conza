@@ -22,16 +22,20 @@ const LabourEventToast = ({ visible, title, message, variant, onPress, onDismiss
   const { icon, color } = VARIANT_STYLES[variant] || VARIANT_STYLES.manual_accepted;
 
   useEffect(() => {
-    Animated.spring(translateY, {
-      toValue: visible ? 0 : 160,
-      useNativeDriver: true,
-      friction: 8,
-    }).start();
+    if (visible) {
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        friction: 8,
+      }).start();
+    }
   }, [visible]);
+
+  if (!visible) return null;
 
   return (
     <Animated.View
-      pointerEvents={visible ? 'auto' : 'none'}
+      pointerEvents="auto"
       style={[
         styles.wrap,
         { bottom: insets.bottom + 84 + stackIndex * 90, transform: [{ translateY }] },

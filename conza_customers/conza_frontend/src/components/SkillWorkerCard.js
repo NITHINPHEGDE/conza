@@ -27,13 +27,18 @@ const SkillWorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
     isSelected && styles.checkboxSelected
   ], [isSelected]);
 
-  // Build the pricing segments once — only show Hour and Day rates.
-  // Base charge is an admin-internal minimum call-out fee, not shown to customers.
+  // Build the pricing segments — show Base Charge (from admin panel), Hour and Day rates.
   const priceSegments = useMemo(() => {
-    const segs = [{ label: 'Per Hour', value: Number(worker.pricePerDay) || 0, suffix: '/hr' }];
-    if (worker.perDayCharge) segs.push({ label: 'Per Day', value: Number(worker.perDayCharge), suffix: '/day' });
+    const segs = [];
+    if (worker.baseCharge != null && Number(worker.baseCharge) > 0) {
+      segs.push({ label: 'Base Charge', value: Number(worker.baseCharge), suffix: '' });
+    }
+    segs.push({ label: 'Per Hour', value: Number(worker.pricePerDay) || 0, suffix: '/hr' });
+    if (worker.perDayCharge != null && Number(worker.perDayCharge) > 0) {
+      segs.push({ label: 'Per Day', value: Number(worker.perDayCharge), suffix: '/day' });
+    }
     return segs;
-  }, [worker.pricePerDay, worker.perDayCharge]);
+  }, [worker.baseCharge, worker.pricePerDay, worker.perDayCharge]);
 
   return (
     <TouchableOpacity

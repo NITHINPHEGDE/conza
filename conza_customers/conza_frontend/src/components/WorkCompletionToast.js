@@ -14,16 +14,20 @@ const WorkCompletionToast = ({ visible, workerName, onPress, onDismiss }) => {
   const translateY = useRef(new Animated.Value(160)).current;
 
   useEffect(() => {
-    Animated.spring(translateY, {
-      toValue: visible ? 0 : 160,
-      useNativeDriver: true,
-      friction: 8,
-    }).start();
+    if (visible) {
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        friction: 8,
+      }).start();
+    }
   }, [visible]);
+
+  if (!visible) return null;
 
   return (
     <Animated.View
-      pointerEvents={visible ? 'auto' : 'none'}
+      pointerEvents="auto"
       style={[
         styles.wrap,
         { bottom: insets.bottom + 84, transform: [{ translateY }] },

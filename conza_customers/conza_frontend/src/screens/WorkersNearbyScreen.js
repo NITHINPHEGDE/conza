@@ -40,12 +40,16 @@ const WorkerCard = React.memo(({ worker, isSelected, onToggle }) => {
   ], [isSelected]);
 
   const priceSegments = useMemo(() => {
-    const segs = [
-      { label: 'Per Hour', value: Number(worker.pricePerDay) || 0, suffix: '/hr' },
-    ];
-    if (worker.perDayCharge) segs.push({ label: 'Per Day', value: Number(worker.perDayCharge), suffix: '/day' });
+    const segs = [];
+    if (worker.baseCharge != null && Number(worker.baseCharge) > 0) {
+      segs.push({ label: 'Base Charge', value: Number(worker.baseCharge), suffix: '' });
+    }
+    segs.push({ label: 'Per Hour', value: Number(worker.pricePerDay) || 0, suffix: '/hr' });
+    if (worker.perDayCharge != null && Number(worker.perDayCharge) > 0) {
+      segs.push({ label: 'Per Day', value: Number(worker.perDayCharge), suffix: '/day' });
+    }
     return segs;
-  }, [worker.pricePerDay, worker.perDayCharge]);
+  }, [worker.baseCharge, worker.pricePerDay, worker.perDayCharge]);
 
   return (
     <TouchableOpacity

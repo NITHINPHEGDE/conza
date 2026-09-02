@@ -89,10 +89,14 @@ const PAYMENT_METHODS = [
 
 const WorkerRow = React.memo(({ worker }) => {
   const rateSegments = useMemo(() => {
-    const segs = [{ label: 'Per Hr', value: Number(worker.pricePerDay) || 0 }];
+    const segs = [];
+    if (worker.baseCharge != null && Number(worker.baseCharge) > 0) {
+      segs.push({ label: 'Base', value: Number(worker.baseCharge) });
+    }
+    segs.push({ label: 'Per Hr', value: Number(worker.pricePerDay) || 0 });
     if (worker.perDayCharge) segs.push({ label: 'Per Day', value: Number(worker.perDayCharge) });
     return segs;
-  }, [worker.pricePerDay, worker.perDayCharge]);
+  }, [worker.baseCharge, worker.pricePerDay, worker.perDayCharge]);
 
   return (
     <View style={styles.workerRow}>
@@ -787,22 +791,69 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
                 calculated automatically based on the time actually worked, payable on completion.
               </Text>
             </View>
-            <View style={styles.billDivider} />
-            {selectedWorkers.map((worker) => (
-              <View key={worker._id} style={styles.billRow}>
-                <Text style={styles.billLabel}>{worker.name} (per hour)</Text>
-                <Text style={styles.billValue}>₹{Number(worker.pricePerDay) || 0}</Text>
+
+            <View style={styles.baseChargeInfoCard}>
+              <View style={styles.baseChargeIconWrap}>
+                <MaterialCommunityIcons name="information" size={20} color="#2563EB" />
               </View>
-            ))}
-            <View style={styles.billDivider} />
-            <View style={styles.billRow}>
-              <Text style={styles.billTotalLabel}>Combined Hourly Rate</Text>
-              <Text style={styles.billTotalValue}>₹{hourlyRateTotal.toLocaleString()}/hr</Text>
+              <Text style={styles.baseChargeInfoTitle}>Base Charge & Hourly Billing Policy</Text>
+              <Text style={styles.baseChargeInfoText}>
+                For any work lasting <Text style={styles.boldText}>less than 1 hour</Text>, the fixed <Text style={styles.boldText}>Base Charge</Text> will be applied as the minimum fee. If the job extends beyond 1 hour, billing will be calculated according to the <Text style={styles.boldText}>hourly rate</Text> for the time actually worked.
+              </Text>
+            </View>
+            {/* ── Tier 1: Under 1 hour → Base Charge ─────────────────────── */}
+            <View style={styles.billingTierCard}>
+              <View style={styles.billingTierHeader}>
+                <View style={styles.billingTierBadge}>
+                  <Text style={styles.billingTierBadgeText}>Under 1 Hour</Text>
+                </View>
+                <Text style={styles.billingTierHint}>minimum call-out fee applies</Text>
+              </View>
+
+              {selectedWorkers.map((worker) => {
+                const bc = Number(worker.baseCharge) || 0;
+                return (
+                  <View key={worker._id + '_base'} style={styles.billRow}>
+                    <Text style={styles.billLabel}>{worker.name} — Base Charge</Text>
+                    <Text style={styles.billValue}>{bc > 0 ? `₹${bc}` : 'N/A'}</Text>
+                  </View>
+                );
+              })}
+
+              <View style={styles.billDivider} />
+              <View style={styles.billRow}>
+                <Text style={styles.billTotalLabel}>Minimum Charge (if {'<'} 1 hr)</Text>
+                <Text style={[styles.billTotalValue, { color: '#2563EB' }]}>
+                  ₹{selectedWorkers.reduce((s, w) => s + (Number(w.baseCharge) || 0), 0).toLocaleString()}
+                </Text>
+              </View>
+            </View>
+
+            {/* ── Tier 2: Over 1 hour → Hourly Rate ──────────────────────── */}
+            <View style={[styles.billingTierCard, { marginTop: 8 }]}>
+              <View style={styles.billingTierHeader}>
+                <View style={[styles.billingTierBadge, { backgroundColor: 'rgba(245,200,66,0.18)', borderColor: '#F5C842' }]}>
+                  <Text style={[styles.billingTierBadgeText, { color: '#92620A' }]}>Over 1 Hour</Text>
+                </View>
+                <Text style={styles.billingTierHint}>hourly rate × time worked</Text>
+              </View>
+
+              {selectedWorkers.map((worker) => (
+                <View key={worker._id + '_hr'} style={styles.billRow}>
+                  <Text style={styles.billLabel}>{worker.name} — Per Hour</Text>
+                  <Text style={styles.billValue}>₹{Number(worker.pricePerDay) || 0}/hr</Text>
+                </View>
+              ))}
+
+              <View style={styles.billDivider} />
+              <View style={styles.billRow}>
+                <Text style={styles.billTotalLabel}>Combined Hourly Rate</Text>
+                <Text style={styles.billTotalValue}>₹{hourlyRateTotal.toLocaleString()}/hr</Text>
+              </View>
             </View>
 
             <View style={styles.billDivider} />
-
-            <Text style={styles.appliedPricingHeader}>Applied at final billing (from Conza pricing)</Text>
+            <Text style={styles.appliedPricingHeader}>Additional charges applied at final billing</Text>
             <View style={styles.billRow}>
               <Text style={styles.billLabel}>Surge (Peak Hour Multiplier)</Text>
               <Text style={[styles.billValue, { color: '#F59E0B', fontWeight: '700' }]}>
@@ -825,7 +876,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
 
             <View style={styles.billDivider} />
             <View style={styles.billRow}>
-              <Text style={styles.billTotalLabel}>Estimated Total (per hour)</Text>
+              <Text style={styles.billTotalLabel}>Estimated Total (per hour, if {'>'} 1 hr)</Text>
               <Text style={styles.billTotalValue}>₹{total.toLocaleString()}</Text>
             </View>
           </View>
@@ -1324,11 +1375,81 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.accentYellow,
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 10,
   },
   immediateInfoEmoji: { fontSize: 28, marginBottom: 8 },
   immediateInfoTitle: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, marginBottom: 6, textAlign: 'center' },
   immediateInfoText: { fontSize: 12, color: colors.textSecondary, lineHeight: 18, textAlign: 'center', fontWeight: '500' },
+  baseChargeInfoCard: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  baseChargeIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  baseChargeInfoTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1E3A8A',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  baseChargeInfoText: {
+    fontSize: 12,
+    color: '#1E40AF',
+    lineHeight: 18,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  boldText: {
+    fontWeight: '700',
+    color: '#1E3A8A',
+  },
+  billingTierCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FAFBFF',
+    padding: 12,
+    marginTop: 4,
+  },
+  billingTierHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  billingTierBadge: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  billingTierBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1D4ED8',
+    letterSpacing: 0.2,
+  },
+  billingTierHint: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+    fontStyle: 'italic',
+  },
   webPickerContainer: {
     backgroundColor: colors.surfaceElevated,
     padding: 16,

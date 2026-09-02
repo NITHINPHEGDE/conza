@@ -193,6 +193,41 @@ const AwaitingConfirmationModal = React.memo(({ visible }) => (
   </Modal>
 ));
 
+// ── CancelConfirmationModal ────────────────────────────────────────────────
+const CancelConfirmationModal = React.memo(({ visible, onConfirm, onCancel, loading }) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalCard}>
+        <Text style={styles.modalEmoji}>⚠️</Text>
+        <Text style={styles.modalTitle}>Cancel Job</Text>
+        <Text style={styles.modalSub}>
+          Are you sure you want to cancel this job? This may affect your rating.
+        </Text>
+
+        <TouchableOpacity
+          onPress={onConfirm}
+          disabled={loading}
+          activeOpacity={0.85}
+          style={[styles.fullWidth, styles.cancelConfirmBtn]}
+        >
+          <Text style={styles.cancelConfirmBtnText}>
+            {loading ? 'Cancelling...' : 'Yes, Cancel Job'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={onCancel}
+          disabled={loading}
+          activeOpacity={0.7}
+          style={styles.cancelDismissBtn}
+        >
+          <Text style={styles.cancelDismissBtnText}>Keep Job</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+));
+
 // ── No-job placeholder ────────────────────────────────────────────────────────
 const NoJobView = () => (
   <View style={[styles.screen, styles.noJobState]}>
@@ -211,6 +246,9 @@ const ActiveJobScreen = ({ navigation }) => {
   const completeJob    = usePartnerStore(selectCompleteJob);
   const resetActiveJob = usePartnerStore(selectResetActiveJob);
 
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [cancelling, setCancelling]                 = useState(false);
+
   const stepStatuses = useMemo(() => {
     const order = ['pending', 'accepted', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed'];
     const currentIdx = order.indexOf(jobStatus);
@@ -227,7 +265,7 @@ const ActiveJobScreen = ({ navigation }) => {
       
       if (i === 0) return currentIdx >= 2 ? 'done' : currentIdx === 1 ? 'active' : 'pending';
       if (i === 1) return currentIdx >= 3 ? 'done' : currentIdx === 2 ? 'active' : 'pending';
-      if (i === 2) return currentIdx >= 5 ? 'done' : currentIdx >= 3 ? 'active' : 'pending';
+      if (i === 2) return currentIdx >= 5 ? 'done' : currentIdx === 3 ? 'active' : 'pending';
       return 'pending';
     });
   }, [jobStatus]);
@@ -290,23 +328,25 @@ const ActiveJobScreen = ({ navigation }) => {
 
   const handleBack = useCallback(() => navigation.goBack(), [navigation]);
 
-  const handleCancelJob = useCallback(() => {
-    Alert.alert(
-      'Cancel Job',
-      'Are you sure you want to cancel this job? This may affect your rating.',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            await usePartnerStore.getState().updateRequestStatus(activeJob.id, 'cancelled');
-            navigation.navigate('Tabs', { screen: 'Home' });
-          },
-        },
-      ]
-    );
-  }, [activeJob, navigation]);
+  const handleCancelPress = useCallback(() => {
+    setCancelModalVisible(true);
+  }, []);
+
+  const handleConfirmCancel = useCallback(async () => {
+    if (!activeJob) return;
+    try {
+      setCancelling(true);
+      const jobId = activeJob.id || activeJob._id;
+      await usePartnerStore.getState().updateRequestStatus(jobId, 'cancelled');
+      resetActiveJob();
+      setCancelModalVisible(false);
+      navigation.navigate('Tabs', { screen: 'Home' });
+    } catch (err) {
+      console.error('Cancel job failed:', err);
+    } finally {
+      setCancelling(false);
+    }
+  }, [activeJob, resetActiveJob, navigation]);
 
   const containerStyle = useMemo(
     () => [styles.screen, { paddingTop: insets.top }],
@@ -379,7 +419,7 @@ const ActiveJobScreen = ({ navigation }) => {
         />
 
         {(!['awaiting_customer_confirmation', 'completed'].includes(jobStatus)) && (
-          <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelJob}>
+          <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelPress} activeOpacity={0.7}>
             <Text style={styles.cancelBtnText}>Cancel Job</Text>
           </TouchableOpacity>
         )}
@@ -394,6 +434,13 @@ const ActiveJobScreen = ({ navigation }) => {
       
       <AwaitingConfirmationModal 
         visible={jobStatus === 'awaiting_customer_confirmation'} 
+      />
+
+      <CancelConfirmationModal
+        visible={cancelModalVisible}
+        onConfirm={handleConfirmCancel}
+        onCancel={() => setCancelModalVisible(false)}
+        loading={cancelling}
       />
     </View>
   );
@@ -433,11 +480,11 @@ const styles = StyleSheet.create({
   workflowTitle:    { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginHorizontal: 20, marginBottom: 16, letterSpacing: 0.2 },
   fullWidth:        { width: '100%' },
   modalOverlay:     { flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center' },
-  modalCard:        { width: '80%', backgroundColor: colors.surface, borderRadius: 24, padding: 32, alignItems: 'center', gap: 4 },
+  modalCard:        { width: '85%', maxWidth: 360, backgroundColor: colors.surface, borderRadius: 24, padding: 28, alignItems: 'center', gap: 4 },
   modalEmoji:       { fontSize: 52, marginBottom: 12 },
-  modalTitle:       { fontSize: 22, fontWeight: '800', color: colors.textPrimary },
+  modalTitle:       { fontSize: 20, fontWeight: '800', color: colors.textPrimary },
   modalAmount:      { fontSize: 36, fontWeight: '900', color: colors.statusGreen },
-  modalSub:         { fontSize: 13, color: colors.textMuted, marginBottom: 20, fontWeight: '500', textAlign: 'center' },
+  modalSub:         { fontSize: 13, color: colors.textMuted, marginBottom: 20, fontWeight: '500', textAlign: 'center', lineHeight: 18 },
   modalBtn:         { borderRadius: 14, paddingHorizontal: 40, paddingVertical: 14, alignItems: 'center' },
   modalBtnText:     { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
   qrBtn:            { width: '100%', marginTop: 10, paddingVertical: 14, borderRadius: 14, alignItems: 'center', borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surfaceElevated },
@@ -457,6 +504,10 @@ const styles = StyleSheet.create({
   backLinkText:     { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
   cancelBtn:        { marginTop: 20, padding: 15, alignItems: 'center' },
   cancelBtnText:    { color: colors.danger, fontWeight: '700', fontSize: 14 },
+  cancelConfirmBtn: { backgroundColor: colors.danger, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
+  cancelConfirmBtnText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+  cancelDismissBtn: { paddingVertical: 12, alignItems: 'center', marginTop: 6 },
+  cancelDismissBtnText: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
 });
 
 export default ActiveJobScreen;
