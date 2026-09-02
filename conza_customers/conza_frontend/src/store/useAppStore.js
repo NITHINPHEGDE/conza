@@ -811,6 +811,20 @@ const useAppStore = create((set, get) => ({
   dismissLabourPopup: (id) =>
     set((s) => ({ labourPopupQueue: s.labourPopupQueue.filter((p) => p.id !== id) })),
 
+  // ── Material/Rental seller-order accepted/dispatched/rejected popups ──
+  // Same queued, stays-until-closed pattern as labourPopupQueue above,
+  // driven by the 'seller_order_status_changed' socket event below.
+  orderPopupQueue: [],
+  pushOrderPopup: (popup) =>
+    set((s) => ({
+      orderPopupQueue: [
+        ...s.orderPopupQueue,
+        { id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, ...popup },
+      ],
+    })),
+  dismissOrderPopup: (id) =>
+    set((s) => ({ orderPopupQueue: s.orderPopupQueue.filter((p) => p.id !== id) })),
+
   // ── Cart ────────────────────────────────────────────────────────────────────
   cart: {},
 
@@ -902,6 +916,7 @@ const useAppStore = create((set, get) => ({
     socket.off('manual_labour_accepted');
     socket.off('manual_labour_cancelled');
     socket.off('autobook_no_acceptance');
+    socket.off('seller_order_status_changed');
     socket.off('connect');
 
     socket.on('worker_availability_changed', (data) => {
@@ -1238,7 +1253,17 @@ const useAppStore = create((set, get) => ({
       get().fetchMyProjects();
     });
 
-    socket.on('seller_order_status_changed', ({ orderId, status }) => {
+    // Material/rental seller-order status changes — silently syncs the
+    // sellerOrders list, and for accepted / dispatched / rejected
+    // transitions also raises a global popup (mirrors the labour
+    // accept/cancel popups above).
+    const ORDER_POPUP_INFO = {
+      accepted:         { type: 'order_accepted',   title: 'Order Accepted' },
+      out_for_delivery: { type: 'order_dispatched', title: 'Order Dispatched' },
+      cancelled:        { type: 'order_rejected',   title: 'Order Rejected' },
+    };
+
+    socket.on('seller_order_status_changed', ({ orderId, status, orderType, itemsSummary }) => {
       set((s) => ({
         sellerOrders: s.sellerOrders.map((o) =>
           o._id === orderId || o._id?.toString() === orderId
@@ -1247,6 +1272,23 @@ const useAppStore = create((set, get) => ({
         ),
       }));
       get().fetchMyProjects();
+
+      const info = ORDER_POPUP_INFO[status];
+      if (info) {
+        const typeLabel = orderType === 'rental' ? 'rental' : 'material';
+        const itemLabel = itemsSummary || `your ${typeLabel} order`;
+        const MESSAGES = {
+          accepted:         `Your ${typeLabel} order (${itemLabel}) has been accepted by the seller. Tap to view.`,
+          out_for_delivery: `Your ${typeLabel} order (${itemLabel}) is out for delivery. Tap to track.`,
+          cancelled:        `Your ${typeLabel} order (${itemLabel}) was rejected by the seller. Tap to view.`,
+        };
+        get().pushOrderPopup({
+          type: info.type,
+          orderId,
+          title: info.title,
+          message: MESSAGES[status],
+        });
+      }
     });
 
     socket.on('connect', () => {

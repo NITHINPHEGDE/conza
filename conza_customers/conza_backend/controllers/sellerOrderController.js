@@ -190,8 +190,21 @@ const updateOrderStatus = async (req, res) => {
     invalidateCache(`dashboard:seller:${req.seller._id}`).catch(() => {});
 
     const io = getIO();
+    const itemsSummary =
+      order.items && order.items.length
+        ? order.items.length === 1
+          ? order.items[0].title
+          : `${order.items[0].title} +${order.items.length - 1} more`
+        : '';
+
     io.to(`seller_${req.seller._id}`).emit('order_status_updated', { orderId: order._id, status });
-    io.to(`customer_${order.customer}`).emit('seller_order_status_changed', { orderId: order._id, status });
+    io.to(`customer_${order.customer}`).emit('seller_order_status_changed', {
+      orderId: order._id,
+      status,
+      orderType: order.orderType,
+      itemsSummary,
+      total: order.total,
+    });
 
     res.json({ success: true, order });
   } catch (err) {

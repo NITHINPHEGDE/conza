@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -40,7 +40,24 @@ const CartScreen = () => {
     [rentalCart]
   );
 
-  const grandTotal = materialTotal + rentalTotal;
+  const hasMaterials = materialItems.length > 0;
+  const hasRentals   = rentalCart.length > 0;
+  const showTabs      = hasMaterials && hasRentals;
+
+  // Which section is on screen. Only relevant (and only rendered as a
+  // switchable tab bar) when BOTH materials and rentals have items —
+  // if only one of them has items, that one is shown with no tab bar.
+  const [activeTab, setActiveTab] = useState(hasMaterials ? 'materials' : 'rentals');
+
+  // Keep the active tab valid as cart contents change — e.g. the last
+  // rental item gets removed while the Rentals tab is open.
+  useEffect(() => {
+    if (activeTab === 'materials' && !hasMaterials && hasRentals) setActiveTab('rentals');
+    if (activeTab === 'rentals' && !hasRentals && hasMaterials) setActiveTab('materials');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMaterials, hasRentals]);
+
+  const activeSection = showTabs ? activeTab : hasMaterials ? 'materials' : 'rentals';
 
   const handleMaterialCheckout = useCallback(() => {
     navigation.navigate('Booking', {
@@ -58,6 +75,11 @@ const CartScreen = () => {
       params: { item: rentalCart[0], quantity: 1 },
     });
   }, [navigation, rentalCart]);
+
+  const handleCheckoutPress = useCallback(() => {
+    if (activeSection === 'materials') handleMaterialCheckout();
+    else handleRentalCheckout();
+  }, [activeSection, handleMaterialCheckout, handleRentalCheckout]);
 
   const renderMaterialItem = useCallback(({ item }) => (
     <View style={styles.cartItem}>
@@ -97,7 +119,7 @@ const CartScreen = () => {
     </View>
   ), [removeFromRentalCart]);
 
-  const isEmpty = materialItems.length === 0 && rentalCart.length === 0;
+  const isEmpty = !hasMaterials && !hasRentals;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -114,67 +136,70 @@ const CartScreen = () => {
         </View>
       ) : (
         <>
-          <FlatList
-            data={[]}
-            ListHeaderComponent={
-              <View>
-                {materialItems.length > 0 && (
-                  <View>
-                    <Text style={styles.sectionTitle}>🧱 Materials</Text>
-                    {materialItems.map((item) => (
-                      <View key={item.id}>{renderMaterialItem({ item })}</View>
-                    ))}
-                    <View style={styles.sectionSummary}>
-                      <Text style={styles.sectionTotal}>Subtotal: ₹{materialTotal.toLocaleString('en-IN')}</Text>
-                      <LinearGradient
-                        colors={[colors.gradientStart, colors.gradientEnd]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.checkoutBtn}
-                      >
-                        <TouchableOpacity
-                          style={styles.checkoutBtnTouch}
-                          onPress={handleMaterialCheckout}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={styles.checkoutBtnText}>Proceed to Checkout →</Text>
-                        </TouchableOpacity>
-                      </LinearGradient>
-                    </View>
-                  </View>
-                )}
+          {showTabs && (
+            <View style={styles.tabBar}>
+              <TouchableOpacity
+                style={[styles.tabBtn, activeTab === 'materials' && styles.tabBtnActive]}
+                onPress={() => setActiveTab('materials')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tabBtnText, activeTab === 'materials' && styles.tabBtnTextActive]}>
+                  🧱 Materials ({materialItems.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabBtn, activeTab === 'rentals' && styles.tabBtnActive]}
+                onPress={() => setActiveTab('rentals')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tabBtnText, activeTab === 'rentals' && styles.tabBtnTextActive]}>
+                  🏗️ Rentals ({rentalCart.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-                {rentalCart.length > 0 && (
-                  <View style={{ marginTop: 16 }}>
-                    <Text style={styles.sectionTitle}>🏗️ Rentals</Text>
-                    {rentalCart.map((item) => (
-                      <View key={item.id}>{renderRentalItem({ item })}</View>
-                    ))}
-                    <View style={styles.sectionSummary}>
-                      <Text style={styles.sectionTotal}>Est. ₹{rentalTotal.toLocaleString('en-IN')}/day</Text>
-                      <LinearGradient
-                        colors={[colors.gradientStart, colors.gradientEnd]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.checkoutBtn}
-                      >
-                        <TouchableOpacity
-                          style={styles.checkoutBtnTouch}
-                          onPress={handleRentalCheckout}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={styles.checkoutBtnText}>Proceed to Checkout →</Text>
-                        </TouchableOpacity>
-                      </LinearGradient>
-                    </View>
-                  </View>
-                )}
-              </View>
-            }
-            renderItem={null}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
+          {activeSection === 'materials' ? (
+            <FlatList
+              data={materialItems}
+              keyExtractor={(item) => item.id}
+              renderItem={renderMaterialItem}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+            />
+          ) : (
+            <FlatList
+              data={rentalCart}
+              keyExtractor={(item) => item.id}
+              renderItem={renderRentalItem}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
+
+          {/* Proceed to Checkout — static at the bottom of the cart page,
+              always acting on whichever section is currently active. */}
+          <View style={styles.checkoutBar}>
+            <Text style={styles.checkoutBarTotal}>
+              {activeSection === 'materials'
+                ? `Subtotal: ₹${materialTotal.toLocaleString('en-IN')}`
+                : `Est. ₹${rentalTotal.toLocaleString('en-IN')}/day`}
+            </Text>
+            <LinearGradient
+              colors={[colors.gradientStart, colors.gradientEnd]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.checkoutBtn}
+            >
+              <TouchableOpacity
+                style={styles.checkoutBtnTouch}
+                onPress={handleCheckoutPress}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.checkoutBtnText}>Proceed to Checkout →</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
         </>
       )}
     </SafeAreaView>
@@ -191,8 +216,33 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderLight,
   },
   headerTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary },
-  listContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, marginBottom: 12 },
+  tabBar: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 2,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 14,
+    padding: 4,
+    gap: 4,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 11,
+    alignItems: 'center',
+  },
+  tabBtnActive: {
+    backgroundColor: colors.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  tabBtnText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  tabBtnTextActive: { color: colors.textPrimary },
+  listContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 110 },
   cartItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -237,10 +287,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   removeBtnText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
-  sectionSummary: { marginTop: 8, gap: 10 },
-  sectionTotal: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
+  checkoutBar: {
+    position: 'absolute',
+    bottom: 0, left: 0, right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    shadowColor: colors.cardShadow,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  checkoutBarTotal: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
   checkoutBtn: { borderRadius: 14, overflow: 'hidden' },
-  checkoutBtnTouch: { paddingVertical: 14, alignItems: 'center' },
+  checkoutBtnTouch: { paddingHorizontal: 22, paddingVertical: 13, alignItems: 'center' },
   checkoutBtnText: { fontSize: 14, fontWeight: '800', color: '#111', letterSpacing: 0.3 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyEmoji: { fontSize: 52, marginBottom: 14 },

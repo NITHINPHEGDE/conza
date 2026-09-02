@@ -13,6 +13,7 @@ import useAppStore from './src/store/useAppStore';
 import BookingTrackingScreen from './src/screens/BookingTrackingScreen';
 import WorkCompletionToast from './src/components/WorkCompletionToast';
 import LabourEventToast from './src/components/LabourEventToast';
+import OrderEventToast from './src/components/OrderEventToast';
 
 const Stack = createNativeStackNavigator();
 export const navigationRef = createNavigationContainerRef();
@@ -28,6 +29,8 @@ export default function App() {
   const setActiveBookingId = useAppStore((s) => s.setActiveBookingId);
   const labourPopupQueue = useAppStore((s) => s.labourPopupQueue);
   const dismissLabourPopup = useAppStore((s) => s.dismissLabourPopup);
+  const orderPopupQueue = useAppStore((s) => s.orderPopupQueue);
+  const dismissOrderPopup = useAppStore((s) => s.dismissOrderPopup);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -82,6 +85,35 @@ export default function App() {
     if (currentLabourPopup) dismissLabourPopup(currentLabourPopup.id);
   }, [currentLabourPopup]);
 
+  // Material/rental seller-order accepted/dispatched/rejected popups —
+  // same global, stays-until-closed pattern as the labour popups above.
+  // Tapping jumps to Status tab → that order's detail screen.
+  const currentOrderPopup = orderPopupQueue[0] || null;
+
+  const handleOrderPopupPress = useCallback(() => {
+    if (!currentOrderPopup) return;
+    if (navigationRef.isReady()) {
+      navigationRef.navigate('Main', {
+        screen: 'Status',
+        params: { screen: 'OrderDetail', params: { orderId: currentOrderPopup.orderId } },
+      });
+    }
+    dismissOrderPopup(currentOrderPopup.id);
+  }, [currentOrderPopup]);
+
+  const handleOrderPopupDismiss = useCallback(() => {
+    if (currentOrderPopup) dismissOrderPopup(currentOrderPopup.id);
+  }, [currentOrderPopup]);
+
+  // Up to three global bottom banners can be visible at once (work
+  // completion, labour accept/cancel, order accept/dispatch/reject).
+  // WorkCompletionToast always sits at the base position; each other
+  // visible banner stacks 90px higher per banner already below it, in
+  // this fixed priority order.
+  const labourStackIndex = pendingWorkerCompletion ? 1 : 0;
+  const orderStackIndex =
+    (pendingWorkerCompletion ? 1 : 0) + (currentLabourPopup ? 1 : 0);
+
   if (!initialized && userProfile === null) {
     return (
       <SafeAreaProvider>
@@ -130,7 +162,16 @@ export default function App() {
         variant={currentLabourPopup?.type}
         onPress={handleLabourPopupPress}
         onDismiss={handleLabourPopupDismiss}
-        stacked={!!pendingWorkerCompletion}
+        stackIndex={labourStackIndex}
+      />
+      <OrderEventToast
+        visible={!!currentOrderPopup}
+        title={currentOrderPopup?.title}
+        message={currentOrderPopup?.message}
+        variant={currentOrderPopup?.type}
+        onPress={handleOrderPopupPress}
+        onDismiss={handleOrderPopupDismiss}
+        stackIndex={orderStackIndex}
       />
     </SafeAreaProvider>
   );

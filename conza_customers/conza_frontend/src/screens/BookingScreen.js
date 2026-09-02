@@ -8,7 +8,7 @@ import {
   StyleSheet,
   StatusBar,
   Image,
-  Modal,
+  ScrollView,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -353,15 +353,17 @@ const MaterialView = React.memo(() => {
         </View>
       </View>
 
-      {/* Categories — always visible, scrolls with the page like the
-          reference design. Tapping a tile filters the grid below;
+      {/* Categories — always visible, horizontally scrollable banners
+          across two rows. Tapping a tile filters the grid below;
           tapping the active tile again clears the filter. */}
       <SectionHeader title="Categories" />
-      <View style={styles.categoryGrid}>
-        {materialCategories
-          .filter((cat) => cat.id !== 'all')
-          .map((cat) => renderCategoryTile(cat))}
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={styles.categoryGridTwoRow}>
+          {materialCategories
+            .filter((cat) => cat.id !== 'all')
+            .map((cat) => renderCategoryTile(cat))}
+        </View>
+      </ScrollView>
 
       {selectedCat !== 'all' && (
         <View style={styles.activeCatRow}>
@@ -479,23 +481,23 @@ const RentalView = React.memo(() => {
 
   const [query,       setQuery]       = useState('');
   const [selectedCat, setSelectedCat] = useState('all');
-  const [showFilter,  setShowFilter]  = useState(false);
 
   const filtered  = useMemo(() => filterRentalItems(selectedCat, query), [rentalItems, filterRentalItems, selectedCat, query]);
   const activeCat = useMemo(() => rentalCategories.find((c) => c.id === selectedCat), [rentalCategories, selectedCat]);
 
   const handleClearQuery = useCallback(() => setQuery(''), []);
-  const handleOpenFilter = useCallback(() => setShowFilter(true), []);
-  const handleCloseFilter = useCallback(() => setShowFilter(false), []);
   const handleClearCat = useCallback(() => setSelectedCat('all'), []);
 
   const handleRentalPress = useCallback((item) => {
     navigation.navigate('RentalDetail', { item });
   }, [navigation]);
 
+  // Selecting a category tile no longer opens/closes a modal — categories
+  // stay permanently visible above the equipment grid, exactly like
+  // MaterialView. Tapping a tile filters the grid below; tapping the
+  // active tile again clears the filter.
   const handleSelectCat = useCallback((id) => {
-    setSelectedCat(id);
-    setShowFilter(false);
+    setSelectedCat((prev) => (prev === id ? 'all' : id));
   }, []);
 
   const renderItem = useCallback(({ item }) => (
@@ -508,45 +510,42 @@ const RentalView = React.memo(() => {
     </View>
   ), [handleRentalPress, handleAddToCart]);
 
-  const renderCatItem = useCallback(({ item: cat }) => (
-    <TouchableOpacity
-      key={cat.id}
-      style={[styles.catCard, selectedCat === cat.id && styles.catCardSelected]}
-      onPress={() => handleSelectCat(cat.id)}
-      activeOpacity={0.75}
-    >
-      {cat.image ? (
-        <Image source={{ uri: cat.image }} style={styles.catImage} />
-      ) : (
-        <Text style={styles.catEmoji}>{cat.emoji}</Text>
-      )}
-      <Text style={[styles.catLabel, selectedCat === cat.id && styles.catLabelSelected]}>
-        {cat.label}
-      </Text>
-      {selectedCat === cat.id && <View style={styles.catSelectedDot} />}
-    </TouchableOpacity>
-  ), [selectedCat, handleSelectCat]);
+  // Always-visible category grid tile (replaces the old Filter-modal chip).
+  const renderCategoryTile = useCallback((cat) => {
+    const isSelected = selectedCat === cat.id;
+    return (
+      <TouchableOpacity
+        key={cat.id}
+        style={styles.categoryTile}
+        onPress={() => handleSelectCat(cat.id)}
+        activeOpacity={0.75}
+      >
+        <View style={[styles.categoryTileImageWrap, isSelected && styles.categoryTileImageWrapSelected]}>
+          {cat.image ? (
+            <Image source={{ uri: cat.image }} style={styles.categoryTileImage} />
+          ) : (
+            <Text style={styles.categoryTileEmoji}>{cat.emoji}</Text>
+          )}
+        </View>
+        <Text
+          style={[styles.categoryTileLabel, isSelected && styles.categoryTileLabelSelected]}
+          numberOfLines={2}
+        >
+          {cat.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [selectedCat, handleSelectCat]);
 
-  const listEmpty = useMemo(() => (
-    <EmptyState
-      emoji="🏗️"
-      title="No equipment found"
-      subtitle="Try a different filter or search term"
-    />
-  ), []);
-
-  if (rentalLoading) return <RentalGridSkeleton />;
-  if (rentalError)   return <ErrorState message={rentalError} onRetry={fetchRental} />;
-
-  return (
-    <View style={{ flex: 1 }}>
-      <View style={styles.rentalTopBar}>
-        <View style={styles.rentalSearchBar}>
+  const listHeader = useMemo(() => (
+    <View>
+      <View style={[styles.materialSearchRow, { marginTop: 4 }]}>
+        <View style={[styles.materialSearchWrapper, { flex: 1, marginHorizontal: 0 }]}>
           <View style={styles.searchIconBadge}>
             <MaterialCommunityIcons name="magnify" size={16} color={colors.accentAmber} />
           </View>
           <TextInput
-            style={styles.rentalSearchInput}
+            style={styles.materialSearchInput}
             placeholder="Search equipment..."
             placeholderTextColor={colors.textMuted}
             value={query}
@@ -558,19 +557,19 @@ const RentalView = React.memo(() => {
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity
-          style={[styles.filterBtn, selectedCat !== 'all' && styles.filterBtnActive]}
-          onPress={handleOpenFilter}
-          activeOpacity={0.8}
-        >
-          <View style={styles.filterIconBadge}>
-            <MaterialCommunityIcons name="tune-variant" size={13} color="#16A34A" />
-          </View>
-          <Text style={[styles.filterBtnText, selectedCat !== 'all' && styles.filterBtnTextActive]}>
-            {selectedCat !== 'all' ? activeCat?.label : 'Filter'}
-          </Text>
-        </TouchableOpacity>
       </View>
+
+      {/* Categories — always visible, horizontally scrollable banners
+          in a single row. Tapping a tile filters the grid below;
+          tapping the active tile again clears the filter. */}
+      <SectionHeader title="Categories" />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={styles.categoryGridOneRow}>
+          {rentalCategories
+            .filter((cat) => cat.id !== 'all')
+            .map((cat) => renderCategoryTile(cat))}
+        </View>
+      </ScrollView>
 
       {selectedCat !== 'all' && (
         <View style={styles.activeCatRow}>
@@ -586,6 +585,23 @@ const RentalView = React.memo(() => {
         </View>
       )}
 
+      <SectionHeader title={selectedCat !== 'all' ? activeCat?.label || 'Equipment' : 'All Equipment'} />
+    </View>
+  ), [query, handleClearQuery, selectedCat, activeCat, rentalCategories, renderCategoryTile, handleClearCat]);
+
+  const listEmpty = useMemo(() => (
+    <EmptyState
+      emoji="🏗️"
+      title="No equipment found"
+      subtitle="Try a different filter or search term"
+    />
+  ), []);
+
+  if (rentalLoading) return <RentalGridSkeleton />;
+  if (rentalError)   return <ErrorState message={rentalError} onRetry={fetchRental} />;
+
+  return (
+    <View style={{ flex: 1 }}>
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
@@ -593,6 +609,7 @@ const RentalView = React.memo(() => {
         columnWrapperStyle={styles.rentalGridRow}
         contentContainerStyle={[styles.rentalGridList, rentalCartCount > 0 && { paddingBottom: 100 }]}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={listHeader}
         ListEmptyComponent={listEmpty}
         renderItem={renderItem}
         initialNumToRender={10}
@@ -631,45 +648,6 @@ const RentalView = React.memo(() => {
           </LinearGradient>
         </View>
       )}
-
-      {/* Filter Modal */}
-      <Modal
-        visible={showFilter}
-        transparent
-        animationType="slide"
-        onRequestClose={handleCloseFilter}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={handleCloseFilter}
-        >
-          <TouchableOpacity style={styles.modalSheet} activeOpacity={1}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Filter by Category</Text>
-            <Text style={styles.modalSub}>Select a category to filter equipment</Text>
-            
-            <FlatList
-              data={rentalCategories}
-              keyExtractor={(item) => item.id}
-              renderItem={renderCatItem}
-              numColumns={3}
-              columnWrapperStyle={{ gap: 12, marginBottom: 12 }}
-              contentContainerStyle={{ paddingVertical: 10 }}
-              scrollEnabled={false}
-              extraData={selectedCat}
-            />
-
-            <TouchableOpacity
-              onPress={handleCloseFilter}
-              style={styles.modalCancel}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.modalCancelText}>Close</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
     </View>
   );
 });
@@ -1144,17 +1122,24 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentAmber,
   },
 
-  // Always-visible category grid (Order Material section)
-  categoryGrid: {
-    flexDirection: 'row',
+  // Always-visible category banners — horizontally scrollable
+  categoryGridTwoRow: {
+    flexDirection: 'column',
     flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-    paddingHorizontal: 12,
-    marginBottom: 8,
+    height: 188,
     rowGap: 14,
-    columnGap: 6,
+    columnGap: 14,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
   },
-  categoryTile: { width: '18%', alignItems: 'center' },
+  categoryGridOneRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    columnGap: 14,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  categoryTile: { width: 76, alignItems: 'center' },
   categoryTileImageWrap: {
     width: 54,
     height: 54,
