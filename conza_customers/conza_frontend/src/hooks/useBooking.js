@@ -8,6 +8,7 @@ export const useBooking = (type) => {
   const [success, setSuccess] = useState(false);
 
   const clearCart          = useAppStore((s) => s.clearCart);
+  const clearRentalCart    = useAppStore((s) => s.clearRentalCart);
   const userLat            = useAppStore((s) => s.userLat);
   const userLng            = useAppStore((s) => s.userLng);
   const userProfile        = useAppStore((s) => s.userProfile);
@@ -216,48 +217,88 @@ export const useBooking = (type) => {
 
       // ── Rental order → seller order API ─────────────────────────────────
       if (type === 'rental') {
-        const { item, quantity, subtotal, platformFee, total } = bookingData;
-        const sellerId = item?.sellerId;
-        if (!sellerId) throw new Error('No seller information on rental item');
+        // Support two call patterns:
+        //   Cart flow:          { items: [...], quantity: 1, ... }
+        //   Detail-screen flow: { item: {...},  quantity: N, ... }
+        const { items: rentalItemsParam, item, quantity } = bookingData;
 
-        const rentalSubtotal = Number(item.pricePerDay) * (Number(quantity) || 1);
-        const rentalTotal    = Math.round(rentalSubtotal * 1.05) + 149;
+        // Normalise to an array so the rest of the logic is uniform.
+        const rentalItems = rentalItemsParam && rentalItemsParam.length
+          ? rentalItemsParam
+          : (item ? [{ ...item, _qty: Number(quantity) || 1 }] : []);
 
-        const payload = {
-          sellerId,
-          orderType:    'rental',
-          items: [{
-            productId: item.id,
-            qty:       Number(quantity) || 1,
-            days:      null,
-            subtotal:  rentalSubtotal,
-          }],
-          customerAddress: `${houseNumber || ''} ${houseName || ''} ${street || ''}`.trim(),
-          city,
-          pincode,
-          latitude:       latitude  || userLat,
-          longitude:      longitude || userLng,
-          subtotal:       rentalSubtotal,
-          deliveryCharge: 149,
-          total:          rentalTotal,
-          depositAmount:  item.deposit || 0,
-          paymentMethod:  paymentMethod || 'cod',
-          notes:          description   || '',
-        };
+        if (!rentalItems.length) throw new Error('No rental items to order');
 
-        const result = await bookingAPI.placeSellerOrder(payload);
-        if (result.success) {
-          addSellerOrder(result.order);
-        }
-        setSuccess(true);
-        return result.success
-          ? {
+        // Group by sellerId — one SellerOrder per seller (matches material flow)
+        const bySellerMap = {};
+        rentalItems.forEach((it) => {
+          const sid = it.sellerId;
+          if (!sid) return;
+          if (!bySellerMap[sid]) bySellerMap[sid] = [];
+          bySellerMap[sid].push(it);
+        });
+
+        const sellerIds = Object.keys(bySellerMap);
+        if (!sellerIds.length) throw new Error('No seller information on rental items');
+
+        const createdOrders = [];
+        for (const sellerId of sellerIds) {
+          const sellerItems = bySellerMap[sellerId];
+
+          // For the single-item path `_qty` carries the quantity field;
+          // for the multi-item cart path each item qty = 1.
+          const sellerSubtotal = sellerItems.reduce((sum, it) => {
+            const qty = it._qty !== undefined ? it._qty : 1;
+            return sum + (Number(it.pricePerDay) || 0) * qty;
+          }, 0);
+          const sellerTotal = Math.round(sellerSubtotal * 1.05) + 149;
+
+          const payload = {
+            sellerId,
+            orderType: 'rental',
+            items: sellerItems.map((it) => ({
+              productId: it.id,
+              qty:       it._qty !== undefined ? it._qty : 1,
+              days:      null,
+              subtotal:  (Number(it.pricePerDay) || 0) * (it._qty !== undefined ? it._qty : 1),
+            })),
+            customerAddress: `${houseNumber || ''} ${houseName || ''} ${street || ''}`.trim(),
+            city,
+            pincode,
+            latitude:       latitude  || userLat,
+            longitude:      longitude || userLng,
+            subtotal:       sellerSubtotal,
+            deliveryCharge: 149,
+            total:          sellerTotal,
+            depositAmount:  sellerItems.reduce((s, it) => s + (it.deposit || 0), 0),
+            paymentMethod:  paymentMethod || 'cod',
+            notes:          description   || '',
+          };
+
+          const result = await bookingAPI.placeSellerOrder(payload);
+          if (result.success) {
+            addSellerOrder(result.order);
+            createdOrders.push({
               refModel: 'SellerOrder',
               refId: result.order._id,
               title: (result.order.items || []).map((i) => i.title).filter(Boolean).join(', ') || 'Equipment Rental',
-            }
-          : null;
+            });
+          }
+        }
+
+        setSuccess(true);
+        // Clear the rental cart only when the order came from the cart
+        // (rentalItemsParam was provided). The single-item detail-screen
+        // flow should not wipe unrelated cart items.
+        if (rentalItemsParam && rentalItemsParam.length) {
+          clearRentalCart();
+        }
+        // Return array for multi-seller, or single object for single-seller
+        // (BookingConfirmation screen handles both via its `attachment` prop).
+        if (!createdOrders.length) return null;
+        return createdOrders.length === 1 ? createdOrders[0] : createdOrders;
       }
+
 
     } catch (err) {
       setError(err.message || 'Something went wrong while booking');

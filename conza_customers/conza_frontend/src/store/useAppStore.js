@@ -1275,17 +1275,23 @@ const useAppStore = create((set, get) => ({
 
       const info = ORDER_POPUP_INFO[status];
       if (info) {
-        const typeLabel = orderType === 'rental' ? 'rental' : 'material';
-        const itemLabel = itemsSummary || `your ${typeLabel} order`;
+        const typeLabel = orderType === 'rental' ? 'Rental' : 'Material';
+        const typeLabelLower = typeLabel.toLowerCase();
+        const itemLabel = itemsSummary || `your ${typeLabelLower} order`;
+        const TITLES = {
+          accepted:         `${typeLabel} Order Accepted`,
+          out_for_delivery: `${typeLabel} Order Dispatched`,
+          cancelled:        `${typeLabel} Order Rejected`,
+        };
         const MESSAGES = {
-          accepted:         `Your ${typeLabel} order (${itemLabel}) has been accepted by the seller. Tap to view.`,
-          out_for_delivery: `Your ${typeLabel} order (${itemLabel}) is out for delivery. Tap to track.`,
-          cancelled:        `Your ${typeLabel} order (${itemLabel}) was rejected by the seller. Tap to view.`,
+          accepted:         `Your ${typeLabelLower} order (${itemLabel}) has been accepted by the seller. Tap to view.`,
+          out_for_delivery: `Your ${typeLabelLower} order (${itemLabel}) is out for delivery. Tap to track.`,
+          cancelled:        `Your ${typeLabelLower} order (${itemLabel}) was rejected by the seller. Tap to view.`,
         };
         get().pushOrderPopup({
           type: info.type,
           orderId,
-          title: info.title,
+          title: TITLES[status],
           message: MESSAGES[status],
         });
       }

@@ -55,11 +55,23 @@ const PaymentOption = React.memo(({ method, selected, onSelect }) => {
 
 const RentalCheckoutScreen = ({ route, navigation }) => {
   const {
-    item,
+    // Cart flow passes `items` (array). Detail-screen flow passes a
+    // single `item`. Support both so we don't break either path.
+    items: itemsParam,
+    item:  itemParam,
     quantity      = 1,
     scheduledDate = null,
     scheduledTime = null,
   } = route.params || {};
+
+  // Normalise: always work with an array of rental items.
+  // For the detail-screen single-item path, wrap in an array.
+  const rentalItems = itemsParam && itemsParam.length ? itemsParam : (itemParam ? [itemParam] : []);
+
+  // Keep a single-item alias for the legacy scheduled-rental path where
+  // only one item was ever passed (quantity > 1 means N units of that one
+  // item). For the multi-item cart path `quantity` is still 1 per item.
+  const singleItem = rentalItems[0] || null;
 
   const [houseNumber, setHouseNumber] = useState('');
   const [houseName,   setHouseName]   = useState('');
@@ -87,13 +99,16 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
   const { submitBooking, loading: submitting, error: submitError } = useBooking('rental');
 
   const { subtotal, platformFee, total } = useMemo(() => {
-    const qty = Number(quantity) || 0;
-    const price = Number(item?.pricePerDay) || 0;
-    const sub = price * qty;
+    // Multi-item cart path: sum across all items (qty = 1 per item).
+    // Single-item detail path: pricePerDay * quantity.
+    const sub = rentalItems.reduce((acc, it) => {
+      const qty = rentalItems.length > 1 ? 1 : (Number(quantity) || 1);
+      return acc + (Number(it.pricePerDay) || 0) * qty;
+    }, 0);
     const fee = Math.round(sub * PLATFORM_FEE_RATE);
     const tot = sub + fee + DELIVERY_FEE;
     return { subtotal: sub, platformFee: fee, total: tot };
-  }, [item, quantity]);
+  }, [rentalItems, quantity]);
 
   const isScheduled = !!scheduledDate;
 
@@ -144,7 +159,11 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
 
   const handleConfirmRental = useCallback(async () => {
     const result = await submitBooking({
-      item,
+      // Pass the full items array so useBooking can group by seller.
+      items: rentalItems,
+      // Legacy single-item fields kept for backward compat with the
+      // detail-screen scheduled-rental path.
+      item: singleItem,
       quantity,
       scheduledDate,
       scheduledTime,
@@ -168,7 +187,7 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
         message: 'Your equipment rental has been booked successfully. You can track it from My Bookings.',
       });
     }
-  }, [submitBooking, item, quantity, scheduledDate, scheduledTime, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, lat, lng, navigation]);
+  }, [submitBooking, rentalItems, singleItem, quantity, scheduledDate, scheduledTime, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, lat, lng, navigation]);
 
 
   return (
@@ -194,22 +213,30 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
         {/* Order Summary */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order Summary</Text>
-          <View style={styles.itemRow}>
-            <Image source={{ uri: item?.image }} style={styles.itemImage} resizeMode="cover" />
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemName}>{item?.name}</Text>
-              <Text style={styles.itemSeller}>by {item?.seller}</Text>
-              <Text style={styles.itemQty}>Quantity: {Number(quantity) || 0}</Text>
-              {isScheduled && (
-                <View style={styles.scheduledTag}>
-                  <Text style={styles.scheduledTagText}>
-                    📅 {scheduledDate} · {scheduledTime}
-                  </Text>
-                </View>
-              )}
+          {rentalItems.map((it, idx) => (
+            <View key={it.id || idx} style={styles.itemRow}>
+              <Image source={{ uri: it?.image }} style={styles.itemImage} resizeMode="cover" />
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemName}>{it?.name}</Text>
+                <Text style={styles.itemSeller}>by {it?.seller}</Text>
+                <Text style={styles.itemQty}>
+                  {rentalItems.length > 1
+                    ? `₹${Number(it.pricePerDay).toLocaleString()}/day`
+                    : `Quantity: ${Number(quantity) || 0}`}
+                </Text>
+                {isScheduled && idx === 0 && (
+                  <View style={styles.scheduledTag}>
+                    <Text style={styles.scheduledTagText}>
+                      📅 {scheduledDate} · {scheduledTime}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.itemPrice}>
+                ₹{((Number(it.pricePerDay) || 0) * (rentalItems.length > 1 ? 1 : (Number(quantity) || 1))).toLocaleString()}
+              </Text>
             </View>
-            <Text style={styles.itemPrice}>₹{(subtotal).toLocaleString()}</Text>
-          </View>
+          ))}
         </View>
 
         {/* Delivery Address */}
@@ -370,7 +397,11 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
         {/* Bill */}
         <View style={styles.billSection}>
           <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Rental ({quantity} unit{quantity > 1 ? 's' : ''} × ₹{item?.pricePerDay}/day)</Text>
+            <Text style={styles.billLabel}>
+              {rentalItems.length > 1
+                ? `${rentalItems.length} equipment items`
+                : `Rental (${Number(quantity) || 0} unit${(Number(quantity) || 0) > 1 ? 's' : ''} × ₹${singleItem?.pricePerDay}/day)`}
+            </Text>
             <Text style={styles.billValue}>₹{subtotal.toLocaleString()}</Text>
           </View>
           <View style={styles.billRow}>

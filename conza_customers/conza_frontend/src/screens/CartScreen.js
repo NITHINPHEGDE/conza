@@ -68,11 +68,9 @@ const CartScreen = () => {
 
   const handleRentalCheckout = useCallback(() => {
     if (rentalCart.length === 0) return;
-    // Navigate to RentalCheckout with the first item;
-    // the customer books each rental individually from there.
     navigation.navigate('Booking', {
       screen: 'RentalCheckout',
-      params: { item: rentalCart[0], quantity: 1 },
+      params: { items: rentalCart, quantity: 1 },
     });
   }, [navigation, rentalCart]);
 

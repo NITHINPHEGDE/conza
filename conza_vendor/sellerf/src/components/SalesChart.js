@@ -15,6 +15,8 @@ const LABELS = {
 const SalesChart = ({ chartData }) => {
   const [filter, setFilter] = useState('week');
 
+  if (!chartData) return null;
+
   const data = {
     labels:   LABELS[filter],
     datasets: [{ data: chartData[filter] || [0, 0, 0, 0, 0, 0, 0] }],

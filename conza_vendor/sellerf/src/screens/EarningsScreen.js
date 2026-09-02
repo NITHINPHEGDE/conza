@@ -42,7 +42,21 @@ const EarningsScreen = () => {
     chartData, fetchDashboard, dashLoading, dashData,
     materialOrders, rentalOrders, fetchOrders,
   } = useVendorStore();
-  const vendor = useVendorStore((s) => s.getVendor());
+  const seller   = useVendorStore((s) => s.seller);
+
+  // Derive vendor display values from stable store slices.
+  // Do NOT call useVendorStore(s => s.getVendor()) — getVendor() returns a
+  // new object on every call, which breaks Zustand's equality check and
+  // causes an infinite re-render loop.
+  const vendor = useMemo(() => ({
+    name:          seller?.name          || '',
+    shopName:      seller?.shopName      || '',
+    walletBalance: seller?.walletBalance || 0,
+    isVerified:    seller?.isVerified    || false,
+    status:        seller?.status        || 'pending_verification',
+    monthEarnings: dashData?.vendor?.monthEarnings || 0,
+    growth:        dashData?.vendor?.growth        || '+0%',
+  }), [seller, dashData]);
 
   useEffect(() => {
     fetchDashboard();
