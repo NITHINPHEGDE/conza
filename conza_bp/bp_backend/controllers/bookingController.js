@@ -337,10 +337,8 @@ const updateBookingStatus = async (req, res) => {
       if (req.body.paymentMethod) booking.paymentMethod = req.body.paymentMethod;
     }
 
-    // Immediate labour bookings are billed by the hour, tiered in 30-min
-    // increments, computed once from workStartTime → checkOutTime.
-    // Exception: if work is ≤ 1 hour, the combined baseCharge is applied
-    // instead of the hourly rate (minimum call-out fee).
+    // Immediate labour bookings: first hour is charged at the fixed baseCharge.
+    // For work exceeding 1 hour, billing is calculated per minute based on hourlyRate.
     if (
       ['awaiting_customer_confirmation', 'completed'].includes(status) &&
       booking.isImmediate &&

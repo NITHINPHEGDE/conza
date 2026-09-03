@@ -1,20 +1,23 @@
-const HOUR_MS = 60 * 60 * 1000;
+const HOUR_MS   = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 
 /**
- * Tiered half-hour billing (used when work exceeds 1 hour):
- *  - 1hr to 1hr30  → 1.5 hr charge
- *  - 1hr30 to 2hr  → 2 hr charge
- *  - 2hr to 2hr30  → 2.5 hr charge
- *  ...and so on.
+ * Per-minute billing calculation (used when work exceeds 1 hour):
+ * Converts elapsed time into exact billed hours with per-minute precision.
+ * e.g.:
+ *  - 60 mins  → 1.0 hr
+ *  - 75 mins  → 1.25 hr
+ *  - 90 mins  → 1.5 hr
+ *  - 105 mins → 1.75 hr
  *
  * NOTE: Sub-1-hour work is handled separately in calculateHourlyCharge
  * and never reaches this function with elapsedMs <= HOUR_MS.
  */
 const calculateBilledHours = (elapsedMs) => {
-  const elapsedHours = elapsedMs / HOUR_MS;
-  if (elapsedHours <= 0) return 1;
-  const roundedToHalfHour = Math.ceil(elapsedHours * 2) / 2;
-  return Math.max(1, roundedToHalfHour);
+  if (!elapsedMs || elapsedMs <= 0) return 1;
+  const elapsedMinutes = Math.ceil(elapsedMs / MINUTE_MS);
+  if (elapsedMinutes <= 60) return 1;
+  return Number((elapsedMinutes / 60).toFixed(4));
 };
 
 /**
@@ -22,29 +25,31 @@ const calculateBilledHours = (elapsedMs) => {
  *
  * Billing rules:
  *  - If work duration is ≤ 1 hour  → charge the combined baseCharge (minimum
- *    call-out fee), regardless of the per-hour rate.
- *  - If work duration is > 1 hour  → standard tiered hourly billing applies
- *    (rounded up to the nearest 30 min), using hourlyRate.
+ *    call-out fee / fixed 1st-hour fee).
+ *  - If work duration is > 1 hour  → fixed baseCharge for the first hour +
+ *    per-minute calculation based on hourlyRate for all time worked beyond 1 hour.
  *
  * @param {Date|string} workStartTime  - When status moved to 'in_progress'.
  * @param {Date|string} workEndTime    - When status moved to completion.
  * @param {number}      hourlyRate     - Combined per-hour rate of all workers.
- * @param {number}      baseCharge     - Combined base/call-out fee of all workers.
- *                                       Applied when work is ≤ 1 hour.
+ * @param {number}      baseCharge     - Combined base/call-out fee of all workers (fixed 1st-hr charge).
  * @returns {{ billedHours: number, subtotal: number, baseFeeApplied: boolean }}
  */
 const calculateHourlyCharge = (workStartTime, workEndTime, hourlyRate, baseCharge = 0) => {
   const elapsedMs = new Date(workEndTime).getTime() - new Date(workStartTime).getTime();
+  const fixedBase = Math.round(Number(baseCharge) || 0);
 
-  // ── Sub-1-hour: charge the base fee ───────────────────────────────────────
+  // ── Sub-1-hour: charge the fixed base fee ──────────────────────────────────
   if (elapsedMs <= HOUR_MS) {
-    const subtotal = Math.round(Number(baseCharge) || 0);
-    return { billedHours: 0, subtotal, baseFeeApplied: true };
+    return { billedHours: 0, subtotal: fixedBase, baseFeeApplied: true };
   }
 
-  // ── Over 1 hour: standard tiered hourly billing ───────────────────────────
+  // ── Over 1 hour: fixed baseCharge for 1st hr + per-minute rate for extra time ─
   const billedHours = calculateBilledHours(elapsedMs);
-  const subtotal    = Math.round(billedHours * (Number(hourlyRate) || 0));
+  const extraHours  = Math.max(0, billedHours - 1);
+  const extraCharge = Math.round(extraHours * (Number(hourlyRate) || 0));
+  const subtotal    = fixedBase + extraCharge;
+
   return { billedHours, subtotal, baseFeeApplied: false };
 };
 

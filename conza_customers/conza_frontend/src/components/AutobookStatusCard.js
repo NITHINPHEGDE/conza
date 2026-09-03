@@ -13,6 +13,16 @@ const STATUS_META = {
   cancelled:                      { text: 'Cancelled',                     color: '#EF4444', icon: 'close-circle' },
 };
 
+const formatDurationHours = (hours) => {
+  if (hours == null || isNaN(hours)) return '';
+  const totalMinutes = Math.round(Number(hours) * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m} min${m === 1 ? '' : 's'}`;
+  if (m === 0) return `${h} hr${h === 1 ? '' : 's'}`;
+  return `${h} hr${h === 1 ? '' : 's'} ${m} min${m === 1 ? '' : 's'}`;
+};
+
 const AutobookStatusCard = React.memo(({ entry, highlighted, onConfirm, onReportIssue, confirming }) => {
   const meta   = STATUS_META[entry.status] || STATUS_META.pending;
   const worker = entry.workerSnapshot || {};
@@ -67,7 +77,7 @@ const AutobookStatusCard = React.memo(({ entry, highlighted, onConfirm, onReport
           ) : !!entry.hoursWorked && (
             <View style={styles.billRow}>
               <Text style={styles.billLabel}>Hours Worked</Text>
-              <Text style={styles.billValue}>{entry.hoursWorked} hr{entry.hoursWorked === 1 ? '' : 's'}</Text>
+              <Text style={styles.billValue}>{formatDurationHours(entry.hoursWorked)}</Text>
             </View>
           )}
           <View style={styles.billRow}>

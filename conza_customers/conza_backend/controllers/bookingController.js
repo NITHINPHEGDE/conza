@@ -38,21 +38,26 @@ const categoryMatcher = (category) =>
 //
 // Base Price rule: each service category has its OWN admin-configured
 // Base Price (ServiceCategory.baseCharge, set per-category in Finance →
-// Categories) — just like it has its own hourly rate. Whenever the job
-// ran under 1 hour, the proportional hourly × fraction calculation is
-// skipped entirely and that category's flat Base Price is used as the
-// base instead. It's only once the job reaches 1 full hour or more that
-// the hourly rate × hours takes over. Either way, the resulting base
-// still goes through the exact same pipeline: surge → service → gst →
-// platform.
+// Categories) — covers the first hour of work as a fixed charge.
+// When the job runs under or up to 1 hour, that flat Base Price is used as the
+// base. For work exceeding 1 hour, the fixed Base Price covers the first hour,
+// and all extra time worked is billed per-minute based on the hourly rate.
+// Either way, the resulting base still goes through the exact same pipeline:
+// surge → service → gst → platform.
 const computeFinalHourlyBase = (hourlyRateInput, workerSnapshot, hoursWorkedInput, categoryBaseCharge) => {
   const snapshot = Array.isArray(workerSnapshot) ? workerSnapshot : [];
   const combinedHourlyRate = Number(hourlyRateInput) ||
     snapshot.reduce((sum, w) => sum + (Number(w.pricePerDay) || 0), 0);
+  const combinedBaseCharge = snapshot.length > 0
+    ? snapshot.reduce((sum, w) => sum + (Number(w.baseCharge) || Number(categoryBaseCharge) || 0), 0)
+    : (Number(categoryBaseCharge) || 0);
   const parsedHours = Number(hoursWorkedInput);
   const hoursWorked = Number.isFinite(parsedHours) && parsedHours > 0 ? parsedHours : 0;
   const isUnderAnHour = hoursWorked < 1;
-  const rawBase = isUnderAnHour ? (Number(categoryBaseCharge) || 0) : combinedHourlyRate * hoursWorked;
+  const extraHours = Math.max(0, hoursWorked - 1);
+  const rawBase = isUnderAnHour
+    ? combinedBaseCharge
+    : Math.round(combinedBaseCharge + (combinedHourlyRate * extraHours));
   return {
     combinedHourlyRate,
     hoursWorked,
@@ -172,9 +177,9 @@ const createBooking = async (req, res) => {
     if (bookingType === 'labour') {
       const rawBase = Array.isArray(workerSnapshot) && workerSnapshot.length
         ? workerSnapshot.reduce((sum, w) => {
-            const isMultiDay = !isImmediate && totalDays && totalDays > 1;
-            const perUnit = isMultiDay
-              ? (Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * totalDays
+            const isScheduled = !isImmediate;
+            const perUnit = isScheduled
+              ? (Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * (Number(totalDays) || 1)
               : (Number(w.pricePerDay) || 0);
             return sum + perUnit;
           }, 0)
@@ -1101,14 +1106,14 @@ const getLabourBillPreview = async (req, res) => {
       ServiceCategory.findOne({ name: categoryMatcher(category) }).select('baseCharge').lean(),
     ]);
     const categoryBaseCharge = categoryDoc?.baseCharge || 0;
-    const isMultiDay = !isImmediate && totalDays && totalDays > 1;
+    const isScheduled = !isImmediate;
 
     if (isAutobook) {
       const need = parseInt(requiredWorkers) || 0;
       const avgRate = workers.length
         ? workers.reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0) / workers.length
         : 0;
-      const rawBase = isMultiDay ? avgRate * need * totalDays : avgRate * need;
+      const rawBase = isScheduled ? avgRate * need * (Number(totalDays) || 1) : avgRate * need;
       const bill = computeLabourBill(rawBase, config, categoryBaseCharge);
       return res.json({ success: true, config: { ...config, categoryBaseCharge }, summary: bill });
     }
@@ -1118,8 +1123,8 @@ const getLabourBillPreview = async (req, res) => {
     // the per-category minimum charge, and platformCommission are applied
     // at the booking level — not multiplied by the number of workers.
     const perWorker = (workers || []).map((w) => {
-      const rawBase = isMultiDay
-        ? (Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * totalDays
+      const rawBase = isScheduled
+        ? (Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * (Number(totalDays) || 1)
         : (Number(w.pricePerDay) || 0);
       return rawBase;
     });

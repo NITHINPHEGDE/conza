@@ -22,6 +22,16 @@ const getStatusDisplay = (status) => {
   }
 };
 
+const formatDurationHours = (hours) => {
+  if (hours == null || isNaN(hours)) return '';
+  const totalMinutes = Math.round(Number(hours) * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m} min${m === 1 ? '' : 's'}`;
+  if (m === 0) return `${h} hr${h === 1 ? '' : 's'}`;
+  return `${h} hr${h === 1 ? '' : 's'} ${m} min${m === 1 ? '' : 's'}`;
+};
+
 const DetailRow = React.memo(({ label, value }) => (
   <View style={styles.detailRow}>
     <Text style={styles.detailLabel}>{label}</Text>
@@ -463,7 +473,7 @@ const BookingTrackingScreen = ({ navigation, route }) => {
                   {activeBooking.baseFeeApplied ? (
                     <DetailRow label="Billing" value="Base Price (job under 1 hr)" />
                   ) : !!activeBooking.hoursWorked && (
-                    <DetailRow label="Hours Worked" value={`${activeBooking.hoursWorked} hr${activeBooking.hoursWorked === 1 ? '' : 's'}`} />
+                    <DetailRow label="Hours Worked" value={formatDurationHours(activeBooking.hoursWorked)} />
                   )}
                   <DetailRow label="Surge (Peak Hour Multiplier)" value={`×${activeBooking.billing?.peakHourMultiplier ?? 1}`} />
                   <DetailRow label="Service Charge" value={`₹${activeBooking.billing?.serviceCharge ?? 0}`} />
@@ -479,7 +489,7 @@ const BookingTrackingScreen = ({ navigation, route }) => {
                 {activeBooking.baseFeeApplied ? (
                   <DetailRow label="Billing"        value="Base fee (< 1 hr)" />
                 ) : !!activeBooking.hoursWorked && (
-                  <DetailRow label="Hours Worked"   value={`${activeBooking.hoursWorked} hr${activeBooking.hoursWorked === 1 ? '' : 's'}`} />
+                  <DetailRow label="Hours Worked"   value={formatDurationHours(activeBooking.hoursWorked)} />
                 )}
                 <DetailRow label="Total Amount" value={`₹${activeBooking.total}`} />
               </>

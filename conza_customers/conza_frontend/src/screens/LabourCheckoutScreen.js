@@ -382,6 +382,21 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
     return selectedWorkers.reduce((sum, w) => sum + (Number(w.pricePerDay) || 0), 0);
   }, [selectedWorkers, effectiveWorkers, requiredWorkers, isAutobook]);
 
+  const baseChargeTotal = useMemo(() => {
+    return selectedWorkers.reduce((sum, w) => sum + (Number(w.baseCharge) || 0), 0);
+  }, [selectedWorkers]);
+
+  const under1hrBill = useMemo(() => {
+    const config = adminConfig || {
+      platformCommission: 12,
+      costRate: 18,
+      serviceCharge: 25,
+      cancellationFee: 30,
+      peakHourMultiplier: 1.5,
+    };
+    return computeLocalBill(baseChargeTotal, config, 0);
+  }, [baseChargeTotal, adminConfig]);
+
   const handleSelectPayment = useCallback((id) => setPayment(id), []);
   const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
 
@@ -798,11 +813,34 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
               </View>
               <Text style={styles.baseChargeInfoTitle}>Base Charge & Hourly Billing Policy</Text>
               <Text style={styles.baseChargeInfoText}>
-                For any work lasting <Text style={styles.boldText}>less than 1 hour</Text>, the fixed <Text style={styles.boldText}>Base Charge</Text> will be applied as the minimum fee. If the job extends beyond 1 hour, billing will be calculated according to the <Text style={styles.boldText}>hourly rate</Text> for the time actually worked.
+                The fixed <Text style={styles.boldText}>Base Charge</Text> covers the first hour of work. If the job extends beyond 1 hour, additional time worked is billed <Text style={styles.boldText}>per minute</Text> according to the hourly rate.
               </Text>
             </View>
-            {/* ── Tier 1: Under 1 hour → Base Charge ─────────────────────── */}
-            <View style={styles.billingTierCard}>
+            {/* ── Tier 1: Over 1 hour → Hourly Rate ──────────────────────── */}
+            <View style={[styles.billingTierCard, { marginTop: 4 }]}>
+              <View style={styles.billingTierHeader}>
+                <View style={[styles.billingTierBadge, { backgroundColor: 'rgba(245,200,66,0.18)', borderColor: '#F5C842' }]}>
+                  <Text style={[styles.billingTierBadgeText, { color: '#92620A' }]}>Over 1 Hour</Text>
+                </View>
+                <Text style={styles.billingTierHint}>base charge + per-minute rate</Text>
+              </View>
+
+              {selectedWorkers.map((worker) => (
+                <View key={worker._id + '_hr'} style={styles.billRow}>
+                  <Text style={styles.billLabel}>{worker.name} — Per Hour</Text>
+                  <Text style={styles.billValue}>₹{Number(worker.pricePerDay) || 0}/hr</Text>
+                </View>
+              ))}
+
+              <View style={styles.billDivider} />
+              <View style={styles.billRow}>
+                <Text style={styles.billTotalLabel}>Combined Hourly Rate</Text>
+                <Text style={styles.billTotalValue}>₹{hourlyRateTotal.toLocaleString()}/hr</Text>
+              </View>
+            </View>
+
+            {/* ── Tier 2: Under 1 hour → Base Charge + all charges ───────── */}
+            <View style={[styles.billingTierCard, { marginTop: 8 }]}>
               <View style={styles.billingTierHeader}>
                 <View style={styles.billingTierBadge}>
                   <Text style={styles.billingTierBadgeText}>Under 1 Hour</Text>
@@ -820,42 +858,10 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
                 );
               })}
 
-              {(() => {
-                const baseTotal = selectedWorkers.reduce((s, w) => s + (Number(w.baseCharge) || 0), 0);
-                return (
-                  <>
-                    <View style={styles.billDivider} />
-                    <View style={styles.billRow}>
-                      <Text style={styles.billTotalLabel}>Minimum Charge (if {'<'} 1 hr)</Text>
-                      <Text style={[styles.billTotalValue, { color: '#2563EB' }]}>
-                        ₹{baseTotal.toLocaleString()}
-                      </Text>
-                    </View>
-                  </>
-                );
-              })()}
-            </View>
-
-            {/* ── Tier 2: Over 1 hour → Hourly Rate ──────────────────────── */}
-            <View style={[styles.billingTierCard, { marginTop: 8 }]}>
-              <View style={styles.billingTierHeader}>
-                <View style={[styles.billingTierBadge, { backgroundColor: 'rgba(245,200,66,0.18)', borderColor: '#F5C842' }]}>
-                  <Text style={[styles.billingTierBadgeText, { color: '#92620A' }]}>Over 1 Hour</Text>
-                </View>
-                <Text style={styles.billingTierHint}>hourly rate × time worked</Text>
-              </View>
-
-              {selectedWorkers.map((worker) => (
-                <View key={worker._id + '_hr'} style={styles.billRow}>
-                  <Text style={styles.billLabel}>{worker.name} — Per Hour</Text>
-                  <Text style={styles.billValue}>₹{Number(worker.pricePerDay) || 0}/hr</Text>
-                </View>
-              ))}
-
               <View style={styles.billDivider} />
               <View style={styles.billRow}>
-                <Text style={styles.billTotalLabel}>Combined Hourly Rate</Text>
-                <Text style={styles.billTotalValue}>₹{hourlyRateTotal.toLocaleString()}/hr</Text>
+                <Text style={styles.billLabel}>Combined Base Charge</Text>
+                <Text style={styles.billValue}>₹{baseChargeTotal.toLocaleString()}</Text>
               </View>
 
               <View style={styles.billDivider} />
@@ -868,21 +874,22 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
               </View>
               <View style={styles.billRow}>
                 <Text style={styles.billLabel}>Service Charge</Text>
-                <Text style={styles.billValue}>₹{serviceCharge.toLocaleString()}</Text>
+                <Text style={styles.billValue}>₹{under1hrBill.serviceCharge.toLocaleString()}</Text>
               </View>
               <View style={styles.billRow}>
                 <Text style={styles.billLabel}>GST ({costRatePct}%)</Text>
-                <Text style={styles.billValue}>₹{costRateAmount.toLocaleString()}</Text>
+                <Text style={styles.billValue}>₹{under1hrBill.costRateAmount.toLocaleString()}</Text>
               </View>
               <View style={styles.billRow}>
                 <Text style={styles.billLabel}>Platform Commission ({platformCommissionPct}%)</Text>
-                <Text style={styles.billValue}>₹{platformCommissionAmount.toLocaleString()}</Text>
+                <Text style={styles.billValue}>₹{under1hrBill.platformCommissionAmount.toLocaleString()}</Text>
               </View>
-
               <View style={styles.billDivider} />
               <View style={styles.billRow}>
-                <Text style={styles.billTotalLabel}>Estimated Total (if {'>'} 1 hr)</Text>
-                <Text style={styles.billTotalValue}>₹{total.toLocaleString()}</Text>
+                <Text style={styles.billTotalLabel}>Estimated Total (if {'<'} 1 hr)</Text>
+                <Text style={[styles.billTotalValue, { color: '#2563EB' }]}>
+                  ₹{under1hrBill.total.toLocaleString()}
+                </Text>
               </View>
             </View>
 
@@ -911,9 +918,9 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
             <View style={styles.billSection}>
               <View style={styles.billRow}>
                 <Text style={styles.billLabel}>
-                  Subtotal ({selectedWorkers.length} worker{selectedWorkers.length > 1 ? 's' : ''} × {totalDays} day{totalDays > 1 ? 's' : ''})
+                  Base Subtotal ({selectedWorkers.length} worker{selectedWorkers.length > 1 ? 's' : ''} × {totalDays} day{totalDays > 1 ? 's' : ''})
                 </Text>
-                <Text style={styles.billValue}>₹{subtotal.toLocaleString()}</Text>
+                <Text style={styles.billValue}>₹{baseCost.toLocaleString()}</Text>
               </View>
 
               <View style={styles.billDivider} />
