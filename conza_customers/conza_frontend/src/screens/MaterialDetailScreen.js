@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -136,6 +136,8 @@ const MaterialDetailScreen = ({ route, navigation }) => {
   const [showReplacementTerms, setShowReplacementTerms] = useState(false);
   const [activeImageIndex, setActiveImageIndex]     = useState(0);
   const [vendorQuery, setVendorQuery]               = useState('');
+  const [vendorSectionY, setVendorSectionY]         = useState(0);
+  const scrollRef                                   = useRef(null);
 
   const sellerName = useMemo(() => {
     if (!item?.seller) return 'Vendor';
@@ -230,6 +232,13 @@ const MaterialDetailScreen = ({ route, navigation }) => {
 
   const handleClearVendorSearch = useCallback(() => setVendorQuery(''), []);
 
+  const handleTopSearchChange = useCallback((text) => {
+    setVendorQuery(text);
+    if (text.trim().length > 0 && scrollRef.current && vendorSectionY > 0) {
+      scrollRef.current.scrollTo({ y: vendorSectionY - 15, animated: true });
+    }
+  }, [vendorSectionY]);
+
   if (!item) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
@@ -246,18 +255,37 @@ const MaterialDetailScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* Back button — floats over image */}
-      <TouchableOpacity
-        style={styles.backBtn}
-        onPress={handleGoBack}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.backArrow}>←</Text>
-      </TouchableOpacity>
+      {/* Top Header Bar with Back Button & Vendor Search Bar */}
+      <View style={styles.topHeader}>
+        <TouchableOpacity
+          style={styles.topBackBtn}
+          onPress={handleGoBack}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.topBackArrow}>←</Text>
+        </TouchableOpacity>
+        <View style={styles.topSearchWrapper}>
+          <Text style={styles.topSearchIcon}>🔍</Text>
+          <TextInput
+            style={styles.topSearchInput}
+            placeholder={`Search products from ${sellerName}...`}
+            placeholderTextColor={colors.textMuted}
+            value={vendorQuery}
+            onChangeText={handleTopSearchChange}
+            returnKeyType="search"
+          />
+          {vendorQuery.length > 0 && (
+            <TouchableOpacity onPress={handleClearVendorSearch} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.topSearchClear}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
 
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
@@ -411,7 +439,10 @@ const MaterialDetailScreen = ({ route, navigation }) => {
 
         {/* ── More from this Vendor ── */}
         {vendorProducts.length > 0 && (
-          <View style={styles.vendorSection}>
+          <View
+            style={styles.vendorSection}
+            onLayout={(e) => setVendorSectionY(e.nativeEvent.layout.y)}
+          >
             <Text style={styles.vendorSectionTitle}>More from this Vendor</Text>
 
             <View style={styles.vendorSearchWrapper}>
@@ -544,6 +575,60 @@ const MaterialDetailScreen = ({ route, navigation }) => {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
+
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 10,
+    zIndex: 20,
+  },
+  topBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topBackArrow: {
+    fontSize: 18,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  topSearchWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 8,
+  },
+  topSearchIcon: {
+    fontSize: 13,
+  },
+  topSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.textPrimary,
+    includeFontPadding: false,
+  },
+  topSearchClear: {
+    fontSize: 13,
+    color: colors.textMuted,
+    fontWeight: '700',
+    paddingLeft: 4,
+  },
 
   backBtn: {
     position: 'absolute',
