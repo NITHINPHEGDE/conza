@@ -27,6 +27,7 @@ import { SectionLoader, ErrorState, EmptyState, WorkerListSkeleton, CategoryGrid
 import useAppStore from '../store/useAppStore';
 import { colors } from '../theme/colors';
 import SavedAddressSheet from '../components/SavedAddressSheet';
+import BannerCarousel from '../components/BannerCarousel';
 
 const TRUCK_IMAGE = require('../../assets/images/delivery_truck.jpg');
 const TRACTOR_IMAGE = require('../../assets/images/rental_tractor.jpg');
@@ -159,6 +160,7 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
   const labourLoading   = useAppStore((s) => s.labourLoading);
   const labourError     = useAppStore((s) => s.labourError);
   const fetchLabour     = useAppStore((s) => s.fetchLabourData);
+  const banners         = useAppStore((s) => s.banners);
 
   const handlePress = useCallback((item) => {
     navigation.navigate('WorkersNearby', { category: item.label });
@@ -191,9 +193,15 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
           </TouchableOpacity>
         )}
       </View>
-      <View style={{ height: 17 }} />
+      <View style={{ height: 12 }} />
+      {banners.length > 0 && (
+        <View style={{ marginHorizontal: 14 }}>
+          <BannerCarousel banners={banners} />
+        </View>
+      )}
+      <View style={{ height: 5 }} />
     </View>
-  ), [search, onSearchChange, onClearSearch]);
+  ), [search, onSearchChange, onClearSearch, banners]);
 
   const listEmpty = useMemo(() => (
     <EmptyState emoji="👷" title="No categories available" />

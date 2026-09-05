@@ -8,6 +8,7 @@ import { authAPI    } from '../api/authAPI';
 import { walletAPI  } from '../api/walletAPI';
 import { productAPI } from '../api/productAPI';
 import { projectAPI } from '../api/projectAPI';
+import { fetchCustomerBanners } from '../api/bannerAPI';
 
 import { socket, connectSocket } from '../utils/socket';
 
@@ -153,6 +154,7 @@ const useAppStore = create((set, get) => ({
       get().fetchRentalData(),
       get().fetchUserProfile(),
       get().fetchWalletBalance(),
+      get().fetchBanners(),
     ]);
 
     // Guarantee join_customer after both socket and profile are ready
@@ -330,6 +332,23 @@ const useAppStore = create((set, get) => ({
       set({ labourError: err.message });
     } finally {
       set({ labourLoading: false });
+    }
+  },
+
+  // ── Home Banners (Content → Banner, Customer app) ───────────────────────────
+  banners:        [],
+  bannersLoading: false,
+  bannersError:   null,
+
+  fetchBanners: async () => {
+    try {
+      set({ bannersLoading: true, bannersError: null });
+      const data = await fetchCustomerBanners();
+      set({ banners: data.banners || EMPTY_ARRAY });
+    } catch (err) {
+      set({ bannersError: err.message });
+    } finally {
+      set({ bannersLoading: false });
     }
   },
 

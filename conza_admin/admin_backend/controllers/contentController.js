@@ -1,8 +1,13 @@
 const Content = require('../models/Content')
 const { sendSuccess, sendPaginated } = require('../utils/response')
 const { createError } = require('../utils/error')
+const { uploadToCloudinary, deleteFromCloudinary, extractPublicId } = require('../middleware/cloudinaryUpload')
 
 const VALID_APP_TARGETS = ['customer', 'worker', 'vendor']
+
+// Banners are uploaded to their own Cloudinary folder; every other content
+// type keeps using the shared 'conza/content' folder.
+const cloudinaryFolderForType = (type) => (type === 'banner' ? 'conza/banners' : 'conza/content')
 
 const getContent = (type) => async (req, res, next) => {
   try {
@@ -115,6 +120,27 @@ exports.getPublicAbout = async (req, res, next) => {
   }
 }
 
+// ── Public banners — no auth, consumed by Customer/Worker/Vendor apps ───────
+exports.getPublicBanners = async (req, res, next) => {
+  try {
+    const { appTarget } = req.params
+    if (!VALID_APP_TARGETS.includes(appTarget)) {
+      return next(createError(400, 'Invalid appTarget.'))
+    }
+    const banners = await Content.find({
+      type: 'banner',
+      appTarget: { $in: [appTarget, 'all'] },
+      status: 'published',
+    })
+      .select('image link title order appTarget position updatedAt')
+      .sort({ order: 1, createdAt: -1 })
+      .lean()
+    sendSuccess(res, 200, 'Banners retrieved', { banners })
+  } catch (err) {
+    next(err)
+  }
+}
+
 exports.getFAQs = getContent('faq')
 exports.getTerms = getContent('terms')
 exports.getPrivacy = getContent('privacy')
@@ -125,7 +151,15 @@ exports.getBanners = getContent('banner')
 
 exports.createContent = async (req, res, next) => {
   try {
-    const content = await Content.create(req.body)
+    const payload = { ...req.body }
+
+    // If the frontend sent a base64 data-URI (drag-and-drop upload), push
+    // it to Cloudinary. If it already sent a URL, use it as-is.
+    if (payload.image && typeof payload.image === 'string' && payload.image.startsWith('data:')) {
+      payload.image = await uploadToCloudinary(payload.image, cloudinaryFolderForType(payload.type))
+    }
+
+    const content = await Content.create(payload)
     req.auditTarget = `Content - ${content.title || content.type}`
     req.auditDetails = `Created ${content.type} content`
     sendSuccess(res, 201, 'Content created', { content })
@@ -136,8 +170,22 @@ exports.createContent = async (req, res, next) => {
 
 exports.updateContent = async (req, res, next) => {
   try {
-    const content = await Content.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
-    if (!content) return next(createError(404, 'Content not found.'))
+    const existing = await Content.findById(req.params.id)
+    if (!existing) return next(createError(404, 'Content not found.'))
+
+    const updates = { ...req.body }
+
+    if (updates.image && typeof updates.image === 'string' && updates.image.startsWith('data:')) {
+      const folder = cloudinaryFolderForType(existing.type)
+      const newImageUrl = await uploadToCloudinary(updates.image, folder)
+      const oldPublicId = extractPublicId(existing.image)
+      if (oldPublicId) {
+        deleteFromCloudinary(oldPublicId).catch(() => {}) // best-effort, don't block the response
+      }
+      updates.image = newImageUrl
+    }
+
+    const content = await Content.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true })
     req.auditTarget = `Content #${req.params.id}`
     req.auditDetails = `Updated ${content.type} content`
     sendSuccess(res, 200, 'Content updated', { content })
@@ -150,6 +198,10 @@ exports.deleteContent = async (req, res, next) => {
   try {
     const content = await Content.findByIdAndDelete(req.params.id)
     if (!content) return next(createError(404, 'Content not found.'))
+    if (content.image) {
+      const publicId = extractPublicId(content.image)
+      if (publicId) deleteFromCloudinary(publicId).catch(() => {})
+    }
     req.auditTarget = `Content #${req.params.id}`
     req.auditDetails = `Deleted ${content.type} content`
     sendSuccess(res, 200, 'Content deleted')

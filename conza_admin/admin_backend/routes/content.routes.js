@@ -7,6 +7,7 @@ const { logAction } = require('../middleware/auditLogger')
 // ── Public routes (no auth) — consumed by Customer, Worker, Vendor apps ──────
 router.get('/public/legal/:appTarget', c.getPublicLegal)
 router.get('/public/about', c.getPublicAbout)
+router.get('/public/banners/:appTarget', c.getPublicBanners)
 
 router.use(protect)
 router.use(requirePermission('content'))
