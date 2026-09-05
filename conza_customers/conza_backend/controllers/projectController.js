@@ -175,7 +175,14 @@ const getAttachableItems = async (req, res, next) => {
 // @access  Private
 const createProject = async (req, res, next) => {
   try {
-    const { name, description = '', attachments = [] } = req.body;
+    const {
+      name,
+      description = '',
+      budget = 0,
+      location = 'Bengaluru, Karnataka',
+      image = '',
+      attachments = [],
+    } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Project name is required.' });
@@ -187,6 +194,10 @@ const createProject = async (req, res, next) => {
       user: req.user._id,
       name: name.trim(),
       description: description ? String(description).trim() : '',
+      budget: Number(budget) || 0,
+      location: location ? String(location).trim() : 'Bengaluru, Karnataka',
+      image: image ? String(image).trim() : '',
+      customStatus: 'in_progress',
       attachments: cleanAttachments,
     });
 
@@ -247,12 +258,12 @@ const getProjectById = async (req, res, next) => {
   }
 };
 
-// @desc    Rename / update a project's description
+// @desc    Rename / update a project's description, budget, location, status
 // @route   PATCH /api/projects/:id
 // @access  Private
 const updateProject = async (req, res, next) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, budget, location, image, customStatus } = req.body;
     const project = await Project.findOne({ _id: req.params.id, user: req.user._id });
     if (!project) {
       return res.status(404).json({ success: false, message: 'Project not found.' });
@@ -265,6 +276,10 @@ const updateProject = async (req, res, next) => {
       project.name = String(name).trim();
     }
     if (description !== undefined) project.description = String(description).trim();
+    if (budget !== undefined) project.budget = Number(budget) || 0;
+    if (location !== undefined) project.location = String(location).trim();
+    if (image !== undefined) project.image = String(image).trim();
+    if (customStatus !== undefined) project.customStatus = String(customStatus).trim();
 
     await project.save();
 
@@ -379,6 +394,51 @@ const deleteProject = async (req, res, next) => {
   }
 };
 
+// @desc    Add an expense to a project
+// @route   POST /api/projects/:id/expenses
+// @access  Private
+const addExpense = async (req, res, next) => {
+  try {
+    const { title, amount, category = 'General' } = req.body;
+    if (!title || !amount) {
+      return res.status(400).json({ success: false, message: 'Title and amount are required.' });
+    }
+    const project = await Project.findOne({ _id: req.params.id, user: req.user._id });
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Project not found.' });
+    }
+    project.expenses.push({
+      title: String(title).trim(),
+      amount: Number(amount) || 0,
+      category: String(category).trim(),
+      date: new Date(),
+    });
+    await project.save();
+    const items = await loadAttachments(project.attachments);
+    res.json({ success: true, project: { ...project.toObject(), attachments: items } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc    Remove an expense from a project
+// @route   DELETE /api/projects/:id/expenses/:expenseId
+// @access  Private
+const removeExpense = async (req, res, next) => {
+  try {
+    const project = await Project.findOne({ _id: req.params.id, user: req.user._id });
+    if (!project) {
+      return res.status(404).json({ success: false, message: 'Project not found.' });
+    }
+    project.expenses = project.expenses.filter((e) => e._id.toString() !== req.params.expenseId);
+    await project.save();
+    const items = await loadAttachments(project.attachments);
+    res.json({ success: true, project: { ...project.toObject(), attachments: items } });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getAttachableItems,
   createProject,
@@ -389,4 +449,6 @@ module.exports = {
   removeAttachment,
   removeAttachments,
   deleteProject,
+  addExpense,
+  removeExpense,
 };

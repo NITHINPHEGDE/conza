@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,7 @@ import {
   StyleSheet,
   TextInput,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors } from '../theme/colors';
 
 const MaterialCard = React.memo(({
   id,
@@ -23,7 +21,7 @@ const MaterialCard = React.memo(({
   image,
   images,
   rating,
-  inStock,
+  inStock = true,
   quantity = 0,
   category,
   brand,
@@ -39,180 +37,194 @@ const MaterialCard = React.memo(({
   onImagePress,
   onAddToCart,
 }) => {
-  const [cartAdded, setCartAdded] = React.useState(false);
+  const [cartAdded, setCartAdded] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [localQty, setLocalQty] = useState(quantity > 0 ? String(quantity) : '1');
+
+  useEffect(() => {
+    if (quantity > 0) {
+      setLocalQty(String(quantity));
+    }
+  }, [quantity]);
+
   const imageSource = useMemo(() => ({ uri: image }), [image]);
 
   const hasDiscount = Number(mrp) > Number(price);
-  const qty = Number(quantity) || 0;
-  const displayPrice = ((Number(price) || 0) * (qty > 0 ? qty : 1)).toLocaleString('en-IN');
-  const displayMrp  = ((Number(mrp)   || 0) * (qty > 0 ? qty : 1)).toLocaleString('en-IN');
-  const unitLabel   = qty > 0 ? `${qty} ${(unit || '').replace('per ', '')}` : (unit || '');
+  const computedDiscount = discountPercent || (hasDiscount ? Math.round(((Number(mrp) - Number(price)) / Number(mrp)) * 100) : null);
+  const unitShort = (unit || 'piece').replace('per ', '').trim();
 
   const handleImagePress = useCallback(() => {
+    const num = Math.max(1, parseInt(localQty, 10) || 1);
     onImagePress && onImagePress({
       id, name, seller, price, mrp, discountPercent, unit, distance,
-      image, images, rating, inStock, quantity,
+      image, images, rating, inStock, quantity: num,
       category, brand, description,
       sellerId, sellerPhone, sellerCity,
       returnable, replaceable, returnPolicy, replacementPolicy,
     });
   }, [
     onImagePress, id, name, seller, price, mrp, discountPercent, unit, distance,
-    image, images, rating, inStock, quantity,
+    image, images, rating, inStock, localQty,
     category, brand, description, sellerId, sellerPhone, sellerCity,
     returnable, replaceable, returnPolicy, replacementPolicy,
   ]);
 
   const handleMinus = useCallback(() => {
-    onUpdate(id, Math.max(0, qty - 1));
-  }, [onUpdate, id, qty]);
+    setLocalQty((prev) => {
+      const num = parseInt(prev, 10);
+      const next = isNaN(num) || num <= 1 ? 1 : num - 1;
+      if (onUpdate && quantity > 0) onUpdate(id, next);
+      return String(next);
+    });
+  }, [onUpdate, id, quantity]);
 
   const handlePlus = useCallback(() => {
-    onUpdate(id, qty + 1);
-  }, [onUpdate, id, qty]);
+    setLocalQty((prev) => {
+      const num = parseInt(prev, 10);
+      const next = isNaN(num) ? 1 : Math.min(9999, num + 1);
+      if (onUpdate && quantity > 0) onUpdate(id, next);
+      return String(next);
+    });
+  }, [onUpdate, id, quantity]);
 
-  const handleTextChange = useCallback((t) => {
-    const num = parseInt(t);
-    if (!isNaN(num)) onUpdate(id, num);
-    else if (t === '') onUpdate(id, 0);
-  }, [onUpdate, id]);
+  const handleTextChange = useCallback((text) => {
+    const cleaned = text.replace(/[^0-9]/g, '').slice(0, 4);
+    setLocalQty(cleaned);
+    const num = parseInt(cleaned, 10);
+    if (!isNaN(num) && num > 0 && onUpdate && quantity > 0) {
+      onUpdate(id, num);
+    }
+  }, [onUpdate, id, quantity]);
 
-  const handleAdd = useCallback(() => {
-    if (inStock) onUpdate(id, 1);
-  }, [onUpdate, id, inStock]);
+  const handleBlur = useCallback(() => {
+    const num = parseInt(localQty, 10);
+    if (isNaN(num) || num < 1) {
+      setLocalQty('1');
+      if (onUpdate && quantity > 0) onUpdate(id, 1);
+    }
+  }, [localQty, onUpdate, id, quantity]);
 
   const handleAddToCart = useCallback(() => {
     if (!inStock) return;
-    onAddToCart && onAddToCart({ id, name, seller, price, unit, distance, image, rating, inStock });
+    const finalQty = Math.max(1, parseInt(localQty, 10) || 1);
+    if (onAddToCart) {
+      onAddToCart({ id, name, seller, price, unit, distance, image, rating, inStock, quantity: finalQty });
+    }
+    if (onUpdate) {
+      onUpdate(id, finalQty);
+    }
     setCartAdded(true);
-    setTimeout(() => setCartAdded(false), 2000);
-  }, [onAddToCart, id, name, seller, price, unit, distance, image, rating, inStock]);
+    setTimeout(() => setCartAdded(false), 1800);
+  }, [onAddToCart, onUpdate, id, name, seller, price, unit, distance, image, rating, inStock, localQty]);
 
   return (
-    <View style={[styles.card, qty > 0 && styles.cardActive]}>
+    <View style={styles.card}>
 
-      {/* ── Image ── */}
-      <TouchableOpacity style={styles.imageWrapper} onPress={handleImagePress} activeOpacity={0.9}>
-       <Image source={imageSource} style={styles.image} resizeMode="contain" />
-        {/* Stock badge — top right */}
-        <View style={[styles.stockBadge, { backgroundColor: inStock ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)' }]}>
-          <View style={[styles.stockDot, { backgroundColor: inStock ? '#22c55e' : '#ef4444' }]} />
-          <Text style={[styles.stockText, { color: inStock ? '#22c55e' : '#ef4444' }]}>
+      {/* ── Image Container with Badges ── */}
+      <TouchableOpacity style={styles.imageWrapper} onPress={handleImagePress} activeOpacity={0.92}>
+        <Image source={imageSource} style={styles.image} resizeMode="contain" />
+
+        {/* Stock badge — top-left (lightweight mint pill, clean typography) */}
+        <View style={[styles.stockBadge, { backgroundColor: inStock ? '#DCFCE7' : '#FEE2E2' }]}>
+          <Text style={[styles.stockText, { color: inStock ? '#16A34A' : '#EF4444' }]}>
             {inStock ? 'In Stock' : 'Out of Stock'}
           </Text>
         </View>
-        {/* Rating badge — top left */}
+
+        {/* Rating badge — top-right (lightweight white pill with orange star) */}
         <View style={styles.ratingBadge}>
-          <MaterialCommunityIcons name="star" size={10} color={colors.accentAmber} />
-          <Text style={styles.ratingText}>{rating}</Text>
+          <Text style={styles.ratingStar}>★</Text>
+          <Text style={styles.ratingText}>{rating || '4.5'}</Text>
         </View>
+
+        {/* Heart button — floating delicate circle at bottom-right of image */}
+        <TouchableOpacity
+          style={styles.heartBtn}
+          onPress={() => setIsFavorite((prev) => !prev)}
+          activeOpacity={0.75}
+        >
+          <MaterialCommunityIcons
+            name={isFavorite ? 'heart' : 'heart-outline'}
+            size={15}
+            color={isFavorite ? '#EF4444' : '#4B5563'}
+          />
+        </TouchableOpacity>
       </TouchableOpacity>
 
-      {/* ── Price block ── */}
-      <View style={styles.priceBlock}>
+      {/* ── Content area ── */}
+      <View style={styles.content}>
+
+        {/* Product Title — sleek, lightweight typography */}
+        <Text style={styles.name} numberOfLines={1}>{name}</Text>
+
+        {/* Seller row with verified blue tick */}
+        <View style={styles.sellerRow}>
+          <Text style={styles.sellerLabel}>by </Text>
+          <Text style={styles.sellerName} numberOfLines={1}>{seller || brand || 'RN Enterprises'}</Text>
+          <MaterialCommunityIcons name="check-circle" size={13} color="#2563EB" style={styles.verifiedIcon} />
+        </View>
+
+        {/* Price & Discount row */}
         <View style={styles.priceRow}>
-          {hasDiscount ? (
-            <Text style={styles.mrpStrike}>₹{displayMrp}</Text>
+          <View style={styles.priceLeft}>
+            <Text style={styles.price}>₹{Number(price).toLocaleString('en-IN')}</Text>
+            <Text style={styles.unitLabel}> / {unitShort}</Text>
+          </View>
+          {computedDiscount ? (
+            <View style={styles.discountBadge}>
+              <Text style={styles.discountText}>{computedDiscount}% OFF</Text>
+            </View>
           ) : null}
-          <Text style={styles.price}>₹{displayPrice}</Text>
-          <Text style={styles.unitLabel}>{unitLabel}</Text>
         </View>
-        {hasDiscount ? (
-          <View style={styles.discountPill}>
-            <Text style={styles.discountText}>{discountPercent}% off</Text>
-          </View>
-        ) : null}
-      </View>
 
-      {/* ── Divider ── */}
-      <View style={styles.divider} />
-
-      {/* ── Meta row: name/seller left | distance right ── */}
-      <View style={styles.metaRow}>
-        <View style={styles.metaLeft}>
-          <Text style={styles.name} numberOfLines={1}>{name}</Text>
-          <Text style={styles.seller} numberOfLines={1}>by {seller}</Text>
-        </View>
-        {distance ? (
-          <View style={styles.distanceWrap}>
-            <MaterialCommunityIcons name="map-marker" size={12} color={colors.textMuted} />
-            <Text style={styles.distanceText} numberOfLines={1}>{distance}</Text>
-          </View>
-        ) : null}
-      </View>
-
-      {/* ── Bottom action: pill morphs into stepper when qty > 0 ── */}
-      <View style={styles.cartRow}>
-        {inStock ? (
-          qty > 0 ? (
-            /* ── Qty stepper — same pill shape ── */
-            <View style={styles.stepperWrap}>
-              <LinearGradient
-                colors={[colors.gradientStart, colors.gradientEnd]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.stepperPill}
-              >
-                <TouchableOpacity style={styles.stepBtn} onPress={handleMinus} activeOpacity={0.75}>
+        {/* ── Bottom row: Lightweight Stepper Pill + Add to Cart Button ── */}
+        <View style={styles.actionRow}>
+          {inStock ? (
+            <>
+              {/* Stepper Pill — slender, lightweight warm cream */}
+              <View style={styles.stepper}>
+                <TouchableOpacity style={styles.stepBtn} onPress={handleMinus} activeOpacity={0.65} hitSlop={{ top: 8, bottom: 8, left: 6, right: 3 }}>
                   <Text style={styles.stepSymbol}>−</Text>
                 </TouchableOpacity>
                 <TextInput
                   style={styles.stepInput}
-                  value={String(qty)}
+                  value={localQty}
                   onChangeText={handleTextChange}
+                  onBlur={handleBlur}
                   keyboardType="numeric"
                   maxLength={4}
                   selectTextOnFocus
+                  returnKeyType="done"
                 />
-                <TouchableOpacity style={styles.stepBtn} onPress={handlePlus} activeOpacity={0.75}>
+                <TouchableOpacity style={styles.stepBtn} onPress={handlePlus} activeOpacity={0.65} hitSlop={{ top: 8, bottom: 8, left: 3, right: 6 }}>
                   <Text style={styles.stepSymbol}>+</Text>
                 </TouchableOpacity>
-              </LinearGradient>
-            </View>
-          ) : (
-            /* ── Default add-to-cart pill ── */
-            <View style={styles.cartPillWrap}>
-              <LinearGradient
-                colors={cartAdded ? ['#22c55e', '#16a34a'] : [colors.gradientStart, colors.gradientEnd]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.cartPill}
+              </View>
+
+              {/* Add to Cart button — slender, modern amber */}
+              <TouchableOpacity
+                style={styles.addCartBtn}
+                onPress={handleAddToCart}
+                activeOpacity={0.85}
               >
-                <TouchableOpacity
-                  style={styles.cartPillLeft}
-                  onPress={cartAdded ? undefined : handleAddToCart}
-                  activeOpacity={0.85}
-                >
-                  <MaterialCommunityIcons
-                    name={cartAdded ? 'check-circle' : 'cart'}
-                    size={16}
-                    color={colors.textPrimary}
-                  />
-                  <Text style={styles.cartPillText}>
-                    {cartAdded ? 'Added to Cart' : 'Add to Cart'}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* ⊕ circle — tapping this kicks off qty stepper */}
-                <TouchableOpacity
-                  style={styles.plusCircle}
-                  onPress={handleAdd}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <MaterialCommunityIcons name="plus" size={15} color={colors.textPrimary} />
-                </TouchableOpacity>
-              </LinearGradient>
+                <MaterialCommunityIcons
+                  name={cartAdded ? 'check' : 'cart'}
+                  size={12}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.addCartText} numberOfLines={1}>
+                  {cartAdded ? 'Added' : 'Add to Cart'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.unavailableBox}>
+              <Text style={styles.unavailableText}>Out of Stock</Text>
             </View>
-          )
-        ) : (
-          <View style={[styles.cartPill, styles.cartPillDisabled]}>
-            <MaterialCommunityIcons name="cart-off" size={15} color={colors.textMuted} />
-            <Text style={styles.cartPillTextDisabled}>Unavailable</Text>
-          </View>
-        )}
-      </View>
+          )}
+        </View>
 
+      </View>
     </View>
   );
 });
@@ -220,168 +232,251 @@ const MaterialCard = React.memo(({
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EFF0F3',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  cardActive: {
-    borderColor: colors.accentYellow,
-    shadowColor: colors.accentAmber,
-    shadowOpacity: 0.2,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
+    elevation: 1,
+    marginBottom: 2,
   },
 
-  // Image
-  imageWrapper: { width: '100%', height: 130, position: 'relative', backgroundColor: colors.surfaceElevated },
-  image: { width: '100%', height: '100%' },
+  // Image wrapper — clean, soft, lightweight
+  imageWrapper: {
+    width: '100%',
+    height: 136,
+    position: 'relative',
+    backgroundColor: '#F9FAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+  },
+  image: {
+    width: '86%',
+    height: '86%',
+  },
 
-  // Stock badge (top-right)
+  // In Stock badge — lightweight mint pill
   stockBadge: {
-    position: 'absolute', top: 8, right: 8,
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 7, paddingVertical: 3, borderRadius: 20,
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    zIndex: 2,
   },
-  stockDot: { width: 5, height: 5, borderRadius: 3 },
-  stockText: { fontSize: 9.5, fontWeight: '700' },
+  stockText: {
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 0.1,
+  },
 
-  // Rating badge (top-left)
+  // Rating badge — clean white pill with orange star
   ratingBadge: {
-    position: 'absolute', top: 8, left: 8,
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    paddingHorizontal: 6, paddingVertical: 3, borderRadius: 20,
-  },
-  ratingText: { fontSize: 9.5, fontWeight: '800', color: colors.textPrimary },
-
-  // Price block
-  priceBlock: {
-    paddingHorizontal: 12,
-    paddingTop: 9,
-    paddingBottom: 7,
+    position: 'absolute',
+    top: 8,
+    right: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
+    gap: 3,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: '#F0F1F3',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+    zIndex: 2,
   },
-  priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, flexShrink: 1 },
-  mrpStrike: { fontSize: 11, color: colors.textMuted, fontWeight: '600', textDecorationLine: 'line-through' },
-  price: { fontSize: 19, fontWeight: '900', color: colors.textPrimary },
-  unitLabel: { fontSize: 10.5, color: colors.textMuted, fontWeight: '600' },
-  discountPill: {
-    backgroundColor: 'rgba(239,68,68,0.11)',
-    borderRadius: 20,
-    paddingHorizontal: 6, paddingVertical: 2,
+  ratingStar: {
+    fontSize: 10.5,
+    color: '#F59E0B',
+    lineHeight: 12,
   },
-  discountText: { fontSize: 9.5, fontWeight: '800', color: '#ef4444' },
+  ratingText: {
+    fontSize: 10.5,
+    fontWeight: '500',
+    color: '#334155',
+  },
 
-  // Divider
-  divider: { height: 1, backgroundColor: colors.borderLight, marginHorizontal: 12 },
-
-  // Meta row
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: 7,
-    paddingBottom: 6,
-    gap: 8,
-  },
-  metaLeft: { flex: 1, minWidth: 0 },
-  name: { fontSize: 12.5, fontWeight: '800', color: colors.textPrimary, marginBottom: 1 },
-  seller: { fontSize: 10.5, color: colors.textMuted, fontWeight: '500' },
-  distanceWrap: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 },
-  distanceText: { fontSize: 10.5, color: colors.textMuted, fontWeight: '600', maxWidth: 80 },
-
-  // Shared cart row padding
-  cartRow: { paddingHorizontal: 10, paddingBottom: 10 },
-
-  // ── Default cart pill ──
-  cartPillWrap: { borderRadius: 50, overflow: 'hidden' },
-  cartPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 14,
-    paddingRight: 5,
-    paddingVertical: 8,    // slender
-    borderRadius: 50,
-  },
-  cartPillLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  cartPillDisabled: {
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    justifyContent: 'center',
-    paddingRight: 14,
-    gap: 6,
-  },
-  cartPillText: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    letterSpacing: 0.3,
-  },
-  cartPillTextDisabled: { fontSize: 11.5, fontWeight: '700', color: colors.textMuted },
-  plusCircle: {
+  // Heart button — lightweight floating circle
+  heartBtn: {
+    position: 'absolute',
+    bottom: 6,
+    right: 8,
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.28)',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
+    borderWidth: 0.5,
+    borderColor: '#ECEEF1',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.07,
+    shadowRadius: 3,
+    elevation: 2,
+    zIndex: 3,
   },
 
-  // ── Stepper pill (replaces cart pill when qty > 0) ──
-  stepperWrap: {
-    borderRadius: 50,
-    overflow: 'hidden',
+  // Content area
+  content: {
+    paddingHorizontal: 11,
+    paddingTop: 8,
+    paddingBottom: 11,
   },
-  stepperPill: {
+
+  // Product title — sleek, clean, modern typography
+  name: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#1E293B',
+    lineHeight: 17,
+    letterSpacing: -0.1,
+    marginBottom: 2.5,
+  },
+
+  // Seller row
+  sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
-    paddingLeft: 4,
-    paddingRight: 4,
+    marginBottom: 7,
+  },
+  sellerLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '400',
+  },
+  sellerName: {
+    fontSize: 11,
+    color: '#4B5563',
+    fontWeight: '500',
+  },
+  verifiedIcon: {
+    marginLeft: 3.5,
+  },
+
+  // Price & Discount row
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  priceLeft: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  price: {
+    fontSize: 15.5,
+    fontWeight: '600',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  unitLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '400',
+    marginLeft: 2,
+  },
+  discountBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+  },
+  discountText: {
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: '#EF4444',
+    letterSpacing: 0.1,
+  },
+
+  // Action Row
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+
+  // Stepper — neutral grey rounded pill
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    height: 32,
+    paddingHorizontal: 4,
+    minWidth: 54,
   },
   stepBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    width: 14,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-    flexGrow: 0,
   },
-  stepSymbol: { fontSize: 20, fontWeight: '700', color: colors.textPrimary, lineHeight: 24 },
+  stepSymbol: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#4B5563',
+    lineHeight: 15,
+  },
   stepInput: {
-    flexGrow: 1,
-    flexShrink: 1,
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
+    minWidth: 20,
+    maxWidth: 26,
+    height: 32,
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#1E293B',
     textAlign: 'center',
     textAlignVertical: 'center',
-    includeFontPadding: false,
     paddingHorizontal: 0,
     paddingVertical: 0,
-    height: 36,
-    minWidth: 30,
+    includeFontPadding: false,
+  },
+
+  // Add to Cart button — golden amber pill
+  addCartBtn: {
+    flex: 1,
+    height: 32,
+    backgroundColor: '#F59E0B',
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+  },
+  addCartText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    letterSpacing: -0.1,
+  },
+
+  unavailableBox: {
+    flex: 1,
+    height: 32,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unavailableText: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: '#9CA3AF',
   },
 });
 

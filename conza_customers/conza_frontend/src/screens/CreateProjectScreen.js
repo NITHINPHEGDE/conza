@@ -1,253 +1,511 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TextInput,
-  TouchableOpacity, StatusBar, ActivityIndicator,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Image,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import useAppStore from '../store/useAppStore';
-import { colors } from '../theme/colors';
-
-const attachmentKey = (a) => `${a.refModel}:${a.refId}`;
-
-const AttachmentRow = React.memo(({ item, selected, onToggle }) => (
-  <TouchableOpacity style={styles.attachRow} onPress={onToggle} activeOpacity={0.75}>
-    <View style={[styles.checkbox, selected && styles.checkboxOn]}>
-      {selected && <MaterialCommunityIcons name="check" size={13} color={colors.white} />}
-    </View>
-    <View style={{ flex: 1 }}>
-      <Text style={styles.attachTitle} numberOfLines={1}>{item.title}</Text>
-      <Text style={styles.attachMeta}>
-        {item.city ? `${item.city} • ` : ''}₹{item.total} • {item.status.replace(/_/g, ' ')}
-      </Text>
-    </View>
-  </TouchableOpacity>
-));
 
 const CreateProjectScreen = ({ navigation }) => {
-  const {
-    attachableItems, attachableItemsLoading, fetchAttachableItems, createProject,
-  } = useAppStore();
+  const insets = useSafeAreaInsets();
+  const { createProject } = useAppStore();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [selected, setSelected] = useState({});
+  const [budget, setBudget] = useState('');
+  const [imageUri, setImageUri] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => { fetchAttachableItems(); }, []);
+  const handleGoBack = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
 
-  const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
+  const handlePickImage = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Denied', 'Camera roll permission is required to upload an image.');
+        return;
+      }
 
-  const toggleAttachment = useCallback((attachment) => {
-    setSelected((prev) => {
-      const key = attachmentKey(attachment);
-      const next = { ...prev };
-      if (next[key]) delete next[key];
-      else next[key] = attachment;
-      return next;
-    });
-  }, []);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
 
-  const selectedList = useMemo(() => Object.values(selected), [selected]);
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        setImageUri(result.assets[0].uri);
+      }
+    } catch (e) {
+      // Fallback
+    }
+  };
 
-  const handleSave = useCallback(async () => {
+  const handleCreate = async () => {
     if (!name.trim()) {
-      setError('Please give your project a name.');
+      setError('Project name is required.');
       return;
     }
+    const numBudget = Number(budget.replace(/[^0-9]/g, ''));
+    if (!numBudget || numBudget <= 0) {
+      setError('Please enter a valid total project budget.');
+      return;
+    }
+
     setError('');
     setSubmitting(true);
+
     try {
-      const attachments = selectedList.map((a) => ({ refModel: a.refModel, refId: a.refId }));
-      const project = await createProject({ name, description, attachments });
-      navigation.replace('ProjectDetail', { projectId: project._id });
-    } catch (e) {
-      setError(e.message || 'Could not create project. Please try again.');
+      const newProject = await createProject({
+        name: name.trim(),
+        description: description.trim(),
+        budget: numBudget,
+        location: 'Bengaluru, Karnataka',
+        image: imageUri || '',
+      });
+
+      navigation.replace('ProjectDetail', { projectId: newProject._id });
+    } catch (err) {
+      setError(err?.response?.data?.message || err.message || 'Could not create project.');
     } finally {
       setSubmitting(false);
     }
-  }, [name, description, selectedList, createProject, navigation]);
-
-  const labourBookings = attachableItems.labourBookings || [];
-  const orders          = attachableItems.orders || [];
+  };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.7}>
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Project</Text>
-        <View style={{ width: 38 }} />
-      </View>
-      <View style={styles.divider} />
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Project Details</Text>
-          <Text style={styles.label}>Project Name</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. New House Construction"
-            placeholderTextColor={colors.textMuted}
-            value={name}
-            onChangeText={setName}
-          />
-          <Text style={styles.label}>Description (optional)</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="A short note about this project"
-            placeholderTextColor={colors.textMuted}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-          />
+    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* Top Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.7}>
+            <MaterialCommunityIcons name="arrow-left" size={20} color="#0F172A" />
+          </TouchableOpacity>
+          <View style={styles.headerTitles}>
+            <Text style={styles.headerTitle}>Add New Project</Text>
+            <Text style={styles.headerSubtitle}>
+              Create a new project to manage your work, expenses and team
+            </Text>
+          </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Attach Labour Bookings</Text>
-          {attachableItemsLoading ? (
-            <ActivityIndicator color={colors.accentAmber} />
-          ) : labourBookings.length === 0 ? (
-            <Text style={styles.emptyHint}>No ongoing labour bookings to attach.</Text>
-          ) : (
-            labourBookings.map((item) => (
-              <AttachmentRow
-                key={attachmentKey(item)}
-                item={item}
-                selected={!!selected[attachmentKey(item)]}
-                onToggle={() => toggleAttachment(item)}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Section 1: Project Image (Optional) */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Project Image (Optional)</Text>
+            <TouchableOpacity
+              style={[styles.uploadBox, imageUri && styles.uploadBoxWithImage]}
+              onPress={handlePickImage}
+              activeOpacity={0.8}
+            >
+              {imageUri ? (
+                <View style={styles.previewContainer}>
+                  <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="cover" />
+                  <View style={styles.previewOverlay}>
+                    <TouchableOpacity
+                      style={styles.removeImageBtn}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setImageUri('');
+                      }}
+                    >
+                      <MaterialCommunityIcons name="close-circle" size={22} color="#EF4444" />
+                    </TouchableOpacity>
+                    <Text style={styles.changeImageText}>Tap to change image</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.uploadInner}>
+                  <View style={styles.uploadIconCircle}>
+                    <MaterialCommunityIcons name="tray-arrow-up" size={22} color="#EA580C" />
+                  </View>
+                  <Text style={styles.uploadMainText}>Upload project image</Text>
+                  <Text style={styles.uploadSubText}>JPG, PNG up to 5MB</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Section 2: Project Details */}
+          <View style={styles.section}>
+            <Text style={styles.sectionHeaderTitle}>Project Details</Text>
+            <Text style={styles.fieldLabel}>
+              Project Name <Text style={styles.requiredStar}>*</Text>
+            </Text>
+            <View style={styles.inputRow}>
+              <MaterialCommunityIcons name="calendar-blank-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter project name"
+                placeholderTextColor="#94A3B8"
+                value={name}
+                onChangeText={(t) => {
+                  setName(t);
+                  if (error) setError('');
+                }}
               />
-            ))
-          )}
-        </View>
+            </View>
+          </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Attach Orders</Text>
-          {attachableItemsLoading ? (
-            <ActivityIndicator color={colors.accentAmber} />
-          ) : orders.length === 0 ? (
-            <Text style={styles.emptyHint}>No ongoing orders to attach.</Text>
-          ) : (
-            orders.map((item) => (
-              <AttachmentRow
-                key={attachmentKey(item)}
-                item={item}
-                selected={!!selected[attachmentKey(item)]}
-                onToggle={() => toggleAttachment(item)}
+          {/* Section 3: Project Description (Optional) */}
+          <View style={styles.section}>
+            <Text style={styles.fieldLabel}>Project Description (Optional)</Text>
+            <View style={styles.textAreaContainer}>
+              <View style={styles.textAreaHeader}>
+                <MaterialCommunityIcons name="file-document-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+              </View>
+              <TextInput
+                style={styles.textAreaInput}
+                placeholder="Enter project description, notes or any specific details..."
+                placeholderTextColor="#94A3B8"
+                multiline
+                maxLength={250}
+                value={description}
+                onChangeText={setDescription}
+                textAlignVertical="top"
               />
-            ))
+              <Text style={styles.charCounter}>{description.length}/250</Text>
+            </View>
+          </View>
+
+          {/* Section 4: Total Budget * */}
+          <View style={styles.section}>
+            <Text style={styles.fieldLabel}>
+              Total Budget <Text style={styles.requiredStar}>*</Text>
+            </Text>
+            <View style={styles.budgetInputRow}>
+              <View style={styles.budgetWalletPill}>
+                <MaterialCommunityIcons name="wallet-outline" size={18} color="#EA580C" />
+              </View>
+              <Text style={styles.currencySymbol}>₹</Text>
+              <TextInput
+                style={styles.budgetTextInput}
+                placeholder="Enter total project budget"
+                placeholderTextColor="#94A3B8"
+                keyboardType="numeric"
+                value={budget}
+                onChangeText={(t) => {
+                  // Format as numbers
+                  const clean = t.replace(/[^0-9]/g, '');
+                  setBudget(clean ? Number(clean).toLocaleString('en-IN') : '');
+                  if (error) setError('');
+                }}
+              />
+            </View>
+          </View>
+
+          {/* Error Banner */}
+          {!!error && (
+            <View style={styles.errorBox}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={16} color="#EF4444" />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
           )}
-        </View>
+        </ScrollView>
 
-        {!!error && <Text style={styles.errorText}>{error}</Text>}
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <TouchableOpacity onPress={handleSave} disabled={submitting} activeOpacity={0.85}>
-          <LinearGradient
-            colors={[colors.gradientStart, colors.gradientEnd]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.saveBtn}
+        {/* Footer Button */}
+        <View style={styles.footerContainer}>
+          <TouchableOpacity
+            style={[styles.createBtn, submitting && styles.createBtnDisabled]}
+            onPress={handleCreate}
+            disabled={submitting}
+            activeOpacity={0.88}
           >
             {submitting ? (
-              <ActivityIndicator color={colors.textPrimary} />
+              <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.saveBtnText}>Save Project</Text>
+              <Text style={styles.createBtnText}>+ Create Project</Text>
             )}
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  screen: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   backBtn: {
-    width: 38, height: 38, borderRadius: 12,
-    backgroundColor: colors.surfaceElevated,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: colors.border,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    backgroundColor: '#FFFFFF',
   },
-  backArrow: { fontSize: 18, color: colors.textPrimary, fontWeight: '600' },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary },
-  divider: { height: 1, backgroundColor: colors.borderLight },
+  headerTitles: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '400',
+    marginTop: 2,
+  },
 
-  scroll: { paddingTop: 20, paddingHorizontal: 20, paddingBottom: 120 },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
 
   section: {
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
+    marginBottom: 20,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, marginBottom: 14 },
-  label: {
-    fontSize: 11, fontWeight: '600', color: colors.textSecondary,
-    marginBottom: 6, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5,
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 8,
   },
-  input: {
-    backgroundColor: colors.inputBg,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  sectionHeaderTitle: {
     fontSize: 14,
-    color: colors.textPrimary,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 10,
   },
-  textArea: { height: 80, paddingTop: 12, textAlignVertical: 'top' },
+  fieldLabel: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  requiredStar: {
+    color: '#EF4444',
+  },
 
-  attachRow: {
+  // Upload box (dashed)
+  uploadBox: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#FDBA74',
+    backgroundColor: '#FFFBF5',
+    borderRadius: 12,
+    paddingVertical: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadBoxWithImage: {
+    paddingVertical: 0,
+    overflow: 'hidden',
+    borderStyle: 'solid',
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  uploadInner: {
+    alignItems: 'center',
+  },
+  uploadIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFEDD5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  uploadMainText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 3,
+  },
+  uploadSubText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  previewContainer: {
+    width: '100%',
+    height: 140,
+    position: 'relative',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  previewOverlay: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 6,
+  },
+  removeImageBtn: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+  },
+  changeImageText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+
+  // Inputs
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    padding: 0,
+  },
+
+  // Textarea
+  textAreaContainer: {
+    height: 105,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    position: 'relative',
+  },
+  textAreaHeader: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+  },
+  textAreaInput: {
+    flex: 1,
+    fontSize: 12.5,
+    color: '#0F172A',
+    paddingLeft: 26,
+    paddingTop: 0,
+  },
+  charCounter: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+    textAlign: 'right',
+  },
+
+  // Budget row
+  budgetInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: 10,
+    backgroundColor: '#FFFBF5',
+    paddingHorizontal: 10,
+  },
+  budgetWalletPill: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#FFEDD5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  currencySymbol: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginRight: 6,
+  },
+  budgetTextInput: {
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: '500',
+    color: '#0F172A',
+    padding: 0,
+  },
+
+  // Error
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#EF4444',
+  },
+
+  // Footer
+  footerContainer: {
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
   },
-  checkbox: {
-    width: 22, height: 22, borderRadius: 6,
-    borderWidth: 1.5, borderColor: colors.border,
-    alignItems: 'center', justifyContent: 'center',
+  createBtn: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#EA580C',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  checkboxOn: { backgroundColor: colors.accentAmber, borderColor: colors.accentAmber },
-  attachTitle: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  attachMeta: { fontSize: 12, color: colors.textMuted, marginTop: 2, fontWeight: '500', textTransform: 'capitalize' },
-  emptyHint: { fontSize: 13, color: colors.textMuted, fontWeight: '500' },
-
-  errorText: { fontSize: 13, color: colors.danger, textAlign: 'center', marginBottom: 10, fontWeight: '500' },
-
-  footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 20, paddingBottom: 28, paddingTop: 14,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1, borderTopColor: colors.borderLight,
+  createBtnDisabled: {
+    opacity: 0.65,
   },
-  saveBtn: { borderRadius: 16, paddingVertical: 17, alignItems: 'center' },
-  saveBtnText: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
+  createBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
 });
 
 export default CreateProjectScreen;

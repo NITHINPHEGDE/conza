@@ -10,6 +10,19 @@ const projectSchema = new mongoose.Schema(
 
     name:        { type: String, required: true, trim: true },
     description: { type: String, default: '', trim: true },
+    budget:      { type: Number, default: 0 },
+    location:    { type: String, default: 'Bengaluru, Karnataka', trim: true },
+    image:       { type: String, default: '' },
+    customStatus:{ type: String, default: 'in_progress' },
+
+    expenses: [
+      {
+        title:    { type: String, required: true },
+        amount:   { type: Number, required: true },
+        category: { type: String, default: 'General' },
+        date:     { type: Date, default: Date.now },
+      },
+    ],
 
     attachments: [
       {

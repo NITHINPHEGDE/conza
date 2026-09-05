@@ -24,7 +24,6 @@ const darken = (hex, amount) => {
 const CategoryButton = React.memo(({ label, icon, color, isSelected, onPress }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const iconColor = color || colors.accentAmber;
-  const iconTint = hexToRgba(iconColor, 0.14);
 
   const animateIn = () => {
     Animated.spring(scale, {
@@ -46,24 +45,19 @@ const CategoryButton = React.memo(({ label, icon, color, isSelected, onPress }) 
 
   if (isSelected) {
     return (
-      <Animated.View style={[styles.wrapper, { transform: [{ scale: scale.interpolate({ inputRange: [0.96, 1], outputRange: [0.98, 1.04] }) }] }]}>
+      <Animated.View style={[styles.wrapper, { transform: [{ scale }] }]}>
         <TouchableOpacity
           onPress={onPress}
           onPressIn={animateIn}
           onPressOut={animateOut}
           activeOpacity={0.92}
         >
-          <LinearGradient
-            colors={[iconColor, darken(iconColor, 35)]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.pill, styles.pillSelected, { shadowColor: iconColor }]}
-          >
-            <View style={styles.iconBadgeSelected}>
-              <MaterialCommunityIcons name={icon} size={19} color={iconColor} />
+          <View style={[styles.pill, styles.pillSelected]}>
+            <View style={styles.iconBoxSelected}>
+              <MaterialCommunityIcons name={icon} size={22} color="#FFFFFF" />
             </View>
             <Text style={styles.labelSelected} numberOfLines={2}>{label}</Text>
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
       </Animated.View>
     );
@@ -78,8 +72,8 @@ const CategoryButton = React.memo(({ label, icon, color, isSelected, onPress }) 
         activeOpacity={0.8}
       >
         <View style={styles.pill}>
-          <View style={[styles.iconBadge, { backgroundColor: iconTint }]}>
-            <MaterialCommunityIcons name={icon} size={19} color={iconColor} />
+          <View style={styles.iconCircleInactive}>
+            <MaterialCommunityIcons name={icon} size={20} color="#F59E0B" />
           </View>
           <Text style={styles.labelInactive} numberOfLines={2}>{label}</Text>
         </View>
@@ -91,19 +85,18 @@ const CategoryButton = React.memo(({ label, icon, color, isSelected, onPress }) 
 const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
-    marginHorizontal: 4,
+    marginHorizontal: 3,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
+    height: 56,
     paddingHorizontal: 8,
-    borderRadius: 14,
+    borderRadius: 16,
     gap: 7,
-    backgroundColor: colors.surface,
-    borderWidth: 1.3,
-    borderColor: colors.borderLight,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -111,44 +104,44 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   pillSelected: {
+    backgroundColor: '#F59E0B',
     borderWidth: 0,
-    paddingVertical: 12,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.4,
-    shadowRadius: 9,
-    elevation: 7,
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  iconBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  iconCircleInactive: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF3C7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBadgeSelected: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.white,
+  iconBoxSelected: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   labelSelected: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '800',
-    color: colors.white,
-    letterSpacing: 0.2,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
     lineHeight: 15,
-    textAlign: 'left',
     flexShrink: 1,
   },
   labelInactive: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    letterSpacing: 0.1,
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#111827',
+    letterSpacing: -0.2,
     lineHeight: 15,
-    textAlign: 'left',
     flexShrink: 1,
   },
 });

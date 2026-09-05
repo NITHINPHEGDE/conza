@@ -16,13 +16,23 @@ export const projectAPI = {
     return res.data;
   },
 
-  createProject: async ({ name, description, attachments }) => {
-    const res = await api.post('/projects', { name, description, attachments });
+  createProject: async ({ name, description, budget, location, image, attachments }) => {
+    const res = await api.post('/projects', { name, description, budget, location, image, attachments });
     return res.data;
   },
 
   updateProject: async (id, data) => {
     const res = await api.patch(`/projects/${id}`, data);
+    return res.data;
+  },
+
+  addExpense: async (id, expenseData) => {
+    const res = await api.post(`/projects/${id}/expenses`, expenseData);
+    return res.data;
+  },
+
+  removeExpense: async (id, expenseId) => {
+    const res = await api.delete(`/projects/${id}/expenses/${expenseId}`);
     return res.data;
   },
 

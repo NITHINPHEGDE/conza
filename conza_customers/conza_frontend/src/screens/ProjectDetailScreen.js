@@ -1,928 +1,1667 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  StatusBar, Alert, ActivityIndicator, Modal, Platform,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Image,
+  Modal,
+  Pressable,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
-import { colors } from '../theme/colors';
+import AddToProjectSheet from '../components/AddToProjectSheet';
 
-// ── Status display helpers (mirror StatusScreen.js so the cards look identical) ──
-const getLabourStatusDisplay = (status) => {
-  switch (status) {
-    case 'pending':                        return { text: 'Waiting for response',    color: '#F59E0B', icon: 'clock-outline'   };
-    case 'accepted':                       return { text: 'Worker on the way',       color: '#3B82F6', icon: 'car-side'        };
-    case 'arrived':                        return { text: 'Worker Arrived',          color: '#10B981', icon: 'account-check'   };
-    case 'in_progress':                    return { text: 'Work in Progress',        color: '#6366F1', icon: 'hammer-wrench'   };
-    case 'awaiting_customer_confirmation': return { text: 'Confirm Work Completion', color: '#F97316', icon: 'clipboard-check' };
-    case 'completed':                      return { text: 'Completed',               color: '#10B981', icon: 'check-decagram'  };
-    case 'cancelled':                      return { text: 'Cancelled',               color: '#EF4444', icon: 'close-circle'    };
-    default:                               return { text: status,                    color: '#6B7280', icon: 'help-circle'     };
-  }
-};
+const defaultProjectImage = require('../../assets/images/project_default.jpg');
 
-const getMaterialStatusDisplay = (status) => {
-  switch (status) {
-    case 'new':              return { text: 'Order Placed',     color: '#3B82F6', icon: 'package-variant' };
-    case 'accepted':         return { text: 'Accepted',         color: '#10B981', icon: 'check-circle'    };
-    case 'out_for_delivery': return { text: 'Out for Delivery', color: '#F97316', icon: 'truck-delivery'  };
-    case 'delivered':        return { text: 'Delivered',        color: '#6366F1', icon: 'package-check'   };
-    case 'cancelled':        return { text: 'Cancelled',        color: '#EF4444', icon: 'close-circle'    };
-    default:                 return { text: status,             color: '#6B7280', icon: 'help-circle'     };
-  }
-};
-
-const getVendorStatusDisplay = (status) => {
-  switch (status) {
-    case 'new':       return { text: 'Booking Placed',   color: '#3B82F6', icon: 'clock-outline'   };
-    case 'accepted':  return { text: 'Accepted',         color: '#10B981', icon: 'check-circle'    };
-    case 'active':    return { text: 'Equipment Active', color: '#6366F1', icon: 'hammer-wrench'   };
-    case 'overdue':   return { text: 'Overdue',          color: '#EF4444', icon: 'alert-circle'    };
-    case 'returned':  return { text: 'Returned',         color: '#10B981', icon: 'keyboard-return' };
-    case 'cancelled': return { text: 'Cancelled',        color: '#EF4444', icon: 'close-circle'    };
-    default:          return { text: status,             color: '#6B7280', icon: 'help-circle'     };
-  }
-};
-
-// item.type comes from the backend loadAttachments() helper: 'labour' | 'material' | 'rental'
-const getStatusForType = (type, status) => {
-  if (type === 'labour')   return getLabourStatusDisplay(status);
-  if (type === 'material') return getMaterialStatusDisplay(status);
-  return getVendorStatusDisplay(status); // 'rental' → shown under the "Vendor" filter
-};
-
-const TYPE_META = {
-  labour:   { icon: 'account-hard-hat', badge: '👷 Labour',   badgeBg: '#EEF2FF', badgeColor: '#4338CA' },
-  material: { icon: 'package-variant',  badge: '📦 Material', badgeBg: '#FEF3C7', badgeColor: '#92400E' },
-  rental:   { icon: 'hammer-wrench',    badge: '🏗️ Vendor',   badgeBg: '#ECFDF5', badgeColor: '#059669' },
-};
-
-const FILTERS = [
-  { key: 'all',      label: 'All',      icon: 'view-grid-outline' },
-  { key: 'labour',   label: 'Labour',   icon: 'account-hard-hat'  },
-  { key: 'material', label: 'Material', icon: 'package-variant'   },
-  { key: 'vendor',   label: 'Vendor',   icon: 'hammer-wrench'     },
+const TABS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'labour', label: 'Labour' },
+  { key: 'material', label: 'Material' },
+  { key: 'rental', label: 'Rental' },
+  { key: 'expenses', label: 'Expenses' },
 ];
 
-// UI filter key → attachment item.type
-const filterToType = { labour: 'labour', material: 'material', vendor: 'rental' };
+const formatTimeAgo = (date) => {
+  if (!date) return 'Recently';
+  const d = new Date(date);
+  const now = new Date();
+  const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
+  const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-const EMPTY_COPY = {
-  all:      { emoji: '📋', title: 'No Attachments Yet',      sub: 'Tap "Add Attachment" below to attach a labour booking or order from the Status tab.' },
-  labour:   { emoji: '👷', title: 'No Labour Attachments',   sub: 'Labour bookings added to this project will appear here.'   },
-  material: { emoji: '📦', title: 'No Material Attachments', sub: 'Material orders added to this project will appear here.'   },
-  vendor:   { emoji: '🏗️', title: 'No Vendor Attachments',   sub: 'Rental / vendor orders added to this project will appear here.' },
+  if (diffDays === 0) return `Today, ${timeStr}`;
+  if (diffDays === 1) return `Yesterday, ${timeStr}`;
+  return `${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, ${timeStr}`;
 };
 
-// A status card, visually matching the ones on the Status tab. Stays visible
-// (showing "Completed" / "Delivered" / "Returned" etc.) until the customer
-// explicitly removes it — never auto-hides. Supports multi-selection.
-const AttachmentStatusCard = React.memo(({
-  item, onViewDetails, onRemove, busy,
-  selected, onToggleSelect,
-}) => {
-  const s    = getStatusForType(item.type, item.status);
-  const meta = TYPE_META[item.type] || TYPE_META.material;
-
-  return (
-    <TouchableOpacity
-      style={[styles.card, selected && styles.cardSelected]}
-      onPress={() => onToggleSelect && onToggleSelect(item.attachmentId)}
-      activeOpacity={0.88}
-    >
-      <View style={[styles.cardAccent, { backgroundColor: s.color }]} />
-
-      {/* Select checkbox on the left */}
-      <TouchableOpacity
-        style={styles.selectCheckboxTouch}
-        onPress={() => onToggleSelect && onToggleSelect(item.attachmentId)}
-        activeOpacity={0.7}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-      >
-        <MaterialCommunityIcons
-          name={selected ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
-          size={22}
-          color={selected ? colors.danger : colors.textMuted}
-        />
-      </TouchableOpacity>
-
-      <View style={styles.cardBody}>
-        <View style={styles.cardTop}>
-          <View style={styles.statusPill}>
-            <MaterialCommunityIcons name={s.icon} size={14} color={s.color} />
-            <Text style={[styles.statusPillText, { color: s.color }]}>{s.text}</Text>
-          </View>
-          <View style={[styles.typeBadge, { backgroundColor: meta.badgeBg }]}>
-            <Text style={[styles.typeBadgeText, { color: meta.badgeColor }]}>{meta.badge}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.serviceName} numberOfLines={1}>{item.title}</Text>
-
-        {!!item.city && (
-          <View style={styles.locationRow}>
-            <MaterialCommunityIcons name="map-marker" size={13} color={colors.textMuted} />
-            <Text style={styles.locationText} numberOfLines={1}>{item.city}</Text>
-          </View>
-        )}
-
-        <View style={styles.cardBottom}>
-          <Text style={styles.amountText}>₹{item.total}</Text>
-          <Text style={styles.idText}>#{(item.refId || '').toString().slice(-6).toUpperCase()}</Text>
-        </View>
-
-        <View style={styles.cardActions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={onViewDetails} activeOpacity={0.8}>
-            <Text style={styles.actionBtnText}>View Details →</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.removeBtn}
-            onPress={(e) => {
-              e.stopPropagation();
-              onRemove();
-            }}
-            activeOpacity={0.8}
-            disabled={busy}
-          >
-            <MaterialCommunityIcons name="close-circle-outline" size={14} color={colors.danger} />
-            <Text style={styles.removeBtnText}>Remove</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-});
-
-// Scrollable amount-breakdown popup, grouped by Labour / Material / Vendor.
-const BreakdownModal = ({ visible, onClose, groups, grandTotal }) => (
-  <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-    <View style={styles.modalBackdrop}>
-      <View style={styles.modalSheet}>
-        <View style={styles.modalHandle} />
-        <View style={styles.modalHeaderRow}>
-          <Text style={styles.modalTitle}>Amount Breakdown</Text>
-          <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn} activeOpacity={0.7}>
-            <MaterialCommunityIcons name="close" size={18} color={colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView
-          style={styles.modalScroll}
-          contentContainerStyle={styles.modalScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {groups.length === 0 ? (
-            <Text style={styles.emptyHint}>No attachments to show yet.</Text>
-          ) : (
-            groups.map((group) => (
-              <View key={group.key} style={styles.breakdownGroup}>
-                <Text style={styles.breakdownGroupTitle}>{group.label} ({group.items.length})</Text>
-                {group.items.map((item) => (
-                  <View key={item.attachmentId} style={styles.breakdownRow}>
-                    <Text style={styles.breakdownRowTitle} numberOfLines={1}>{item.title}</Text>
-                    <Text style={styles.breakdownRowAmount}>₹{item.total}</Text>
-                  </View>
-                ))}
-                <View style={styles.breakdownSubtotalRow}>
-                  <Text style={styles.breakdownSubtotalLabel}>Subtotal</Text>
-                  <Text style={styles.breakdownSubtotalAmount}>₹{group.subtotal}</Text>
-                </View>
-              </View>
-            ))
-          )}
-        </ScrollView>
-
-        <View style={styles.modalGrandTotalRow}>
-          <Text style={styles.modalGrandTotalLabel}>Grand Total</Text>
-          <Text style={styles.modalGrandTotalAmount}>₹{grandTotal}</Text>
-        </View>
-      </View>
-    </View>
-  </Modal>
-);
-
-// Sleek in-app confirm modal (replaces browser window.confirm and native system Alert)
-const DeleteConfirmModal = ({ visible, title, message, onCancel, onConfirm, busy }) => (
-  <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-    <View style={styles.modalOverlay}>
-      <TouchableOpacity style={styles.modalBackdropTouch} activeOpacity={1} onPress={onCancel} />
-      <View style={styles.confirmDialogSheet}>
-        <View style={styles.confirmIconWrap}>
-          <MaterialCommunityIcons name="trash-can-outline" size={26} color={colors.danger} />
-        </View>
-        <Text style={styles.confirmTitle}>{title || 'Delete Project?'}</Text>
-        <Text style={styles.confirmSub}>{message}</Text>
-
-        <View style={styles.confirmActionRow}>
-          <TouchableOpacity
-            style={styles.cancelModalBtn}
-            onPress={onCancel}
-            disabled={busy}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.cancelModalBtnText}>Cancel</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.deleteModalBtn}
-            onPress={onConfirm}
-            disabled={busy}
-            activeOpacity={0.8}
-          >
-            {busy ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.deleteModalBtnText}>Delete</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  </Modal>
-);
-
 const ProjectDetailScreen = ({ route, navigation }) => {
+  const insets = useSafeAreaInsets();
   const { projectId } = route.params || {};
+
   const {
-    myProjects, fetchMyProjects,
-    removeAttachmentFromProject, removeAttachmentsFromProject, deleteProject,
+    myProjects,
+    fetchMyProjects,
+    updateProject,
+    deleteProject,
+    addExpenseToProject,
+    removeExpenseFromProject,
     setActiveBookingId,
   } = useAppStore();
 
-  const [activeFilter, setActiveFilter]         = useState('all');
-  const [showBreakdown, setShowBreakdown]       = useState(false);
-  const [showDeleteModal, setShowDeleteModal]   = useState(false);
-  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
-  const [itemToRemove, setItemToRemove]         = useState(null);
-  const [selectedIds, setSelectedIds]           = useState([]);
-  const [busy, setBusy]                         = useState(false);
-  const [deleting, setDeleting]                 = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [project, setProject] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Edit project modal
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editBudget, setEditBudget] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // 3-dots actions menu modal
+  const [showMenuModal, setShowMenuModal] = useState(false);
+
+  // Add Expense modal
+  const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
+  const [expenseTitle, setExpenseTitle] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState('Materials');
+  const [savingExpense, setSavingExpense] = useState(false);
+
+  // Add Attachments sheet
+  const [showAttachSheet, setShowAttachSheet] = useState(false);
+
+  // Activity filter modal
+  const [showActivityFilter, setShowActivityFilter] = useState(false);
+  const [activityFilter, setActivityFilter] = useState('all'); // 'all' | 'material' | 'labour' | 'rental' | 'expense'
+
+  // Load project from store or backend
+  const loadProject = useCallback(async () => {
+    setLoading(true);
+    await fetchMyProjects();
+    setLoading(false);
+  }, [fetchMyProjects]);
 
   useEffect(() => {
-    fetchMyProjects();
-  }, []);
+    loadProject();
+  }, [loadProject]);
 
-  const project = useMemo(
-    () => (myProjects || []).find((p) => p._id === projectId),
-    [myProjects, projectId]
-  );
+  useEffect(() => {
+    const found = (myProjects || []).find((p) => p._id === projectId);
+    if (found) {
+      setProject(found);
+      setEditName(found.name || '');
+      setEditBudget(found.budget ? found.budget.toString() : '250000');
+      setEditLocation(found.location || 'Bengaluru, Karnataka');
+    }
+  }, [myProjects, projectId]);
 
-  const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
+  // Breakdown & calculations
+  const {
+    attachments,
+    materialOrders,
+    labourBookingsList,
+    rentalOrdersList,
+    expensesList,
+    materialSpent,
+    labourSpent,
+    rentalSpent,
+    expensesSpent,
+    totalSpent,
+    budget,
+    budgetPercent,
+    remainingBudget,
+    allActivities,
+  } = useMemo(() => {
+    if (!project) {
+      return {
+        attachments: [],
+        materialOrders: [],
+        labourBookingsList: [],
+        rentalOrdersList: [],
+        expensesList: [],
+        materialSpent: 0,
+        labourSpent: 0,
+        rentalSpent: 0,
+        expensesSpent: 0,
+        totalSpent: 0,
+        budget: 250000,
+        budgetPercent: 0,
+        remainingBudget: 250000,
+        allActivities: [],
+      };
+    }
 
-  const attachments = project?.attachments || [];
+    const att = project.attachments || [];
+    const mat = att.filter((a) => a.refModel === 'SellerOrder' && a.type !== 'rental');
+    const lab = att.filter((a) => a.refModel === 'Booking' || a.type === 'labour');
+    const ren = att.filter((a) => a.type === 'rental');
+    const exp = project.expenses || [];
 
-  // Cancelled orders/bookings are automatically hidden — only active items show.
-  const activeAttachments = useMemo(
-    () => attachments.filter((a) => a.status !== 'cancelled'),
-    [attachments]
-  );
+    const matTotal = mat.reduce((sum, a) => sum + (a.total || 0), 0);
+    const labTotal = lab.reduce((sum, a) => sum + (a.total || 0), 0);
+    const renTotal = ren.reduce((sum, a) => sum + (a.total || 0), 0);
+    const expTotal = exp.reduce((sum, e) => sum + (e.amount || 0), 0);
 
-  const counts = useMemo(() => ({
-    all:      activeAttachments.length,
-    labour:   activeAttachments.filter((a) => a.type === 'labour').length,
-    material: activeAttachments.filter((a) => a.type === 'material').length,
-    vendor:   activeAttachments.filter((a) => a.type === 'rental').length,
-  }), [activeAttachments]);
+    const tot = matTotal + labTotal + renTotal + expTotal;
+    const b = project.budget || 250000;
+    const pct = b > 0 ? Math.min(100, Math.round((tot / b) * 100)) : 0;
+    const rem = Math.max(0, b - tot);
 
-  const filteredAttachments = useMemo(() => {
-    if (activeFilter === 'all') return activeAttachments;
-    const wantType = filterToType[activeFilter];
-    return activeAttachments.filter((a) => a.type === wantType);
-  }, [activeAttachments, activeFilter]);
+    // Build activities timeline
+    const acts = [];
+    mat.forEach((m) => {
+      acts.push({
+        id: `mat-${m._id || m.refId}`,
+        title: `${m.title || 'Material Order'} ${m.status === 'delivered' ? 'delivered' : 'placed'}`,
+        subtitle: `${m.items?.length || 1} items • ${m.city || 'Bengaluru'}`,
+        type: 'material',
+        badge: 'Material',
+        badgeColor: '#10B981',
+        badgeBg: '#ECFDF5',
+        icon: 'package-variant',
+        iconBg: '#ECFDF5',
+        iconColor: '#10B981',
+        amount: m.total || 0,
+        date: m.createdAt || project.createdAt,
+      });
+    });
 
-  // Total spent always reflects the whole project, regardless of the active filter.
-  const grandTotal = useMemo(
-    () => activeAttachments.reduce((sum, a) => sum + (Number(a.total) || 0), 0),
-    [activeAttachments]
-  );
+    lab.forEach((l) => {
+      acts.push({
+        id: `lab-${l._id || l.refId}`,
+        title: `${l.title || 'Labour Booking'} ${l.status === 'completed' ? 'completed' : 'started work'}`,
+        subtitle: `${l.city || 'Bengaluru'}`,
+        type: 'labour',
+        badge: 'Labour',
+        badgeColor: '#D97706',
+        badgeBg: '#FEF3C7',
+        icon: 'account-hard-hat',
+        iconBg: '#FFF7ED',
+        iconColor: '#D97706',
+        amount: l.total || 0,
+        date: l.createdAt || project.createdAt,
+      });
+    });
 
-  const breakdownGroups = useMemo(() => {
-    const groupDefs = [
-      { key: 'labour',   label: 'Labour Bookings', type: 'labour'   },
-      { key: 'material', label: 'Material Orders', type: 'material' },
-      { key: 'rental',   label: 'Vendor Orders',   type: 'rental'   },
-    ];
-    return groupDefs
-      .map((g) => {
-        const items    = activeAttachments.filter((a) => a.type === g.type);
-        const subtotal = items.reduce((sum, a) => sum + (Number(a.total) || 0), 0);
-        return { key: g.key, label: g.label, items, subtotal };
-      })
-      .filter((g) => g.items.length > 0);
-  }, [attachments]);
+    ren.forEach((r) => {
+      acts.push({
+        id: `ren-${r._id || r.refId}`,
+        title: `${r.title || 'Equipment Rental'} ${r.status === 'returned' ? 'completed' : 'booked'}`,
+        subtitle: `${r.city || 'Bengaluru'}`,
+        type: 'rental',
+        badge: 'Rental',
+        badgeColor: '#7C3AED',
+        badgeBg: '#FAF5FF',
+        icon: 'truck-outline',
+        iconBg: '#FAF5FF',
+        iconColor: '#7C3AED',
+        amount: r.total || 0,
+        date: r.createdAt || project.createdAt,
+      });
+    });
 
-  const handleViewDetails = useCallback(async (item) => {
+    exp.forEach((e) => {
+      acts.push({
+        id: `exp-${e._id}`,
+        title: e.title,
+        subtitle: e.category || 'Expense',
+        type: 'expense',
+        badge: 'Expense',
+        badgeColor: '#EA580C',
+        badgeBg: '#FFF7ED',
+        icon: 'cash-multiple',
+        iconBg: '#FFF7ED',
+        iconColor: '#EA580C',
+        amount: e.amount || 0,
+        date: e.date || project.createdAt,
+      });
+    });
+
+    acts.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return {
+      attachments: att,
+      materialOrders: mat,
+      labourBookingsList: lab,
+      rentalOrdersList: ren,
+      expensesList: exp,
+      materialSpent: matTotal,
+      labourSpent: labTotal,
+      rentalSpent: renTotal,
+      expensesSpent: expTotal,
+      totalSpent: tot,
+      budget: b,
+      budgetPercent: pct,
+      remainingBudget: rem,
+      allActivities: acts,
+    };
+  }, [project]);
+
+  const filteredActivities = useMemo(() => {
+    if (activityFilter === 'all') return allActivities;
+    return allActivities.filter((a) => a.type === activityFilter);
+  }, [allActivities, activityFilter]);
+
+  const handleSaveEdit = async () => {
+    if (!editName.trim()) {
+      Alert.alert('Validation Error', 'Project name cannot be empty.');
+      return;
+    }
+    const numBudget = Number(editBudget.replace(/[^0-9]/g, '')) || 0;
+    setSavingEdit(true);
+    try {
+      await updateProject(projectId, {
+        name: editName.trim(),
+        budget: numBudget,
+        location: editLocation.trim(),
+      });
+      setShowEditModal(false);
+      await fetchMyProjects();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to update project.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleSaveExpense = async () => {
+    if (!expenseTitle.trim() || !expenseAmount) {
+      Alert.alert('Validation Error', 'Please enter a title and amount.');
+      return;
+    }
+    const num = Number(expenseAmount.replace(/[^0-9]/g, ''));
+    if (!num || num <= 0) {
+      Alert.alert('Validation Error', 'Please enter a valid amount.');
+      return;
+    }
+
+    setSavingExpense(true);
+    try {
+      await addExpenseToProject(projectId, {
+        title: expenseTitle.trim(),
+        amount: num,
+        category: expenseCategory,
+      });
+      setExpenseTitle('');
+      setExpenseAmount('');
+      setShowAddExpenseModal(false);
+      await fetchMyProjects();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to add expense.');
+    } finally {
+      setSavingExpense(false);
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId) => {
+    Alert.alert('Delete Expense', 'Remove this expense from the project?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await removeExpenseFromProject(projectId, expenseId);
+            await fetchMyProjects();
+          } catch (e) {
+            Alert.alert('Error', 'Failed to remove expense');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteProject = () => {
+    setShowMenuModal(false);
+    Alert.alert('Delete Project', `Are you sure you want to delete "${project?.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteProject(projectId);
+            navigation.goBack();
+          } catch (e) {
+            Alert.alert('Error', 'Could not delete project.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleUpdateCustomStatus = async (statusKey) => {
+    setShowMenuModal(false);
+    try {
+      await updateProject(projectId, { customStatus: statusKey });
+      await fetchMyProjects();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to update status');
+    }
+  };
+
+  const handleViewAttachment = async (item) => {
     if (item.refModel === 'Booking') {
-      await setActiveBookingId(item.refId);
-      navigation.navigate('Status', { screen: 'BookingDetail' });
+      await setActiveBookingId(item.refId?._id || item.refId);
+      navigation.navigate('BookingDetail');
     } else {
-      navigation.navigate('Status', { screen: 'OrderDetail', params: { orderId: item.refId } });
+      navigation.navigate('OrderDetail', { orderId: item.refId?._id || item.refId });
     }
-  }, [navigation, setActiveBookingId]);
+  };
 
-  const handleRemove = useCallback((item) => {
-    setItemToRemove(item);
-  }, []);
-
-  const confirmRemoveAttachment = useCallback(async () => {
-    if (!project || !itemToRemove) return;
-    setBusy(true);
-    try {
-      await removeAttachmentFromProject(project._id, itemToRemove.attachmentId);
-      setItemToRemove(null);
-    } catch (e) {
-      const msg = e.message || 'Please try again.';
-      if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert('Could not remove', msg);
-    } finally {
-      setBusy(false);
-    }
-  }, [project, itemToRemove, removeAttachmentFromProject]);
-
-  const handleToggleSelect = useCallback((attachmentId) => {
-    setSelectedIds((prev) =>
-      prev.includes(attachmentId)
-        ? prev.filter((id) => id !== attachmentId)
-        : [...prev, attachmentId]
-    );
-  }, []);
-
-  const handleSelectAll = useCallback(() => {
-    if (selectedIds.length === filteredAttachments.length && filteredAttachments.length > 0) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(filteredAttachments.map((a) => a.attachmentId));
-    }
-  }, [selectedIds.length, filteredAttachments]);
-
-  const confirmBulkDelete = useCallback(async () => {
-    if (!project || !selectedIds.length) return;
-    setBusy(true);
-    try {
-      await removeAttachmentsFromProject(project._id, selectedIds);
-      setSelectedIds([]);
-      setShowBulkDeleteModal(false);
-    } catch (e) {
-      const msg = e.message || 'Could not remove selected attachments.';
-      if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert('Could not remove', msg);
-    } finally {
-      setBusy(false);
-    }
-  }, [project, selectedIds, removeAttachmentsFromProject]);
-
-  const handleDeleteProjectPress = useCallback(() => {
-    if (!project || busy || deleting) return;
-    setShowDeleteModal(true);
-  }, [project, busy, deleting]);
-
-  const confirmDeleteProject = useCallback(async () => {
-    if (!project) return;
-    setDeleting(true);
-    setBusy(true);
-    try {
-      await deleteProject(project._id);
-      setShowDeleteModal(false);
-      navigation.goBack();
-    } catch (e) {
-      setDeleting(false);
-      setBusy(false);
-      const errMsg = e?.response?.data?.message || e?.message || 'Please check your connection and try again.';
-      if (Platform.OS === 'web') window.alert(`Could not delete: ${errMsg}`);
-      else Alert.alert('Could not delete', errMsg);
-    }
-  }, [project, deleteProject, navigation]);
-
-  // Bottom-right FAB: send the customer to the Status tab, where attachments
-  // are actually added via each card's existing "Add to Project" action.
-  const handleAddAttachment = useCallback(() => {
-    navigation.navigate('Status', { screen: 'StatusList' });
-  }, [navigation]);
-
-  if (!project) {
+  if (loading && !project) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.7}>
-            <Text style={styles.backArrow}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Project</Text>
-          <View style={{ width: 38 }} />
-        </View>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.accentAmber} />
-        </View>
-      </SafeAreaView>
+      <View style={[styles.screen, styles.center]}>
+        <ActivityIndicator size="large" color="#D97706" />
+      </View>
     );
   }
 
-  const emptyCopy      = EMPTY_COPY[activeFilter];
-  const activeFilterDef = FILTERS.find((f) => f.key === activeFilter);
-
-  return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.7}>
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{project.name}</Text>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={handleDeleteProjectPress}
-          activeOpacity={0.7}
-          disabled={busy || deleting}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          {deleting ? (
-            <ActivityIndicator size="small" color={colors.danger} />
-          ) : (
-            <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.danger} />
-          )}
+  if (!project) {
+    return (
+      <View style={[styles.screen, styles.center]}>
+        <Text style={styles.errorSub}>Project not found.</Text>
+        <TouchableOpacity style={styles.backHomeBtn} onPress={() => navigation.goBack()}>
+          <Text style={styles.backHomeBtnText}>Go Back</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.divider} />
+    );
+  }
 
-      <View style={styles.filterRow}>
-        {FILTERS.map((f) => {
-          const isActive = activeFilter === f.key;
+  const projectThumb = project.image ? { uri: project.image } : defaultProjectImage;
+
+  return (
+    <SafeAreaView style={styles.screen} edges={['top']}>
+      {/* Header Top Bar */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+          <MaterialCommunityIcons name="arrow-left" size={20} color="#0F172A" />
+        </TouchableOpacity>
+
+        <Image source={projectThumb} style={styles.headerThumb} resizeMode="cover" />
+
+        <View style={styles.headerCenter}>
+          <View style={styles.titleRow}>
+            <Text style={styles.headerTitle} numberOfLines={1}>{project.name}</Text>
+            <View style={styles.statusPill}>
+              <View style={styles.statusDot} />
+              <Text style={styles.statusPillText}>In Progress</Text>
+            </View>
+          </View>
+          <View style={styles.metaRow}>
+            <MaterialCommunityIcons name="map-marker-outline" size={12} color="#64748B" />
+            <Text style={styles.metaText} numberOfLines={1}>{project.location || 'Bengaluru, Karnataka'}</Text>
+            <MaterialCommunityIcons name="calendar-blank-outline" size={12} color="#64748B" style={{ marginLeft: 6 }} />
+            <Text style={styles.metaText}>
+              Started on {new Date(project.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.actionIconBtn} onPress={() => setShowEditModal(true)}>
+            <MaterialCommunityIcons name="pencil-outline" size={18} color="#1E293B" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionIconBtn} onPress={() => setShowMenuModal(true)}>
+            <MaterialCommunityIcons name="dots-vertical" size={18} color="#1E293B" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Tabs Row */}
+      <View style={styles.tabRow}>
+        {TABS.map((t) => {
+          const isSelected = activeTab === t.key;
           return (
             <TouchableOpacity
-              key={f.key}
-              style={[styles.filterChip, isActive && styles.filterChipActive]}
-              onPress={() => setActiveFilter(f.key)}
-              activeOpacity={0.75}
+              key={t.key}
+              style={styles.tabItem}
+              onPress={() => setActiveTab(t.key)}
+              activeOpacity={0.8}
             >
-              <MaterialCommunityIcons
-                name={f.icon}
-                size={14}
-                color={isActive ? colors.white : colors.textSecondary}
-              />
-              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                {f.label}
+              <Text style={[styles.tabItemText, isSelected && styles.tabItemTextActive]}>
+                {t.label}
               </Text>
-              {counts[f.key] > 0 && (
-                <View style={[styles.filterBadge, isActive && styles.filterBadgeActive]}>
-                  <Text style={[styles.filterBadgeText, isActive && styles.filterBadgeTextActive]}>
-                    {counts[f.key]}
-                  </Text>
-                </View>
-              )}
+              {isSelected && <View style={styles.tabUnderline} />}
             </TouchableOpacity>
           );
         })}
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <TouchableOpacity style={styles.totalCard} onPress={() => setShowBreakdown(true)} activeOpacity={0.85}>
-          <View style={styles.totalCardLeft}>
-            <View style={styles.totalIconWrap}>
-              <MaterialCommunityIcons name="wallet-outline" size={20} color={colors.accentAmber} />
-            </View>
-            <View>
-              <Text style={styles.totalLabel}>Total Amount Spent</Text>
-              <Text style={styles.totalAmount}>₹{grandTotal}</Text>
-            </View>
-          </View>
-          <View style={styles.totalCardRight}>
-            <Text style={styles.totalCardHint}>View Breakdown</Text>
-            <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textMuted} />
-          </View>
-        </TouchableOpacity>
+      {/* Main Content Scroll */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {activeTab === 'overview' && (
+          <>
+            {/* Big Budget Card */}
+            <View style={styles.budgetCard}>
+              <View style={styles.budgetCardTop}>
+                <View style={styles.walletIconWrap}>
+                  <MaterialCommunityIcons name="wallet-outline" size={24} color="#10B981" />
+                </View>
+                <View style={styles.budgetAmountsCol}>
+                  <Text style={styles.totalSpentLabel}>Total Spent</Text>
+                  <Text style={styles.totalSpentValue}>₹{totalSpent.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.budgetTotalSub}>of ₹{budget.toLocaleString('en-IN')} (Budget)</Text>
+                </View>
+                <View style={styles.budgetUsedCol}>
+                  <Text style={styles.budgetPercentText}>{budgetPercent}%</Text>
+                  <Text style={styles.budgetUsedLabel}>Budget Used</Text>
+                </View>
+              </View>
 
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>
-            Attachments{activeFilter !== 'all' ? ` · ${activeFilterDef?.label}` : ''} ({filteredAttachments.length})
-          </Text>
+              {/* Progress Bar */}
+              <View style={styles.budgetProgressTrack}>
+                <View style={[styles.budgetProgressFill, { width: `${budgetPercent}%` }]} />
+              </View>
 
-          {filteredAttachments.length > 0 && (
-            <View style={styles.bulkHeaderActions}>
-              <TouchableOpacity
-                style={styles.selectAllBtn}
-                onPress={handleSelectAll}
-                activeOpacity={0.75}
-              >
-                <MaterialCommunityIcons
-                  name={selectedIds.length === filteredAttachments.length && filteredAttachments.length > 0 ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                  size={15}
-                  color={colors.accentAmber}
-                />
-                <Text style={styles.selectAllText}>
-                  {selectedIds.length === filteredAttachments.length && filteredAttachments.length > 0 ? 'Deselect All' : 'Select All'}
+              {/* Bottom Row */}
+              <View style={styles.budgetCardFooter}>
+                <Text style={styles.remainingAmountText}>
+                  ₹{remainingBudget.toLocaleString('en-IN')} remaining
                 </Text>
+                <TouchableOpacity
+                  style={styles.breakdownLink}
+                  onPress={() => setActiveTab('expenses')}
+                >
+                  <Text style={styles.breakdownLinkText}>View Breakdown</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={14} color="#10B981" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* 5 Metric Summary Cards */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.metricsRowScroll}
+            >
+              {/* Orders */}
+              <TouchableOpacity
+                style={styles.metricCard}
+                onPress={() => setActiveTab('material')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.metricCardIcon, { backgroundColor: '#ECFDF5' }]}>
+                  <MaterialCommunityIcons name="package-variant-closed" size={17} color="#10B981" />
+                </View>
+                <Text style={styles.metricCardValue}>{materialOrders.length}</Text>
+                <Text style={styles.metricCardLabel}>Orders</Text>
+                <Text style={[styles.metricCardSub, { color: '#10B981' }]}>₹{materialSpent.toLocaleString('en-IN')}</Text>
               </TouchableOpacity>
 
-              {selectedIds.length > 0 && (
+              {/* Labour */}
+              <TouchableOpacity
+                style={styles.metricCard}
+                onPress={() => setActiveTab('labour')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.metricCardIcon, { backgroundColor: '#FFF7ED' }]}>
+                  <MaterialCommunityIcons name="account-hard-hat" size={17} color="#D97706" />
+                </View>
+                <Text style={styles.metricCardValue}>{labourBookingsList.length}</Text>
+                <Text style={styles.metricCardLabel}>Labour</Text>
+                <Text style={[styles.metricCardSub, { color: '#D97706' }]}>₹{labourSpent.toLocaleString('en-IN')}</Text>
+              </TouchableOpacity>
+
+              {/* Rentals */}
+              <TouchableOpacity
+                style={styles.metricCard}
+                onPress={() => setActiveTab('rental')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.metricCardIcon, { backgroundColor: '#FAF5FF' }]}>
+                  <MaterialCommunityIcons name="truck-outline" size={17} color="#7C3AED" />
+                </View>
+                <Text style={styles.metricCardValue}>{rentalOrdersList.length}</Text>
+                <Text style={styles.metricCardLabel}>Rentals</Text>
+                <Text style={[styles.metricCardSub, { color: '#7C3AED' }]}>₹{rentalSpent.toLocaleString('en-IN')}</Text>
+              </TouchableOpacity>
+
+              {/* Expenses */}
+              <TouchableOpacity
+                style={styles.metricCard}
+                onPress={() => setActiveTab('expenses')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.metricCardIcon, { backgroundColor: '#FFF7ED' }]}>
+                  <MaterialCommunityIcons name="cash-multiple" size={17} color="#EA580C" />
+                </View>
+                <Text style={styles.metricCardValue}>{expensesList.length}</Text>
+                <Text style={styles.metricCardLabel}>Expenses</Text>
+                <Text style={[styles.metricCardSub, { color: '#EA580C' }]}>₹{expensesSpent.toLocaleString('en-IN')}</Text>
+              </TouchableOpacity>
+
+              {/* Progress */}
+              <View style={styles.metricCard}>
+                <View style={[styles.metricCardIcon, { backgroundColor: '#EFF6FF' }]}>
+                  <MaterialCommunityIcons name="chart-bar" size={17} color="#2563EB" />
+                </View>
+                <Text style={styles.metricCardValue}>{budgetPercent}%</Text>
+                <Text style={styles.metricCardLabel}>Progress</Text>
+                <Text style={[styles.metricCardSub, { color: '#2563EB' }]}>Used</Text>
+              </View>
+            </ScrollView>
+
+            {/* Quick Action Pills */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickActionsScroll}
+            >
+              <TouchableOpacity
+                style={styles.quickActionBtn}
+                onPress={() => navigation.navigate('Booking', { screen: 'BookingHome' })}
+              >
+                <MaterialCommunityIcons name="cart-outline" size={15} color="#10B981" />
+                <Text style={styles.quickActionText}>Book Material</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionBtn}
+                onPress={() => navigation.navigate('Booking', { screen: 'BookingHome' })}
+              >
+                <MaterialCommunityIcons name="account-hard-hat" size={15} color="#D97706" />
+                <Text style={styles.quickActionText}>Book Labour</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionBtn}
+                onPress={() => navigation.navigate('Booking', { screen: 'BookingHome' })}
+              >
+                <MaterialCommunityIcons name="tractor" size={15} color="#7C3AED" />
+                <Text style={styles.quickActionText}>Book Rental</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionBtn}
+                onPress={() => setShowAddExpenseModal(true)}
+              >
+                <MaterialCommunityIcons name="cash-plus" size={15} color="#EA580C" />
+                <Text style={styles.quickActionText}>Add Expense</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickActionBtn, styles.quickActionBtnAdd]}
+                onPress={() => setShowAddExpenseModal(true)}
+              >
+                <MaterialCommunityIcons name="plus" size={15} color="#10B981" />
+                <Text style={[styles.quickActionText, { color: '#10B981' }]}>Add Activity</Text>
+              </TouchableOpacity>
+            </ScrollView>
+
+            {/* Activities Timeline Section */}
+            <View style={styles.activitiesSection}>
+              <View style={styles.activitiesHeaderRow}>
+                <Text style={styles.activitiesHeaderTitle}>Activities</Text>
                 <TouchableOpacity
-                  style={styles.bulkDeleteBtn}
-                  onPress={() => setShowBulkDeleteModal(true)}
-                  activeOpacity={0.8}
+                  style={styles.activityFilterBtn}
+                  onPress={() => setShowActivityFilter(true)}
                 >
-                  <MaterialCommunityIcons name="trash-can-outline" size={14} color="#FFF" />
-                  <Text style={styles.bulkDeleteText}>Delete ({selectedIds.length})</Text>
+                  <MaterialCommunityIcons name="filter-variant" size={16} color="#475569" />
+                  <Text style={styles.activityFilterBtnText}>Filter</Text>
                 </TouchableOpacity>
+              </View>
+
+              {filteredActivities.length === 0 ? (
+                <View style={styles.emptyActivities}>
+                  <Text style={styles.emptyActivitiesText}>No activities recorded yet.</Text>
+                  <Text style={styles.emptyActivitiesSub}>
+                    Book labour, order materials, or add an expense to record project activity.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.timelineContainer}>
+                  {filteredActivities.map((act, idx) => {
+                    const isLast = idx === filteredActivities.length - 1;
+                    return (
+                      <View key={act.id} style={styles.timelineItemRow}>
+                        {/* Timeline node */}
+                        <View style={styles.timelineNodeCol}>
+                          <View style={[styles.timelineIconCircle, { backgroundColor: act.iconBg }]}>
+                            <MaterialCommunityIcons name={act.icon} size={15} color={act.iconColor} />
+                          </View>
+                          {!isLast && <View style={styles.timelineLine} />}
+                        </View>
+
+                        {/* Content */}
+                        <View style={styles.timelineContent}>
+                          <View style={styles.timelineTopRow}>
+                            <Text style={styles.activityTitle} numberOfLines={1}>{act.title}</Text>
+                            <Text style={styles.activityAmount}>₹{act.amount.toLocaleString('en-IN')}</Text>
+                          </View>
+                          <View style={styles.timelineBottomRow}>
+                            <Text style={styles.activitySubtitle} numberOfLines={1}>{act.subtitle}</Text>
+                            <View style={[styles.activityBadge, { backgroundColor: act.badgeBg }]}>
+                              <Text style={[styles.activityBadgeText, { color: act.badgeColor }]}>{act.badge}</Text>
+                            </View>
+                            <Text style={styles.activityDate}>{formatTimeAgo(act.date)}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
               )}
             </View>
-          )}
-        </View>
+          </>
+        )}
 
-        {filteredAttachments.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>{emptyCopy.emoji}</Text>
-            <Text style={styles.emptyTitle}>{emptyCopy.title}</Text>
-            <Text style={styles.emptySub}>{emptyCopy.sub}</Text>
+        {/* Labour Tab */}
+        {activeTab === 'labour' && (
+          <View style={styles.tabContent}>
+            <View style={styles.tabContentHeader}>
+              <Text style={styles.tabContentTitle}>Labour Bookings ({labourBookingsList.length})</Text>
+            </View>
+            {labourBookingsList.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <MaterialCommunityIcons name="account-hard-hat" size={38} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>No Labour Bookings Attached</Text>
+                <Text style={styles.emptySub}>Attach ongoing labour bookings from the Status tab.</Text>
+              </View>
+            ) : (
+              labourBookingsList.map((item) => (
+                <TouchableOpacity
+                  key={item._id || item.refId}
+                  style={styles.itemCard}
+                  onPress={() => handleViewAttachment(item)}
+                  activeOpacity={0.88}
+                >
+                  <View style={styles.itemCardTop}>
+                    <Text style={styles.itemCardTitle}>{item.title || 'Labour Booking'}</Text>
+                    <Text style={styles.itemCardPrice}>₹{(item.total || 0).toLocaleString('en-IN')}</Text>
+                  </View>
+                  <Text style={styles.itemCardSub}>{item.city || 'Bengaluru'} • {item.status}</Text>
+                  <View style={styles.itemCardFooter}>
+                    <Text style={styles.itemCardDate}>{formatTimeAgo(item.createdAt)}</Text>
+                    <Text style={styles.viewDetailsText}>View Details →</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </View>
-        ) : (
-          filteredAttachments.map((item) => (
-            <AttachmentStatusCard
-              key={item.attachmentId}
-              item={item}
-              busy={busy}
-              selected={selectedIds.includes(item.attachmentId)}
-              onToggleSelect={handleToggleSelect}
-              onViewDetails={() => handleViewDetails(item)}
-              onRemove={() => handleRemove(item)}
-            />
-          ))
+        )}
+
+        {/* Material Tab */}
+        {activeTab === 'material' && (
+          <View style={styles.tabContent}>
+            <View style={styles.tabContentHeader}>
+              <Text style={styles.tabContentTitle}>Material Orders ({materialOrders.length})</Text>
+            </View>
+            {materialOrders.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <MaterialCommunityIcons name="package-variant-closed" size={38} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>No Material Orders Attached</Text>
+                <Text style={styles.emptySub}>Attach ongoing material orders from the Status tab.</Text>
+              </View>
+            ) : (
+              materialOrders.map((item) => (
+                <TouchableOpacity
+                  key={item._id || item.refId}
+                  style={styles.itemCard}
+                  onPress={() => handleViewAttachment(item)}
+                  activeOpacity={0.88}
+                >
+                  <View style={styles.itemCardTop}>
+                    <Text style={styles.itemCardTitle}>{item.title || 'Material Order'}</Text>
+                    <Text style={styles.itemCardPrice}>₹{(item.total || 0).toLocaleString('en-IN')}</Text>
+                  </View>
+                  <Text style={styles.itemCardSub}>{item.city || 'Bengaluru'} • {item.status}</Text>
+                  <View style={styles.itemCardFooter}>
+                    <Text style={styles.itemCardDate}>{formatTimeAgo(item.createdAt)}</Text>
+                    <Text style={styles.viewDetailsText}>View Details →</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* Rental Tab */}
+        {activeTab === 'rental' && (
+          <View style={styles.tabContent}>
+            <View style={styles.tabContentHeader}>
+              <Text style={styles.tabContentTitle}>Equipment Rentals ({rentalOrdersList.length})</Text>
+            </View>
+            {rentalOrdersList.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <MaterialCommunityIcons name="truck-outline" size={38} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>No Rentals Attached</Text>
+                <Text style={styles.emptySub}>Attach equipment rentals from the Status tab.</Text>
+              </View>
+            ) : (
+              rentalOrdersList.map((item) => (
+                <TouchableOpacity
+                  key={item._id || item.refId}
+                  style={styles.itemCard}
+                  onPress={() => handleViewAttachment(item)}
+                  activeOpacity={0.88}
+                >
+                  <View style={styles.itemCardTop}>
+                    <Text style={styles.itemCardTitle}>{item.title || 'Rental Equipment'}</Text>
+                    <Text style={styles.itemCardPrice}>₹{(item.total || 0).toLocaleString('en-IN')}</Text>
+                  </View>
+                  <Text style={styles.itemCardSub}>{item.city || 'Bengaluru'} • {item.status}</Text>
+                  <View style={styles.itemCardFooter}>
+                    <Text style={styles.itemCardDate}>{formatTimeAgo(item.createdAt)}</Text>
+                    <Text style={styles.viewDetailsText}>View Details →</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* Expenses Tab */}
+        {activeTab === 'expenses' && (
+          <View style={styles.tabContent}>
+            <View style={styles.tabContentHeader}>
+              <Text style={styles.tabContentTitle}>Project Expenses ({expensesList.length})</Text>
+              <TouchableOpacity
+                style={styles.addExpenseBtn}
+                onPress={() => setShowAddExpenseModal(true)}
+              >
+                <MaterialCommunityIcons name="plus" size={16} color="#FFFFFF" />
+                <Text style={styles.addExpenseBtnText}>Add Expense</Text>
+              </TouchableOpacity>
+            </View>
+
+            {expensesList.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <MaterialCommunityIcons name="cash-multiple" size={38} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>No Expenses Logged</Text>
+                <Text style={styles.emptySub}>Log site expenses, permits, or consultancy fees to track spending.</Text>
+              </View>
+            ) : (
+              expensesList.map((e) => (
+                <View key={e._id} style={styles.itemCard}>
+                  <View style={styles.itemCardTop}>
+                    <Text style={styles.itemCardTitle}>{e.title}</Text>
+                    <Text style={styles.itemCardPrice}>₹{(e.amount || 0).toLocaleString('en-IN')}</Text>
+                  </View>
+                  <View style={styles.itemCardFooter}>
+                    <Text style={styles.itemCardSub}>{e.category || 'General'} • {formatTimeAgo(e.date)}</Text>
+                    <TouchableOpacity onPress={() => handleDeleteExpense(e._id)}>
+                      <MaterialCommunityIcons name="trash-can-outline" size={16} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
         )}
       </ScrollView>
 
-      <TouchableOpacity style={styles.fab} onPress={handleAddAttachment} activeOpacity={0.88}>
-        <MaterialCommunityIcons name="plus" size={18} color={colors.textPrimary} />
-        <Text style={styles.fabText}>Add Attachment</Text>
-      </TouchableOpacity>
+      {/* Edit Project Modal */}
+      <Modal visible={showEditModal} transparent animationType="fade" onRequestClose={() => setShowEditModal(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowEditModal(false)}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit Project Details</Text>
 
-      <BreakdownModal
-        visible={showBreakdown}
-        onClose={() => setShowBreakdown(false)}
-        groups={breakdownGroups}
-        grandTotal={grandTotal}
-      />
+            <Text style={styles.inputLabel}>Project Name</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Project Name"
+            />
 
-      {/* Popup modal for deleting project */}
-      <DeleteConfirmModal
-        visible={showDeleteModal}
-        title="Delete Project?"
-        message={`Delete "${project.name}"? This cannot be undone.`}
-        onCancel={() => setShowDeleteModal(false)}
-        onConfirm={confirmDeleteProject}
-        busy={deleting}
-      />
+            <Text style={styles.inputLabel}>Total Budget (₹)</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editBudget}
+              onChangeText={setEditBudget}
+              keyboardType="numeric"
+              placeholder="Budget"
+            />
 
-      {/* Popup modal for single attachment removal */}
-      <DeleteConfirmModal
-        visible={!!itemToRemove}
-        title="Remove Attachment?"
-        message={itemToRemove ? `Remove "${itemToRemove.title}" from this project?` : ''}
-        onCancel={() => setItemToRemove(null)}
-        onConfirm={confirmRemoveAttachment}
-        busy={busy}
-      />
+            <Text style={styles.inputLabel}>Location</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editLocation}
+              onChangeText={setEditLocation}
+              placeholder="Location"
+            />
 
-      {/* Popup modal for mass deleting selected attachments */}
-      <DeleteConfirmModal
-        visible={showBulkDeleteModal}
-        title={`Delete ${selectedIds.length} Attachments?`}
-        message={`Remove ${selectedIds.length} selected attachment(s) from "${project.name}"? This cannot be undone.`}
-        onCancel={() => setShowBulkDeleteModal(false)}
-        onConfirm={confirmBulkDelete}
-        busy={busy}
-      />
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowEditModal(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleSaveEdit}
+                disabled={savingEdit}
+              >
+                {savingEdit ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
 
-      {busy && (
-        <View style={styles.busyOverlay}>
-          <ActivityIndicator color={colors.accentAmber} />
-        </View>
-      )}
+      {/* 3-Dots Action Menu Modal */}
+      <Modal visible={showMenuModal} transparent animationType="fade" onRequestClose={() => setShowMenuModal(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowMenuModal(false)}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Project Actions</Text>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenuModal(false);
+                setShowEditModal(true);
+              }}
+            >
+              <MaterialCommunityIcons name="pencil-outline" size={18} color="#334155" style={{ marginRight: 8 }} />
+              <Text style={styles.menuItemText}>Edit Project Details</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.subModalLabel}>Change Status:</Text>
+            <View style={styles.statusChipsRow}>
+              <TouchableOpacity
+                style={[styles.statusChipBtn, { borderColor: '#10B981' }]}
+                onPress={() => handleUpdateCustomStatus('in_progress')}
+              >
+                <Text style={{ color: '#10B981', fontSize: 11.5, fontWeight: '600' }}>In Progress</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.statusChipBtn, { borderColor: '#F59E0B' }]}
+                onPress={() => handleUpdateCustomStatus('planning')}
+              >
+                <Text style={{ color: '#D97706', fontSize: 11.5, fontWeight: '600' }}>Planning</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.statusChipBtn, { borderColor: '#3B82F6' }]}
+                onPress={() => handleUpdateCustomStatus('on_hold')}
+              >
+                <Text style={{ color: '#2563EB', fontSize: 11.5, fontWeight: '600' }}>On Hold</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.statusChipBtn, { borderColor: '#10B981' }]}
+                onPress={() => handleUpdateCustomStatus('completed')}
+              >
+                <Text style={{ color: '#10B981', fontSize: 11.5, fontWeight: '600' }}>Completed</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: '#FEF2F2', marginTop: 12 }]}
+              onPress={handleDeleteProject}
+            >
+              <MaterialCommunityIcons name="trash-can-outline" size={18} color="#EF4444" style={{ marginRight: 8 }} />
+              <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Delete Project</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowMenuModal(false)}>
+              <Text style={styles.modalCloseBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Add Expense Modal */}
+      <Modal
+        visible={showAddExpenseModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddExpenseModal(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowAddExpenseModal(false)}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Add Project Expense</Text>
+
+            <Text style={styles.inputLabel}>Expense Title</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g. Site cleaning, Architecture consultation"
+              value={expenseTitle}
+              onChangeText={setExpenseTitle}
+            />
+
+            <Text style={styles.inputLabel}>Amount (₹)</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g. 5000"
+              keyboardType="numeric"
+              value={expenseAmount}
+              onChangeText={setExpenseAmount}
+            />
+
+            <Text style={styles.inputLabel}>Category</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g. Materials, Labour, Permits, Misc"
+              value={expenseCategory}
+              onChangeText={setExpenseCategory}
+            />
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAddExpenseModal(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleSaveExpense}
+                disabled={savingExpense}
+              >
+                {savingExpense ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Add Expense</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Activity Filter Modal */}
+      <Modal
+        visible={showActivityFilter}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowActivityFilter(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowActivityFilter(false)}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Filter Activities</Text>
+            {['all', 'material', 'labour', 'rental', 'expense'].map((cat) => (
+              <TouchableOpacity
+                key={cat}
+                style={[styles.filterOption, activityFilter === cat && styles.filterOptionActive]}
+                onPress={() => {
+                  setActivityFilter(cat);
+                  setShowActivityFilter(false);
+                }}
+              >
+                <Text style={[styles.filterOptionText, activityFilter === cat && styles.filterOptionTextActive]}>
+                  {cat === 'all' ? 'All Activities' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowActivityFilter(false)}>
+              <Text style={styles.modalCloseBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  screen: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  center: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 14,
-    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 10,
+    backgroundColor: '#FFFFFF',
   },
   backBtn: {
-    width: 38, height: 38, borderRadius: 12,
-    backgroundColor: colors.surfaceElevated,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: colors.border,
-  },
-  backArrow: { fontSize: 18, color: colors.textPrimary, fontWeight: '600' },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '800', color: colors.textPrimary, textAlign: 'center' },
-  divider: { height: 1, backgroundColor: colors.borderLight },
-
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  filterChip: {
-    flex: 1,
-    flexDirection: 'row',
+    width: 36,
+    height: 36,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceElevated,
+    marginRight: 10,
+    backgroundColor: '#FFFFFF',
   },
-  filterChipActive: { backgroundColor: colors.textPrimary },
-  filterChipText:   { fontSize: 11, fontWeight: '700', color: colors.textSecondary },
-  filterChipTextActive: { color: colors.white },
-  filterBadge: {
-    minWidth: 15, height: 15, borderRadius: 8,
-    paddingHorizontal: 3,
-    backgroundColor: colors.border,
-    alignItems: 'center', justifyContent: 'center',
+  headerThumb: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    marginRight: 10,
+    backgroundColor: '#F1F5F9',
   },
-  filterBadgeActive: { backgroundColor: colors.accentAmber },
-  filterBadgeText: { fontSize: 9, fontWeight: '800', color: colors.textSecondary },
-  filterBadgeTextActive: { color: colors.textPrimary },
-
-  scroll: { paddingTop: 18, paddingHorizontal: 20, paddingBottom: 110 },
-
-  totalCard: {
+  headerCenter: {
+    flex: 1,
+  },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 22,
-    borderWidth: 1,
-    borderColor: colors.border,
+    gap: 6,
   },
-  totalCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  totalIconWrap: {
-    width: 42, height: 42, borderRadius: 12,
-    backgroundColor: colors.accentAmberSoft,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  totalLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 2 },
-  totalAmount: { fontSize: 20, fontWeight: '800', color: colors.textPrimary },
-  totalCardRight: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  totalCardHint: { fontSize: 12, fontWeight: '700', color: colors.accentAmber },
-
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, marginBottom: 14 },
-
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 60, paddingHorizontal: 16 },
-  emptyEmoji: { fontSize: 44, marginBottom: 12 },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, marginBottom: 6 },
-  emptySub:   { fontSize: 13, color: colors.textMuted, textAlign: 'center', lineHeight: 18, fontWeight: '500' },
-
-  card: {
-    flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    marginBottom: 14,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  cardAccent: { width: 5 },
-  cardBody:   { flex: 1, padding: 14 },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  statusPillText: { fontSize: 11, fontWeight: '700' },
-  typeBadge:      { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
-  typeBadgeText:  { fontSize: 10, fontWeight: '700' },
-  serviceName:    { fontSize: 15, fontWeight: '800', color: colors.textPrimary, marginBottom: 6 },
-  locationRow:    { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 10 },
-  locationText:   { fontSize: 12, color: colors.textMuted },
-  cardBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  amountText: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
-  idText:     { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
-  cardActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  actionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accentAmberSoft,
-    paddingVertical: 9,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 10,
+    gap: 3.5,
   },
-  actionBtnText: { fontSize: 12, fontWeight: '700', color: colors.accentAmber },
-  removeBtn: {
-    flex: 1,
+  statusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#10B981',
+  },
+  statusPillText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(224,59,59,0.08)',
-    paddingVertical: 9,
-    borderRadius: 10,
+    marginTop: 2,
   },
-  removeBtnText: { fontSize: 12, fontWeight: '700', color: colors.danger },
-
-  fab: {
-    position: 'absolute',
-    right: 18,
-    bottom: 22,
+  metaText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginLeft: 2,
+  },
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.accentAmber,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderRadius: 28,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 6,
+    marginLeft: 6,
   },
-  fabText: { fontSize: 13, fontWeight: '800', color: colors.textPrimary },
-
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(26,24,20,0.45)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 24,
-    maxHeight: '75%',
-  },
-  modalHandle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
-    marginBottom: 12,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  modalTitle: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
-  modalCloseBtn: {
-    width: 32, height: 32, borderRadius: 10,
-    backgroundColor: colors.surfaceElevated,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  modalScroll: { flexGrow: 0 },
-  modalScrollContent: { paddingBottom: 8 },
-  emptyHint: { fontSize: 13, color: colors.textMuted, fontWeight: '500', paddingVertical: 16, textAlign: 'center' },
-
-  breakdownGroup: {
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
+  actionIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.border,
-  },
-  breakdownGroupTitle: {
-    fontSize: 12, fontWeight: '700', color: colors.textSecondary,
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8,
-  },
-  breakdownRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: colors.borderLight,
-  },
-  breakdownRowTitle:  { flex: 1, fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginRight: 10 },
-  breakdownRowAmount: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
-  breakdownSubtotalRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: 8,
-  },
-  breakdownSubtotalLabel:  { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  breakdownSubtotalAmount: { fontSize: 13, fontWeight: '800', color: colors.accentAmber },
-
-  modalGrandTotalRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginTop: 6, paddingTop: 14,
-    borderTopWidth: 1, borderTopColor: colors.borderLight,
-  },
-  modalGrandTotalLabel:  { fontSize: 14, fontWeight: '800', color: colors.textPrimary },
-  modalGrandTotalAmount: { fontSize: 18, fontWeight: '900', color: colors.accentAmber },
-
-  busyOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(250,250,247,0.6)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    backgroundColor: '#FFFFFF',
   },
-  modalBackdropTouch: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  confirmDialogSheet: {
-    width: '100%',
-    maxWidth: 340,
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  confirmIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(239,68,68,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  confirmTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  confirmSub: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 20,
-  },
-  confirmActionRow: {
+
+  // Tabs
+  tabRow: {
     flexDirection: 'row',
-    gap: 10,
-    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingHorizontal: 8,
   },
-  cancelModalBtn: {
+  tabItem: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceElevated,
+    alignItems: 'center',
+    paddingVertical: 11,
+    position: 'relative',
+  },
+  tabItemText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  tabItemTextActive: {
+    color: '#D97706',
+    fontWeight: '600',
+  },
+  tabUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 8,
+    right: 8,
+    height: 2,
+    backgroundColor: '#D97706',
+    borderRadius: 1,
+  },
+
+  scrollContent: {
+    paddingBottom: 40,
+  },
+
+  // Budget Card
+  budgetCard: {
+    marginHorizontal: 14,
+    marginTop: 12,
+    marginBottom: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1.5,
+  },
+  budgetCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  walletIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#ECFDF5',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 10,
   },
-  cancelModalBtnText: {
+  budgetAmountsCol: {
+    flex: 1,
+  },
+  totalSpentLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '400',
+  },
+  totalSpentValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginVertical: 1,
+  },
+  budgetTotalSub: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  budgetUsedCol: {
+    alignItems: 'flex-end',
+  },
+  budgetPercentText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  budgetUsedLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#10B981',
+  },
+  budgetProgressTrack: {
+    height: 5,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 2.5,
+    overflow: 'hidden',
+    marginTop: 12,
+    marginBottom: 10,
+  },
+  budgetProgressFill: {
+    height: '100%',
+    backgroundColor: '#10B981',
+    borderRadius: 2.5,
+  },
+  budgetCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  remainingAmountText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  breakdownLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  breakdownLinkText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+
+  // 5 Metric Cards
+  metricsRowScroll: {
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    gap: 8,
+  },
+  metricCard: {
+    width: 82,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  metricCardIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5,
+  },
+  metricCardValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  metricCardLabel: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  metricCardSub: {
+    fontSize: 9.5,
+    fontWeight: '600',
+  },
+
+  // Quick Action Pills
+  quickActionsScroll: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  quickActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 20,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    gap: 5,
+  },
+  quickActionBtnAdd: {
+    borderColor: '#A7F3D0',
+    backgroundColor: '#F0FDF4',
+  },
+  quickActionText: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: '#334155',
+  },
+
+  // Activities Section
+  activitiesSection: {
+    marginHorizontal: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+  },
+  activitiesHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  activitiesHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  activityFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 3,
+  },
+  activityFilterBtnText: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: '#475569',
+  },
+  emptyActivities: {
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  emptyActivitiesText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#334155',
+    marginBottom: 4,
+  },
+  emptyActivitiesSub: {
+    fontSize: 11.5,
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
+
+  // Timeline
+  timelineContainer: {
+    paddingLeft: 4,
+  },
+  timelineItemRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    minHeight: 52,
+  },
+  timelineNodeCol: {
+    alignItems: 'center',
+    width: 28,
+    marginRight: 8,
+  },
+  timelineIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  timelineLine: {
+    width: 1.5,
+    flex: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 2,
+  },
+  timelineContent: {
+    flex: 1,
+    paddingBottom: 14,
+  },
+  timelineTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  activityTitle: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#0F172A',
+    flex: 1,
+    paddingRight: 6,
+  },
+  activityAmount: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  timelineBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  activitySubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    flex: 1,
+  },
+  activityBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  activityBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '600',
+  },
+  activityDate: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+  },
+
+  // Tab Content
+  tabContent: {
+    paddingHorizontal: 14,
+    paddingTop: 12,
+  },
+  tabContentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  tabContentTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  addExpenseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EA580C',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  addExpenseBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  itemCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 10,
+  },
+  itemCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  itemCardTitle: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#0F172A',
+    flex: 1,
+    paddingRight: 6,
+  },
+  itemCardPrice: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.textPrimary,
+    color: '#0F172A',
   },
-  deleteModalBtn: {
-    flex: 1,
-    paddingVertical: 12,
+  itemCardSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  itemCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F8FAFC',
+  },
+  itemCardDate: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+  },
+  viewDetailsText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#D97706',
+  },
+
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    backgroundColor: colors.danger,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 30,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 10,
   },
-  deleteModalBtnText: {
+  emptyTitle: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '600',
+    color: '#0F172A',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  emptySub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+
+  // Modals
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 18,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 12,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#334155',
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  modalInput: {
+    height: 42,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 16,
+  },
+  cancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  cancelBtnText: {
+    fontSize: 12.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  saveBtn: {
+    backgroundColor: '#EA580C',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  saveBtnText: {
+    fontSize: 12.5,
     color: '#FFFFFF',
+    fontWeight: '600',
+  },
+
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    marginBottom: 6,
+  },
+  menuItemText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#334155',
+  },
+  subModalLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  statusChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  statusChipBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  modalCloseBtn: {
+    marginTop: 10,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  modalCloseBtnText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+
+  filterOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 6,
+    backgroundColor: '#F8FAFC',
+  },
+  filterOptionActive: {
+    backgroundColor: '#FEF3C7',
+  },
+  filterOptionText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#334155',
+  },
+  filterOptionTextActive: {
+    color: '#D97706',
+    fontWeight: '600',
+  },
+
+  errorSub: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 10,
+  },
+  backHomeBtn: {
+    backgroundColor: '#EA580C',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  backHomeBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });
 

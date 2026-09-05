@@ -3,6 +3,7 @@ const router  = express.Router();
 const {
   getAttachableItems, createProject, getMyProjects, getProjectById,
   updateProject, addAttachment, removeAttachment, removeAttachments, deleteProject,
+  addExpense, removeExpense,
 } = require('../controllers/projectController');
 const { protect, checkSuspended } = require('../middleware/authMiddleware');
 
@@ -15,6 +16,8 @@ router.patch('/:id', protect, checkSuspended, updateProject);
 router.patch('/:id/attachments', protect, checkSuspended, addAttachment);
 router.post('/:id/attachments/bulk-delete', protect, checkSuspended, removeAttachments);
 router.delete('/:id/attachments/:attachmentId', protect, checkSuspended, removeAttachment);
+router.post('/:id/expenses', protect, checkSuspended, addExpense);
+router.delete('/:id/expenses/:expenseId', protect, checkSuspended, removeExpense);
 router.delete('/:id', protect, checkSuspended, deleteProject);
 
 module.exports = router;

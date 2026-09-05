@@ -293,10 +293,17 @@ const ScheduleModal = React.memo(({ visible, item, onClose, onProceed }) => {
 const RentalDetailScreen = ({ route, navigation }) => {
   const { item } = route.params;
   const rentalItems = useAppStore((s) => s.rentalItems);
-  const addToCart   = useAppStore((s) => s.addToCart);
+  const addToRentalCart = useAppStore((s) => s.addToRentalCart);
   const [showBookNow,  setShowBookNow]  = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [cartAdded, setCartAdded]       = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  const handleAddToCart = useCallback(() => {
+    addToRentalCart(item);
+    setCartAdded(true);
+    setTimeout(() => setCartAdded(false), 2000);
+  }, [addToRentalCart, item]);
 
   const vendorProducts = useMemo(() =>
     (rentalItems || []).filter(
@@ -508,11 +515,11 @@ const RentalDetailScreen = ({ route, navigation }) => {
               contentContainerStyle={styles.vendorScroll}
             >
               {vendorProducts.map((prod) => (
-                <View key={prod.id} style={styles.vendorCard}>
+                <View key={prod.id || prod._id} style={styles.vendorCard}>
                   <RentalCard
                     item={prod}
                     onPress={() => navigation.push('RentalDetail', { item: prod })}
-                    onAddToCart={() => addToCart(prod)}
+                    onAddToCart={() => addToRentalCart(prod)}
                   />
                 </View>
               ))}
@@ -525,6 +532,16 @@ const RentalDetailScreen = ({ route, navigation }) => {
 
       {/* Bottom Buttons */}
       <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={[styles.cartBtn, cartAdded && styles.cartBtnAdded]}
+          onPress={handleAddToCart}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.cartBtnText, cartAdded && styles.cartBtnTextAdded]}>
+            {cartAdded ? '✓ Added' : '🛒 Add to Cart'}
+          </Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.scheduleBtn}
           onPress={openSchedule}
@@ -545,7 +562,7 @@ const RentalDetailScreen = ({ route, navigation }) => {
             onPress={handleBookNowPress}
           >
             <Text style={[styles.bookNowText, !item.available && { color: colors.textMuted }]}>
-              {item.available ? '⚡ Book Now' : 'Not Available'}
+              {item.available ? '⚡ Book' : 'Not Available'}
             </Text>
           </TouchableOpacity>
         </LinearGradient>
@@ -714,19 +731,43 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 10,
+    borderTopColor: colors.border,
+  },
+  cartBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: '#EA580C',
+  },
+  cartBtnAdded: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#16A34A',
+  },
+  cartBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#EA580C',
+  },
+  cartBtnTextAdded: {
+    color: '#16A34A',
   },
   scheduleBtn: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.surface,
     borderWidth: 1.5,
     borderColor: colors.border,
   },
-  scheduleBtnText: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  bookNowBtn: { flex: 1, borderRadius: 16, overflow: 'hidden' },
-  bookNowTouch: { paddingVertical: 16, alignItems: 'center' },
+  scheduleBtnText: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
+  bookNowBtn: { flex: 1, borderRadius: 14, overflow: 'hidden' },
+  bookNowTouch: { paddingVertical: 14, alignItems: 'center' },
   bookNowText: { fontSize: 14, fontWeight: '800', color: colors.textPrimary },
 
   // Modal

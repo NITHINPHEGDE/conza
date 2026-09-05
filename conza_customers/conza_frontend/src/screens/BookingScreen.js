@@ -28,10 +28,23 @@ import useAppStore from '../store/useAppStore';
 import { colors } from '../theme/colors';
 import SavedAddressSheet from '../components/SavedAddressSheet';
 
+const TRUCK_IMAGE = require('../../assets/images/delivery_truck.jpg');
+const TRACTOR_IMAGE = require('../../assets/images/rental_tractor.jpg');
+
 const CATEGORIES = [
-  { key: 'Labour',   label: 'Book\nLabour',   icon: 'account-hard-hat',        color: '#F0A500' },
-  { key: 'Material', label: 'Order\nMaterial', icon: 'package-variant', color: '#F0A500' },
-  { key: 'Rental',   label: 'Book\nRental',   icon: 'excavator',       color: '#F0A500' },
+  { key: 'Labour',   label: 'Book\nLabour',   icon: 'account-hard-hat', color: '#F59E0B' },
+  { key: 'Material', label: 'Order\nMaterial', icon: 'cube-outline',    color: '#F59E0B' },
+  { key: 'Rental',   label: 'Book\nRental',   icon: 'excavator',        color: '#F59E0B' },
+];
+
+const MATERIAL_CATEGORIES_DATA = [
+  { id: 'all',              label: 'All',               icon: 'view-grid-outline' },
+  { id: 'cement',           label: 'Cement',            icon: 'sack' },
+  { id: 'steel',            label: 'Steel',             icon: 'reorder-horizontal' },
+  { id: 'bricks_blocks',    label: 'Bricks &\nBlocks',  icon: 'wall' },
+  { id: 'sand_aggregate',   label: 'Sand &\nAggregate', icon: 'grain' },
+  { id: 'electrical',       label: 'Electrical',        icon: 'lightning-bolt-circle' },
+  { id: 'plumbing',         label: 'Plumbing',          icon: 'pipe-wrench' },
 ];
 
 // ─── Skill Search Results View ────────────────────────────────────────────────
@@ -333,55 +346,117 @@ const MaterialView = React.memo(() => {
 
   const listHeader = useMemo(() => (
     <View>
-      <View style={[styles.materialSearchRow, { marginTop: 4 }]}>
-        <View style={[styles.materialSearchWrapper, { flex: 1, marginHorizontal: 0 }]}>
-          <View style={styles.searchIconBadge}>
-            <MaterialCommunityIcons name="magnify" size={16} color={colors.accentAmber} />
-          </View>
+      {/* Search + Filter row */}
+      <View style={styles.mSearchRow}>
+        <View style={styles.mSearchBox}>
+          <MaterialCommunityIcons name="magnify" size={18} color="#9CA3AF" />
           <TextInput
-            style={styles.materialSearchInput}
-            placeholder="Search materials, sellers..."
-            placeholderTextColor={colors.textMuted}
+            style={styles.mSearchInput}
+            placeholder="Search materials, brands, or categories..."
+            placeholderTextColor="#9CA3AF"
             value={query}
             onChangeText={setQuery}
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={handleClearQuery} activeOpacity={0.7}>
-              <Text style={styles.searchClear}>✕</Text>
+              <MaterialCommunityIcons name="close-circle" size={16} color="#9CA3AF" />
             </TouchableOpacity>
           )}
         </View>
+        <TouchableOpacity style={styles.mFilterBtn} activeOpacity={0.8}>
+          <MaterialCommunityIcons name="tune-variant" size={17} color="#374151" />
+          <Text style={styles.mFilterText}>Filter</Text>
+          <View style={styles.mFilterDot} />
+        </TouchableOpacity>
       </View>
 
-      {/* Categories — always visible, horizontally scrollable banners
-          across two rows. Tapping a tile filters the grid below;
-          tapping the active tile again clears the filter. */}
-      <SectionHeader title="Categories" />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.categoryGridTwoRow}>
-          {materialCategories
-            .filter((cat) => cat.id !== 'all')
-            .map((cat) => renderCategoryTile(cat))}
+      {/* Bulk Order Banner */}
+      <TouchableOpacity style={styles.bulkBanner} activeOpacity={0.88}>
+        <View style={styles.bulkBannerLeft}>
+          <Image source={TRUCK_IMAGE} style={styles.bulkImage} resizeMode="contain" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bulkTitle} numberOfLines={1}>Bulk Order? Get better prices</Text>
+            <Text style={styles.bulkSub} numberOfLines={1}>Save more on bulk purchases</Text>
+          </View>
         </View>
+        <View style={styles.bulkQuoteBtn}>
+          <Text style={styles.bulkQuoteText}>Get Quote →</Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* Shop by Category */}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionHeaderTitle}>Shop by Category</Text>
+        <TouchableOpacity onPress={handleClearCat} activeOpacity={0.7}>
+          <Text style={styles.sectionHeaderLink}>View all &gt;</Text>
+        </TouchableOpacity>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScrollContent}>
+        {/* "All" square */}
+        <TouchableOpacity
+          style={styles.circCatItem}
+          onPress={() => setSelectedCat('all')}
+          activeOpacity={0.75}
+        >
+          <View style={[styles.circCatIcon, selectedCat === 'all' && styles.circCatIconActive]}>
+            <MaterialCommunityIcons
+              name="view-grid-outline"
+              size={24}
+              color={selectedCat === 'all' ? '#F59E0B' : '#4B5563'}
+            />
+          </View>
+          <Text style={[styles.circCatLabel, selectedCat === 'all' && styles.circCatLabelActive]}>All</Text>
+        </TouchableOpacity>
+
+        {/* Dynamic categories (backend categories or defaults) */}
+        {(materialCategories && materialCategories.length > 1
+          ? materialCategories.filter((c) => c.id !== 'all')
+          : MATERIAL_CATEGORIES_DATA.filter((c) => c.id !== 'all')
+        ).map((cat) => {
+          const isSelected = selectedCat === cat.id;
+          return (
+            <TouchableOpacity
+              key={cat.id}
+              style={styles.circCatItem}
+              onPress={() => handleSelectCat(cat.id)}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.circCatIcon, isSelected && styles.circCatIconActive]}>
+                {cat.image ? (
+                  <Image source={{ uri: cat.image }} style={styles.circCatImage} resizeMode="contain" />
+                ) : cat.icon ? (
+                  <MaterialCommunityIcons
+                    name={cat.icon}
+                    size={24}
+                    color={isSelected ? '#F59E0B' : '#4B5563'}
+                  />
+                ) : (
+                  <Text style={styles.circCatEmoji}>{cat.emoji || '🧱'}</Text>
+                )}
+              </View>
+              <Text
+                style={[styles.circCatLabel, isSelected && styles.circCatLabelActive]}
+                numberOfLines={2}
+              >
+                {cat.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
-      {selectedCat !== 'all' && (
-        <View style={styles.activeCatRow}>
-          {activeCat?.image ? (
-            <Image source={{ uri: activeCat.image }} style={styles.activeCatImage} />
-          ) : (
-            <Text style={styles.activeCatEmoji}>{activeCat?.emoji}</Text>
-          )}
-          <Text style={styles.activeCatLabel}>{activeCat?.label}</Text>
-          <TouchableOpacity onPress={handleClearCat} activeOpacity={0.7}>
-            <Text style={styles.activeCatClear}>✕ Clear</Text>
-          </TouchableOpacity>
+      {/* Top Picks header */}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionHeaderTitle}>
+          {selectedCat !== 'all' ? (activeCat?.label || 'Materials') : 'Top Picks for You'}
+        </Text>
+        <View style={styles.sortRow}>
+          <Text style={styles.sortText}>Sort by: </Text>
+          <Text style={styles.sortValue}>Popular ▾</Text>
         </View>
-      )}
-
-      <SectionHeader title={selectedCat !== 'all' ? activeCat?.label || 'Materials' : 'All Materials'} />
+      </View>
     </View>
-  ), [query, handleClearQuery, selectedCat, activeCat, materialCategories, renderCategoryTile, handleClearCat]);
+  ), [query, handleClearQuery, selectedCat, activeCat, handleClearCat]);
 
   const listEmpty = useMemo(() => (
     materialsFetched ? (
@@ -395,7 +470,7 @@ const MaterialView = React.memo(() => {
 
   const contentContainerStyle = useMemo(() => [
     styles.materialGridList,
-    totalItems > 0 && { paddingBottom: 100 },
+    { paddingBottom: totalItems > 0 ? 120 : 64 },
   ], [totalItems]);
 
   if (materialsLoading || (!materialsFetched && materials.length === 0)) return <MaterialGridSkeleton />;
@@ -419,6 +494,25 @@ const MaterialView = React.memo(() => {
         removeClippedSubviews={true}
         extraData={cart}
       />
+
+      {/* Statically fixed sleek and slender trust banner */}
+      <View style={[styles.fixedSlenderTrustBar, totalItems > 0 && { bottom: 64 }]}>
+        {[
+          { icon: 'shield-check-outline', title: '100% Genuine\nMaterials', sub: 'Quality checked' },
+          { icon: 'medal-outline',        title: 'Best Price\nGuarantee',   sub: "We'll match it" },
+          { icon: 'truck-fast-outline',  title: 'On-time\nDelivery',       sub: 'At your site' },
+          { icon: 'face-agent',          title: 'Expert\nSupport',         sub: '24/7 assistance' },
+        ].map((item, i) => (
+          <View key={i} style={styles.fixedSlenderTrustItem}>
+            <View style={styles.fixedSlenderTrustIconCircle}>
+              <MaterialCommunityIcons name={item.icon} size={12} color="#D97706" />
+            </View>
+            <Text style={styles.fixedSlenderTrustTitle} numberOfLines={2}>{item.title}</Text>
+            <Text style={styles.fixedSlenderTrustSub} numberOfLines={1}>{item.sub}</Text>
+          </View>
+        ))}
+      </View>
+
       {totalItems > 0 && (
         <View style={styles.materialCheckoutBar}>
           <View style={styles.materialCheckoutLeft}>
@@ -473,6 +567,7 @@ const RentalView = React.memo(() => {
 
   const handleAddToCart = useCallback((item) => {
     addToRentalCart(item);
+    Alert.alert('Added to Cart', `${item.name || 'Equipment'} added to your cart.`, [{ text: 'OK' }]);
   }, [addToRentalCart]);
 
   const handleRentalCheckoutBar = useCallback(() => {
@@ -539,53 +634,101 @@ const RentalView = React.memo(() => {
 
   const listHeader = useMemo(() => (
     <View>
-      <View style={[styles.materialSearchRow, { marginTop: 4 }]}>
-        <View style={[styles.materialSearchWrapper, { flex: 1, marginHorizontal: 0 }]}>
-          <View style={styles.searchIconBadge}>
-            <MaterialCommunityIcons name="magnify" size={16} color={colors.accentAmber} />
-          </View>
+      {/* Search + Filter row */}
+      <View style={styles.mSearchRow}>
+        <View style={styles.mSearchBox}>
+          <MaterialCommunityIcons name="magnify" size={18} color="#9CA3AF" />
           <TextInput
-            style={styles.materialSearchInput}
-            placeholder="Search equipment..."
-            placeholderTextColor={colors.textMuted}
+            style={styles.mSearchInput}
+            placeholder="Search equipment, brands, or categories..."
+            placeholderTextColor="#9CA3AF"
             value={query}
             onChangeText={setQuery}
           />
           {query.length > 0 && (
             <TouchableOpacity onPress={handleClearQuery} activeOpacity={0.7}>
-              <Text style={styles.searchClear}>✕</Text>
+              <MaterialCommunityIcons name="close-circle" size={16} color="#9CA3AF" />
             </TouchableOpacity>
           )}
         </View>
+        <TouchableOpacity style={styles.mFilterBtn} activeOpacity={0.8}>
+          <MaterialCommunityIcons name="tune-variant" size={17} color="#374151" />
+          <Text style={styles.mFilterText}>Filter</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Categories — always visible, horizontally scrollable banners
-          in a single row. Tapping a tile filters the grid below;
-          tapping the active tile again clears the filter. */}
-      <SectionHeader title="Categories" />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.categoryGridOneRow}>
-          {rentalCategories
-            .filter((cat) => cat.id !== 'all')
-            .map((cat) => renderCategoryTile(cat))}
+      {/* Rental Inquiry Banner */}
+      <TouchableOpacity style={styles.bulkBanner} activeOpacity={0.88}>
+        <View style={styles.bulkBannerLeft}>
+          <Image source={TRACTOR_IMAGE} style={styles.bulkImage} resizeMode="contain" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bulkTitle} numberOfLines={1}>Need equipment long-term?</Text>
+            <Text style={styles.bulkSub} numberOfLines={1}>Get custom rental packages</Text>
+          </View>
         </View>
+        <View style={styles.bulkQuoteBtn}>
+          <Text style={styles.bulkQuoteText}>Get Quote →</Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* Shop by Category */}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionHeaderTitle}>Browse Equipment</Text>
+        <TouchableOpacity onPress={handleClearCat} activeOpacity={0.7}>
+          <Text style={styles.sectionHeaderLink}>View all &gt;</Text>
+        </TouchableOpacity>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScrollContent}>
+        <TouchableOpacity
+          style={styles.circCatItem}
+          onPress={() => setSelectedCat('all')}
+          activeOpacity={0.75}
+        >
+          <View style={[styles.circCatIcon, selectedCat === 'all' && styles.circCatIconActive]}>
+            <MaterialCommunityIcons
+              name="view-grid-outline"
+              size={22}
+              color={selectedCat === 'all' ? '#F59E0B' : '#4B5563'}
+            />
+          </View>
+          <Text style={[styles.circCatLabel, selectedCat === 'all' && styles.circCatLabelActive]}>All</Text>
+        </TouchableOpacity>
+        {rentalCategories
+          .filter((cat) => cat.id !== 'all')
+          .map((cat) => {
+            const isSelected = selectedCat === cat.id;
+            return (
+              <TouchableOpacity
+                key={cat.id}
+                style={styles.circCatItem}
+                onPress={() => handleSelectCat(cat.id)}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.circCatIcon, isSelected && styles.circCatIconActive]}>
+                  {cat.image ? (
+                    <Image source={{ uri: cat.image }} style={styles.circCatImage} />
+                  ) : (
+                    <Text style={styles.circCatEmoji}>{cat.emoji}</Text>
+                  )}
+                </View>
+                <Text style={[styles.circCatLabel, isSelected && styles.circCatLabelActive]} numberOfLines={2}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
       </ScrollView>
 
-      {selectedCat !== 'all' && (
-        <View style={styles.activeCatRow}>
-          {activeCat?.image ? (
-            <Image source={{ uri: activeCat.image }} style={styles.activeCatImage} />
-          ) : (
-            <Text style={styles.activeCatEmoji}>{activeCat?.emoji}</Text>
-          )}
-          <Text style={styles.activeCatLabel}>{activeCat?.label}</Text>
-          <TouchableOpacity onPress={handleClearCat} activeOpacity={0.7}>
-            <Text style={styles.activeCatClear}>✕ Clear</Text>
-          </TouchableOpacity>
+      {/* Available Equipment header */}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionHeaderTitle}>
+          {selectedCat !== 'all' ? (activeCat?.label || 'Equipment') : 'Available Equipment'}
+        </Text>
+        <View style={styles.sortRow}>
+          <Text style={styles.sortText}>Sort by: </Text>
+          <Text style={styles.sortValue}>Popular ▾</Text>
         </View>
-      )}
-
-      <SectionHeader title={selectedCat !== 'all' ? activeCat?.label || 'Equipment' : 'All Equipment'} />
+      </View>
     </View>
   ), [query, handleClearQuery, selectedCat, activeCat, rentalCategories, renderCategoryTile, handleClearCat]);
 
@@ -597,9 +740,6 @@ const RentalView = React.memo(() => {
     />
   ), []);
 
-  if (rentalLoading) return <RentalGridSkeleton />;
-  if (rentalError)   return <ErrorState message={rentalError} onRetry={fetchRental} />;
-
   return (
     <View style={{ flex: 1 }}>
       <FlatList
@@ -607,7 +747,7 @@ const RentalView = React.memo(() => {
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={styles.rentalGridRow}
-        contentContainerStyle={[styles.rentalGridList, rentalCartCount > 0 && { paddingBottom: 100 }]}
+        contentContainerStyle={[styles.rentalGridList, { paddingBottom: rentalCartCount > 0 ? 120 : 64 }]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={listEmpty}
@@ -617,6 +757,24 @@ const RentalView = React.memo(() => {
         windowSize={5}
         removeClippedSubviews={true}
       />
+
+      {/* Statically fixed sleek and slender trust banner */}
+      <View style={[styles.fixedSlenderTrustBar, rentalCartCount > 0 && { bottom: 64 }]}>
+        {[
+          { icon: 'shield-check-outline', title: 'Verified\nEquipment', sub: 'Safety checked' },
+          { icon: 'medal-outline',        title: 'Best Rates\nGuaranteed', sub: 'Competitive price' },
+          { icon: 'truck-fast-outline',  title: 'On-site\nDelivery',     sub: 'At your site' },
+          { icon: 'face-agent',          title: 'Expert\nSupport',       sub: '24/7 assistance' },
+        ].map((item, i) => (
+          <View key={i} style={styles.fixedSlenderTrustItem}>
+            <View style={styles.fixedSlenderTrustIconCircle}>
+              <MaterialCommunityIcons name={item.icon} size={12} color="#D97706" />
+            </View>
+            <Text style={styles.fixedSlenderTrustTitle} numberOfLines={2}>{item.title}</Text>
+            <Text style={styles.fixedSlenderTrustSub} numberOfLines={1}>{item.sub}</Text>
+          </View>
+        ))}
+      </View>
 
       {/* Rental cart checkout bar — mirrors MaterialView's bar exactly */}
       {rentalCartCount > 0 && (
@@ -700,48 +858,51 @@ const BookingScreen = () => {
   const totalCartCount = rentalCartCount + materialCartCount;
   const walletBalance = useAppStore((s) => s.walletBalance);
 
-  const header = useMemo(() => (
-    <View style={styles.header}>
-      <TouchableOpacity
-        onPress={() => setAddressSheetVisible(true)}
-        activeOpacity={0.75}
-        style={styles.headerLocationBtn}
-      >
-        <View style={styles.headerMetaRow}>
-          <MaterialCommunityIcons name="map-marker" size={12} color={colors.danger} />
-          <Text style={styles.headerMeta}>Deliver to</Text>
-        </View>
-        <Text style={styles.headerLocation} numberOfLines={2}>{displayLocation}</Text>
-      </TouchableOpacity>
-
-      {/* Wallet balance chip */}
-      <TouchableOpacity
-        style={[styles.walletChip, { marginTop: 1 }]}
-        activeOpacity={0.8}
-        onPress={() => navigation.navigate('Wallet')}
-      >
-        <View style={styles.walletIconBadge}>
-          <MaterialCommunityIcons name="wallet" size={12} color="#F0A500" />
-        </View>
-        <Text style={styles.walletAmount}>₹{walletBalance}</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.notifBtn}
-        activeOpacity={0.8}
-        onPress={() => navigation.navigate('CartTab')}
-      >
-        <View style={styles.cartIconBadge}>
-          <MaterialCommunityIcons name="cart" size={18} color="#2F80ED" />
-        </View>
-        {totalCartCount > 0 && (
-          <View style={styles.cartBadge}>
-            <Text style={styles.cartBadgeText}>{totalCartCount}</Text>
+  const header = useMemo(() => {
+    return (
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => setAddressSheetVisible(true)}
+          activeOpacity={0.75}
+          style={styles.headerLocationBtn}
+        >
+          <View style={styles.headerMetaRow}>
+            <MaterialCommunityIcons name="map-marker" size={13} color="#EF4444" />
+            <Text style={styles.headerMeta}>Deliver to</Text>
           </View>
-        )}
-      </TouchableOpacity>
-    </View>
-  ), [displayLocation, activeCategory, totalCartCount, navigation, walletBalance]);
+          <Text style={styles.headerLocationLine1} numberOfLines={1}>Sri Maregowda Circle,</Text>
+          <View style={styles.headerLocationLine2Row}>
+            <Text style={styles.headerLocationLine2} numberOfLines={1}>Bengaluru, Karnataka</Text>
+            <MaterialCommunityIcons name="chevron-down" size={15} color="#374151" />
+          </View>
+        </TouchableOpacity>
+
+        {/* Wallet balance chip */}
+        <TouchableOpacity
+          style={styles.walletChip}
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate('Wallet')}
+        >
+          <MaterialCommunityIcons name="wallet-outline" size={17} color="#F59E0B" />
+          <Text style={styles.walletAmount}>₹{walletBalance || 0}</Text>
+        </TouchableOpacity>
+
+        {/* Cart pill */}
+        <TouchableOpacity
+          style={styles.notifBtn}
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate('CartTab')}
+        >
+          <MaterialCommunityIcons name="cart-outline" size={20} color="#111827" />
+          {totalCartCount > 0 && (
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>{totalCartCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+    );
+  }, [totalCartCount, navigation, walletBalance]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -800,86 +961,101 @@ const BookingScreen = () => {
 
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.accentYellowSoft },
+  safe: { flex: 1, backgroundColor: '#FAFAFA' },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 18,
-    backgroundColor: colors.accentYellowSoft,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 14,
+    backgroundColor: '#FAFAFA',
   },
   headerLocationBtn: {
     flex: 1,
-    marginRight: 14,
-    paddingTop: 1,
+    marginRight: 10,
   },
   headerMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 5,
+    gap: 3,
+    marginBottom: 2,
   },
   headerMeta: {
-    fontSize: 10.5,
-    color: colors.textMuted,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
   },
-  headerLocation: {
-    fontSize: 14,
+  headerLocationLine1: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#111827',
+    lineHeight: 18,
+  },
+  headerLocationLine2Row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  headerLocationLine2: {
+    fontSize: 13,
     fontWeight: '700',
-    color: colors.textPrimary,
-    letterSpacing: 0.1,
-    lineHeight: 19,
+    color: '#374151',
+    lineHeight: 16,
   },
   walletChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
-
-  walletAmount: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
+  walletAmount: { fontSize: 13.5, fontWeight: '800', color: '#111827' },
   notifBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: colors.surfaceElevated,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E5E7EB',
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   cartBadge: {
     position: 'absolute',
     top: -4,
     right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.accentAmber,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 8.5,
+    backgroundColor: '#F59E0B',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
   },
-  cartBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff' },
+  cartBadgeText: { fontSize: 9.5, fontWeight: '800', color: '#FFFFFF' },
   fixedSection: {
-    paddingHorizontal: 20,
-    backgroundColor: colors.accentYellowSoft,
+    paddingHorizontal: 16,
+    backgroundColor: '#FAFAFA',
   },
   tabsWrapper: {
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    paddingBottom: 10,
   },
   searchBar: {
     flexDirection: 'row',
@@ -983,7 +1159,7 @@ const styles = StyleSheet.create({
   continueOutlineBtnText: { color: colors.textPrimary, fontSize: 15, fontWeight: '700', letterSpacing: 0.3 },
 
   // Material
-  materialGridList: { paddingTop: 10, paddingBottom: 30, paddingHorizontal: 12 },
+  materialGridList: { paddingTop: 10, paddingBottom: 16, paddingHorizontal: 12 },
   materialGridRow: { justifyContent: 'space-between' },
   materialCardWrapper: { flex: 1, margin: 6 },
   materialSearchRow: {
@@ -1009,6 +1185,182 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   materialSearchInput: { flex: 1, fontSize: 14, color: colors.textPrimary },
+
+  // New Material/Rental header styles
+  mSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  mSearchBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  mSearchInput: { flex: 1, fontSize: 13, color: '#111827', includeFontPadding: false },
+  mFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  mFilterText: { fontSize: 12.5, fontWeight: '500', color: '#374151' },
+  mFilterDot: {
+    width: 5, height: 5, borderRadius: 2.5,
+    backgroundColor: colors.accentAmber,
+  },
+
+  // Bulk Order Banner
+  bulkBanner: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  bulkBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 },
+  bulkImage: { width: 34, height: 34, borderRadius: 6 },
+  bulkTitle: { fontSize: 11.5, fontWeight: '600', color: '#92400E', lineHeight: 14 },
+  bulkSub: { fontSize: 10, color: '#B45309', fontWeight: '400', lineHeight: 12, marginTop: 1 },
+  bulkQuoteBtn: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    flexShrink: 0,
+  },
+  bulkQuoteText: { fontSize: 10.5, fontWeight: '600', color: '#D97706' },
+
+  // Section header row
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 2,
+    paddingBottom: 8,
+  },
+  sectionHeaderTitle: { fontSize: 14.5, fontWeight: '600', color: '#111827' },
+  sectionHeaderLink: { fontSize: 12.5, fontWeight: '400', color: '#6B7280' },
+
+  // Sort row
+  sortRow: { flexDirection: 'row', alignItems: 'center' },
+  sortText: { fontSize: 11.5, color: '#6B7280', fontWeight: '400' },
+  sortValue: { fontSize: 11.5, color: '#D97706', fontWeight: '600' },
+
+  // Square category tiles
+  catScrollContent: { paddingHorizontal: 14, paddingBottom: 12, gap: 10 },
+  circCatItem: { alignItems: 'center', width: 68 },
+  circCatIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  circCatIconActive: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#F59E0B',
+    borderWidth: 1.5,
+  },
+  circCatEmoji: { fontSize: 24 },
+  circCatImage: { width: 42, height: 42, borderRadius: 8 },
+  circCatLabel: {
+    fontSize: 10.5,
+    fontWeight: '500',
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 13,
+  },
+  circCatLabelActive: { color: '#D97706', fontWeight: '600' },
+
+  // Statically fixed sleek & slender trust banner
+  fixedSlenderTrustBar: {
+    position: 'absolute',
+    bottom: 4,
+    left: 8,
+    right: 8,
+    backgroundColor: '#FFFDF9',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  fixedSlenderTrustItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 1,
+  },
+  fixedSlenderTrustIconCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  fixedSlenderTrustTitle: {
+    fontSize: 8.5,
+    fontWeight: '600',
+    color: '#1E293B',
+    textAlign: 'center',
+    lineHeight: 10.5,
+  },
+  fixedSlenderTrustSub: {
+    fontSize: 7.5,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 9.5,
+  },
   materialCheckoutBar: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
@@ -1018,30 +1370,30 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 10,
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  materialCheckoutLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  materialCheckoutLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   materialCheckoutBadge: {
-    width: 36, height: 36,
-    borderRadius: 12,
+    width: 32, height: 32,
+    borderRadius: 10,
     backgroundColor: colors.accentYellowSoft,
     borderWidth: 1,
     borderColor: colors.accentYellow,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  materialCheckoutBadgeText: { fontSize: 15, fontWeight: '800', color: colors.accentAmber },
-  materialCheckoutLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '600', marginBottom: 2 },
-  materialCheckoutTotal: { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
-  materialCheckoutBtn: { borderRadius: 14, overflow: 'hidden' },
-  materialCheckoutBtnTouch: { paddingHorizontal: 22, paddingVertical: 13, alignItems: 'center' },
-  materialCheckoutBtnText: { fontSize: 14, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
+  materialCheckoutBadgeText: { fontSize: 13, fontWeight: '700', color: colors.accentAmber },
+  materialCheckoutLabel: { fontSize: 11.5, color: colors.textSecondary, fontWeight: '500', marginBottom: 1 },
+  materialCheckoutTotal: { fontSize: 15.5, fontWeight: '700', color: colors.textPrimary },
+  materialCheckoutBtn: { borderRadius: 12, overflow: 'hidden' },
+  materialCheckoutBtnTouch: { paddingHorizontal: 20, paddingVertical: 11, alignItems: 'center' },
+  materialCheckoutBtnText: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, letterSpacing: 0.2 },
 
   // Rental
   rentalTopBar: {
@@ -1095,9 +1447,9 @@ const styles = StyleSheet.create({
   activeCatImage: { width: 20, height: 20, borderRadius: 10 },
   activeCatLabel: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, flex: 1 },
   activeCatClear: { fontSize: 12, fontWeight: '600', color: colors.accentAmber },
-  rentalGridList: { paddingHorizontal: 12, paddingBottom: 30 },
+  rentalGridList: { paddingTop: 10, paddingHorizontal: 12, paddingBottom: 16 },
   rentalGridRow: { justifyContent: 'space-between' },
-  rentalCardWrapper: { width: '47%', margin: '1.5%' },
+  rentalCardWrapper: { flex: 1, margin: 6 },
   catCard: {
     width: '30%',
     alignItems: 'center',

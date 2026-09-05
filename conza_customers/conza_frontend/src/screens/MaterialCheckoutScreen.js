@@ -4,868 +4,1187 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   StyleSheet,
-  StatusBar,
   Image,
   ActivityIndicator,
-  Platform,
+  Modal,
+  Pressable,
+  Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialIcons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import * as Location from 'expo-location';
-import { colors } from '../theme/colors';
-import { useBooking } from '../hooks/useBooking';
-import SavedAddressSheet from '../components/SavedAddressSheet';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
+import SavedAddressSheet from '../components/SavedAddressSheet';
+import { bookingAPI } from '../api/bookingAPI';
 
-const PLATFORM_FEE_RATE = 0.05;
-const DELIVERY_FEE = 99;
-
-const PAYMENT_METHODS = [
-  { id: 'cod',    label: 'Cash on Delivery',    sub: 'Pay on delivery',              icon: '💵' },
-  { id: 'upi',    label: 'UPI / Digital Wallet', sub: 'PhonePe, Google Pay, Paytm',  icon: '📲' },
-  { id: 'online', label: 'Credit / Debit Card',  sub: 'All major cards accepted',     icon: '💳' },
-];
-
-// ─── Material Item Row ────────────────────────────────────────────────────────
-const MaterialItemRow = React.memo(({ item, quantity }) => {
-  const qty = Number(quantity) || 0;
-  const price = Number(item.price) || 0;
-  const total = qty * price;
-
-  return (
-    <View style={styles.itemRow}>
-      <Image source={{ uri: item.image }} style={styles.itemImage} resizeMode="cover" />
-      <View style={styles.itemInfo}>
-        <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.itemSeller}>by {item.seller}</Text>
-        <Text style={styles.itemUnit}>{item.unit}</Text>
-      </View>
-      <View style={styles.itemRight}>
-        <Text style={styles.itemQty}>×{qty}</Text>
-        <Text style={styles.itemPrice}>₹{total.toLocaleString()}</Text>
-      </View>
-    </View>
-  );
-});
-
-// ─── Payment Option ───────────────────────────────────────────────────────────
-const PaymentOption = React.memo(({ method, selected, onSelect }) => {
-  const handlePress = useCallback(() => {
-    onSelect(method.id);
-  }, [onSelect, method.id]);
-
-  return (
-    <TouchableOpacity
-      style={[styles.paymentOption, selected && styles.paymentOptionSelected]}
-      onPress={handlePress}
-      activeOpacity={0.75}
-    >
-      <View style={[styles.paymentRadio, selected && styles.paymentRadioSelected]}>
-        {selected && <View style={styles.paymentRadioDot} />}
-      </View>
-      <View style={styles.paymentIconBox}>
-        <Text style={{ fontSize: 18 }}>{method.icon}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.paymentLabel}>{method.label}</Text>
-        <Text style={styles.paymentSub}>{method.sub}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-});
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
 const MaterialCheckoutScreen = ({ route, navigation }) => {
-  const { cartItems = [], cart = {} } = route.params || {};
+  const insets = useSafeAreaInsets();
+  const {
+    selectedMaterials = [],
+    selectedRentals = [],
+    cart = {},
+    selectedProject: initialProject = null,
+    selectedAddress: initialAddress = null,
+    deliveryLocationText: initialLocationText = '',
+  } = route.params || {};
 
-  const [houseNumber, setHouseNumber] = useState('');
-  const [houseName,   setHouseName]   = useState('');
-  const [street,      setStreet]      = useState('');
-  const [area,        setArea]        = useState('');
-  const [city,        setCity]        = useState('');
-  const [district,    setDistrict]    = useState('');
-  const [state,       setState]       = useState('');
-  const [pincode,     setPincode]     = useState('');
-  const [paymentMethod, setPayment]   = useState('cod');
+  // Store slices
+  const userProfile = useAppStore((s) => s.userProfile);
+  const userLocationText = useAppStore((s) => s.userLocationText);
+  const userLat = useAppStore((s) => s.userLat);
+  const userLng = useAppStore((s) => s.userLng);
+  const myProjects = useAppStore((s) => s.myProjects);
+  const addAttachmentToProject = useAppStore((s) => s.addAttachmentToProject);
+  const addSellerOrder = useAppStore((s) => s.addSellerOrder);
+  const clearCart = useAppStore((s) => s.clearCart);
+  const clearRentalCart = useAppStore((s) => s.clearRentalCart);
 
-  const [lat,         setLat]         = useState(null);
-  const [lng,         setLng]         = useState(null);
-  const [fetching,    setFetching]    = useState(false);
+  // Selected project & address
+  const [selectedProject, setSelectedProject] = useState(initialProject);
+  const [showProjectModal, setShowProjectModal] = useState(false);
 
-  const [description, setDescription] = useState('');
-  const [bookingType, setBookingType] = useState('immediate');
-  const [scheduledDate, setScheduledDate] = useState(new Date());
-  const [scheduledTime, setScheduledTime] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState(initialAddress);
+  const [showAddressSheet, setShowAddressSheet] = useState(false);
 
-  const [savedAddressSheetVisible, setSavedAddressSheetVisible] = useState(false);
+  // Payment Method
+  const [paymentMethod, setPaymentMethod] = useState('upi'); // 'upi' | 'card' | 'netbanking' | 'wallet'
+  const [submitting, setSubmitting] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
-  const currentAddressDisplay = useMemo(() => {
-    return [houseNumber, houseName, street, area, city, state, pincode]
-      .filter(Boolean)
-      .join(', ') || null;
-  }, [houseNumber, houseName, street, area, city, state, pincode]);
+  const displayAddress = selectedAddress?.address || initialLocationText || userLocationText || 'Sri Maregowda Circle, Bengaluru - 560002';
+  const recipientName = userProfile?.name || userProfile?.fullName || 'Rifat Kazi';
+  const recipientPhone = userProfile?.phone || '98765 43210';
 
-  const { submitBooking, loading: submitting, error: submitError } = useBooking('material');
-
-  const { subtotal, platformFee, total, totalItems } = useMemo(() => {
-    const sub = cartItems.reduce((sum, item) => {
-      const qty = Number(cart[item.id] ?? item.quantity) || 0;
-      const price = Number(item.price) || 0;
-      return sum + (price * qty);
-    }, 0);
-    const fee = Math.round(sub * PLATFORM_FEE_RATE);
-    const tot = sub + fee + DELIVERY_FEE;
-    const itemsCount = cartItems.reduce((sum, item) => {
-      const qty = Number(cart[item.id] ?? item.quantity) || 0;
-      return sum + qty;
-    }, 0);
-    return { subtotal: sub, platformFee: fee, total: tot, totalItems: itemsCount };
-  }, [cartItems, cart]);
-
-  const handleSelectPayment = useCallback((id) => setPayment(id), []);
-  const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
-
-  const handleAutoFetch = async () => {
-    try {
-      setFetching(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-
-      const pos = await Location.getCurrentPositionAsync({});
-      const { reverseGeocodeFullAddress } = require('../hooks/useAuth');
-      const place = await reverseGeocodeFullAddress(pos.coords.latitude, pos.coords.longitude);
-
-      if (place) {
-        setHouseNumber(place.houseNumber);
-        setHouseName(place.houseName);
-        setStreet(place.street);
-        setArea(place.area);
-        setCity(place.city);
-        setDistrict(place.district);
-        setState(place.state);
-        setPincode(place.pincode);
+  // Group materials by vendor
+  const materialsByVendor = useMemo(() => {
+    const map = {};
+    selectedMaterials.forEach((item) => {
+      const vendor = item.seller || 'RN Enterprises';
+      if (!map[vendor]) {
+        map[vendor] = {
+          vendorName: vendor,
+          sellerId: item.sellerId || item.seller,
+          deliveryCharge: 250,
+          deliveryTime: '1 - 2 days',
+          items: [],
+        };
       }
-      setLat(pos.coords.latitude);
-      setLng(pos.coords.longitude);
-    } catch (err) {
-      console.log(err);
-    } finally {
-      setFetching(false);
-    }
-  };
-
-  const handleSavedAddressSelect = useCallback((item) => {
-    setHouseNumber(item.houseNo   || '');
-    setHouseName(item.building    || '');
-    setStreet(item.street         || '');
-    setArea(item.area             || '');
-    setCity(item.city             || '');
-    setDistrict(item.district     || '');
-    setState(item.state           || '');
-    setPincode(item.pincode       || '');
-    setLat(item.latitude          ?? null);
-    setLng(item.longitude         ?? null);
-  }, []);
-
-  const handleDateChange = (event, date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (date) {
-      setScheduledDate(date);
-      if (Platform.OS === 'android') setShowDatePicker(false);
-    }
-  };
-
-  const handleTimeChange = (event, time) => {
-    setShowTimePicker(Platform.OS === 'ios');
-    if (time) {
-      setScheduledTime(time);
-      if (Platform.OS === 'android') setShowTimePicker(false);
-    }
-  };
-
-  const combinedScheduledDate = useMemo(() => {
-    const d = new Date(scheduledDate);
-    d.setHours(scheduledTime.getHours());
-    d.setMinutes(scheduledTime.getMinutes());
-    return d;
-  }, [scheduledDate, scheduledTime]);
-
-  const handlePlaceOrder = useCallback(async () => {
-    const result = await submitBooking({
-      items: cartItems.map(item => ({
-        id:       item.id,
-        name:     item.name,
-        price:    item.price,
-        quantity: cart[item.id] ?? item.quantity ?? 1,
-        image:    item.image,
-        seller:   item.seller,
-        sellerId: item.sellerId,
-        unit:     item.unit,
-      })),
-      subtotal,
-      platformFee,
-      total,
-      houseNumber,
-      houseName,
-      street,
-      area,
-      city,
-      district,
-      state,
-      pincode,
-      paymentMethod,
-      description,
-      isImmediate: bookingType === 'immediate',
-      scheduledDate: bookingType === 'scheduled' ? combinedScheduledDate : null,
-      latitude: lat,
-      longitude: lng,
+      map[vendor].items.push(item);
     });
-    if (result) {
-      useAppStore.getState().clearCart();
-      navigation.navigate('BookingConfirmation', {
-        attachment: result,
-        title: 'Order Placed! 📦',
-        message: 'Your material order has been placed successfully. You can track it from My Bookings.',
-      });
-    }
-  }, [submitBooking, cartItems, cart, subtotal, platformFee, total, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, lat, lng, navigation]);
+    return Object.values(map);
+  }, [selectedMaterials]);
 
+  // Group rentals by vendor
+  const rentalsByVendor = useMemo(() => {
+    const map = {};
+    selectedRentals.forEach((item) => {
+      const vendor = item.seller || 'PowerUp Rentals';
+      if (!map[vendor]) {
+        map[vendor] = {
+          vendorName: vendor,
+          sellerId: item.sellerId || item.seller,
+          deliveryCharge: 800,
+          deliveryTime: '12 Sep, 9:00 AM',
+          items: [],
+        };
+      }
+      map[vendor].items.push(item);
+    });
+    return Object.values(map);
+  }, [selectedRentals]);
+
+  // Totals calculations
+  const {
+    itemsCount,
+    vendorsCount,
+    materialsSubtotal,
+    materialsDeliveryTotal,
+    rentalsSubtotal,
+    rentalsDeliveryTotal,
+    itemsTotal,
+    grandTotal,
+  } = useMemo(() => {
+    let mSub = 0;
+    let mDeliv = 0;
+    materialsByVendor.forEach((v) => {
+      v.items.forEach((i) => {
+        const itemId = String(i.id || i._id);
+        const qty = Number(cart[itemId]) || Number(cart[i.id]) || 1;
+        mSub += (Number(i.price) || 0) * qty;
+      });
+      mDeliv += v.deliveryCharge;
+    });
+
+    let rSub = 0;
+    let rDeliv = 0;
+    rentalsByVendor.forEach((v) => {
+      v.items.forEach((i) => {
+        const days = Number(i.rentalDays) || 3;
+        rSub += (Number(i.pricePerDay) || 600) * days;
+      });
+      rDeliv += v.deliveryCharge;
+    });
+
+    const iTotal = mSub + rSub;
+    const vCount = materialsByVendor.length + rentalsByVendor.length;
+    const iCount = selectedMaterials.length + selectedRentals.length;
+
+    return {
+      itemsCount: iCount,
+      vendorsCount: vCount,
+      materialsSubtotal: mSub,
+      materialsDeliveryTotal: mDeliv,
+      rentalsSubtotal: rSub,
+      rentalsDeliveryTotal: rDeliv,
+      itemsTotal: iTotal,
+      grandTotal: iTotal + mDeliv + rDeliv,
+    };
+  }, [materialsByVendor, rentalsByVendor, cart, selectedMaterials, selectedRentals]);
+
+  const handlePlaceOrder = async () => {
+    setSubmitting(true);
+    try {
+      const createdOrders = [];
+
+      // 1. Submit Material Orders (one per vendor)
+      for (const v of materialsByVendor) {
+        const sub = v.items.reduce((s, i) => {
+          const itemId = String(i.id || i._id);
+          const qty = Number(cart[itemId]) || Number(cart[i.id]) || 1;
+          return s + (Number(i.price) || 0) * qty;
+        }, 0);
+        const tot = sub + v.deliveryCharge;
+
+        const payload = {
+          sellerId: v.sellerId,
+          orderType: 'material',
+          items: v.items.map((i) => {
+            const itemId = String(i.id || i._id);
+            const qty = Number(cart[itemId]) || Number(cart[i.id]) || 1;
+            return {
+              productId: itemId,
+              qty,
+              subtotal: (Number(i.price) || 0) * qty,
+            };
+          }),
+          customerAddress: displayAddress,
+          city: 'Bengaluru',
+          pincode: '560002',
+          latitude: userLat || 12.9716,
+          longitude: userLng || 77.5946,
+          subtotal: sub,
+          deliveryCharge: v.deliveryCharge,
+          total: tot,
+          paymentMethod,
+          notes: selectedProject ? `Project: ${selectedProject.name}` : '',
+        };
+
+        const res = await bookingAPI.placeSellerOrder(payload);
+        if (res.success && res.order) {
+          addSellerOrder(res.order);
+          createdOrders.push(res.order);
+
+          // Attach to project if chosen
+          if (selectedProject?._id) {
+            await addAttachmentToProject(selectedProject._id, {
+              refModel: 'SellerOrder',
+              refId: res.order._id,
+            });
+          }
+        }
+      }
+
+      // 2. Submit Rental Orders (one per vendor)
+      for (const v of rentalsByVendor) {
+        const sub = v.items.reduce((s, i) => s + (Number(i.pricePerDay) || 600) * (Number(i.rentalDays) || 3), 0);
+        const tot = sub + v.deliveryCharge;
+
+        const payload = {
+          sellerId: v.sellerId,
+          orderType: 'rental',
+          items: v.items.map((i) => ({
+            productId: String(i.id || i._id),
+            qty: 1,
+            subtotal: (Number(i.pricePerDay) || 600) * (Number(i.rentalDays) || 3),
+            rentalDays: Number(i.rentalDays) || 3,
+            startDate: i.startDate || '12 Sep 2024',
+            endDate: i.endDate || '15 Sep 2024',
+            withOperator: true,
+          })),
+          customerAddress: displayAddress,
+          city: 'Bengaluru',
+          pincode: '560002',
+          latitude: userLat || 12.9716,
+          longitude: userLng || 77.5946,
+          subtotal: sub,
+          deliveryCharge: v.deliveryCharge,
+          total: tot,
+          paymentMethod,
+          notes: selectedProject ? `Project: ${selectedProject.name}` : '',
+        };
+
+        const res = await bookingAPI.placeSellerOrder(payload);
+        if (res.success && res.order) {
+          addSellerOrder(res.order);
+          createdOrders.push(res.order);
+
+          // Attach to project if chosen
+          if (selectedProject?._id) {
+            await addAttachmentToProject(selectedProject._id, {
+              refModel: 'SellerOrder',
+              refId: res.order._id,
+            });
+          }
+        }
+      }
+
+      // Clear carts
+      clearCart();
+      clearRentalCart();
+
+      const firstOrder = createdOrders[0];
+      navigation.navigate('BookingConfirmation', {
+        attachment: firstOrder,
+        title: 'Order Placed! 📦',
+        message: selectedProject
+          ? `Your order has been placed and added to "${selectedProject.name}". Track it from Status.`
+          : 'Your order has been placed successfully. Track it from Status.',
+      });
+    } catch (err) {
+      Alert.alert('Order Failed', err?.response?.data?.message || err.message || 'Could not place order.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-
+    <SafeAreaView style={styles.screen} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={handleGoBack}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.backArrow}>←</Text>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+          <MaterialCommunityIcons name="chevron-left" size={26} color="#0F172A" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Material Checkout</Text>
-        <View style={{ width: 38 }} />
+        <View style={styles.headerTitles}>
+          <Text style={styles.headerTitle}>Checkout</Text>
+          <Text style={styles.headerSubtitle}>Review your order and complete the payment</Text>
+        </View>
+        <View style={styles.conzaBranding}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+            <MaterialCommunityIcons name="hard-hat" size={14} color="#F59E0B" />
+            <Text style={styles.brandTitle}>CONZA</Text>
+          </View>
+          <Text style={styles.brandTagline}>BUILD • BOOK • BELONG</Text>
+        </View>
       </View>
 
-      <View style={styles.divider} />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* Project (Optional) Card */}
+        <TouchableOpacity
+          style={styles.projectSelectorCard}
+          onPress={() => setShowProjectModal(true)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.projectIconCircle}>
+            <MaterialCommunityIcons name="folder-outline" size={18} color="#EA580C" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.projectCardTitle}>Project (Optional)</Text>
+            <Text style={styles.projectCardSub}>Add this order to a project</Text>
+          </View>
+          <View style={styles.currentProjectPill}>
+            <Text style={styles.currentProjectText} numberOfLines={1}>
+              {selectedProject ? `${selectedProject.name} - Current Project` : 'Select Project'}
+            </Text>
+            <MaterialCommunityIcons name="chevron-down" size={14} color="#EA580C" />
+          </View>
+        </TouchableOpacity>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-      >
-        {/* Order Summary */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            Order Summary
-            <Text style={styles.sectionCount}> ({totalItems} items)</Text>
-          </Text>
-          {cartItems.map((item) => (
-            <MaterialItemRow
-              key={item.id}
-              item={item}
-              quantity={cart[item.id] ?? item.quantity ?? 0}
-            />
-          ))}
+        {/* Delivery Details Card */}
+        <View style={styles.deliverySection}>
+          <View style={styles.sectionTitleRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <MaterialCommunityIcons name="map-marker-outline" size={18} color="#0F172A" />
+              <Text style={styles.sectionHeading}>Delivery Details</Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowAddressSheet(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.changeLink}>Change</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.deliveryCard}>
+            <View style={styles.deliveryPinCircle}>
+              <MaterialCommunityIcons name="map-marker" size={16} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.deliveryAddressText} numberOfLines={2}>
+                {displayAddress}
+              </Text>
+              <Text style={styles.recipientText}>
+                {recipientName} • {recipientPhone}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        {/* Delivery Address */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🚚  Delivery Address</Text>
+        {/* Order Items Section */}
+        <View style={styles.orderItemsSection}>
+          <View style={styles.sectionTitleRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <MaterialCommunityIcons name="briefcase-outline" size={18} color="#0F172A" />
+              <Text style={styles.sectionHeading}>Order Items</Text>
+            </View>
+            <Text style={styles.vendorItemCount}>
+              {vendorsCount} vendors • {itemsCount} items
+            </Text>
+          </View>
 
-          {/* Auto Fetch */}
-          <TouchableOpacity
-            style={styles.fetchLocationBtn}
-            onPress={handleAutoFetch}
-            disabled={fetching}
-            activeOpacity={0.8}
-          >
-            {fetching ? (
-              <ActivityIndicator size="small" color={colors.accentAmber} />
-            ) : (
-              <>
-                <MaterialIcons name="my-location" size={22} color={colors.accentAmber} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.fetchLocationText}>Auto Fetch My Location</Text>
-                  <Text style={styles.fetchLocationSub}>Uses your current GPS location</Text>
+          {/* Group: Materials */}
+          {materialsByVendor.map((vendor) => (
+            <View key={vendor.vendorName} style={styles.vendorOrderBlock}>
+              <View style={styles.vendorBlockHeader}>
+                <View style={[styles.vendorGroupIcon, { backgroundColor: '#FFEDD5' }]}>
+                  <MaterialCommunityIcons name="package-variant-closed" size={16} color="#EA580C" />
                 </View>
-                <Text style={styles.fetchLocationArrow}>→</Text>
-              </>
-            )}
-          </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.vendorGroupTitle}>Materials</Text>
+                  <Text style={styles.vendorGroupSub}>Supplied by {vendor.vendorName}</Text>
+                </View>
+                <View style={styles.vendorDeliveryPill}>
+                  <MaterialCommunityIcons name="truck-delivery-outline" size={13} color="#64748B" />
+                  <Text style={styles.vendorChargeText}>Delivery charge: ₹{vendor.deliveryCharge}</Text>
+                </View>
+                <View style={styles.vendorDivider} />
+                <View>
+                  <Text style={styles.vendorChargeText}>Delivery in</Text>
+                  <Text style={[styles.vendorChargeText, { fontWeight: '600', color: '#0F172A' }]}>
+                    {vendor.deliveryTime}
+                  </Text>
+                </View>
+              </View>
 
-          {/* Use Saved Address */}
-          <TouchableOpacity
-            style={styles.savedAddressBtn}
-            activeOpacity={0.8}
-            onPress={() => setSavedAddressSheetVisible(true)}
-          >
-            <MaterialIcons name="bookmark-border" size={18} color={colors.textSecondary} />
-            <Text style={styles.savedAddressBtnText}>Use Saved Address</Text>
-          </TouchableOpacity>
+              {/* Items in this vendor */}
+              {vendor.items.map((item) => {
+                const itemId = String(item.id || item._id);
+                const qty = Number(cart[itemId]) || Number(cart[item.id]) || 1;
+                const total = (Number(item.price) || 0) * qty;
 
-          <View style={styles.inputRow}>
-            <View style={{ flex: 1, marginRight: 10 }}>
-              <Text style={styles.inputLabel}>House No.</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ex: 12"
-                placeholderTextColor={colors.textMuted}
-                value={houseNumber}
-                onChangeText={setHouseNumber}
-              />
+                return (
+                  <View key={itemId} style={styles.checkoutItemRow}>
+                    <Image
+                      source={item.image ? { uri: item.image } : require('../../assets/images/project_default.jpg')}
+                      style={styles.checkoutItemImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.checkoutItemInfo}>
+                      <Text style={styles.checkoutItemTitle} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.checkoutItemSub}>50 kg (1 bag)</Text>
+                      <Text style={styles.checkoutItemRate}>₹{item.price} / bag • Qty: {qty}</Text>
+                    </View>
+                    <Text style={styles.checkoutItemTotal}>₹{total.toLocaleString('en-IN')}</Text>
+                  </View>
+                );
+              })}
+
+              <View style={styles.groupSubtotalLine}>
+                <Text style={styles.groupSubtotalLabel}>Subtotal (Materials)</Text>
+                <Text style={styles.groupSubtotalValue}>₹{materialsSubtotal.toLocaleString('en-IN')}</Text>
+              </View>
             </View>
-            <View style={{ flex: 2 }}>
-              <Text style={styles.inputLabel}>Building/House Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ex: Shantiniketan"
-                placeholderTextColor={colors.textMuted}
-                value={houseName}
-                onChangeText={setHouseName}
-              />
+          ))}
+
+          {/* Group: Rentals */}
+          {rentalsByVendor.map((vendor) => (
+            <View key={vendor.vendorName} style={styles.vendorOrderBlock}>
+              <View style={styles.vendorBlockHeader}>
+                <View style={[styles.vendorGroupIcon, { backgroundColor: '#FFEDD5' }]}>
+                  <MaterialCommunityIcons name="tractor" size={16} color="#EA580C" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.vendorGroupTitle}>Rentals</Text>
+                  <Text style={styles.vendorGroupSub}>Supplied by {vendor.vendorName}</Text>
+                </View>
+                <View style={styles.vendorDeliveryPill}>
+                  <MaterialCommunityIcons name="truck-delivery-outline" size={13} color="#64748B" />
+                  <Text style={styles.vendorChargeText}>Delivery charge: ₹{vendor.deliveryCharge}</Text>
+                </View>
+                <View style={styles.vendorDivider} />
+                <View>
+                  <Text style={styles.vendorChargeText}>Delivery on</Text>
+                  <Text style={[styles.vendorChargeText, { fontWeight: '600', color: '#0F172A' }]}>
+                    {vendor.deliveryTime}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Rental Items in this vendor */}
+              {vendor.items.map((item) => {
+                const itemId = String(item.id || item._id);
+                const days = Number(item.rentalDays) || 3;
+                const rate = Number(item.pricePerDay) || 600;
+                const total = rate * days;
+
+                return (
+                  <View key={itemId} style={styles.checkoutItemRow}>
+                    <Image
+                      source={item.image ? { uri: item.image } : require('../../assets/images/rental_tractor.jpg')}
+                      style={styles.checkoutItemImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.checkoutItemInfo}>
+                      <Text style={styles.checkoutItemTitle} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.checkoutItemSub}>With operator (optional)</Text>
+                      <Text style={styles.checkoutItemRate}>₹{rate} / day • {days} days</Text>
+                      <Text style={styles.checkoutItemDates}>12 Sep 2024 → 15 Sep 2024</Text>
+                    </View>
+                    <Text style={styles.checkoutItemTotal}>₹{total.toLocaleString('en-IN')}</Text>
+                  </View>
+                );
+              })}
+
+              <View style={styles.groupSubtotalLine}>
+                <Text style={styles.groupSubtotalLabel}>Subtotal (Rentals)</Text>
+                <Text style={styles.groupSubtotalValue}>₹{rentalsSubtotal.toLocaleString('en-IN')}</Text>
+              </View>
             </View>
-          </View>
-
-          <Text style={styles.inputLabel}>Street / Road</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ex: ITPL Main Road"
-            placeholderTextColor={colors.textMuted}
-            value={street}
-            onChangeText={setStreet}
-          />
-
-          <View style={styles.inputRow}>
-            <View style={{ flex: 1, marginRight: 10 }}>
-              <Text style={styles.inputLabel}>Area / Locality</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Area"
-                placeholderTextColor={colors.textMuted}
-                value={area}
-                onChangeText={setArea}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.inputLabel}>City</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="City"
-                placeholderTextColor={colors.textMuted}
-                value={city}
-                onChangeText={setCity}
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputRow}>
-            <View style={{ flex: 1, marginRight: 10 }}>
-              <Text style={styles.inputLabel}>District</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="District"
-                placeholderTextColor={colors.textMuted}
-                value={district}
-                onChangeText={setDistrict}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.inputLabel}>State</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="State"
-                placeholderTextColor={colors.textMuted}
-                value={state}
-                onChangeText={setState}
-              />
-            </View>
-          </View>
-
-          <View style={{ width: '50%', marginBottom: 20 }}>
-            <Text style={styles.inputLabel}>Pincode</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="000000"
-              placeholderTextColor={colors.textMuted}
-              value={pincode}
-              onChangeText={setPincode}
-              keyboardType="numeric"
-              maxLength={6}
-            />
-          </View>
-
-          <View style={styles.sectionDivider} />
-
-          {showDatePicker && (
-            <DateTimePicker
-              value={scheduledDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
-              onChange={handleDateChange}
-              minimumDate={new Date()}
-            />
-          )}
-          {showTimePicker && (
-            <DateTimePicker
-              value={scheduledTime}
-              mode="time"
-              display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
-              onChange={handleTimeChange}
-            />
-          )}
-
-          <Text style={styles.inputLabel}>Booking Schedule</Text>
-          <View style={styles.bookingTypeRow}>
-            <TouchableOpacity
-              style={[styles.typeBtn, bookingType === 'immediate' && styles.typeBtnActive]}
-              onPress={() => setBookingType('immediate')}
-            >
-              <Text style={[styles.typeBtnText, bookingType === 'immediate' && styles.typeBtnTextActive]}>⚡ Immediate</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.typeBtn, bookingType === 'scheduled' && styles.typeBtnActive]}
-              onPress={() => setBookingType('scheduled')}
-            >
-              <Text style={[styles.typeBtnText, bookingType === 'scheduled' && styles.typeBtnTextActive]}>📅 Schedule</Text>
-            </TouchableOpacity>
-          </View>
-
-          {bookingType === 'scheduled' && (
-            <View style={styles.scheduleRow}>
-              <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowDatePicker(true)}>
-                <Text style={styles.dateTimeLabel}>Date</Text>
-                <Text style={styles.dateTimeValue}>{scheduledDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.dateTimeBtn} onPress={() => setShowTimePicker(true)}>
-                <Text style={styles.dateTimeLabel}>Time</Text>
-                <Text style={styles.dateTimeValue}>{scheduledTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <Text style={styles.inputLabel}>Order Description</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Any special instructions for the delivery..."
-            placeholderTextColor={colors.textMuted}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-          />
-        </View>
-
-        {/* Payment Method */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payment Method</Text>
-          {PAYMENT_METHODS.map((method) => (
-            <PaymentOption
-              key={method.id}
-              method={method}
-              selected={paymentMethod === method.id}
-              onSelect={handleSelectPayment}
-            />
           ))}
         </View>
 
-        {/* Bill Summary */}
-        <View style={styles.billSection}>
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Subtotal ({totalItems} items)</Text>
-            <Text style={styles.billValue}>₹{subtotal.toLocaleString()}</Text>
+        {/* Payment Method Section */}
+        <View style={styles.paymentSection}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <MaterialCommunityIcons name="wallet-outline" size={18} color="#0F172A" />
+            <Text style={styles.sectionHeading}>Payment Method</Text>
           </View>
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Delivery Fee</Text>
-            <Text style={styles.billValue}>₹{DELIVERY_FEE}</Text>
-          </View>
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Platform Fee (5%)</Text>
-            <Text style={styles.billValue}>₹{platformFee}</Text>
-          </View>
-          <View style={styles.billDivider} />
-          <View style={styles.billRow}>
-            <Text style={styles.billTotalLabel}>Total Amount</Text>
-            <Text style={styles.billTotalValue}>₹{total.toLocaleString()}</Text>
-          </View>
+          <Text style={styles.paymentSubheading}>UPI, Cards and more</Text>
+
+          {/* Option 1: UPI */}
+          <TouchableOpacity
+            style={[styles.paymentMethodCard, paymentMethod === 'upi' && styles.paymentMethodCardSelected]}
+            onPress={() => setPaymentMethod('upi')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.radioOuter, paymentMethod === 'upi' && styles.radioOuterSelected]}>
+              {paymentMethod === 'upi' && <View style={styles.radioInner} />}
+            </View>
+            <View style={styles.paymentMethodInfo}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.upiIconText}>UPI</Text>
+                <Text style={styles.paymentMethodTitle}>Pay via UPI</Text>
+              </View>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={16} color="#EA580C" />
+          </TouchableOpacity>
+
+          {/* Option 2: Debit / Credit Card */}
+          <TouchableOpacity
+            style={[styles.paymentMethodCard, paymentMethod === 'card' && styles.paymentMethodCardSelected]}
+            onPress={() => setPaymentMethod('card')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.radioOuter, paymentMethod === 'card' && styles.radioOuterSelected]}>
+              {paymentMethod === 'card' && <View style={styles.radioInner} />}
+            </View>
+            <MaterialCommunityIcons name="credit-card-outline" size={18} color="#475569" style={{ marginRight: 8 }} />
+            <Text style={styles.paymentMethodTitle}>Debit / Credit Card</Text>
+          </TouchableOpacity>
+
+          {/* Option 3: Net Banking */}
+          <TouchableOpacity
+            style={[styles.paymentMethodCard, paymentMethod === 'netbanking' && styles.paymentMethodCardSelected]}
+            onPress={() => setPaymentMethod('netbanking')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.radioOuter, paymentMethod === 'netbanking' && styles.radioOuterSelected]}>
+              {paymentMethod === 'netbanking' && <View style={styles.radioInner} />}
+            </View>
+            <MaterialCommunityIcons name="bank-outline" size={18} color="#475569" style={{ marginRight: 8 }} />
+            <Text style={styles.paymentMethodTitle}>Net Banking</Text>
+          </TouchableOpacity>
+
+          {/* Option 4: Wallet */}
+          <TouchableOpacity
+            style={[styles.paymentMethodCard, paymentMethod === 'wallet' && styles.paymentMethodCardSelected]}
+            onPress={() => setPaymentMethod('wallet')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.radioOuter, paymentMethod === 'wallet' && styles.radioOuterSelected]}>
+              {paymentMethod === 'wallet' && <View style={styles.radioInner} />}
+            </View>
+            <MaterialCommunityIcons name="wallet-outline" size={18} color="#475569" style={{ marginRight: 8 }} />
+            <Text style={styles.paymentMethodTitle}>Wallet (e.g. PhonePe, Paytm)</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={{ height: 100 }} />
+        {/* Price Summary Section */}
+        <View style={styles.priceSummarySection}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+            <MaterialCommunityIcons name="receipt-text-outline" size={18} color="#0F172A" />
+            <Text style={styles.sectionHeading}>Price Summary</Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Items total</Text>
+            <Text style={styles.summaryValue}>₹{itemsTotal.toLocaleString('en-IN')}</Text>
+          </View>
+
+          {materialsByVendor.map((v) => (
+            <View key={v.vendorName} style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Materials delivery charge ({v.vendorName})</Text>
+              <Text style={styles.summaryValue}>₹{v.deliveryCharge}</Text>
+            </View>
+          ))}
+
+          {rentalsByVendor.map((v) => (
+            <View key={v.vendorName} style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Rentals delivery charge ({v.vendorName})</Text>
+              <Text style={styles.summaryValue}>₹{v.deliveryCharge}</Text>
+            </View>
+          ))}
+
+          <View style={styles.summaryGrandTotalRow}>
+            <View>
+              <Text style={styles.grandTotalLabel}>Total Amount</Text>
+              <Text style={styles.grandTotalSub}>Includes GST and applicable fees</Text>
+            </View>
+            <Text style={styles.grandTotalValue}>₹{grandTotal.toLocaleString('en-IN')}</Text>
+          </View>
+        </View>
       </ScrollView>
 
-      {/* Confirm Button */}
-      <View style={styles.confirmWrapper}>
-        <LinearGradient
-          colors={[colors.gradientStart, colors.gradientEnd]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.confirmBtn}
-        >
+      {/* Sticky Bottom Bar */}
+      <View style={styles.stickyFooter}>
+        <View style={styles.footerLeft}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={styles.footerAmount}>₹{grandTotal.toLocaleString('en-IN')}</Text>
+            <MaterialCommunityIcons name="information-outline" size={14} color="#94A3B8" />
+          </View>
           <TouchableOpacity
-            style={styles.confirmTouch}
-            activeOpacity={0.85}
-            onPress={handlePlaceOrder}
+            style={styles.viewDetailsTouch}
+            onPress={() => setShowDetailsModal(true)}
           >
-            {submitting ? (
-              <ActivityIndicator color={colors.textPrimary} />
-            ) : (
-              <Text style={styles.confirmText}>Place Order →</Text>
-            )}
+            <Text style={styles.viewDetailsText}>View details</Text>
+            <MaterialCommunityIcons name="chevron-up" size={13} color="#EA580C" />
           </TouchableOpacity>
-        </LinearGradient>
-        {submitError && (
-          <Text style={styles.submitError}>{submitError}</Text>
-        )}
+        </View>
+
+        <TouchableOpacity
+          style={[styles.placeOrderBtn, submitting && styles.placeOrderBtnDisabled]}
+          onPress={handlePlaceOrder}
+          disabled={submitting}
+          activeOpacity={0.88}
+        >
+          {submitting ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <>
+              <Text style={styles.placeOrderText}>Place Order</Text>
+              <MaterialCommunityIcons name="arrow-right" size={16} color="#FFFFFF" />
+            </>
+          )}
+        </TouchableOpacity>
       </View>
+
+      {/* Project Selector Modal */}
+      <Modal visible={showProjectModal} transparent animationType="fade" onRequestClose={() => setShowProjectModal(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowProjectModal(false)}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Select Project</Text>
+            <Text style={styles.modalSub}>Link this order directly to a project for unified expense tracking.</Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+              <TouchableOpacity
+                style={[styles.projectOption, !selectedProject && styles.projectOptionSelected]}
+                onPress={() => {
+                  setSelectedProject(null);
+                  setShowProjectModal(false);
+                }}
+              >
+                <Text style={[styles.projectOptionText, !selectedProject && styles.projectOptionTextSelected]}>
+                  No Project (General Order)
+                </Text>
+              </TouchableOpacity>
+
+              {(myProjects || []).map((p) => {
+                const isSel = selectedProject?._id === p._id;
+                return (
+                  <TouchableOpacity
+                    key={p._id}
+                    style={[styles.projectOption, isSel && styles.projectOptionSelected]}
+                    onPress={() => {
+                      setSelectedProject(p);
+                      setShowProjectModal(false);
+                    }}
+                  >
+                    <View style={styles.projectOptionDot} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.projectOptionText, isSel && styles.projectOptionTextSelected]}>
+                        {p.name}
+                      </Text>
+                      <Text style={styles.projectOptionMeta}>{p.location || 'Bengaluru, Karnataka'}</Text>
+                    </View>
+                    {isSel && <MaterialCommunityIcons name="check" size={16} color="#D97706" />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowProjectModal(false)}>
+              <Text style={styles.modalCloseBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* View Details Modal */}
+      <Modal visible={showDetailsModal} transparent animationType="fade" onRequestClose={() => setShowDetailsModal(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowDetailsModal(false)}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Order Breakdown</Text>
+            <View style={styles.breakupRow}>
+              <Text style={styles.breakupLabel}>Items Total:</Text>
+              <Text style={styles.breakupValue}>₹{itemsTotal.toLocaleString('en-IN')}</Text>
+            </View>
+            <View style={styles.breakupRow}>
+              <Text style={styles.breakupLabel}>Materials Delivery Charges:</Text>
+              <Text style={styles.breakupValue}>₹{materialsDeliveryTotal.toLocaleString('en-IN')}</Text>
+            </View>
+            <View style={styles.breakupRow}>
+              <Text style={styles.breakupLabel}>Rentals Delivery Charges:</Text>
+              <Text style={styles.breakupValue}>₹{rentalsDeliveryTotal.toLocaleString('en-IN')}</Text>
+            </View>
+            <View style={[styles.breakupRow, { borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 8, marginTop: 6 }]}>
+              <Text style={[styles.breakupLabel, { fontWeight: '700', color: '#0F172A' }]}>Final Total:</Text>
+              <Text style={[styles.breakupValue, { fontWeight: '700', color: '#0F172A' }]}>₹{grandTotal.toLocaleString('en-IN')}</Text>
+            </View>
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowDetailsModal(false)}>
+              <Text style={styles.modalCloseBtnText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* Saved Address Sheet */}
       <SavedAddressSheet
-        visible={savedAddressSheetVisible}
-        onClose={() => setSavedAddressSheetVisible(false)}
-        onSelect={handleSavedAddressSelect}
-        currentLat={lat}
-        currentLng={lng}
-        currentAddress={currentAddressDisplay}
+        visible={showAddressSheet}
+        onClose={() => setShowAddressSheet(false)}
+        onSelectAddress={(addr) => {
+          setSelectedAddress(addr);
+          setShowAddressSheet(false);
+        }}
       />
     </SafeAreaView>
   );
 };
 
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-
+  screen: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 14,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  backArrow: { fontSize: 18, color: colors.textPrimary, fontWeight: '600' },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary },
-  divider: { height: 1, backgroundColor: colors.borderLight },
-  scroll: { paddingTop: 20, paddingHorizontal: 20 },
-
-  section: {
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 16,
-  },
-  sectionCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  itemImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceElevated,
-    flexShrink: 0,
-  },
-  itemInfo: { flex: 1 },
-  itemName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 3,
-    lineHeight: 18,
-  },
-  itemSeller: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  itemUnit: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '500',
-  },
-  itemRight: {
-    alignItems: 'flex-end',
-    flexShrink: 0,
-  },
-  itemQty: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  itemPrice: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-
-  fetchLocationBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.accentYellowSoft,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1.5,
-    borderColor: colors.accentYellow,
-    gap: 12,
-  },
-  fetchLocationText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 2,
-  },
-  fetchLocationSub: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  fetchLocationArrow: {
-    fontSize: 16,
-    color: colors.accentAmber,
-    fontWeight: '700',
-  },
-
-  savedAddressBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 16,
-    paddingVertical: 13,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
-  },
-  savedAddressBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    letterSpacing: 0.2,
-  },
-
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: 6,
-    marginTop: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  input: {
-    backgroundColor: colors.inputBg,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: colors.textPrimary,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-  },
-
-  paymentOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    marginBottom: 10,
-    gap: 12,
-    backgroundColor: colors.background,
-  },
-  paymentOptionSelected: {
-    borderColor: colors.accentYellow,
-    backgroundColor: '#FFFDF0',
-  },
-  paymentRadio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  paymentRadioSelected: { borderColor: colors.accentAmber },
-  paymentRadioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.accentAmber,
-  },
-  paymentIconBox: {
     width: 36,
     height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    marginRight: 8,
   },
-  paymentLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
-  paymentSub: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
+  headerTitles: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  headerSubtitle: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  conzaBranding: {
+    alignItems: 'flex-end',
+  },
+  brandTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: 0.5,
+  },
+  brandTagline: {
+    fontSize: 7.5,
+    fontWeight: '600',
+    color: '#94A3B8',
+    letterSpacing: 0.3,
+  },
 
-  billSection: {
-    backgroundColor: colors.accentYellowSoft,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(245,200,66,0.25)',
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 90,
   },
-  billRow: {
+
+  // Project selector
+  projectSelectorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBF5',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  projectIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#FFEDD5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  projectCardTitle: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  projectCardSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  currentProjectPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  currentProjectText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#EA580C',
+    maxWidth: 130,
+  },
+
+  // Delivery section
+  deliverySection: {
+    marginBottom: 20,
+  },
+  sectionTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
+  },
+  sectionHeading: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  changeLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#EA580C',
+  },
+  deliveryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+  },
+  deliveryPinCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EA580C',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  deliveryAddressText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  recipientText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+
+  // Order Items
+  orderItemsSection: {
+    marginBottom: 20,
+  },
+  vendorItemCount: {
+    fontSize: 11.5,
+    color: '#64748B',
+  },
+  vendorOrderBlock: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  vendorBlockHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  vendorGroupIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  vendorGroupTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  vendorGroupSub: {
+    fontSize: 10.5,
+    color: '#64748B',
+  },
+  vendorDeliveryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  vendorChargeText: {
+    fontSize: 10.5,
+    color: '#64748B',
+  },
+  vendorDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 6,
+  },
+
+  checkoutItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  checkoutItemImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    marginRight: 10,
+  },
+  checkoutItemInfo: {
+    flex: 1,
+  },
+  checkoutItemTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  checkoutItemSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  checkoutItemRate: {
+    fontSize: 11.5,
+    color: '#475569',
+    marginTop: 1,
+  },
+  checkoutItemDates: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  checkoutItemTotal: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+
+  groupSubtotalLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
+  },
+  groupSubtotalLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  groupSubtotalValue: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+
+  // Payment Method
+  paymentSection: {
+    marginBottom: 20,
+  },
+  paymentSubheading: {
+    fontSize: 11.5,
+    color: '#64748B',
     marginBottom: 10,
   },
-  billLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
-  billValue: { fontSize: 13, color: colors.textPrimary, fontWeight: '700' },
-  billDivider: {
-    height: 1,
-    backgroundColor: 'rgba(245,200,66,0.35)',
-    marginVertical: 8,
+  paymentMethodCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
   },
-  billTotalLabel: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
-  billTotalValue: { fontSize: 18, fontWeight: '800', color: colors.accentAmber },
+  paymentMethodCardSelected: {
+    borderColor: '#FED7AA',
+    backgroundColor: '#FFFBF5',
+  },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: '#94A3B8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  radioOuterSelected: {
+    borderColor: '#EA580C',
+  },
+  radioInner: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#EA580C',
+  },
+  paymentMethodInfo: {
+    flex: 1,
+  },
+  upiIconText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#EA580C',
+    fontStyle: 'italic',
+  },
+  paymentMethodTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
 
-  confirmWrapper: {
+  // Price Summary Section
+  priceSummarySection: {
+    marginBottom: 20,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 12.5,
+    color: '#64748B',
+  },
+  summaryValue: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#0F172A',
+  },
+  summaryGrandTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 10,
+    marginTop: 6,
+  },
+  grandTotalLabel: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  grandTotalSub: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  grandTotalValue: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+
+  // Sticky Footer
+  stickyFooter: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 20,
-    paddingBottom: 28,
-    paddingTop: 14,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    shadowColor: colors.cardShadow,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  confirmBtn: { borderRadius: 16, overflow: 'hidden' },
-  confirmTouch: { paddingVertical: 17, alignItems: 'center' },
-  confirmText: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
-  submitError: {
-    fontSize: 13,
-    color: colors.danger,
-    textAlign: 'center',
-    marginTop: 10,
-    fontWeight: '500',
-  },
-  sectionDivider: {
-    height: 1,
-    backgroundColor: colors.borderLight,
-    marginVertical: 20,
-  },
-  bookingTypeRow: {
+    borderTopColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  typeBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: colors.border,
     alignItems: 'center',
-    backgroundColor: colors.background,
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    elevation: 8,
   },
-  typeBtnActive: {
-    borderColor: colors.accentAmber,
-    backgroundColor: colors.accentYellowSoft,
+  footerLeft: {
+    justifyContent: 'center',
   },
-  typeBtnText: {
-    fontSize: 14,
+  footerAmount: {
+    fontSize: 17,
     fontWeight: '700',
-    color: colors.textMuted,
+    color: '#0F172A',
   },
-  typeBtnTextActive: {
-    color: colors.textPrimary,
-  },
-  scheduleRow: {
+  viewDetailsTouch: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
+    alignItems: 'center',
+    gap: 1,
+    marginTop: 1,
   },
-  dateTimeBtn: {
-    flex: 1,
-    backgroundColor: colors.inputBg,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  dateTimeLabel: {
-    fontSize: 11,
+  viewDetailsText: {
+    fontSize: 11.5,
     fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    marginBottom: 4,
+    color: '#EA580C',
   },
-  dateTimeValue: {
+  placeOrderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EA580C',
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 6,
+  },
+  placeOrderBtnDisabled: {
+    opacity: 0.65,
+  },
+  placeOrderText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: colors.accentAmber,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
-  textArea: {
-    height: 100,
-    paddingTop: 12,
-    textAlignVertical: 'top',
+
+  // Modals
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 18,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  modalSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 12,
+  },
+  projectOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  projectOptionSelected: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+  },
+  projectOptionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#D97706',
+    marginRight: 8,
+  },
+  projectOptionText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#334155',
+  },
+  projectOptionTextSelected: {
+    color: '#92400E',
+    fontWeight: '600',
+  },
+  projectOptionMeta: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  modalCloseBtn: {
+    marginTop: 12,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  modalCloseBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#EA580C',
+  },
+
+  breakupRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+  },
+  breakupLabel: {
+    fontSize: 12.5,
+    color: '#475569',
+  },
+  breakupValue: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#0F172A',
   },
 });
 

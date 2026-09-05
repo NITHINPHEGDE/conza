@@ -1,11 +1,5 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  materials        as dummyMaterials,
-  rentalItems      as dummyRentalItems,
-  rentalCategories as dummyRentalCategories,
-  projects         as dummyProjects,
-} from '../data/dummyData';
 
 import * as Location from 'expo-location';
 import { workerAPI  } from '../api/workerAPI';
@@ -154,6 +148,7 @@ const useAppStore = create((set, get) => ({
 
     // 3. Fetch data that doesn't strictly depend on location
     await Promise.all([
+      get().loadPersistedCart(),
       get().fetchMaterials(),
       get().fetchRentalData(),
       get().fetchUserProfile(),
@@ -435,17 +430,17 @@ const useAppStore = create((set, get) => ({
         });
       } else {
         set({
-          materials: dummyMaterials,
-          materialCategories: buildCategoryList(apiCategories, dummyMaterials, { allEmoji: '🧱' }),
+          materials: [],
+          materialCategories: buildCategoryList(apiCategories, [], { allEmoji: '🧱' }),
         });
       }
     } catch (err) {
-      console.warn('[Materials] API error, falling back to dummy:', err.message);
+      console.warn('[Materials] API error:', err.message);
       const apiCategories = await catsPromise;
       set({
-        materials: dummyMaterials,
-        materialCategories: buildCategoryList(apiCategories, dummyMaterials, { allEmoji: '🧱' }),
-        materialsError: null,
+        materials: [],
+        materialCategories: buildCategoryList(apiCategories, [], { allEmoji: '🧱' }),
+        materialsError: err.message,
       });
     } finally {
       set({ materialsLoading: false, materialsFetched: true });
@@ -532,11 +527,11 @@ const useAppStore = create((set, get) => ({
           rentalCategories: buildCategoryList(apiCategories, normalized, { allEmoji: '🏗️', fallbackEmoji: '📦' }),
         });
       } else {
-        set({ rentalItems: dummyRentalItems, rentalCategories: dummyRentalCategories });
+        set({ rentalItems: [], rentalCategories: buildCategoryList(apiCategories, [], { allEmoji: '🏗️', fallbackEmoji: '📦' }) });
       }
     } catch (err) {
-      console.warn('[Rentals] API error, falling back to dummy:', err.message);
-      set({ rentalItems: dummyRentalItems, rentalCategories: dummyRentalCategories, rentalError: null });
+      console.warn('[Rentals] API error:', err.message);
+      set({ rentalItems: [], rentalCategories: [], rentalError: err.message });
     } finally {
       set({ rentalLoading: false });
     }
@@ -587,9 +582,25 @@ const useAppStore = create((set, get) => ({
     }
   },
 
-  createProject: async ({ name, description, attachments }) => {
-    const data = await projectAPI.createProject({ name, description, attachments });
+  createProject: async (payload) => {
+    const data = await projectAPI.createProject(payload);
     set((s) => ({ myProjects: [data.project, ...s.myProjects] }));
+    return data.project;
+  },
+
+  addExpenseToProject: async (projectId, expenseData) => {
+    const data = await projectAPI.addExpense(projectId, expenseData);
+    set((s) => ({
+      myProjects: s.myProjects.map((p) => (p._id === projectId ? data.project : p)),
+    }));
+    return data.project;
+  },
+
+  removeExpenseFromProject: async (projectId, expenseId) => {
+    const data = await projectAPI.removeExpense(projectId, expenseId);
+    set((s) => ({
+      myProjects: s.myProjects.map((p) => (p._id === projectId ? data.project : p)),
+    }));
     return data.project;
   },
 
@@ -659,8 +670,9 @@ const useAppStore = create((set, get) => ({
           b.status === 'accepted'    ? '#22C55E' : '#94A3B8',
       }));
       set({ projects });
-    } catch {
-      set({ projects: dummyProjects });
+    } catch (err) {
+      console.warn('[Projects] fetch error:', err.message);
+      set({ projects: [] });
     } finally {
       set({ projectsLoading: false });
     }
@@ -827,62 +839,179 @@ const useAppStore = create((set, get) => ({
 
   // ── Cart ────────────────────────────────────────────────────────────────────
   cart: {},
+  cartItemsMap: {},
 
-  addToCart: (item) => {
-    if (item._setQty !== undefined) {
-      set((state) => ({ cart: { ...state.cart, [item.id]: item._setQty } }));
-    } else {
-      set((state) => ({
-        cart: { ...state.cart, [item.id]: (Number(state.cart[item.id]) || 0) + 1 },
-      }));
+  loadPersistedCart: async () => {
+    try {
+      const [savedCart, savedMap, savedRentals] = await Promise.all([
+        AsyncStorage.getItem('conza_cart'),
+        AsyncStorage.getItem('conza_cart_map'),
+        AsyncStorage.getItem('conza_rental_cart'),
+      ]);
+      const cart = savedCart ? JSON.parse(savedCart) : {};
+      const cartItemsMap = savedMap ? JSON.parse(savedMap) : {};
+      const rentalCart = savedRentals ? JSON.parse(savedRentals) : [];
+      set({ cart, cartItemsMap, rentalCart });
+    } catch (e) {
+      console.warn('Failed to load persisted cart:', e.message);
     }
   },
 
-  removeFromCart: (item) => {
+  persistCart: async (cart, cartItemsMap) => {
+    try {
+      await Promise.all([
+        AsyncStorage.setItem('conza_cart', JSON.stringify(cart)),
+        AsyncStorage.setItem('conza_cart_map', JSON.stringify(cartItemsMap)),
+      ]);
+    } catch (_) {}
+  },
+
+  persistRentalCart: async (rentalCart) => {
+    try {
+      await AsyncStorage.setItem('conza_rental_cart', JSON.stringify(rentalCart));
+    } catch (_) {}
+  },
+
+  addToCart: (item) => {
+    const itemId = String(item?.id || item?._id || '');
+    if (!itemId) return;
+
     set((state) => {
-      const current = Number(state.cart[item.id]) || 0;
-      if (current <= 1) {
-        const updated = { ...state.cart };
-        delete updated[item.id];
-        return { cart: updated };
+      let newCart = { ...state.cart };
+      let newMap = { ...state.cartItemsMap };
+
+      if (item._setQty !== undefined) {
+        const qty = Number(item._setQty) || 0;
+        if (qty <= 0) {
+          delete newCart[itemId];
+          delete newMap[itemId];
+        } else {
+          newCart[itemId] = qty;
+          newMap[itemId] = {
+            ...(newMap[itemId] || {}),
+            ...item,
+            id: itemId,
+            _id: itemId,
+          };
+        }
+      } else {
+        const currentQty = Number(newCart[itemId]) || 0;
+        newCart[itemId] = currentQty + 1;
+        newMap[itemId] = {
+          ...(newMap[itemId] || {}),
+          ...item,
+          id: itemId,
+          _id: itemId,
+        };
       }
-      return { cart: { ...state.cart, [item.id]: current - 1 } };
+
+      get().persistCart(newCart, newMap);
+      return { cart: newCart, cartItemsMap: newMap };
     });
   },
 
-  clearCart: () => set({ cart: {} }),
+  removeFromCart: (item) => {
+    const itemId = String(item?.id || item?._id || (typeof item === 'string' ? item : ''));
+    if (!itemId) return;
+
+    set((state) => {
+      const current = Number(state.cart[itemId]) || 0;
+      let newCart = { ...state.cart };
+      let newMap = { ...state.cartItemsMap };
+
+      if (current <= 1) {
+        delete newCart[itemId];
+        delete newMap[itemId];
+      } else {
+        newCart[itemId] = current - 1;
+      }
+
+      get().persistCart(newCart, newMap);
+      return { cart: newCart, cartItemsMap: newMap };
+    });
+  },
+
+  clearCart: () => {
+    get().persistCart({}, {});
+    set({ cart: {}, cartItemsMap: {} });
+  },
 
   getCartItems: () => {
-    const { cart, materials } = get();
-    return materials.filter((m) => (Number(cart[m.id]) || 0) > 0);
+    const { cart, materials, cartItemsMap } = get();
+    const result = [];
+    const activeIds = Object.keys(cart).filter((id) => (Number(cart[id]) || 0) > 0);
+
+    activeIds.forEach((id) => {
+      const fromStore = (materials || []).find(
+        (m) => String(m.id || m._id) === id
+      );
+      const fromMap = cartItemsMap ? cartItemsMap[id] : null;
+      const combined = fromStore ? { ...(fromMap || {}), ...fromStore } : fromMap;
+      if (combined) {
+        result.push({
+          ...combined,
+          id,
+          _id: id,
+        });
+      }
+    });
+    return result;
   },
 
   getCartTotal: () => {
-    const { cart, materials } = get();
-    return materials
-      .filter((m) => (Number(cart[m.id]) || 0) > 0)
-      .reduce((sum, m) => sum + (Number(m.price) || 0) * (Number(cart[m.id]) || 0), 0);
+    const { cart } = get();
+    const items = get().getCartItems();
+    return items.reduce(
+      (sum, m) => sum + (Number(m.price) || 0) * (Number(cart[m.id]) || 0),
+      0
+    );
   },
 
-  getCartItemCount: () =>
-    Object.values(get().cart).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0),
+  getCartItemCount: () => {
+    const { cart } = get();
+    return Object.values(cart).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0);
+  },
 
   // ── Rental Cart ─────────────────────────────────────────────────────────────
   rentalCart: [],
 
   addToRentalCart: (item) => {
+    const itemId = String(item?.id || item?._id || '');
+    if (!itemId) return;
+    const normalizedItem = {
+      ...item,
+      id: itemId,
+      _id: itemId,
+      rentalDays: Number(item.rentalDays) || 3,
+    };
+
     set((state) => {
-      const exists = state.rentalCart.find((r) => r.id === item.id);
-      if (exists) return state;
-      return { rentalCart: [...state.rentalCart, item] };
+      const idx = state.rentalCart.findIndex((r) => String(r.id || r._id) === itemId);
+      let updated;
+      if (idx >= 0) {
+        updated = [...state.rentalCart];
+        updated[idx] = { ...updated[idx], ...normalizedItem };
+      } else {
+        updated = [...state.rentalCart, normalizedItem];
+      }
+      get().persistRentalCart(updated);
+      return { rentalCart: updated };
     });
   },
 
   removeFromRentalCart: (itemId) => {
-    set((state) => ({ rentalCart: state.rentalCart.filter((r) => r.id !== itemId) }));
+    const targetId = String(itemId?.id || itemId?._id || itemId || '');
+    set((state) => {
+      const updated = state.rentalCart.filter((r) => String(r.id || r._id) !== targetId);
+      get().persistRentalCart(updated);
+      return { rentalCart: updated };
+    });
   },
 
-  clearRentalCart: () => set({ rentalCart: [] }),
+  clearRentalCart: () => {
+    get().persistRentalCart([]);
+    set({ rentalCart: [] });
+  },
 
   getRentalCartCount: () => get().rentalCart.length,
 
@@ -1326,5 +1455,8 @@ const useAppStore = create((set, get) => ({
     }
   },
 }));
+
+// Eagerly restore cart & rentals from storage
+useAppStore.getState().loadPersistedCart();
 
 export default useAppStore;

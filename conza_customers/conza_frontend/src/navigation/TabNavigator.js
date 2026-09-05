@@ -48,8 +48,18 @@ const BookingStack = () => (
     <Stack.Screen name="MaterialDetail"   component={MaterialDetailScreen}   />
     <Stack.Screen name="RentalDetail"     component={RentalDetailScreen}     />
     <Stack.Screen name="RentalCheckout"   component={RentalCheckoutScreen}   />
+    <Stack.Screen name="Checkout"         component={MaterialCheckoutScreen} />
     <Stack.Screen name="BookingConfirmation" component={BookingConfirmationScreen} />
     <Stack.Screen name="Wallet"           component={WalletScreen}           />
+  </Stack.Navigator>
+);
+
+// Cart tab stack — cart → checkout → confirmation
+const CartStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="CartHome"            component={CartScreen}             />
+    <Stack.Screen name="Checkout"            component={MaterialCheckoutScreen} />
+    <Stack.Screen name="BookingConfirmation" component={BookingConfirmationScreen} />
   </Stack.Navigator>
 );
 
@@ -87,11 +97,11 @@ export const AuthStack = () => (
 );
 
 const TAB_ICONS = {
-  Booking:  'home-variant',
-  CartTab:  'cart',
+  Booking:  'home',
+  CartTab:  'cart-outline',
   Projects: 'briefcase-outline',
-  Status:   'bell',
-  Profile:  'account-circle',
+  Status:   'poll',
+  Profile:  'account-outline',
 };
 
 const TabIcon = ({ name, focused }) => {
@@ -147,7 +157,7 @@ const TabNavigator = () => {
       })}
     >
       <Tab.Screen name="Booking"  component={BookingStack}  options={{ title: 'Home'     }} />
-      <Tab.Screen name="CartTab"  component={CartScreen}    options={{ title: 'Cart'     }} />
+      <Tab.Screen name="CartTab"  component={CartStack}     options={{ title: 'Cart'     }} />
       <Tab.Screen name="Projects" component={ProjectsStack} options={{ title: 'Projects' }} />
       <Tab.Screen name="Status"   component={StatusStack}   options={{ title: 'Status'   }} />
       <Tab.Screen name="Profile"  component={ProfileStack}  options={{ title: 'Profile'  }} />
