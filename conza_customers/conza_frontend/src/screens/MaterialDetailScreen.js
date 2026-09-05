@@ -137,18 +137,40 @@ const MaterialDetailScreen = ({ route, navigation }) => {
   const [activeImageIndex, setActiveImageIndex]     = useState(0);
   const [vendorQuery, setVendorQuery]               = useState('');
 
-  if (!item) return null;
+  const sellerName = useMemo(() => {
+    if (!item?.seller) return 'Vendor';
+    if (typeof item.seller === 'string') return item.seller;
+    return item.seller.shopName || item.seller.name || 'Vendor';
+  }, [item?.seller]);
 
-  const offer       = materialOffers[item.id];
-  const description = materialDescriptions[item.id] || 'High quality construction material sourced from certified suppliers.';
-  const discountedPrice = useMemo(() => Math.round(item.price * 0.95), [item.price]);
+  const offer = useMemo(() => {
+    if (item?.offer) return item.offer;
+    if (item?.discountPercent && item.discountPercent > 0) {
+      return `${item.discountPercent}% OFF`;
+    }
+    return null;
+  }, [item?.offer, item?.discountPercent]);
+
+  const description = useMemo(() => {
+    return item?.description || 'High quality construction material sourced from certified suppliers.';
+  }, [item?.description]);
+
+  const discountedPrice = useMemo(() => {
+    if (!item?.price) return 0;
+    return Math.round(Number(item.price) * 0.95);
+  }, [item?.price]);
 
   // Vendor can upload up to 5 images per product — fall back to the single
   // `image` field for older/dummy data that predates the multi-image array.
-  const images = useMemo(
-    () => (Array.isArray(item.images) && item.images.length ? item.images : (item.image ? [item.image] : [])),
-    [item.images, item.image]
-  );
+  const images = useMemo(() => {
+    if (Array.isArray(item?.images) && item.images.length > 0) {
+      return item.images;
+    }
+    if (item?.image) {
+      return [item.image];
+    }
+    return [];
+  }, [item?.images, item?.image]);
 
   const handleImageScroll = useCallback((e) => {
     // Fires from both onScroll (live, while dragging) and
@@ -156,12 +178,13 @@ const MaterialDetailScreen = ({ route, navigation }) => {
     // instead of only after a fast swipe's momentum fully settles — a slow
     // deliberate drag previously left the indicator stuck on the old dot.
     const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-    const clamped = Math.max(0, Math.min(idx, images.length - 1));
+    const clamped = Math.max(0, Math.min(idx, Math.max(0, images.length - 1)));
     setActiveImageIndex((prev) => (prev === clamped ? prev : clamped));
   }, [images.length]);
 
   const handleBuyNowConfirm = useCallback((qty) => {
     setShowDialog(false);
+    if (!item) return;
     navigation.navigate('MaterialCheckout', {
       cartItems: [item],
       cart: { [item.id]: qty },
@@ -169,6 +192,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
   }, [item, navigation]);
 
   const handleAddToCart = useCallback(() => {
+    if (!item) return;
     addToCart(item);
     setCartAdded(true);
     setTimeout(() => setCartAdded(false), 2000);
@@ -184,17 +208,17 @@ const MaterialDetailScreen = ({ route, navigation }) => {
   const handleGoBack = useCallback(() => navigation.goBack(), [navigation]);
 
   const buyButtonColors = useMemo(() => 
-    item.inStock ? [colors.gradientStart, colors.gradientEnd] : ['#ccc', '#bbb'],
-    [item.inStock]
+    item?.inStock ? [colors.gradientStart, colors.gradientEnd] : ['#ccc', '#bbb'],
+    [item?.inStock]
   );
 
   // Products from the same vendor (excluding this one)
-  const vendorProducts = useMemo(() =>
-    (allMaterials || []).filter(
+  const vendorProducts = useMemo(() => {
+    if (!item) return [];
+    return (allMaterials || []).filter(
       (m) => m.sellerId && m.sellerId === item.sellerId && m.id !== item.id
-    ),
-    [allMaterials, item.sellerId, item.id]
-  );
+    );
+  }, [allMaterials, item?.sellerId, item?.id]);
 
   // Client-side search within this vendor's other products
   const trimmedVendorQuery = vendorQuery.trim();
@@ -205,6 +229,20 @@ const MaterialDetailScreen = ({ route, navigation }) => {
   }, [vendorProducts, trimmedVendorQuery]);
 
   const handleClearVendorSearch = useCallback(() => setVendorQuery(''), []);
+
+  if (!item) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <TouchableOpacity style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.8}>
+          <Text style={styles.backArrow}>←</Text>
+        </TouchableOpacity>
+        <View style={styles.vendorEmptyState}>
+          <Text style={styles.vendorEmptyText}>Product not found</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -265,7 +303,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
             <View style={styles.imageFooter}>
               <View style={styles.sellerRow}>
                 <Text style={styles.sellerIcon}>🏪</Text>
-                <Text style={styles.sellerName}>{item.seller}</Text>
+                <Text style={styles.sellerName}>{sellerName}</Text>
               </View>
               <View style={styles.ratingBadge}>
                 <Text style={styles.ratingStar}>⭐</Text>
@@ -380,7 +418,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
               <Text style={styles.vendorSearchIcon}>🔍</Text>
               <TextInput
                 style={styles.vendorSearchInput}
-                placeholder={`Search products from ${item.seller}...`}
+                placeholder={`Search products from ${sellerName}...`}
                 placeholderTextColor={colors.textMuted}
                 value={vendorQuery}
                 onChangeText={setVendorQuery}
@@ -404,7 +442,13 @@ const MaterialDetailScreen = ({ route, navigation }) => {
                       {...prod}
                       quantity={Number(cart[prod.id]) || 0}
                       onUpdate={handleUpdateQuantity}
-                      onImagePress={() => navigation.push('MaterialDetail', { item: prod })}
+                      onImagePress={() => {
+                        if (navigation.push) {
+                          navigation.push('MaterialDetail', { item: prod });
+                        } else {
+                          navigation.navigate('MaterialDetail', { item: prod });
+                        }
+                      }}
                       onAddToCart={() => addToCart(prod)}
                     />
                   </View>
@@ -413,7 +457,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
             ) : (
               <View style={styles.vendorEmptyState}>
                 <Text style={styles.vendorEmptyText}>
-                  No "{trimmedVendorQuery}" available with {item.seller}.
+                  No "{trimmedVendorQuery}" available with {sellerName}.
                 </Text>
               </View>
             )}
@@ -471,7 +515,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
             <View style={styles.dialogHandle} />
             <Text style={styles.termsModalIcon}>↩️</Text>
             <Text style={styles.termsModalTitle}>Return Terms & Conditions</Text>
-            <Text style={styles.termsModalText}>{item.returnPolicy}</Text>
+            <Text style={styles.termsModalText}>{item?.returnPolicy || 'Standard return policy applies. Please contact the vendor for details.'}</Text>
             <TouchableOpacity style={styles.termsModalCloseBtn} onPress={closeReturnTerms} activeOpacity={0.8}>
               <Text style={styles.termsModalCloseBtnText}>Got it</Text>
             </TouchableOpacity>
@@ -486,7 +530,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
             <View style={styles.dialogHandle} />
             <Text style={styles.termsModalIcon}>🔄</Text>
             <Text style={styles.termsModalTitle}>Replacement Terms & Conditions</Text>
-            <Text style={styles.termsModalText}>{item.replacementPolicy}</Text>
+            <Text style={styles.termsModalText}>{item?.replacementPolicy || 'Standard replacement policy applies. Please contact the vendor for details.'}</Text>
             <TouchableOpacity style={styles.termsModalCloseBtn} onPress={closeReplacementTerms} activeOpacity={0.8}>
               <Text style={styles.termsModalCloseBtnText}>Got it</Text>
             </TouchableOpacity>
