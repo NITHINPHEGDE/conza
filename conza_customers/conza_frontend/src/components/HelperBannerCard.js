@@ -56,8 +56,8 @@ const HelperBannerCard = React.memo(() => {
 const styles = StyleSheet.create({
   wrapper: {
     marginHorizontal: 0,
-    marginTop: 2,
-    marginBottom: 8,
+    marginTop: 0,
+    marginBottom: 0,
   },
   card: {
     flexDirection: 'row',

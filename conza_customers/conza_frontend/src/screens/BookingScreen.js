@@ -246,15 +246,24 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
       (c) => !POPULAR_SERVICES_DEFAULTS.some((def) => isMatch(c.label || c.name, def.label))
     );
 
-    return [...matched, ...extras];
+    const allItems = [...matched, ...extras];
+    if (allItems.length % 2 !== 0) {
+      return [...allItems, { id: '__spacer__', empty: true }];
+    }
+    return allItems;
   }, [labourCategories]);
 
-  const renderItem = useCallback(({ item }) => (
-    <LabourCategoryCard
-      item={item}
-      onPress={handlePress}
-    />
-  ), [handlePress]);
+  const renderItem = useCallback(({ item }) => {
+    if (item.empty) {
+      return <View style={{ flex: 1, marginBottom: 8 }} />;
+    }
+    return (
+      <LabourCategoryCard
+        item={item}
+        onPress={handlePress}
+      />
+    );
+  }, [handlePress]);
 
   const listHeader = useMemo(() => (
     <View style={styles.labourHeaderWrap}>
@@ -293,13 +302,6 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
     </View>
   ), [search, onSearchChange, onClearSearch, banners, navigation]);
 
-  const listFooter = useMemo(() => (
-    <View>
-      <HelperBannerCard />
-      <View style={{ height: 20 }} />
-    </View>
-  ), []);
-
   if (labourLoading && (!labourCategories || labourCategories.length === 0)) return <CategoryGridSkeleton />;
   if (labourError && (!labourCategories || labourCategories.length === 0)) return <ErrorState message={labourError} onRetry={fetchLabour} />;
 
@@ -314,12 +316,16 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
         contentContainerStyle={styles.labourList}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={listHeader}
-        ListFooterComponent={listFooter}
         initialNumToRender={10}
         maxToRenderPerBatch={10}
         windowSize={5}
         removeClippedSubviews={true}
       />
+
+      {/* Static "Need a Helper?" banner pinned at the bottom */}
+      <View style={styles.staticHelperWrap}>
+        <HelperBannerCard />
+      </View>
     </View>
   );
 });
@@ -1169,10 +1175,18 @@ const styles = StyleSheet.create({
   labourList: {
     paddingHorizontal: 10,
     paddingTop: 2,
-    paddingBottom: 20,
+    paddingBottom: 10,
   },
   gridRow: {
     gap: 8,
+  },
+  staticHelperWrap: {
+    paddingHorizontal: 10,
+    paddingTop: 5,
+    paddingBottom: 6,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
 
   // Skill search
