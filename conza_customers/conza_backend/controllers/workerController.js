@@ -259,7 +259,7 @@ const getCategories = async (req, res) => {
       const categories = await withCache(cacheKey, TTL, async () => {
         // Fetch all active service categories first
         const serviceCategories = await ServiceCategory.find({ active: true })
-          .select('name image radius')
+          .select('name image radius description workers')
           .sort({ name: 1 })
           .lean();
 
@@ -294,11 +294,13 @@ const getCategories = async (req, res) => {
             ? workers.reduce((s, w) => s + w.rating, 0) / workers.length
             : 0;
           return {
-            id:        sc._id,
-            label:     sc.name,
-            image:     sc.image,
-            available: workers.length,
-            rating:    parseFloat(avgRating.toFixed(1)),
+            id:           sc._id,
+            label:        sc.name,
+            image:        sc.image,
+            description:  sc.description || '',
+            workersCount: sc.workers || workers.length,
+            available:    workers.length,
+            rating:       parseFloat(avgRating.toFixed(1)),
           };
         });
       });
@@ -307,16 +309,18 @@ const getCategories = async (req, res) => {
     }
 
     const serviceCategories = await ServiceCategory.find({ active: true })
-      .select('name image')
+      .select('name image description workers')
       .sort({ name: 1 })
       .lean();
 
     const categories = serviceCategories.map((sc) => ({
-      id:        sc._id,
-      label:     sc.name,
-      image:     sc.image,
-      available: 0,
-      rating:    0,
+      id:           sc._id,
+      label:        sc.name,
+      image:        sc.image,
+      description:  sc.description || '',
+      workersCount: sc.workers || 0,
+      available:    0,
+      rating:       0,
     }));
 
     res.json({ success: true, categories });

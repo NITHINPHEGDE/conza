@@ -10,6 +10,7 @@ import {
   Modal,
   Dimensions,
   FlatList,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -134,6 +135,7 @@ const MaterialDetailScreen = ({ route, navigation }) => {
   const [showReturnTerms, setShowReturnTerms]       = useState(false);
   const [showReplacementTerms, setShowReplacementTerms] = useState(false);
   const [activeImageIndex, setActiveImageIndex]     = useState(0);
+  const [vendorQuery, setVendorQuery]               = useState('');
 
   if (!item) return null;
 
@@ -193,6 +195,16 @@ const MaterialDetailScreen = ({ route, navigation }) => {
     ),
     [allMaterials, item.sellerId, item.id]
   );
+
+  // Client-side search within this vendor's other products
+  const trimmedVendorQuery = vendorQuery.trim();
+  const filteredVendorProducts = useMemo(() => {
+    if (!trimmedVendorQuery) return vendorProducts;
+    const q = trimmedVendorQuery.toLowerCase();
+    return vendorProducts.filter((m) => (m.name || '').toLowerCase().includes(q));
+  }, [vendorProducts, trimmedVendorQuery]);
+
+  const handleClearVendorSearch = useCallback(() => setVendorQuery(''), []);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -363,23 +375,48 @@ const MaterialDetailScreen = ({ route, navigation }) => {
         {vendorProducts.length > 0 && (
           <View style={styles.vendorSection}>
             <Text style={styles.vendorSectionTitle}>More from this Vendor</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.vendorScroll}
-            >
-              {vendorProducts.map((prod) => (
-                <View key={prod.id} style={styles.vendorCard}>
-                  <MaterialCard
-                    {...prod}
-                    quantity={Number(cart[prod.id]) || 0}
-                    onUpdate={handleUpdateQuantity}
-                    onImagePress={() => navigation.push('MaterialDetail', { item: prod })}
-                    onAddToCart={() => addToCart(prod)}
-                  />
-                </View>
-              ))}
-            </ScrollView>
+
+            <View style={styles.vendorSearchWrapper}>
+              <Text style={styles.vendorSearchIcon}>🔍</Text>
+              <TextInput
+                style={styles.vendorSearchInput}
+                placeholder={`Search products from ${item.seller}...`}
+                placeholderTextColor={colors.textMuted}
+                value={vendorQuery}
+                onChangeText={setVendorQuery}
+              />
+              {vendorQuery.length > 0 && (
+                <TouchableOpacity onPress={handleClearVendorSearch} activeOpacity={0.7}>
+                  <Text style={styles.vendorSearchClear}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {filteredVendorProducts.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.vendorScroll}
+              >
+                {filteredVendorProducts.map((prod) => (
+                  <View key={prod.id} style={styles.vendorCard}>
+                    <MaterialCard
+                      {...prod}
+                      quantity={Number(cart[prod.id]) || 0}
+                      onUpdate={handleUpdateQuantity}
+                      onImagePress={() => navigation.push('MaterialDetail', { item: prod })}
+                      onAddToCart={() => addToCart(prod)}
+                    />
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.vendorEmptyState}>
+                <Text style={styles.vendorEmptyText}>
+                  No "{trimmedVendorQuery}" available with {item.seller}.
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -915,6 +952,48 @@ const styles = StyleSheet.create({
   },
   vendorCard: {
     width: 220,
+  },
+  vendorSearchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginHorizontal: 20,
+    marginBottom: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 8,
+  },
+  vendorSearchIcon: {
+    fontSize: 14,
+  },
+  vendorSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.textPrimary,
+    includeFontPadding: false,
+  },
+  vendorSearchClear: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontWeight: '700',
+    paddingLeft: 4,
+  },
+  vendorEmptyState: {
+    marginHorizontal: 20,
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 12,
+  },
+  vendorEmptyText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
   },
 });
 

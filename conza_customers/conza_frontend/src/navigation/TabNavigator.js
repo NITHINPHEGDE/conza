@@ -96,37 +96,33 @@ export const AuthStack = () => (
   </Stack.Navigator>
 );
 
-const TAB_ICONS = {
-  Booking:  'home',
-  CartTab:  'cart-outline',
-  Projects: 'briefcase-outline',
-  Status:   'poll',
-  Profile:  'account-outline',
+const getTabIcon = (name, focused) => {
+  switch (name) {
+    case 'Booking':  return focused ? 'home' : 'home-outline';
+    case 'CartTab':  return focused ? 'cart' : 'cart-outline';
+    case 'Projects': return focused ? 'folder' : 'folder-outline';
+    case 'Status':   return focused ? 'poll' : 'poll';
+    case 'Profile':  return focused ? 'account' : 'account-outline';
+    default:         return 'circle';
+  }
 };
 
 const TabIcon = ({ name, focused }) => {
   const materialCartCount = useAppStore((s) => s.getCartItemCount());
   const rentalCartCount   = useAppStore((s) => s.getRentalCartCount());
   const totalCart = materialCartCount + rentalCartCount;
+  const displayBadge = totalCart > 0 ? totalCart : 0;
 
   return (
     <View style={styles.iconWrapper}>
-      {focused && (
-        <LinearGradient
-          colors={[colors.gradientStart, colors.gradientEnd]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.activePill}
-        />
-      )}
       <MaterialCommunityIcons
-        name={TAB_ICONS[name]}
+        name={getTabIcon(name, focused)}
         size={22}
-        color={focused ? colors.accentAmber : colors.textMuted}
+        color={focused ? '#F59E0B' : '#94A3B8'}
       />
-      {name === 'CartTab' && totalCart > 0 && (
+      {name === 'CartTab' && displayBadge > 0 && (
         <View style={styles.tabBadge}>
-          <Text style={styles.tabBadgeText}>{totalCart}</Text>
+          <Text style={styles.tabBadgeText}>{displayBadge}</Text>
         </View>
       )}
     </View>
@@ -136,11 +132,7 @@ const TabIcon = ({ name, focused }) => {
 const TabNavigator = () => {
   const insets = useSafeAreaInsets();
 
-  // Gesture-nav devices report a small inset (~8-20px); button-nav devices
-  // report a much larger one (~48px+) for the opaque system nav bar.
-  // We add our own baseline padding on top of whatever the OS reports,
-  // so the tab bar never sits under (or gets swallowed by) the nav bar.
-  const bottomPadding = Math.max(insets.bottom, 10) + 8;
+  const bottomPadding = Math.max(insets.bottom, 6) + 4;
   const tabBarHeight  = 54 + bottomPadding;
 
   return (
@@ -151,8 +143,8 @@ const TabNavigator = () => {
         tabBarShowLabel:         true,
         tabBarStyle:             [styles.tabBar, { height: tabBarHeight, paddingBottom: bottomPadding }],
         tabBarLabelStyle:        styles.tabLabel,
-        tabBarActiveTintColor:   colors.accentAmber,
-        tabBarInactiveTintColor: colors.textMuted,
+        tabBarActiveTintColor:   '#F59E0B',
+        tabBarInactiveTintColor: '#94A3B8',
         tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
       })}
     >
@@ -167,33 +159,32 @@ const TabNavigator = () => {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: colors.tabBar,
-    borderTopColor:  colors.tabBarBorder,
-    borderTopWidth:  1,
-    paddingTop:      8,
-    shadowColor:     colors.cardShadow,
-    shadowOffset:    { width: 0, height: -3 },
-    shadowOpacity:   0.08,
-    shadowRadius:    10,
-    elevation:       10,
+    backgroundColor: '#FFFFFF',
+    borderTopColor:  '#F1F5F9',
+    borderTopWidth:  0.8,
+    paddingTop:      6,
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: -2 },
+    shadowOpacity:   0.03,
+    shadowRadius:    6,
+    elevation:       6,
   },
-  tabLabel:      { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
-  iconWrapper:   { alignItems: 'center', justifyContent: 'center', position: 'relative', width: 44, height: 30 },
-  activePill:    { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 10, opacity: 0.2 },
+  tabLabel:      { fontSize: 10, fontWeight: '500', letterSpacing: 0.1, marginTop: -1 },
+  iconWrapper:   { alignItems: 'center', justifyContent: 'center', position: 'relative', width: 44, height: 28 },
 
   tabBadge: {
     position: 'absolute',
-    top: -2,
-    right: 0,
+    top: -4,
+    right: 2,
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: colors.accentAmber,
+    backgroundColor: '#FF9500',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
   },
-  tabBadgeText: { fontSize: 9, fontWeight: '800', color: '#fff' },
+  tabBadgeText: { fontSize: 9.5, fontWeight: '800', color: '#FFFFFF' },
   placeholder:   { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
 
   placeholderText:  { fontSize: 20, fontWeight: '800', color: colors.textPrimary, marginBottom: 5 },

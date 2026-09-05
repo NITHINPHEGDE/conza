@@ -1,253 +1,153 @@
-import React, { useCallback, useMemo, useState, useRef } from 'react';
+import React, { useRef } from 'react';
 import {
   TouchableOpacity,
   Text,
   View,
+  Image,
   Animated,
   StyleSheet,
-  Easing,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '../theme/colors';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-// ── Diagonal sweep skeleton ────────────────────────────────────────────────────
-const ImageSkeleton = () => {
-  const shimmer = useRef(new Animated.Value(-1)).current;
-
-  React.useEffect(() => {
-    Animated.loop(
-      Animated.timing(shimmer, {
-        toValue: 1,
-        duration: 1600,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true,
-      })
-    ).start();
-  }, [shimmer]);
-
-  const translateX = shimmer.interpolate({
-    inputRange: [-1, 1],
-    outputRange: ['-120%', '120%'],
-  });
-
-  return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1a1a1a' }]}>
-      <Animated.View
-        style={[
-          StyleSheet.absoluteFillObject,
-          {
-            transform: [{ translateX }, { skewX: '-15deg' }],
-            backgroundColor: 'rgba(255,255,255,0.08)',
-          },
-        ]}
-      />
-    </View>
-  );
+const TRADE_META = {
+  mason: {
+    icon: 'wall',
+    iconColor: '#C2410C',
+    bgColor: '#FFEDD5',
+    sub: 'Brick & plaster',
+    defaultWorkers: '1.2K+ active',
+  },
+  electrician: {
+    icon: 'lightning-bolt',
+    iconColor: '#D97706',
+    bgColor: '#FEF3C7',
+    sub: 'Wiring & repairs',
+    defaultWorkers: '980+ active',
+  },
+  plumber: {
+    icon: 'water-pump',
+    iconColor: '#0284C7',
+    bgColor: '#E0F2FE',
+    sub: 'Pipes & fittings',
+    defaultWorkers: '870+ active',
+  },
+  carpenter: {
+    icon: 'hammer',
+    iconColor: '#B45309',
+    bgColor: '#FFEDD5',
+    sub: 'Furniture & doors',
+    defaultWorkers: '640+ active',
+  },
+  painter: {
+    icon: 'format-paint',
+    iconColor: '#CA8A04',
+    bgColor: '#FEF9C3',
+    sub: 'Interior & paint',
+    defaultWorkers: '720+ active',
+  },
+  'steel fixer': {
+    icon: 'grid',
+    iconColor: '#475569',
+    bgColor: '#F1F5F9',
+    sub: 'RCC & steel work',
+    defaultWorkers: '410+ active',
+  },
+  helper: {
+    icon: 'account-group',
+    iconColor: '#D97706',
+    bgColor: '#FEF3C7',
+    sub: 'General helpers',
+    defaultWorkers: '1.5K+ active',
+  },
 };
 
-// ── Image with fade-in ─────────────────────────────────────────────────────────
-const FadingImage = ({ uri }) => {
-  const [loaded, setLoaded] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+const getMeta = (label = '') => {
+  const key = label.trim().toLowerCase();
+  if (key.startsWith('electr')) return TRADE_META.electrician;
+  for (const [trade, meta] of Object.entries(TRADE_META)) {
+    if (key.includes(trade)) return meta;
+  }
+  return {
+    icon: 'hammer-wrench',
+    iconColor: '#D97706',
+    bgColor: '#FEF3C7',
+    sub: 'Trade service',
+    defaultWorkers: '500+ active',
+  };
+};
 
-  const onLoad = useCallback(() => {
-    setLoaded(true);
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      easing: Easing.out(Easing.quad),
+const LabourCategoryCard = React.memo(({ item, onPress }) => {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const animateIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.96,
       useNativeDriver: true,
-    }).start();
-  }, [fadeAnim]);
-
-  return (
-    <>
-      {!loaded && <ImageSkeleton />}
-      <Animated.Image
-        source={{ uri }}
-        style={[styles.categoryImage, { opacity: fadeAnim }]}
-        onLoad={onLoad}
-        resizeMode="cover"
-      />
-    </>
-  );
-};
-
-// ── Pulsing availability dot ───────────────────────────────────────────────────
-const LiveDot = () => {
-  const pulse = useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 1500,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, [pulse]);
-
-  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 3.2] });
-  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
-
-  return (
-    <View style={styles.dotWrap}>
-      <Animated.View style={[styles.pulseRing, { transform: [{ scale }], opacity }]} />
-      <View style={styles.liveDot} />
-    </View>
-  );
-};
-
-// ── Category Card ──────────────────────────────────────────────────────────────
-const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const selectAnim = useRef(new Animated.Value(0)).current;
-
-  const handlePressIn = useCallback(() => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.95,
-      useNativeDriver: true,
-      speed: 40,
+      speed: 50,
       bounciness: 4,
     }).start();
-  }, [scaleAnim]);
+  };
 
-  const handlePressOut = useCallback(() => {
-    Animated.spring(scaleAnim, {
+  const animateOut = () => {
+    Animated.spring(scale, {
       toValue: 1,
       useNativeDriver: true,
-      speed: 40,
-      bounciness: 4,
+      speed: 50,
+      bounciness: 8,
     }).start();
-  }, [scaleAnim]);
+  };
 
-  const handlePress = useCallback(() => {
-    onPress && onPress(item);
-  }, [onPress, item]);
-
-  React.useEffect(() => {
-    Animated.timing(selectAnim, {
-      toValue: isSelected ? 1 : 0,
-      duration: 300,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [isSelected, selectAnim]);
-
-  const gradientColors = useMemo(() => [colors.gradientStart, colors.gradientEnd], []);
-  const cardStyle = useMemo(() => [styles.card, isSelected && styles.cardSelected], [isSelected]);
-  const hasPhoto = !!item.image;
+  const meta = getMeta(item.label || item.name || '');
+  const description = item.description || meta.sub;
+  const workerCountText =
+    item.workersCount ||
+    (item.available > 0
+      ? `${item.available * 40 || 400}+ active`
+      : meta.defaultWorkers);
 
   return (
-    <Animated.View style={{ flex: 1, marginBottom: 34, transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={[styles.cardWrapper, { transform: [{ scale }] }]}>
       <TouchableOpacity
-        style={cardStyle}
-        onPress={handlePress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        activeOpacity={0.92}
+        style={styles.card}
+        activeOpacity={0.88}
+        onPress={() => onPress && onPress(item)}
+        onPressIn={animateIn}
+        onPressOut={animateOut}
       >
-        {/* ── Background ── */}
-        {hasPhoto ? (
-          <FadingImage uri={item.image} />
-        ) : (
-          <LinearGradient
-            colors={['#2a2a2a', '#1a1a1a']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          >
-            <View style={styles.emojiWrap}>
-              <View style={styles.emojiOrb}>
-                <Text style={styles.emoji}>{item.emoji}</Text>
-              </View>
-            </View>
-          </LinearGradient>
-        )}
-
-        {/* ── Top vignette ── */}
-        {hasPhoto && (
-          <LinearGradient
-            colors={['rgba(0,0,0,0.35)', 'transparent']}
-            locations={[0, 0.5]}
-            style={styles.topVignette}
-            pointerEvents="none"
-          />
-        )}
-
-        {/* ── Bottom panel ── */}
-        {hasPhoto && (
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.55)']}
-            locations={[0, 0.45, 1]}
-            style={styles.bottomPanel}
-            pointerEvents="none"
-          />
-        )}
-
-        {/* ── Selection glow ── */}
-        {isSelected && (
-          <>
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.selectGlow,
-                {
-                  opacity: selectAnim,
-                  transform: [
-                    {
-                      scale: selectAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.92, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
+        {/* Left: Side Photo or Single Trade Illustration Badge */}
+        <View style={styles.imageBox}>
+          {item.image ? (
+            <Image
+              source={{ uri: item.image }}
+              style={styles.image}
+              resizeMode="cover"
             />
-            <View style={styles.selectRing} pointerEvents="none" />
-            <LinearGradient
-              colors={gradientColors}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.checkBadge}
-            >
-              <Text style={styles.checkBadgeText}>✓</Text>
-            </LinearGradient>
-          </>
-        )}
+          ) : (
+            <View style={[styles.fallbackBox, { backgroundColor: meta.bgColor }]}>
+              <MaterialCommunityIcons name={meta.icon} size={28} color={meta.iconColor} />
+            </View>
+          )}
+        </View>
 
-        {/* ── Footer with HIGHLIGHTED text ── */}
-        <View style={styles.footer}>
-          {/* Label with frosted highlight backdrop */}
-          <View style={styles.labelHighlight}>
-            <Text
-              style={[styles.label, hasPhoto ? styles.labelOnPhoto : styles.labelOnTint]}
-              numberOfLines={1}
-            >
-              {item.label}
+        {/* Right: Info Column */}
+        <View style={styles.infoCol}>
+          <View>
+            <Text style={styles.title} numberOfLines={1}>
+              {item.label || item.name}
+            </Text>
+            <Text style={styles.sub} numberOfLines={2}>
+              {description}
             </Text>
           </View>
 
-          {/* Availability chip */}
-          <View style={styles.metaRow}>
-            <View style={styles.availabilityChip}>
-              {item.available > 0 && <LiveDot />}
-              <Text
-                style={[styles.metaText, hasPhoto ? styles.metaTextOnPhoto : styles.metaTextOnTint]}
-                numberOfLines={1}
-              >
-                {item.available === 0 ? 'not available' : `${item.available} available`}
+          <View style={styles.bottomRow}>
+            <View style={styles.workerBadge}>
+              <MaterialCommunityIcons name="account-group-outline" size={12} color="#94A3B8" />
+              <Text style={styles.workerCount} numberOfLines={1}>
+                {workerCountText}
               </Text>
             </View>
+            <MaterialCommunityIcons name="chevron-right" size={15} color="#D97706" />
           </View>
         </View>
       </TouchableOpacity>
@@ -256,195 +156,80 @@ const LabourCategoryCard = React.memo(({ item, isSelected, onPress }) => {
 });
 
 const styles = StyleSheet.create({
-  // ── Card ──
-  card: {
-    aspectRatio: 0.88,
-    borderRadius: 16,
-    backgroundColor: '#1e1e1e',
-    overflow: 'hidden',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.2,
-    shadowRadius: 28,
-    elevation: 10,
-  },
-  cardSelected: {
-    shadowColor: colors.accentYellow,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 24,
-    elevation: 14,
-  },
-
-  // ── Image ──
-  categoryImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '112%',
-    height: '126%',
-    resizeMode: 'cover',
-  },
-
-  // ── Emoji fallback ──
-  emojiWrap: {
+  cardWrapper: {
     flex: 1,
+    marginBottom: 8,
+  },
+  card: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emojiOrb: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emoji: {
-    fontSize: 20,
-  },
-
-  // ── Vignettes ──
-  topVignette: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '35%',
-  },
-  bottomPanel: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '70%',
-  },
-
-  // ── Selection ──
-  selectGlow: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: colors.accentYellow,
-    backgroundColor: 'rgba(255, 193, 7, 0.12)',
-  },
-  selectRing: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 16,
-    borderWidth: 2.5,
-    borderColor: colors.accentYellow,
-  },
-  checkBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 24,
-    height: 24,
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    padding: 6,
+    height: 102,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  checkBadgeText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: colors.textPrimary,
-    includeFontPadding: false,
+  imageBox: {
+    width: 76,
+    height: '100%',
+    borderRadius: 9,
+    overflow: 'hidden',
+    backgroundColor: '#F8FAFC',
   },
-
-  // ── Footer ──
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 7,
-    paddingBottom: 7,
-    paddingTop: 4,
+  image: {
+    width: '100%',
+    height: '100%',
   },
-
-  // ── HIGHLIGHTED LABEL ──
-  labelHighlight: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    marginBottom: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  labelOnPhoto: {
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
-  },
-  labelOnTint: {
-    color: '#f0f0f0',
-  },
-
-  // ── Meta ──
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  availabilityChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(52, 211, 153, 0.15)',
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.3)',
-    alignSelf: 'flex-start',
-  },
-  metaText: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  metaTextOnPhoto: {
-    color: '#34D399',
-  },
-  metaTextOnTint: {
-    color: '#34D399',
-  },
-
-  // ── Live dot ──
-  dotWrap: {
-    position: 'relative',
-    width: 12,
-    height: 12,
+  fallbackBox: {
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 6,
   },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#34D399',
+  infoCol: {
+    flex: 1,
+    paddingLeft: 8,
+    paddingRight: 3,
+    justifyContent: 'space-between',
+    paddingVertical: 3,
+    height: '100%',
   },
-  pulseRing: {
-    position: 'absolute',
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#34D399',
+  title: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#0F172A',
+    letterSpacing: -0.1,
+    lineHeight: 18,
+  },
+  sub: {
+    fontSize: 10.5,
+    fontWeight: '400',
+    color: '#64748B',
+    lineHeight: 14,
+    marginTop: 2,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  workerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    flex: 1,
+  },
+  workerCount: {
+    fontSize: 9.5,
+    fontWeight: '400',
+    color: '#64748B',
+    flexShrink: 1,
   },
 });
 

@@ -28,14 +28,15 @@ import useAppStore from '../store/useAppStore';
 import { colors } from '../theme/colors';
 import SavedAddressSheet from '../components/SavedAddressSheet';
 import BannerCarousel from '../components/BannerCarousel';
+import HelperBannerCard from '../components/HelperBannerCard';
 
 const TRUCK_IMAGE = require('../../assets/images/delivery_truck.jpg');
 const TRACTOR_IMAGE = require('../../assets/images/rental_tractor.jpg');
 
 const CATEGORIES = [
-  { key: 'Labour',   label: 'Book\nLabour',   icon: 'account-hard-hat', color: '#F59E0B' },
-  { key: 'Material', label: 'Order\nMaterial', icon: 'cube-outline',    color: '#F59E0B' },
-  { key: 'Rental',   label: 'Book\nRental',   icon: 'excavator',        color: '#F59E0B' },
+  { key: 'Labour',   label: 'Labour',    subtitle: 'Skilled professionals', icon: 'account-hard-hat' },
+  { key: 'Material', label: 'Materials', subtitle: 'Construction supplies', icon: 'package-variant-closed' },
+  { key: 'Rental',   label: 'Rentals',   subtitle: 'Tools & equipment',     icon: 'crane' },
 ];
 
 const MATERIAL_CATEGORIES_DATA = [
@@ -153,79 +154,166 @@ const SkillSearchView = React.memo(({ query, onClear }) => {
   );
 });
 
+const POPULAR_SERVICES_DEFAULTS = [
+  {
+    id: 'mason',
+    label: 'Mason',
+    description: 'Brick & plaster work',
+    workersCount: '1.2K+ available',
+    image: 'https://res.cloudinary.com/dfgqtahu1/image/upload/v1788189978/conza/services/fnw9rq6qhddpsm8suy4k.png',
+  },
+  {
+    id: 'electrician',
+    label: 'Electrician',
+    description: 'Wiring & installation',
+    workersCount: '980+ available',
+    image: 'https://res.cloudinary.com/dfgqtahu1/image/upload/v1788189924/conza/services/c0z6srpjrkpsclf2geit.png',
+  },
+  {
+    id: 'plumber',
+    label: 'Plumber',
+    description: 'Pipelines & fittings',
+    workersCount: '870+ available',
+    image: 'https://res.cloudinary.com/dfgqtahu1/image/upload/v1788190070/conza/services/uq6xyszbobkfx0h1rowr.png',
+  },
+  {
+    id: 'carpenter',
+    label: 'Carpenter',
+    description: 'Furniture & woodwork',
+    workersCount: '640+ available',
+    image: 'https://res.cloudinary.com/dfgqtahu1/image/upload/v1788189900/conza/services/oudhpjwgfeilzbjfzqpa.png',
+  },
+  {
+    id: 'painter',
+    label: 'Painter',
+    description: 'Interior & exterior',
+    workersCount: '720+ available',
+    image: 'https://res.cloudinary.com/dfgqtahu1/image/upload/v1788190024/conza/services/albqhngyg7a2xa0ztthv.png',
+  },
+  {
+    id: 'steel_fixer',
+    label: 'Steel Fixer',
+    description: 'RCC & reinforcement',
+    workersCount: '410+ available',
+    image: 'https://res.cloudinary.com/dfgqtahu1/image/upload/v1788190337/conza/services/pmfh5x4ec6bhnqhqkakp.png',
+  },
+];
+
 // ─── Labour Grid ──────────────────────────────────────────────────────────────
 const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
-  const navigation      = useNavigation();
+  const navigation       = useNavigation();
   const labourCategories = useAppStore((s) => s.labourCategories);
-  const labourLoading   = useAppStore((s) => s.labourLoading);
-  const labourError     = useAppStore((s) => s.labourError);
-  const fetchLabour     = useAppStore((s) => s.fetchLabourData);
-  const banners         = useAppStore((s) => s.banners);
+  const labourLoading    = useAppStore((s) => s.labourLoading);
+  const labourError      = useAppStore((s) => s.labourError);
+  const fetchLabour      = useAppStore((s) => s.fetchLabourData);
+  const banners          = useAppStore((s) => s.banners);
 
   const handlePress = useCallback((item) => {
-    navigation.navigate('WorkersNearby', { category: item.label });
+    navigation.navigate('WorkersNearby', { category: item.label || item.name });
   }, [navigation]);
+
+  const displayedCategories = useMemo(() => {
+    const isMatch = (catName, defName) => {
+      const a = (catName || '').trim().toLowerCase();
+      const b = (defName || '').trim().toLowerCase();
+      if (a === b) return true;
+      if (a.startsWith('electr') && b.startsWith('electr')) return true;
+      return a.includes(b) || b.includes(a);
+    };
+
+    if (!labourCategories || labourCategories.length === 0) {
+      return POPULAR_SERVICES_DEFAULTS;
+    }
+
+    const matched = POPULAR_SERVICES_DEFAULTS.map((def) => {
+      const found = labourCategories.find((c) =>
+        isMatch(c.label || c.name, def.label)
+      );
+      if (found) {
+        return {
+          ...def,
+          ...found,
+          label: def.label,
+          description: found.description || def.description,
+          image: found.image || def.image,
+          workersCount: found.workersCount ? `${found.workersCount}+ available` : def.workersCount,
+        };
+      }
+      return def;
+    });
+
+    const extras = labourCategories.filter(
+      (c) => !POPULAR_SERVICES_DEFAULTS.some((def) => isMatch(c.label || c.name, def.label))
+    );
+
+    return [...matched, ...extras];
+  }, [labourCategories]);
 
   const renderItem = useCallback(({ item }) => (
     <LabourCategoryCard
       item={item}
-      isSelected={false}
       onPress={handlePress}
     />
   ), [handlePress]);
 
   const listHeader = useMemo(() => (
-    <View style={{ marginHorizontal: -34 }}>
-      <View style={[styles.materialSearchWrapper, { marginTop: 4, marginHorizontal: 14 }]}>
-        <View style={styles.searchIconBadge}>
-          <MaterialCommunityIcons name="magnify" size={16} color={colors.accentAmber} />
-        </View>
+    <View style={styles.labourHeaderWrap}>
+      {/* Search Bar */}
+      <View style={styles.searchInputRow}>
+        <MaterialCommunityIcons name="magnify" size={18} color="#94A3B8" style={styles.searchIconLeft} />
         <TextInput
-          style={styles.materialSearchInput}
-          placeholder="Search services, skills..."
-          placeholderTextColor={colors.textMuted}
+          style={styles.searchInputField}
+          placeholder="Search for labour (mason, plumber...)"
+          placeholderTextColor="#94A3B8"
           value={search}
           onChangeText={onSearchChange}
         />
         {search.length > 0 && (
-          <TouchableOpacity onPress={onClearSearch} activeOpacity={0.7}>
-            <Text style={styles.searchClear}>✕</Text>
+          <TouchableOpacity onPress={onClearSearch} activeOpacity={0.7} style={styles.searchClearBtn}>
+            <Text style={styles.searchClearText}>✕</Text>
           </TouchableOpacity>
         )}
       </View>
-      <View style={{ height: 12 }} />
-      {banners.length > 0 && (
-        <View style={{ marginHorizontal: 14 }}>
-          <BannerCarousel banners={banners} />
-        </View>
-      )}
-      <View style={{ height: 5 }} />
-    </View>
-  ), [search, onSearchChange, onClearSearch, banners]);
 
-  const listEmpty = useMemo(() => (
-    <EmptyState emoji="👷" title="No categories available" />
-  ), []);
+      {/* Banner Carousel with banners from Admin Panel */}
+      <BannerCarousel banners={banners} />
+
+      {/* Popular Services Section Header */}
+      <View style={styles.popularHeaderRow}>
+        <Text style={styles.popularTitle}>Popular Services</Text>
+        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={() => navigation.navigate('WorkersNearby', { category: 'All' })}
+          style={styles.seeAllRow}
+        >
+          <Text style={styles.seeAllText}>See All</Text>
+          <MaterialCommunityIcons name="chevron-right" size={16} color="#F59E0B" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  ), [search, onSearchChange, onClearSearch, banners, navigation]);
 
   const listFooter = useMemo(() => (
-    <View style={{ height: 20 }} />
+    <View>
+      <HelperBannerCard />
+      <View style={{ height: 20 }} />
+    </View>
   ), []);
 
-  if (labourLoading) return <CategoryGridSkeleton />;
-  if (labourError)   return <ErrorState message={labourError} onRetry={fetchLabour} />;
+  if (labourLoading && (!labourCategories || labourCategories.length === 0)) return <CategoryGridSkeleton />;
+  if (labourError && (!labourCategories || labourCategories.length === 0)) return <ErrorState message={labourError} onRetry={fetchLabour} />;
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <FlatList
-        data={labourCategories}
-        keyExtractor={(item) => item.id}
+        data={displayedCategories}
+        keyExtractor={(item) => item.id || item.label}
         renderItem={renderItem}
         numColumns={2}
         columnWrapperStyle={styles.gridRow}
         contentContainerStyle={styles.labourList}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={listHeader}
-        ListEmptyComponent={listEmpty}
         ListFooterComponent={listFooter}
         initialNumToRender={10}
         maxToRenderPerBatch={10}
@@ -858,13 +946,9 @@ const BookingScreen = () => {
     });
   }, [setUserLocation]);
 
-  const displayLocation = userLocationText || 'Set Location';
+  const displayLocation = userLocationText || 'Sri Maregowda Circle, Bengaluru';
 
   const navigation = useNavigation();
-  const rentalCartCount = useAppStore((s) => s.getRentalCartCount());
-  const materialCartCount = useAppStore((s) => s.getCartItemCount());
-  const totalCartCount = rentalCartCount + materialCartCount;
-  const walletBalance = useAppStore((s) => s.walletBalance);
 
   const header = useMemo(() => {
     return (
@@ -875,46 +959,35 @@ const BookingScreen = () => {
           style={styles.headerLocationBtn}
         >
           <View style={styles.headerMetaRow}>
-            <MaterialCommunityIcons name="map-marker" size={13} color="#EF4444" />
-            <Text style={styles.headerMeta}>Deliver to</Text>
-          </View>
-          <Text style={styles.headerLocationLine1} numberOfLines={1}>Sri Maregowda Circle,</Text>
-          <View style={styles.headerLocationLine2Row}>
-            <Text style={styles.headerLocationLine2} numberOfLines={1}>Bengaluru, Karnataka</Text>
-            <MaterialCommunityIcons name="chevron-down" size={15} color="#374151" />
+            <MaterialCommunityIcons name="map-marker" size={20} color="#F59E0B" />
+            <View style={styles.headerLocationTextCol}>
+              <Text style={styles.headerMeta}>Deliver to</Text>
+              <View style={styles.headerLocationLineRow}>
+                <Text style={styles.headerLocationTitle} numberOfLines={1}>
+                  {displayLocation}
+                </Text>
+                <MaterialCommunityIcons name="chevron-down" size={16} color="#111827" />
+              </View>
+            </View>
           </View>
         </TouchableOpacity>
 
-        {/* Wallet balance chip */}
-        <TouchableOpacity
-          style={styles.walletChip}
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('Wallet')}
-        >
-          <MaterialCommunityIcons name="wallet-outline" size={17} color="#F59E0B" />
-          <Text style={styles.walletAmount}>₹{walletBalance || 0}</Text>
-        </TouchableOpacity>
-
-        {/* Cart pill */}
+        {/* Notification Bell with Dot */}
         <TouchableOpacity
           style={styles.notifBtn}
           activeOpacity={0.8}
-          onPress={() => navigation.navigate('CartTab')}
+          onPress={() => navigation.navigate('Main', { screen: 'Status' })}
         >
-          <MaterialCommunityIcons name="cart-outline" size={20} color="#111827" />
-          {totalCartCount > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{totalCartCount}</Text>
-            </View>
-          )}
+          <MaterialCommunityIcons name="bell-outline" size={24} color="#111827" />
+          <View style={styles.notifDot} />
         </TouchableOpacity>
       </View>
     );
-  }, [totalCartCount, navigation, walletBalance]);
+  }, [displayLocation, navigation]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {header}
 
@@ -927,7 +1000,6 @@ const BookingScreen = () => {
                   key={cat.key}
                   label={cat.label}
                   icon={cat.icon}
-                  color={cat.color}
                   isSelected={activeCategory === cat.key}
                   onPress={() => handleCategoryPress(cat.key)}
                 />
@@ -935,7 +1007,6 @@ const BookingScreen = () => {
             </View>
           )}
         </View>
-
       </View>
 
       <View style={styles.dynamicSection}>
@@ -969,15 +1040,15 @@ const BookingScreen = () => {
 
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#FAFAFA' },
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 14,
-    backgroundColor: '#FAFAFA',
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    paddingBottom: 4,
+    backgroundColor: '#FFFFFF',
   },
   headerLocationBtn: {
     flex: 1,
@@ -986,129 +1057,123 @@ const styles = StyleSheet.create({
   headerMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    marginBottom: 2,
+  },
+  headerLocationTextCol: {
+    marginLeft: 6,
+    flex: 1,
   },
   headerMeta: {
-    fontSize: 11,
-    color: '#6B7280',
-    fontWeight: '500',
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '400',
+    lineHeight: 12,
   },
-  headerLocationLine1: {
-    fontSize: 14.5,
-    fontWeight: '800',
-    color: '#111827',
-    lineHeight: 18,
-  },
-  headerLocationLine2Row: {
+  headerLocationLineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 3,
+    marginTop: 1,
   },
-  headerLocationLine2: {
+  headerLocationTitle: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#374151',
+    fontWeight: '600',
+    color: '#0F172A',
     lineHeight: 16,
   },
-  walletChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  walletAmount: { fontSize: 13.5, fontWeight: '800', color: '#111827' },
   notifBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
     position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
   },
-  cartBadge: {
+  notifDot: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 17,
-    height: 17,
-    borderRadius: 8.5,
+    top: 6,
+    right: 6,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#F59E0B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
   },
-  cartBadgeText: { fontSize: 9.5, fontWeight: '800', color: '#FFFFFF' },
   fixedSection: {
-    paddingHorizontal: 16,
-    backgroundColor: '#FAFAFA',
+    paddingHorizontal: 10,
+    backgroundColor: '#FFFFFF',
   },
   tabsWrapper: {
-    paddingBottom: 10,
+    paddingTop: 1,
+    paddingBottom: 2,
   },
-  searchBar: {
+  categoryRow: { flexDirection: 'row', alignItems: 'center' },
+  dynamicSection: { flex: 1, backgroundColor: '#FFFFFF' },
+
+  // Labour View Styles
+  labourHeaderWrap: {
+    marginBottom: 0,
+  },
+  searchInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    marginBottom: 2,
-    borderWidth: 1.3,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 0.8,
+    borderColor: '#E2E8F0',
+    height: 38,
+    paddingHorizontal: 11,
+    marginHorizontal: 0,
+    marginTop: 3,
+    marginBottom: 3,
   },
-  searchIcon: { marginRight: 10 },
-  walletIconBadge: {
-    width: 22, height: 22, borderRadius: 11,
-    backgroundColor: 'rgba(240,165,0,0.16)',
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: 5,
+  searchIconLeft: {
+    marginRight: 7,
   },
-  cartIconBadge: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: 'rgba(47,128,237,0.14)',
-    alignItems: 'center', justifyContent: 'center',
+  searchInputField: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: '400',
+    color: '#0F172A',
+    includeFontPadding: false,
   },
-  searchIconBadge: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: colors.accentYellowSoft,
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: 8,
+  searchClearBtn: {
+    padding: 3,
   },
-  filterIconBadge: {
-    width: 22, height: 22, borderRadius: 11,
-    backgroundColor: 'rgba(22,163,74,0.14)',
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: 4,
+  searchClearText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '600',
   },
-  searchInput: { flex: 1, fontSize: 14, color: colors.textPrimary },
-  searchClear: { fontSize: 14, color: colors.textMuted, fontWeight: '700', paddingLeft: 8 },
-  categoryRow: { flexDirection: 'row', alignItems: 'center' },
-  dynamicSection: { flex: 1, backgroundColor: colors.background },
+  popularHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 0,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  popularTitle: {
+    fontSize: 15.5,
+    fontWeight: '600',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  seeAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 1,
+  },
+  seeAllText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#D97706',
+  },
+  labourList: {
+    paddingHorizontal: 10,
+    paddingTop: 2,
+    paddingBottom: 20,
+  },
+  gridRow: {
+    gap: 8,
+  },
 
   // Skill search
   skillList: { paddingTop: 16, paddingHorizontal: 20, paddingBottom: 120 },
@@ -1150,8 +1215,6 @@ const styles = StyleSheet.create({
   checkoutText: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
 
   // Labour
-  labourList: { paddingTop: 17, paddingBottom: 30, paddingHorizontal: 34 },
-  gridRow: { gap: 34 },
   continueWrapper: { marginTop: 12, marginHorizontal: 6, marginBottom: 10 },
   continueBtn: { borderRadius: 16, overflow: 'hidden' },
   continueTouchable: { paddingVertical: 16, alignItems: 'center' },

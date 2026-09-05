@@ -1,36 +1,16 @@
 import React, { useRef } from 'react';
 import { TouchableOpacity, Text, StyleSheet, View, Animated } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors } from '../theme/colors';
 
-const hexToRgba = (hex, alpha) => {
-  const h = hex.replace('#', '');
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
-
-// Darken a hex color by a percentage, used for the selected-state gradient
-const darken = (hex, amount) => {
-  const h = hex.replace('#', '');
-  const r = Math.max(0, parseInt(h.substring(0, 2), 16) - amount);
-  const g = Math.max(0, parseInt(h.substring(2, 4), 16) - amount);
-  const b = Math.max(0, parseInt(h.substring(4, 6), 16) - amount);
-  return `rgb(${r}, ${g}, ${b})`;
-};
-
-const CategoryButton = React.memo(({ label, icon, color, isSelected, onPress }) => {
+const CategoryButton = React.memo(({ label, icon, isSelected, onPress }) => {
   const scale = useRef(new Animated.Value(1)).current;
-  const iconColor = color || colors.accentAmber;
 
   const animateIn = () => {
     Animated.spring(scale, {
       toValue: 0.96,
       useNativeDriver: true,
       speed: 50,
-      bounciness: 6,
+      bounciness: 4,
     }).start();
   };
 
@@ -39,29 +19,9 @@ const CategoryButton = React.memo(({ label, icon, color, isSelected, onPress }) 
       toValue: 1,
       useNativeDriver: true,
       speed: 50,
-      bounciness: 10,
+      bounciness: 8,
     }).start();
   };
-
-  if (isSelected) {
-    return (
-      <Animated.View style={[styles.wrapper, { transform: [{ scale }] }]}>
-        <TouchableOpacity
-          onPress={onPress}
-          onPressIn={animateIn}
-          onPressOut={animateOut}
-          activeOpacity={0.92}
-        >
-          <View style={[styles.pill, styles.pillSelected]}>
-            <View style={styles.iconBoxSelected}>
-              <MaterialCommunityIcons name={icon} size={22} color="#FFFFFF" />
-            </View>
-            <Text style={styles.labelSelected} numberOfLines={2}>{label}</Text>
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  }
 
   return (
     <Animated.View style={[styles.wrapper, { transform: [{ scale }] }]}>
@@ -69,14 +29,21 @@ const CategoryButton = React.memo(({ label, icon, color, isSelected, onPress }) 
         onPress={onPress}
         onPressIn={animateIn}
         onPressOut={animateOut}
-        activeOpacity={0.8}
+        activeOpacity={0.88}
+        style={[styles.pill, isSelected ? styles.pillActive : styles.pillInactive]}
       >
-        <View style={styles.pill}>
-          <View style={styles.iconCircleInactive}>
-            <MaterialCommunityIcons name={icon} size={20} color="#F59E0B" />
-          </View>
-          <Text style={styles.labelInactive} numberOfLines={2}>{label}</Text>
-        </View>
+        <MaterialCommunityIcons
+          name={icon}
+          size={16}
+          color={isSelected ? '#F59E0B' : '#64748B'}
+          style={styles.icon}
+        />
+        <Text
+          style={[styles.label, isSelected ? styles.labelActive : styles.labelInactive]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -85,64 +52,42 @@ const CategoryButton = React.memo(({ label, icon, color, isSelected, onPress }) 
 const styles = StyleSheet.create({
   wrapper: {
     flex: 1,
-    marginHorizontal: 3,
+    marginHorizontal: 2,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 56,
-    paddingHorizontal: 8,
+    justifyContent: 'center',
+    height: 32,
+    paddingHorizontal: 6,
     borderRadius: 16,
-    gap: 7,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
+  },
+  pillActive: {
+    backgroundColor: '#111827',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  pillSelected: {
-    backgroundColor: '#F59E0B',
-    borderWidth: 0,
-    shadowColor: '#F59E0B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
+  pillInactive: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  iconCircleInactive: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FEF3C7',
-    alignItems: 'center',
-    justifyContent: 'center',
+  icon: {
+    marginRight: 5,
   },
-  iconBoxSelected: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  labelSelected: {
+  label: {
     fontSize: 12.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontWeight: '600',
     letterSpacing: -0.2,
-    lineHeight: 15,
-    flexShrink: 1,
+  },
+  labelActive: {
+    color: '#FFFFFF',
   },
   labelInactive: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#111827',
-    letterSpacing: -0.2,
-    lineHeight: 15,
-    flexShrink: 1,
+    color: '#475569',
   },
 });
 
