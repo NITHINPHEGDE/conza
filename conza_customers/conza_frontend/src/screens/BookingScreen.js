@@ -497,7 +497,7 @@ const MaterialView = React.memo(() => {
           <View style={[styles.circCatIcon, selectedCat === 'all' && styles.circCatIconActive]}>
             <MaterialCommunityIcons
               name="view-grid-outline"
-              size={24}
+              size={20}
               color={selectedCat === 'all' ? '#F59E0B' : '#4B5563'}
             />
           </View>
@@ -523,7 +523,7 @@ const MaterialView = React.memo(() => {
                 ) : cat.icon ? (
                   <MaterialCommunityIcons
                     name={cat.icon}
-                    size={24}
+                    size={20}
                     color={isSelected ? '#F59E0B' : '#4B5563'}
                   />
                 ) : (
@@ -783,7 +783,7 @@ const RentalView = React.memo(() => {
           <View style={[styles.circCatIcon, selectedCat === 'all' && styles.circCatIconActive]}>
             <MaterialCommunityIcons
               name="view-grid-outline"
-              size={22}
+              size={20}
               color={selectedCat === 'all' ? '#F59E0B' : '#4B5563'}
             />
           </View>
@@ -1230,9 +1230,9 @@ const styles = StyleSheet.create({
   continueOutlineBtnText: { color: colors.textPrimary, fontSize: 15, fontWeight: '700', letterSpacing: 0.3 },
 
   // Material
-  materialGridList: { paddingTop: 10, paddingBottom: 16, paddingHorizontal: 12 },
-  materialGridRow: { justifyContent: 'space-between' },
-  materialCardWrapper: { flex: 1, margin: 6 },
+  materialGridList: { paddingTop: 0, paddingBottom: 16, paddingHorizontal: 0 },
+  materialGridRow: { paddingHorizontal: 10, gap: 8, marginBottom: 8 },
+  materialCardWrapper: { flex: 1 },
   materialSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1261,19 +1261,19 @@ const styles = StyleSheet.create({
   mSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 10,
-    gap: 10,
+    marginHorizontal: 10,
+    marginTop: 4,
+    marginBottom: 6,
+    gap: 8,
   },
   mSearchBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     gap: 8,
@@ -1288,10 +1288,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
@@ -1303,15 +1303,15 @@ const styles = StyleSheet.create({
 
   // Bulk Order Banner
   bulkBanner: {
-    marginHorizontal: 16,
-    marginBottom: 10,
+    marginHorizontal: 10,
+    marginBottom: 6,
     backgroundColor: '#FFFBEB',
     borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5.5,
     borderWidth: 1,
     borderColor: '#FDE68A',
   },
@@ -1335,12 +1335,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     paddingTop: 2,
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
-  sectionHeaderTitle: { fontSize: 14.5, fontWeight: '600', color: '#111827' },
-  sectionHeaderLink: { fontSize: 12.5, fontWeight: '400', color: '#6B7280' },
+  sectionHeaderTitle: { fontSize: 13.5, fontWeight: '700', color: '#111827', letterSpacing: -0.1 },
+  sectionHeaderLink: { fontSize: 12, fontWeight: '500', color: '#6B7280' },
 
   // Sort row
   sortRow: { flexDirection: 'row', alignItems: 'center' },
@@ -1348,18 +1348,18 @@ const styles = StyleSheet.create({
   sortValue: { fontSize: 11.5, color: '#D97706', fontWeight: '600' },
 
   // Square category tiles
-  catScrollContent: { paddingHorizontal: 14, paddingBottom: 12, gap: 10 },
-  circCatItem: { alignItems: 'center', width: 68 },
+  catScrollContent: { paddingHorizontal: 10, paddingBottom: 4, gap: 8 },
+  circCatItem: { alignItems: 'center', width: 56 },
   circCatIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 5,
+    marginBottom: 3,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -1372,14 +1372,14 @@ const styles = StyleSheet.create({
     borderColor: '#F59E0B',
     borderWidth: 1.5,
   },
-  circCatEmoji: { fontSize: 24 },
-  circCatImage: { width: 42, height: 42, borderRadius: 8 },
+  circCatEmoji: { fontSize: 20 },
+  circCatImage: { width: 30, height: 30, borderRadius: 6 },
   circCatLabel: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '500',
     color: '#475569',
     textAlign: 'center',
-    lineHeight: 13,
+    lineHeight: 12,
   },
   circCatLabelActive: { color: '#D97706', fontWeight: '600' },
 
@@ -1518,9 +1518,9 @@ const styles = StyleSheet.create({
   activeCatImage: { width: 20, height: 20, borderRadius: 10 },
   activeCatLabel: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, flex: 1 },
   activeCatClear: { fontSize: 12, fontWeight: '600', color: colors.accentAmber },
-  rentalGridList: { paddingTop: 10, paddingHorizontal: 12, paddingBottom: 16 },
-  rentalGridRow: { justifyContent: 'space-between' },
-  rentalCardWrapper: { flex: 1, margin: 6 },
+  rentalGridList: { paddingTop: 0, paddingHorizontal: 0, paddingBottom: 16 },
+  rentalGridRow: { paddingHorizontal: 10, gap: 8, marginBottom: 8 },
+  rentalCardWrapper: { flex: 1 },
   catCard: {
     width: '30%',
     alignItems: 'center',
