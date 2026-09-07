@@ -47,6 +47,11 @@ export const bookingAPI = {
     return res.data;
   },
 
+  updateBookingNotes: async (id, notes) => {
+    const res = await api.patch(`/bookings/${id}/notes`, { notes });
+    return res.data;
+  },
+
   // ── Seller orders (material / rental) ──────────────────────────────────
   placeSellerOrder: async (data) => {
     const res = await api.post('/orders/seller', data);

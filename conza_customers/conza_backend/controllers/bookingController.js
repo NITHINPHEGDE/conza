@@ -578,7 +578,7 @@ const getBookingById = async (req, res) => {
     // other callers (e.g. initial page loads) that still benefit from caching.
     if (req.query._cb) {
       const booking = await Booking.findOne({ _id: bookingId, user: req.user._id })
-        .populate('workers', 'fullName category profileImage rating phone bio')
+        .populate('workers', 'fullName category profileImage rating phone bio experience totalJobs isVerified')
         .lean();
       if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
       return res.json({ success: true, booking });
@@ -589,7 +589,7 @@ const getBookingById = async (req, res) => {
 
     const booking = await withCache(cacheKey, TTL, () =>
       Booking.findOne({ _id: bookingId, user: req.user._id })
-        .populate('workers', 'fullName category profileImage rating phone bio')
+        .populate('workers', 'fullName category profileImage rating phone bio experience totalJobs isVerified')
         .lean()
     );
 
@@ -1139,4 +1139,22 @@ const getLabourBillPreview = async (req, res) => {
   }
 };
 
-module.exports = { createBooking, createAutobookBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue, submitReview, getLabourBillPreview }; 
+const updateBookingNotes = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { notes } = req.body;
+    const booking = await Booking.findOne({ _id: bookingId, user: req.user._id });
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+    booking.notes = (notes || '').trim();
+    await booking.save();
+    await invalidateCache(
+      `bookings:detail:${booking._id}`,
+      `bookings:user:${req.user._id}:*`
+    );
+    res.json({ success: true, booking });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { createBooking, createAutobookBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue, submitReview, getLabourBillPreview, updateBookingNotes }; 

@@ -37,6 +37,7 @@ const CartScreen = () => {
   const clearRentalCart = useAppStore((s) => s.clearRentalCart);
 
   const myProjects = useAppStore((s) => s.myProjects);
+  const activeProject = useAppStore((s) => s.activeProject);
   const fetchMyProjects = useAppStore((s) => s.fetchMyProjects);
   const userLocationText = useAppStore((s) => s.userLocationText);
 
@@ -49,7 +50,7 @@ const CartScreen = () => {
   // Address & Project selection
   const [showAddressSheet, setShowAddressSheet] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState(null);
-  const [selectedProject, setSelectedProject] = useState(null);
+  const [selectedProject, setSelectedProject] = useState(activeProject || null);
   const [showProjectModal, setShowProjectModal] = useState(false);
 
   // Breakup modal
@@ -63,10 +64,12 @@ const CartScreen = () => {
   }, [loadPersistedCart, fetchMyProjects, fetchMaterials, fetchRentalData]);
 
   useEffect(() => {
-    if (myProjects && myProjects.length > 0 && !selectedProject) {
+    if (activeProject) {
+      setSelectedProject(activeProject);
+    } else if (myProjects && myProjects.length > 0 && !selectedProject) {
       setSelectedProject(myProjects[0]);
     }
-  }, [myProjects, selectedProject]);
+  }, [myProjects, selectedProject, activeProject]);
 
   const materialItems = useMemo(() => getCartItems(), [cart, materials, cartItemsMap, getCartItems]);
 

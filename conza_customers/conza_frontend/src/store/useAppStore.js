@@ -569,6 +569,8 @@ const useAppStore = create((set, get) => ({
   // ── My Projects (customer-created, tracks labour bookings + orders) ────────
   myProjects:             [],
   myProjectsLoading:      false,
+  activeProject:          null,
+  setActiveProject:       (project) => set({ activeProject: project }),
   attachableItems:        { labourBookings: [], orders: [] },
   attachableItemsLoading: false,
 

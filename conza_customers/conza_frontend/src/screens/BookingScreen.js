@@ -914,10 +914,17 @@ const RentalView = React.memo(() => {
 
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-const BookingScreen = () => {
-  const [activeCategory, setActiveCategory] = useState('Labour');
+const BookingScreen = ({ route }) => {
+  const initialCat = route?.params?.category
+    ? (CATEGORIES.find((c) => c.key.toLowerCase() === String(route.params.category).trim().toLowerCase())?.key || 'Labour')
+    : 'Labour';
+
+  const [activeCategory, setActiveCategory] = useState(initialCat);
   const [search,         setSearch]         = useState('');
   const [activeSearch,   setActiveSearch]   = useState('');
+
+  const activeProject    = useAppStore((s) => s.activeProject);
+  const setActiveProject = useAppStore((s) => s.setActiveProject);
 
   const handleClearSearch = useCallback(() => {
     setSearch('');
@@ -933,6 +940,18 @@ const BookingScreen = () => {
     setActiveCategory(catKey);
     handleClearSearch();
   }, [handleClearSearch]);
+
+  // React to category changes when navigated from external screens (e.g. ProjectDetailScreen)
+  useEffect(() => {
+    if (route?.params?.category) {
+      const target = String(route.params.category).trim().toLowerCase();
+      const found = CATEGORIES.find((c) => c.key.toLowerCase() === target);
+      if (found) {
+        setActiveCategory(found.key);
+      }
+      handleClearSearch();
+    }
+  }, [route?.params?.category, route?.params?.timestamp, handleClearSearch]);
 
 
   const isSearching = useMemo(() => activeSearch.trim().length > 0, [activeSearch]);
@@ -996,6 +1015,29 @@ const BookingScreen = () => {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {header}
+
+      {activeProject && (
+        <View style={styles.projectContextBanner}>
+          <View style={styles.projectContextLeft}>
+            <View style={styles.projectContextIconCircle}>
+              <MaterialCommunityIcons name="folder-check" size={16} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.projectContextTitle} numberOfLines={1}>
+                Booking for Project: <Text style={{ fontWeight: '700', color: '#B45309' }}>{activeProject.name}</Text>
+              </Text>
+              <Text style={styles.projectContextSub}>Orders & bookings will be linked to this project</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.projectContextClearBtn}
+            onPress={() => setActiveProject(null)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="close-circle" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={styles.fixedSection}>
         <View style={styles.tabsWrapper}>
@@ -1627,6 +1669,46 @@ const styles = StyleSheet.create({
   modalConfirmBtn: { borderRadius: 16, overflow: 'hidden', marginBottom: 12 },
   modalCancel: { paddingVertical: 12, alignItems: 'center' },
   modalCancelText: { fontSize: 14, color: colors.textMuted, fontWeight: '600' },
+
+  // Active Project Banner
+  projectContextBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFBEB',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FDE68A',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  projectContextLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    marginRight: 8,
+  },
+  projectContextIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  projectContextTitle: {
+    fontSize: 12,
+    color: '#92400E',
+    fontWeight: '500',
+  },
+  projectContextSub: {
+    fontSize: 10,
+    color: '#B45309',
+    marginTop: 1,
+  },
+  projectContextClearBtn: {
+    padding: 4,
+  },
 });
 
 export default BookingScreen;

@@ -34,13 +34,14 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
   const userLat = useAppStore((s) => s.userLat);
   const userLng = useAppStore((s) => s.userLng);
   const myProjects = useAppStore((s) => s.myProjects);
+  const activeProject = useAppStore((s) => s.activeProject);
   const addAttachmentToProject = useAppStore((s) => s.addAttachmentToProject);
   const addSellerOrder = useAppStore((s) => s.addSellerOrder);
   const clearCart = useAppStore((s) => s.clearCart);
   const clearRentalCart = useAppStore((s) => s.clearRentalCart);
 
   // Selected project & address
-  const [selectedProject, setSelectedProject] = useState(initialProject);
+  const [selectedProject, setSelectedProject] = useState(initialProject || activeProject || null);
   const [showProjectModal, setShowProjectModal] = useState(false);
 
   const [selectedAddress, setSelectedAddress] = useState(initialAddress);

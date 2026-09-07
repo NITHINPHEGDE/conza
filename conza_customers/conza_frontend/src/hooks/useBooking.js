@@ -12,8 +12,9 @@ export const useBooking = (type) => {
   const userLat            = useAppStore((s) => s.userLat);
   const userLng            = useAppStore((s) => s.userLng);
   const userProfile        = useAppStore((s) => s.userProfile);
-  const setActiveBookingId = useAppStore((s) => s.setActiveBookingId);
-  const addSellerOrder     = useAppStore((s) => s.addSellerOrder);
+  const setActiveBookingId     = useAppStore((s) => s.setActiveBookingId);
+  const addSellerOrder         = useAppStore((s) => s.addSellerOrder);
+  const addAttachmentToProject = useAppStore((s) => s.addAttachmentToProject);
 
   const submitBooking = useCallback(async (bookingData) => {
     try {
@@ -27,6 +28,8 @@ export const useBooking = (type) => {
         isImmediate, scheduledDate, scheduledEndDate, scheduledDates, totalDays,
         latitude, longitude,
       } = bookingData;
+
+      const targetProjectId = bookingData.projectId || bookingData.selectedProject?._id || null;
 
       if (!city || !pincode) {
         throw new Error('Please provide at least city and pincode');
@@ -60,6 +63,16 @@ export const useBooking = (type) => {
         const result = await bookingAPI.createAutobookBooking(payload);
         if (result.success && result.booking?._id) {
           await setActiveBookingId(result.booking._id);
+          if (targetProjectId) {
+            try {
+              await addAttachmentToProject(targetProjectId, {
+                refModel: 'Booking',
+                refId: result.booking._id,
+              });
+            } catch (attErr) {
+              console.warn('[useBooking] Auto-attach labour booking failed:', attErr?.message || attErr);
+            }
+          }
         }
         setSuccess(true);
         return result.success && result.booking?._id
@@ -133,6 +146,16 @@ export const useBooking = (type) => {
 
           const result = await bookingAPI.createBooking(payload);
           if (result.success && result.booking?._id) {
+            if (targetProjectId) {
+              try {
+                await addAttachmentToProject(targetProjectId, {
+                  refModel: 'Booking',
+                  refId: result.booking._id,
+                });
+              } catch (attErr) {
+                console.warn('[useBooking] Auto-attach labour booking failed:', attErr?.message || attErr);
+              }
+            }
             createdBookings.push({
               refModel: 'Booking',
               refId:    result.booking._id,
@@ -202,6 +225,16 @@ export const useBooking = (type) => {
           const result = await bookingAPI.placeSellerOrder(payload);
           if (result.success) {
             addSellerOrder(result.order);
+            if (targetProjectId) {
+              try {
+                await addAttachmentToProject(targetProjectId, {
+                  refModel: 'SellerOrder',
+                  refId: result.order._id,
+                });
+              } catch (attErr) {
+                console.warn('[useBooking] Auto-attach material order failed:', attErr?.message || attErr);
+              }
+            }
             createdOrders.push({
               refModel: 'SellerOrder',
               refId: result.order._id,
@@ -278,6 +311,16 @@ export const useBooking = (type) => {
           const result = await bookingAPI.placeSellerOrder(payload);
           if (result.success) {
             addSellerOrder(result.order);
+            if (targetProjectId) {
+              try {
+                await addAttachmentToProject(targetProjectId, {
+                  refModel: 'SellerOrder',
+                  refId: result.order._id,
+                });
+              } catch (attErr) {
+                console.warn('[useBooking] Auto-attach rental order failed:', attErr?.message || attErr);
+              }
+            }
             createdOrders.push({
               refModel: 'SellerOrder',
               refId: result.order._id,

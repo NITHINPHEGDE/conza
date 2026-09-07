@@ -9,6 +9,7 @@ import {
   StatusBar,
   Image,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,6 +19,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useBooking } from '../hooks/useBooking';
 import SavedAddressSheet from '../components/SavedAddressSheet';
+import useAppStore from '../store/useAppStore';
 
 const PLATFORM_FEE_RATE = 0.05;
 const DELIVERY_FEE = 149;
@@ -62,7 +64,13 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
     quantity      = 1,
     scheduledDate = null,
     scheduledTime = null,
+    selectedProject: initialProject = null,
   } = route.params || {};
+
+  const myProjects       = useAppStore((s) => s.myProjects);
+  const activeProject    = useAppStore((s) => s.activeProject);
+  const [selectedProject, setSelectedProject] = useState(initialProject || activeProject || null);
+  const [showProjectModal, setShowProjectModal] = useState(false);
 
   // Normalise: always work with an array of rental items.
   // For the detail-screen single-item path, wrap in an array.
@@ -165,6 +173,8 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
       // detail-screen scheduled-rental path.
       item: singleItem,
       quantity,
+      projectId: selectedProject?._id,
+      selectedProject,
       scheduledDate,
       scheduledTime,
       houseNumber,
@@ -184,10 +194,12 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
       navigation.navigate('BookingConfirmation', {
         attachment: result,
         title: 'Rental Booked! 🏗️',
-        message: 'Your equipment rental has been booked successfully. You can track it from My Bookings.',
+        message: selectedProject
+          ? `Your equipment rental has been booked and linked to "${selectedProject.name}". You can track it from My Bookings.`
+          : 'Your equipment rental has been booked successfully. You can track it from My Bookings.',
       });
     }
-  }, [submitBooking, rentalItems, singleItem, quantity, scheduledDate, scheduledTime, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, lat, lng, navigation]);
+  }, [submitBooking, rentalItems, singleItem, quantity, selectedProject, scheduledDate, scheduledTime, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, lat, lng, navigation]);
 
 
   return (
@@ -210,6 +222,27 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
       <View style={styles.divider} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        {/* Project Selector Card */}
+        <TouchableOpacity
+          style={styles.projectSelectorCard}
+          onPress={() => setShowProjectModal(true)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.projectIconCircle}>
+            <MaterialCommunityIcons name="folder-outline" size={18} color="#7C3AED" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.projectCardTitle}>Project (Optional)</Text>
+            <Text style={styles.projectCardSub}>Link this rental to a project</Text>
+          </View>
+          <View style={styles.currentProjectPill}>
+            <Text style={styles.currentProjectText} numberOfLines={1}>
+              {selectedProject ? `${selectedProject.name} - Linked` : 'Select Project'}
+            </Text>
+            <MaterialCommunityIcons name="chevron-down" size={14} color="#7C3AED" />
+          </View>
+        </TouchableOpacity>
+
         {/* Order Summary */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order Summary</Text>
@@ -458,6 +491,55 @@ const RentalCheckoutScreen = ({ route, navigation }) => {
         currentLng={lng}
         currentAddress={currentAddressDisplay}
       />
+
+      {/* Project Selector Modal */}
+      <Modal visible={showProjectModal} transparent animationType="fade" onRequestClose={() => setShowProjectModal(false)}>
+        <TouchableOpacity style={styles.projectModalBackdrop} activeOpacity={1} onPress={() => setShowProjectModal(false)}>
+          <View style={styles.projectModalCard}>
+            <Text style={styles.projectModalTitle}>Select Project</Text>
+            <Text style={styles.projectModalSub}>Link this rental directly to a project for unified expense tracking.</Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 280 }}>
+              <TouchableOpacity
+                style={[styles.projectOption, !selectedProject && styles.projectOptionSelected]}
+                onPress={() => {
+                  setSelectedProject(null);
+                  setShowProjectModal(false);
+                }}
+              >
+                <Text style={[styles.projectOptionText, !selectedProject && styles.projectOptionTextSelected]}>
+                  No Project (General Rental)
+                </Text>
+              </TouchableOpacity>
+
+              {(myProjects || []).map((p) => {
+                const isSel = selectedProject?._id === p._id;
+                return (
+                  <TouchableOpacity
+                    key={p._id}
+                    style={[styles.projectOption, isSel && styles.projectOptionSelected]}
+                    onPress={() => {
+                      setSelectedProject(p);
+                      setShowProjectModal(false);
+                    }}
+                  >
+                    <Text style={[styles.projectOptionText, isSel && styles.projectOptionTextSelected]}>
+                      {p.name}
+                    </Text>
+                    {isSel && (
+                      <MaterialCommunityIcons name="check" size={16} color="#7C3AED" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.projectModalCloseBtn} onPress={() => setShowProjectModal(false)}>
+              <Text style={styles.projectModalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -665,6 +747,78 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     textAlignVertical: 'top',
   },
+
+  // Project selector styles
+  projectSelectorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
+  },
+  projectIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FAF5FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  projectCardTitle: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
+  projectCardSub: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  currentProjectPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FAF5FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    maxWidth: '45%',
+  },
+  currentProjectText: { fontSize: 11, fontWeight: '700', color: '#7C3AED' },
+  projectModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  projectModalCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+  },
+  projectModalTitle: { fontSize: 17, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
+  projectModalSub: { fontSize: 12, color: colors.textMuted, marginBottom: 16 },
+  projectOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#F8FAFC',
+  },
+  projectOptionSelected: { backgroundColor: '#FAF5FF', borderWidth: 1, borderColor: '#E9D5FF' },
+  projectOptionText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  projectOptionTextSelected: { color: '#7C3AED', fontWeight: '700' },
+  projectModalCloseBtn: {
+    marginTop: 12,
+    alignItems: 'center',
+    paddingVertical: 10,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+  },
+  projectModalCloseText: { fontSize: 13, fontWeight: '700', color: '#475569' },
 });
 
 export default RentalCheckoutScreen;

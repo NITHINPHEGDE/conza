@@ -184,9 +184,15 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
     selectedWorkers = [], category = '',
     isAutobook = false, requiredWorkers = 0,
     presetIsImmediate, estimateWorkers = [],
+    selectedProject: initialProject = null,
   } = route.params || {};
 
   const effectiveWorkers = isAutobook ? estimateWorkers : selectedWorkers;
+
+  const myProjects       = useAppStore((s) => s.myProjects);
+  const activeProject    = useAppStore((s) => s.activeProject);
+  const [selectedProject, setSelectedProject] = useState(initialProject || activeProject || null);
+  const [showProjectModal, setShowProjectModal] = useState(false);
 
   const [houseNumber, setHouseNumber] = useState('');
   const [houseName,   setHouseName]   = useState('');
@@ -485,6 +491,8 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       category,
       isAutobook,
       requiredWorkers,
+      projectId: selectedProject?._id,
+      selectedProject,
       houseNumber,
       houseName,
       street,
@@ -507,12 +515,14 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       navigation.navigate('BookingConfirmation', {
         attachment: result,
         title: 'Booking Confirmed! ⚡',
-        message: bookingType === 'immediate'
-          ? "Your labour has been booked instantly. You'll be charged based on the actual hours worked once the job starts."
-          : 'Your labour booking has been scheduled successfully.',
+        message: selectedProject
+          ? `Your labour booking has been confirmed and linked to "${selectedProject.name}". Track it from Status.`
+          : bookingType === 'immediate'
+            ? "Your labour has been booked instantly. You'll be charged based on the actual hours worked once the job starts."
+            : 'Your labour booking has been scheduled successfully.',
       });
     }
-  }, [submitBooking, selectedWorkers, category, isAutobook, requiredWorkers, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, toDate, scheduledDates, totalDays, lat, lng, navigation]);
+  }, [submitBooking, selectedWorkers, category, isAutobook, requiredWorkers, selectedProject, houseNumber, houseName, street, area, city, district, state, pincode, paymentMethod, description, bookingType, combinedScheduledDate, toDate, scheduledDates, totalDays, lat, lng, navigation]);
 
   const handleToDateChange = (event, date) => {
     setShowToDatePicker(Platform.OS === 'ios');
@@ -560,6 +570,27 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
+        {/* Project Selector Card */}
+        <TouchableOpacity
+          style={styles.projectSelectorCard}
+          onPress={() => setShowProjectModal(true)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.projectIconCircle}>
+            <MaterialCommunityIcons name="folder-outline" size={18} color="#D97706" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.projectCardTitle}>Project (Optional)</Text>
+            <Text style={styles.projectCardSub}>Link this booking to a project</Text>
+          </View>
+          <View style={styles.currentProjectPill}>
+            <Text style={styles.currentProjectText} numberOfLines={1}>
+              {selectedProject ? `${selectedProject.name} - Linked` : 'Select Project'}
+            </Text>
+            <MaterialCommunityIcons name="chevron-down" size={14} color="#D97706" />
+          </View>
+        </TouchableOpacity>
+
         <View style={styles.section}>
           {isAutobook ? (
             <>
@@ -992,6 +1023,55 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         currentLng={lng}
         currentAddress={currentAddressDisplay}
       />
+
+      {/* Project Selector Modal */}
+      <Modal visible={showProjectModal} transparent animationType="fade" onRequestClose={() => setShowProjectModal(false)}>
+        <TouchableOpacity style={styles.projectModalBackdrop} activeOpacity={1} onPress={() => setShowProjectModal(false)}>
+          <View style={styles.projectModalCard}>
+            <Text style={styles.projectModalTitle}>Select Project</Text>
+            <Text style={styles.projectModalSub}>Link this booking directly to a project for unified expense tracking.</Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 280 }}>
+              <TouchableOpacity
+                style={[styles.projectOption, !selectedProject && styles.projectOptionSelected]}
+                onPress={() => {
+                  setSelectedProject(null);
+                  setShowProjectModal(false);
+                }}
+              >
+                <Text style={[styles.projectOptionText, !selectedProject && styles.projectOptionTextSelected]}>
+                  No Project (General Booking)
+                </Text>
+              </TouchableOpacity>
+
+              {(myProjects || []).map((p) => {
+                const isSel = selectedProject?._id === p._id;
+                return (
+                  <TouchableOpacity
+                    key={p._id}
+                    style={[styles.projectOption, isSel && styles.projectOptionSelected]}
+                    onPress={() => {
+                      setSelectedProject(p);
+                      setShowProjectModal(false);
+                    }}
+                  >
+                    <Text style={[styles.projectOptionText, isSel && styles.projectOptionTextSelected]}>
+                      {p.name}
+                    </Text>
+                    {isSel && (
+                      <MaterialCommunityIcons name="check" size={16} color="#D97706" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity style={styles.projectModalCloseBtn} onPress={() => setShowProjectModal(false)}>
+              <Text style={styles.projectModalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1480,6 +1560,78 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 8,
   },
+
+  // Project selector styles
+  projectSelectorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
+  },
+  projectIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  projectCardTitle: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
+  projectCardSub: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  currentProjectPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    maxWidth: '45%',
+  },
+  currentProjectText: { fontSize: 11, fontWeight: '700', color: '#D97706' },
+  projectModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  projectModalCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+  },
+  projectModalTitle: { fontSize: 17, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
+  projectModalSub: { fontSize: 12, color: colors.textMuted, marginBottom: 16 },
+  projectOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#F8FAFC',
+  },
+  projectOptionSelected: { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FDE68A' },
+  projectOptionText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  projectOptionTextSelected: { color: '#D97706', fontWeight: '700' },
+  projectModalCloseBtn: {
+    marginTop: 12,
+    alignItems: 'center',
+    paddingVertical: 10,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+  },
+  projectModalCloseText: { fontSize: 13, fontWeight: '700', color: '#475569' },
 });
 
 export default LabourCheckoutScreen;

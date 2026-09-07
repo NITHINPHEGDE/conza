@@ -51,11 +51,27 @@ const ProjectDetailScreen = ({ route, navigation }) => {
     addExpenseToProject,
     removeExpenseFromProject,
     setActiveBookingId,
+    setActiveProject,
   } = useAppStore();
 
   const [activeTab, setActiveTab] = useState('overview');
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const handleBookService = useCallback((categoryKey) => {
+    if (project) {
+      setActiveProject(project);
+    }
+    navigation.navigate('Booking', {
+      screen: 'BookingHome',
+      params: {
+        category: categoryKey,
+        projectId: project?._id,
+        project,
+        timestamp: Date.now(),
+      },
+    });
+  }, [navigation, project, setActiveProject]);
 
   // Edit project modal
   const [showEditModal, setShowEditModal] = useState(false);
@@ -557,7 +573,7 @@ const ProjectDetailScreen = ({ route, navigation }) => {
             >
               <TouchableOpacity
                 style={styles.quickActionBtn}
-                onPress={() => navigation.navigate('Booking', { screen: 'BookingHome' })}
+                onPress={() => handleBookService('Material')}
               >
                 <MaterialCommunityIcons name="cart-outline" size={15} color="#10B981" />
                 <Text style={styles.quickActionText}>Book Material</Text>
@@ -565,7 +581,7 @@ const ProjectDetailScreen = ({ route, navigation }) => {
 
               <TouchableOpacity
                 style={styles.quickActionBtn}
-                onPress={() => navigation.navigate('Booking', { screen: 'BookingHome' })}
+                onPress={() => handleBookService('Labour')}
               >
                 <MaterialCommunityIcons name="account-hard-hat" size={15} color="#D97706" />
                 <Text style={styles.quickActionText}>Book Labour</Text>
@@ -573,7 +589,7 @@ const ProjectDetailScreen = ({ route, navigation }) => {
 
               <TouchableOpacity
                 style={styles.quickActionBtn}
-                onPress={() => navigation.navigate('Booking', { screen: 'BookingHome' })}
+                onPress={() => handleBookService('Rental')}
               >
                 <MaterialCommunityIcons name="tractor" size={15} color="#7C3AED" />
                 <Text style={styles.quickActionText}>Book Rental</Text>
@@ -658,12 +674,27 @@ const ProjectDetailScreen = ({ route, navigation }) => {
           <View style={styles.tabContent}>
             <View style={styles.tabContentHeader}>
               <Text style={styles.tabContentTitle}>Labour Bookings ({labourBookingsList.length})</Text>
+              <TouchableOpacity
+                style={[styles.addExpenseBtn, { backgroundColor: '#D97706' }]}
+                onPress={() => handleBookService('Labour')}
+              >
+                <MaterialCommunityIcons name="plus" size={16} color="#FFFFFF" />
+                <Text style={styles.addExpenseBtnText}>Book Labour</Text>
+              </TouchableOpacity>
             </View>
             {labourBookingsList.length === 0 ? (
               <View style={styles.emptyCard}>
                 <MaterialCommunityIcons name="account-hard-hat" size={38} color="#94A3B8" />
                 <Text style={styles.emptyTitle}>No Labour Bookings Attached</Text>
-                <Text style={styles.emptySub}>Attach ongoing labour bookings from the Status tab.</Text>
+                <Text style={styles.emptySub}>Book skilled workers or attach ongoing bookings to this project.</Text>
+                <TouchableOpacity
+                  style={[styles.emptyActionBtn, { backgroundColor: '#FFF7ED', borderColor: '#FDE68A' }]}
+                  onPress={() => handleBookService('Labour')}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons name="account-hard-hat" size={16} color="#D97706" />
+                  <Text style={[styles.emptyActionBtnText, { color: '#D97706' }]}>Book Labour for Project</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               labourBookingsList.map((item) => (
@@ -693,12 +724,27 @@ const ProjectDetailScreen = ({ route, navigation }) => {
           <View style={styles.tabContent}>
             <View style={styles.tabContentHeader}>
               <Text style={styles.tabContentTitle}>Material Orders ({materialOrders.length})</Text>
+              <TouchableOpacity
+                style={[styles.addExpenseBtn, { backgroundColor: '#10B981' }]}
+                onPress={() => handleBookService('Material')}
+              >
+                <MaterialCommunityIcons name="plus" size={16} color="#FFFFFF" />
+                <Text style={styles.addExpenseBtnText}>Book Material</Text>
+              </TouchableOpacity>
             </View>
             {materialOrders.length === 0 ? (
               <View style={styles.emptyCard}>
                 <MaterialCommunityIcons name="package-variant-closed" size={38} color="#94A3B8" />
                 <Text style={styles.emptyTitle}>No Material Orders Attached</Text>
-                <Text style={styles.emptySub}>Attach ongoing material orders from the Status tab.</Text>
+                <Text style={styles.emptySub}>Order construction supplies or attach orders to this project.</Text>
+                <TouchableOpacity
+                  style={[styles.emptyActionBtn, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
+                  onPress={() => handleBookService('Material')}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons name="cart-outline" size={16} color="#10B981" />
+                  <Text style={[styles.emptyActionBtnText, { color: '#10B981' }]}>Order Materials for Project</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               materialOrders.map((item) => (
@@ -728,12 +774,27 @@ const ProjectDetailScreen = ({ route, navigation }) => {
           <View style={styles.tabContent}>
             <View style={styles.tabContentHeader}>
               <Text style={styles.tabContentTitle}>Equipment Rentals ({rentalOrdersList.length})</Text>
+              <TouchableOpacity
+                style={[styles.addExpenseBtn, { backgroundColor: '#7C3AED' }]}
+                onPress={() => handleBookService('Rental')}
+              >
+                <MaterialCommunityIcons name="plus" size={16} color="#FFFFFF" />
+                <Text style={styles.addExpenseBtnText}>Book Rental</Text>
+              </TouchableOpacity>
             </View>
             {rentalOrdersList.length === 0 ? (
               <View style={styles.emptyCard}>
                 <MaterialCommunityIcons name="truck-outline" size={38} color="#94A3B8" />
                 <Text style={styles.emptyTitle}>No Rentals Attached</Text>
-                <Text style={styles.emptySub}>Attach equipment rentals from the Status tab.</Text>
+                <Text style={styles.emptySub}>Rent construction tools, heavy machinery, or vehicles.</Text>
+                <TouchableOpacity
+                  style={[styles.emptyActionBtn, { backgroundColor: '#FAF5FF', borderColor: '#E9D5FF' }]}
+                  onPress={() => handleBookService('Rental')}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons name="tractor" size={16} color="#7C3AED" />
+                  <Text style={[styles.emptyActionBtnText, { color: '#7C3AED' }]}>Rent Equipment for Project</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               rentalOrdersList.map((item) => (
@@ -1515,6 +1576,20 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: '#64748B',
     textAlign: 'center',
+  },
+  emptyActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 14,
+  },
+  emptyActionBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
   },
 
   // Modals

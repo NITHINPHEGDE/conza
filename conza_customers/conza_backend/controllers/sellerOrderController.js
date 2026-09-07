@@ -330,7 +330,7 @@ const getDashboard = async (req, res) => {
 const getMyOrders = async (req, res) => {
   try {
     const orders = await SellerOrder.find({ customer: req.user._id })
-      .populate('seller', 'name shopName phone')
+      .populate('seller', 'name shopName phone address city pincode profileImage isVerified')
       .sort({ createdAt: -1 })
       .lean();
     res.json({ success: true, orders });
@@ -339,7 +339,20 @@ const getMyOrders = async (req, res) => {
   }
 };
 
+// ── CUSTOMER: GET /api/orders/seller/:id ─────────────────────────────────
+const getCustomerOrderById = async (req, res) => {
+  try {
+    const order = await SellerOrder.findOne({ _id: req.params.id, customer: req.user._id })
+      .populate('seller', 'name shopName phone address city pincode profileImage isVerified')
+      .lean();
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    res.json({ success: true, order });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   placeOrder, getSellerOrders, getOrderById,
-  updateOrderStatus, getDashboard, getMyOrders,
+  updateOrderStatus, getDashboard, getMyOrders, getCustomerOrderById,
 };
