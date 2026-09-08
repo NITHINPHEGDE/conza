@@ -1133,83 +1133,87 @@ const useAppStore = create((set, get) => ({
 
     socket.on('worker_updated', ({ workerId, fullDocument }) => {
       if (!workerId || !fullDocument) return;
-      // Patch the worker in place wherever they currently appear. If they
-      // aren't in any category yet but are now visible (verified, active,
-      // available), add them so a newly-logged-in worker appears immediately
-      // without requiring a manual pull-to-refresh.
+      // A worker can belong to several categories at once now, each with
+      // its own pricing (fullDocument.categories: [{name, baseCharge,
+      // minCharge, perDayCharge}]) — patch/insert them into EVERY category
+      // bucket they belong to, using that category's own rate, not a single
+      // flat one.
+      const categoryEntries = fullDocument.categories || [];
+      if (!categoryEntries.length) return;
+
+      const isVisible =
+        fullDocument.isVerified === true &&
+        fullDocument.status !== 'suspended' &&
+        fullDocument.isAvailable !== false;
+
       set((state) => {
-        const category = fullDocument.category;
-        if (!category || !state.workersByCategory[category]) return {};
-        const current = state.workersByCategory[category];
-        const exists = current.some(
-          (w) => w._id?.toString() === workerId || w.id?.toString() === workerId
-        );
+        const nextWorkersByCategory = { ...state.workersByCategory };
+        let changed = false;
 
-        // Worker is newly visible — add them to the list
-        const isVisible =
-          fullDocument.isVerified === true &&
-          fullDocument.status !== 'suspended' &&
-          fullDocument.isAvailable !== false;
+        categoryEntries.forEach((entry) => {
+          const category = entry.name;
+          if (!category || !state.workersByCategory[category]) return;
+          const current = state.workersByCategory[category];
+          const exists = current.some(
+            (w) => w._id?.toString() === workerId || w.id?.toString() === workerId
+          );
 
-        if (!exists) {
-          if (!isVisible) return {};
-          // Build a shape that matches what getNearbyWorkers returns
-          const newWorker = {
-            id:           workerId,
-            _id:          workerId,
-            name:         fullDocument.fullName || '',
-            initials:     (fullDocument.fullName || '??')
-              .split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
-            category:     fullDocument.category,
-            skills:       fullDocument.skills || [],
-            pricePerDay:  fullDocument.minCharge || 0,
-            minCharge:    fullDocument.minCharge || 0,
-            baseCharge:   fullDocument.baseCharge || 0,
-            perDayCharge: fullDocument.perDayCharge || 0,
-            rating:       fullDocument.rating || 5.0,
-            totalJobs:    fullDocument.totalJobs || 0,
-            distance:     fullDocument.locationText || 'Nearby',
-            distanceKm:   null,
-            available:    true,
-            isOnline:     true,
-            isVerified:   true,
-            bio:          fullDocument.bio || '',
-            experience:   fullDocument.experience || null,
-            locationText: fullDocument.locationText || '',
-            memberSince:  fullDocument.memberSince || '',
-            profileImage: fullDocument.profileImage || null,
-          };
-          return {
-            workersByCategory: {
-              ...state.workersByCategory,
-              [category]: [...current, newWorker],
-            },
-          };
-        }
+          if (!exists) {
+            if (!isVisible) return;
+            // Build a shape that matches what getNearbyWorkers returns
+            const newWorker = {
+              id:           workerId,
+              _id:          workerId,
+              name:         fullDocument.fullName || '',
+              initials:     (fullDocument.fullName || '??')
+                .split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+              category,
+              categories:   categoryEntries.map((c) => c.name),
+              skills:       fullDocument.skills || [],
+              pricePerDay:  entry.minCharge || 0,
+              minCharge:    entry.minCharge || 0,
+              baseCharge:   entry.baseCharge || 0,
+              perDayCharge: entry.perDayCharge || 0,
+              rating:       fullDocument.rating || 5.0,
+              totalJobs:    fullDocument.totalJobs || 0,
+              distance:     fullDocument.locationText || 'Nearby',
+              distanceKm:   null,
+              available:    true,
+              isOnline:     true,
+              isVerified:   true,
+              bio:          fullDocument.bio || '',
+              experience:   fullDocument.experience || null,
+              locationText: fullDocument.locationText || '',
+              memberSince:  fullDocument.memberSince || '',
+              profileImage: fullDocument.profileImage || null,
+            };
+            nextWorkersByCategory[category] = [...current, newWorker];
+            changed = true;
+            return;
+          }
 
-        // Worker already in list — patch their fields
-        return {
-          workersByCategory: {
-            ...state.workersByCategory,
-            [category]: current.map((w) =>
-              w._id?.toString() === workerId || w.id?.toString() === workerId
-                ? {
-                    ...w,
-                    name:         fullDocument.fullName        ?? w.name,
-                    skills:       fullDocument.skills          ?? w.skills,
-                    pricePerDay:  fullDocument.minCharge       ?? w.pricePerDay,
-                    minCharge:    fullDocument.minCharge       ?? w.minCharge,
-                    baseCharge:   fullDocument.baseCharge      ?? w.baseCharge,
-                    perDayCharge: fullDocument.perDayCharge    ?? w.perDayCharge,
-                    rating:       fullDocument.rating          ?? w.rating,
-                    isVerified:   fullDocument.isVerified      ?? w.isVerified,
-                    available:    isVisible,
-                    isOnline:     fullDocument.isOnline        ?? w.isOnline,
-                  }
-                : w
-            ),
-          },
-        };
+          // Worker already in this category's list — patch their fields
+          nextWorkersByCategory[category] = current.map((w) =>
+            w._id?.toString() === workerId || w.id?.toString() === workerId
+              ? {
+                  ...w,
+                  name:         fullDocument.fullName        ?? w.name,
+                  skills:       fullDocument.skills          ?? w.skills,
+                  pricePerDay:  entry.minCharge              ?? w.pricePerDay,
+                  minCharge:    entry.minCharge              ?? w.minCharge,
+                  baseCharge:   entry.baseCharge             ?? w.baseCharge,
+                  perDayCharge: entry.perDayCharge           ?? w.perDayCharge,
+                  rating:       fullDocument.rating          ?? w.rating,
+                  isVerified:   fullDocument.isVerified      ?? w.isVerified,
+                  available:    isVisible,
+                  isOnline:     fullDocument.isOnline        ?? w.isOnline,
+                }
+              : w
+          );
+          changed = true;
+        });
+
+        return changed ? { workersByCategory: nextWorkersByCategory } : {};
       });
     });
 

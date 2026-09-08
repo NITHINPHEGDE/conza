@@ -37,13 +37,13 @@ exports.getLiveTracking = async (req, res, next) => {
       isOnline: true,
       'location.coordinates.0': { $ne: 0 },
       'location.coordinates.1': { $ne: 0 },
-    }).select('fullName category location isAvailable status rating')
+    }).select('fullName categories location isAvailable status rating')
 
     const workers = workersRaw
       .map(w => ({
         id: w._id,
         fullName: w.fullName,
-        category: w.category,
+        category: (w.categories || []).map(c => c.name).join(', '),
         latitude: w.location?.coordinates?.[1] ?? null,
         longitude: w.location?.coordinates?.[0] ?? null,
         isAvailable: w.isAvailable,

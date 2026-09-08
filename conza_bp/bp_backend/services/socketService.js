@@ -48,7 +48,11 @@ const initSocket = (server) => {
 // ── Build the worker payload the customer frontend needs ───────────────────
 // This mirrors the shape produced by getNearbyWorkers so the frontend can
 // add/update the worker in its list without making an additional HTTP call.
-const buildWorkerPayload = (doc) => {
+// categoryEntry is the specific entry from doc.categories[] that this
+// payload is being broadcast for — each category a worker belongs to gets
+// its own event with its own pricing (see the emit loop below), the same
+// way getNearbyWorkers scopes pricing to the category being browsed.
+const buildWorkerPayload = (doc, categoryEntry) => {
   if (!doc) return null;
   return {
     id:           doc._id.toString(),
@@ -57,10 +61,12 @@ const buildWorkerPayload = (doc) => {
     initials:     doc.fullName
       ? doc.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase()
       : '??',
-    category:     doc.category,
+    category:     categoryEntry?.name || null,
     skills:       doc.skills || [],
-    pricePerDay:  doc.minCharge || 0,
-    minCharge:    doc.minCharge || 0,
+    pricePerDay:  categoryEntry?.minCharge || 0,
+    minCharge:    categoryEntry?.minCharge || 0,
+    baseCharge:   categoryEntry?.baseCharge || 0,
+    perDayCharge: categoryEntry?.perDayCharge || 0,
     rating:       doc.rating || 5.0,
     totalJobs:    doc.totalJobs || 0,
     // Distance is unknown server-side without the customer's location;
@@ -133,28 +139,38 @@ const watchChanges = () => {
         // ── Precise availability event ─────────────────────────────────────
         // Emitted on every real insert/update so the customer frontend can
         // add/remove workers from the "Available Now" list in real-time
-        // without needing to re-fetch (and hit stale cache).
+        // without needing to re-fetch (and hit stale cache). A worker with
+        // multiple categories fires one event PER category — each category's
+        // "Available Now" list (workersByCategory[category] on the customer
+        // frontend) is keyed by a single category name, so this keeps that
+        // contract unchanged while supporting multi-category workers.
         if ((c.operationType === 'insert' || c.operationType === 'update') && !routinePing) {
-          io.to('workers_watch_room').emit('worker_availability_changed', {
-            workerId,
-            isOnline:  doc ? doc.isOnline  : false,
-            isAvailable: doc ? doc.isAvailable : true,
-            category:  doc ? doc.category  : null,
-            worker:    doc ? buildWorkerPayload(doc) : null,
+          const categoryEntries = doc?.categories || [];
+          categoryEntries.forEach((categoryEntry) => {
+            io.to('workers_watch_room').emit('worker_availability_changed', {
+              workerId,
+              isOnline:  doc ? doc.isOnline  : false,
+              isAvailable: doc ? doc.isAvailable : true,
+              category:  categoryEntry.name,
+              worker:    doc ? buildWorkerPayload(doc, categoryEntry) : null,
+            });
           });
         }
 
         // ── Explicit offline broadcast ─────────────────────────────────────
         // When a worker is explicitly set offline, emit a focused event so
         // the frontend can immediately remove them without checking fields.
+        // One event per category, same reasoning as above.
         if (
           c.operationType === 'update' &&
           doc &&
           doc.isOnline === false
         ) {
-          io.to('workers_watch_room').emit('worker_went_offline', {
-            workerId,
-            category: doc.category,
+          (doc.categories || []).forEach((categoryEntry) => {
+            io.to('workers_watch_room').emit('worker_went_offline', {
+              workerId,
+              category: categoryEntry.name,
+            });
           });
         }
       });

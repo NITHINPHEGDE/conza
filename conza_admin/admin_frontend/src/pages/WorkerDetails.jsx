@@ -61,7 +61,14 @@ export default function WorkerDetails() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center gap-3">
                 <HardHat size={18} className="text-textMuted" />
-                <div><p className="text-xs text-textMuted">Category</p><p className="text-sm font-medium text-textPrimary">{worker.category}</p></div>
+                <div>
+                  <p className="text-xs text-textMuted">Categories</p>
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {(worker.categories || []).map((c) => (
+                      <span key={c.name} className="px-2 py-0.5 bg-accentYellowSoft rounded text-xs text-textPrimary font-medium">{c.name}</span>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <Phone size={18} className="text-textMuted" />
@@ -83,17 +90,19 @@ export default function WorkerDetails() {
                 <Star size={18} className="text-textMuted" />
                 <div><p className="text-xs text-textMuted">Rating</p><p className="text-sm font-medium text-textPrimary">{worker.rating} ({worker.totalJobs} jobs)</p></div>
               </div>
-              <div className="flex items-center gap-3">
-                <IndianRupee size={18} className="text-textMuted" />
-                <div><p className="text-xs text-textMuted">Per Hour Min Charge</p><p className="text-sm font-medium text-textPrimary">₹{worker.minCharge ?? 'N/A'}</p></div>
-              </div>
-              <div className="flex items-center gap-3">
-                <IndianRupee size={18} className="text-textMuted" />
-                <div><p className="text-xs text-textMuted">Base Minimum Charge</p><p className="text-sm font-medium text-textPrimary">₹{worker.baseCharge ?? 'N/A'}</p></div>
-              </div>
-              <div className="flex items-center gap-3">
-                <IndianRupee size={18} className="text-textMuted" />
-                <div><p className="text-xs text-textMuted">Per Day Charge</p><p className="text-sm font-medium text-textPrimary">₹{worker.perDayCharge ?? 'N/A'}</p></div>
+            </div>
+            <div className="mt-4">
+              <p className="text-xs text-textMuted mb-2">Pricing per Category</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(worker.categories || []).map((c) => (
+                  <div key={c.name} className="flex items-center gap-3 border border-border rounded-lg p-3">
+                    <IndianRupee size={18} className="text-textMuted" />
+                    <div>
+                      <p className="text-sm font-medium text-textPrimary">{c.name}</p>
+                      <p className="text-xs text-textMuted">Base ₹{c.baseCharge ?? 0} · Hour ₹{c.minCharge ?? 0} · Day ₹{c.perDayCharge ?? 0}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
             <div className="mt-4">

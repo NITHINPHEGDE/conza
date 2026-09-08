@@ -4,6 +4,18 @@
 const mongoose = require('mongoose');
 const bcrypt   = require('bcryptjs');
 
+// Read-only mirror of the embedded category+pricing snapshot written by
+// conza_bp — see conza_bp/bp_backend/models/Worker.js for the source of truth.
+const workerCategorySchema = new mongoose.Schema(
+  {
+    name:         { type: String, required: true, trim: true },
+    baseCharge:   { type: Number, default: 0 },
+    minCharge:    { type: Number, default: 0 },
+    perDayCharge: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
 const workerSchema = new mongoose.Schema(
   {
     fullName:  { type: String, required: true, trim: true },
@@ -12,13 +24,11 @@ const workerSchema = new mongoose.Schema(
     phone:     { type: String, required: true, unique: true, trim: true },
     email:     { type: String, unique: true, sparse: true, trim: true, lowercase: true },
     profileImage: { type: String, default: null },
-    // Category is now dynamic, sourced from the admin-managed ServiceCategory
-    // collection instead of a hardcoded enum.
-    category:  { type: String, required: true, trim: true },
+    // Categories are dynamic, sourced from the admin-managed ServiceCategory
+    // collection instead of a hardcoded enum. A worker can belong to
+    // multiple categories at once, each with its own admin-set pricing.
+    categories: { type: [workerCategorySchema], default: [] },
     skills:       { type: [String], default: [] },
-    minCharge:    { type: Number, default: null },
-    baseCharge:   { type: Number, default: null },
-    perDayCharge: { type: Number, default: null },
     locationText: { type: String, default: '' },
     experience:   { type: Number, default: null },
     bio:          { type: String, default: '' },
@@ -47,16 +57,16 @@ const workerSchema = new mongoose.Schema(
 
 // Compound geo index — covers all $near and $geoNear queries
 // (single-field 2dsphere is redundant when compound exists)
-workerSchema.index({ location: '2dsphere', category: 1, isAvailable: 1, status: 1 });
+workerSchema.index({ location: '2dsphere', 'categories.name': 1, isAvailable: 1, status: 1 });
 
 // category listing + online status (getCategories aggregation $match)
-workerSchema.index({ category: 1, isOnline: 1, isAvailable: 1, status: 1 });
+workerSchema.index({ 'categories.name': 1, isOnline: 1, isAvailable: 1, status: 1 });
 
 // general availability filter
-workerSchema.index({ category: 1, isAvailable: 1, status: 1 });
+workerSchema.index({ 'categories.name': 1, isAvailable: 1, status: 1 });
 
-// text search across name/category/skills/bio
-workerSchema.index({ fullName: 'text', category: 'text', skills: 'text', bio: 'text' });
+// text search across name/categories/skills/bio
+workerSchema.index({ fullName: 'text', 'categories.name': 'text', skills: 'text', bio: 'text' });
 
 workerSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();

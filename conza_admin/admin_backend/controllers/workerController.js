@@ -16,7 +16,7 @@ exports.getWorkers = async (req, res, next) => {
       ]
     }
     if (status && status !== 'all') query.status = status
-    if (category && category !== 'all') query.category = category
+    if (category && category !== 'all') query['categories.name'] = category
 
     const total = await Worker.countDocuments(query)
     const workers = await Worker.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(parseInt(limit))
@@ -82,9 +82,10 @@ exports.updateWorkerStatus = async (req, res, next) => {
     if (!worker) return next(createError(404, 'Worker not found.'))
 
     // Bust the worker's cached session + customer-facing nearby/category
-    // caches so the change (suspend/activate) applies on the very next
-    // request instead of waiting for the cache TTL to expire.
-    await bustWorkerSessionCache(req.params.id, worker.category)
+    // caches (for every category this worker belongs to) so the change
+    // (suspend/activate) applies on the very next request instead of
+    // waiting for the cache TTL to expire.
+    await bustWorkerSessionCache(req.params.id, (worker.categories || []).map((c) => c.name))
 
     req.auditTarget = `Worker #${req.params.id} - ${worker.fullName}`
     req.auditDetails = `Status changed to ${status}`
@@ -119,7 +120,7 @@ exports.verifyWorker = async (req, res, next) => {
     }
 
     await worker.save()
-    await bustWorkerSessionCache(req.params.id, worker.category)
+    await bustWorkerSessionCache(req.params.id, (worker.categories || []).map((c) => c.name))
     req.auditTarget = `Worker #${req.params.id} - ${worker.fullName}`
     req.auditDetails = `Verification updated: ${JSON.stringify(worker.verification)}`
     sendSuccess(res, 200, 'Worker verification updated', { worker })
@@ -172,7 +173,7 @@ exports.deleteWorker = async (req, res, next) => {
     const worker = await Worker.findByIdAndDelete(req.params.id)
     if (!worker) return next(createError(404, 'Worker not found.'))
     // Bust session + customer-facing caches so deleted worker vanishes immediately
-    await bustWorkerSessionCache(req.params.id, worker.category)
+    await bustWorkerSessionCache(req.params.id, (worker.categories || []).map((c) => c.name))
     req.auditTarget = `Worker #${req.params.id} - ${worker.fullName}`
     req.auditDetails = `Worker account permanently deleted`
     sendSuccess(res, 200, 'Worker deleted successfully', {})

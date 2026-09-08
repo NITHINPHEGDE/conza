@@ -112,7 +112,7 @@ exports.getRecentData = async (req, res, next) => {
     const recentComplaints = await Complaint.find().sort({ createdAt: -1 }).limit(5)
     const recentOrders = await Order.find().sort({ createdAt: -1 }).limit(5)
     const recentBookings = await Booking.find().sort({ createdAt: -1 }).limit(5)
-    const topWorkers = await Worker.find({ status: 'active' }).sort({ totalJobs: -1 }).limit(5).select('fullName category rating totalJobs earnings')
+    const topWorkers = await Worker.find({ status: 'active' }).sort({ totalJobs: -1 }).limit(5).select('fullName categories rating totalJobs earnings')
     const topVendors = await Vendor.find({ status: 'active' }).sort({ totalRevenue: -1 }).limit(5).select('name totalOrders totalRevenue rating')
     const lowStockProducts = await Product.find({
       type: 'material',
@@ -130,17 +130,26 @@ exports.getRecentData = async (req, res, next) => {
       stock: p.stock,
       threshold: p.lowStockAt,
     }))
+    const pendingWorkers = await Worker.find({ status: 'pending_verification' }).limit(3).select('fullName categories createdAt')
+    const pendingVendors = await Vendor.find({ status: 'pending_verification' }).limit(2).select('name shopName createdAt')
     const pendingVerifications = [
-      ...await Worker.find({ status: 'pending_verification' }).limit(3).select('fullName category createdAt'),
-      ...await Vendor.find({ status: 'pending_verification' }).limit(2).select('name shopName createdAt'),
-    ].map(item => ({
-      id: item._id,
-      type: item.category ? 'worker' : 'vendor',
-      name: item.fullName || item.name,
-      category: item.category,
-      shopName: item.shopName,
-      submittedAt: item.createdAt,
-    }))
+      ...pendingWorkers.map(item => ({
+        id: item._id,
+        type: 'worker',
+        name: item.fullName,
+        category: (item.categories || []).map(c => c.name).join(', '),
+        shopName: undefined,
+        submittedAt: item.createdAt,
+      })),
+      ...pendingVendors.map(item => ({
+        id: item._id,
+        type: 'vendor',
+        name: item.name,
+        category: undefined,
+        shopName: item.shopName,
+        submittedAt: item.createdAt,
+      })),
+    ]
 
     const hasData = recentRegistrations.length > 0
 
@@ -149,7 +158,7 @@ exports.getRecentData = async (req, res, next) => {
       recentComplaints: recentComplaints.length > 0 ? recentComplaints : mockRecentComplaints,
       recentOrders: recentOrders.length > 0 ? recentOrders : mockRecentOrders,
       recentBookings: recentBookings.length > 0 ? recentBookings : mockRecentBookings,
-      topWorkers: topWorkers.length > 0 ? topWorkers.map(w => ({ id: w._id, name: w.fullName, category: w.category, rating: w.rating, jobs: w.totalJobs, earnings: w.earnings?.total || 0 })) : mockTopWorkers,
+      topWorkers: topWorkers.length > 0 ? topWorkers.map(w => ({ id: w._id, name: w.fullName, category: (w.categories || []).map(c => c.name).join(', '), rating: w.rating, jobs: w.totalJobs, earnings: w.earnings?.total || 0 })) : mockTopWorkers,
       topVendors: topVendors.length > 0 ? topVendors.map(v => ({ id: v._id, name: v.name, orders: v.totalOrders, revenue: v.totalRevenue, rating: v.rating })) : mockTopVendors,
       lowStockAlerts: lowStockAlerts.length > 0 ? lowStockAlerts : mockLowStockAlerts,
       pendingVerifications: pendingVerifications.length > 0 ? pendingVerifications : mockPendingVerifications,

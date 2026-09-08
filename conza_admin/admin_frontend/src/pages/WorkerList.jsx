@@ -29,7 +29,7 @@ export default function WorkerList() {
   const getFilteredWorkers = () => {
     return displayedWorkers.filter((w) => {
       if (filters.status !== 'all' && w.status !== filters.status) return false
-      if (filters.category !== 'all' && w.category !== filters.category) return false
+      if (filters.category !== 'all' && !(w.categories || []).some((c) => c.name === filters.category)) return false
       if (filters.search && !w.fullName?.toLowerCase().includes(filters.search.toLowerCase()) && !w.phone?.includes(filters.search)) return false
       return true
     })
@@ -62,7 +62,13 @@ export default function WorkerList() {
         </div>
       </div>
     )},
-    { key: 'category', title: 'Category' },
+    { key: 'category', title: 'Categories', render: (row) => (
+      <div className="flex flex-wrap gap-1">
+        {(row.categories || []).map((c) => (
+          <span key={c.name} className="px-2 py-0.5 bg-accentYellowSoft rounded text-xs text-textPrimary font-medium">{c.name}</span>
+        ))}
+      </div>
+    )},
     { key: 'skills', title: 'Skills', render: (row) => (
       <div className="flex flex-wrap gap-1">
         {(row.skills || []).slice(0, 2).map((s) => (
@@ -71,9 +77,15 @@ export default function WorkerList() {
         {(row.skills || []).length > 2 && <span className="text-xs text-textMuted">+{row.skills.length - 2}</span>}
       </div>
     )},
-    { key: 'minCharge', title: 'Hourly', render: (row) => `₹${row.minCharge ?? 0}` },
-    { key: 'baseCharge', title: 'Base', render: (row) => `₹${row.baseCharge ?? 0}` },
-    { key: 'perDayCharge', title: 'Per Day', render: (row) => `₹${row.perDayCharge ?? 0}` },
+    { key: 'pricing', title: 'Pricing (Base / Hr / Day)', render: (row) => (
+      <div className="space-y-0.5">
+        {(row.categories || []).map((c) => (
+          <p key={c.name} className="text-xs text-textSecondary">
+            <span className="font-medium text-textPrimary">{c.name}:</span> ₹{c.baseCharge ?? 0} / ₹{c.minCharge ?? 0} / ₹{c.perDayCharge ?? 0}
+          </p>
+        ))}
+      </div>
+    )},
     { key: 'rating', title: 'Rating', render: (row) => `⭐ ${row.rating}` },
     { key: 'totalJobs', title: 'Jobs' },
     { key: 'status', title: 'Status', render: (row) => <StatusBadge status={row.status} /> },

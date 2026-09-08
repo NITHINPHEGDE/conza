@@ -15,11 +15,17 @@ const workerSchema = new mongoose.Schema({
   password: { type: String, select: false },
   profileImage: { type: String, default: null },
 
-  category: { type: String },
+  // Mirrors the embedded category+pricing snapshot written by conza_bp —
+  // see conza_bp/bp_backend/models/Worker.js. A worker can belong to
+  // several categories at once, each with its own admin-set pricing.
+  categories: [{
+    name:         { type: String },
+    baseCharge:   { type: Number, default: 0 },
+    minCharge:    { type: Number, default: 0 },
+    perDayCharge: { type: Number, default: 0 },
+    _id: false,
+  }],
   skills: { type: [String], default: [] },
-  minCharge: { type: Number, default: null },
-  baseCharge: { type: Number, default: null },
-  perDayCharge: { type: Number, default: null },
   locationText: { type: String, default: '' },
   experience: { type: Number, default: null },
   bio: { type: String, default: '' },

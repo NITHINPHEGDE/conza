@@ -77,7 +77,7 @@ const getUploadSignature = asyncHandler(async (req, res) => {
 });
 
 const ALLOWED_PROFILE_FIELDS = [
-  'fullName', 'phone', 'email', 'category', 'skills',
+  'fullName', 'phone', 'email', 'skills',
   'locationText', 'experience', 'bio', 'profileImage',
 ];
 
@@ -87,7 +87,7 @@ const updateProfile = asyncHandler(async (req, res) => {
     if (req.body[field] !== undefined) updates[field] = req.body[field];
   });
 
-  if (Object.keys(updates).length === 0) {
+  if (Object.keys(updates).length === 0 && req.body.categories === undefined) {
     throw new AppError('No valid fields to update.', 400);
   }
 
@@ -112,15 +112,25 @@ const updateProfile = asyncHandler(async (req, res) => {
     if (updates.email) updates.email = updates.email.toLowerCase();
   }
 
-  const worker = await Worker.findByIdAndUpdate(
-    req.worker._id,
-    { $set: updates },
-    { new: true, runValidators: true, select: '-password' }
-  );
+  let worker = null;
+  if (Object.keys(updates).length > 0) {
+    worker = await Worker.findByIdAndUpdate(
+      req.worker._id,
+      { $set: updates },
+      { new: true, runValidators: true, select: '-password' }
+    );
+    if (!worker) throw new AppError('Worker not found.', 404);
+  }
 
-  if (!worker) throw new AppError('Worker not found.', 404);
+  // Categories are handled separately from the generic $set above —
+  // pricing must always be re-snapshotted from the live ServiceCategory
+  // rates whenever the worker's category list changes, never trusted
+  // from the client.
+  if (req.body.categories !== undefined) {
+    worker = await workerService.updateWorkerCategories(req.worker._id, req.body.categories);
+  }
 
-  logger.info({ workerId: req.worker._id, fields: Object.keys(updates) }, 'Profile updated');
+  logger.info({ workerId: req.worker._id, fields: Object.keys(updates), categoriesChanged: req.body.categories !== undefined }, 'Profile updated');
   res.status(200).json({ success: true, worker });
 });
 

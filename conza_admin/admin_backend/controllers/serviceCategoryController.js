@@ -71,17 +71,20 @@ exports.updateCategory = async (req, res, next) => {
 
     // Pricing is category-wide: whenever the admin edits pricing for a
     // category, push the new charges onto every worker already registered
-    // under that category so pricing stays consistent.
+    // under that category — updating just THAT category's entry inside
+    // their categories[] array, leaving any other categories they belong
+    // to untouched.
     if (updates.baseCharge !== undefined || updates.perHourCharge !== undefined || updates.perDayCharge !== undefined) {
       await Worker.updateMany(
-        { category: category.name },
+        { 'categories.name': category.name },
         {
           $set: {
-            baseCharge:  category.baseCharge,
-            minCharge:   category.perHourCharge,
-            perDayCharge: category.perDayCharge,
+            'categories.$[elem].baseCharge':   category.baseCharge,
+            'categories.$[elem].minCharge':    category.perHourCharge,
+            'categories.$[elem].perDayCharge': category.perDayCharge,
           },
-        }
+        },
+        { arrayFilters: [{ 'elem.name': category.name }] }
       )
     }
 

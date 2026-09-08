@@ -24,12 +24,15 @@ const signupRules = [
   body('phone')
     .trim().notEmpty().withMessage('Phone number is required.')
     .matches(/^[6-9]\d{9}$/).withMessage('Enter a valid 10-digit Indian mobile number.'),
-  body('category')
-    .trim()
-    .notEmpty().withMessage('Category is required.'),
-  // Existence of the category is checked against the live ServiceCategory
-  // collection in workerService.signUpWorker() — the list is admin-managed
-  // and changes over time, so it can no longer be a static enum here.
+  body('categories')
+    .isArray({ min: 1 }).withMessage('Select at least one category.'),
+  body('categories.*')
+    .isString().withMessage('Invalid category selected.')
+    .trim().notEmpty().withMessage('Invalid category selected.'),
+  // Existence of each category is checked against the live ServiceCategory
+  // collection in workerService.resolveCategoriesArray() — the list is
+  // admin-managed and changes over time, so it can no longer be a static
+  // enum here. A worker can select any number of categories.
   body('locationText').trim().notEmpty().withMessage('Location is required.'),
   body('email').optional({ nullable: true, checkFalsy: true }).isEmail().withMessage('Invalid email address.'),
   // Pricing (minCharge / baseCharge / perDayCharge) is admin-managed per

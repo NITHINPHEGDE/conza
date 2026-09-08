@@ -37,16 +37,18 @@ const getWorkersRedis = () => {
  * the very next request instead of waiting for the cache TTL to expire.
  *
  * @param {string} workerId — Mongo ObjectId string
- * @param {string} [category] — worker's category, to bust category-scoped caches too
+ * @param {string|string[]} [categories] — worker's category name(s), to bust category-scoped caches too
  */
-const bustWorkerSessionCache = async (workerId, category) => {
+const bustWorkerSessionCache = async (workerId, categories) => {
   try {
     const redis = getWorkersRedis()
     if (!redis) return
     await redis.del(`worker:session:${workerId}`)
 
+    const list = Array.isArray(categories) ? categories.filter(Boolean) : (categories ? [categories] : [])
+
     const patterns = ['workers:nearby:*', 'workers:categories:*']
-    if (category) patterns.push(`workers:search:${category.toLowerCase()}:*`)
+    list.forEach((cat) => patterns.push(`workers:search:${cat.toLowerCase()}:*`))
 
     for (const pattern of patterns) {
       let cursor = '0'

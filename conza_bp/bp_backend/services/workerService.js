@@ -78,20 +78,21 @@ const flushLocationBuffer = async () => {
 
 // ── Invalidate customer-facing worker cache ─────────────────────────────────
 // Both bp_backend and conza_backend share the same Redis instance (same REDIS_URL).
-// When a worker's online status changes, we must bust all nearby/category cache
-// keys so the customer backend serves fresh data on next request.
-const invalidateWorkerCache = async (category) => {
+// When a worker's online status or categories change, we must bust all
+// nearby/category cache keys (for every affected category) so the customer
+// backend serves fresh data on next request.
+const invalidateWorkerCache = async (categories) => {
   const redis = getRedis();
+  const list  = Array.isArray(categories) ? categories.filter(Boolean) : (categories ? [categories] : []);
   try {
     // Scan and delete all nearby and category cache keys
     const patterns = [
       'workers:nearby:*',
       'workers:categories:*',
     ];
-    if (category) {
-      // Also bust category-specific search cache if it exists
-      patterns.push(`workers:search:${category.toLowerCase()}:*`);
-    }
+    // Also bust category-specific search cache for every category this
+    // worker belongs to
+    list.forEach((cat) => patterns.push(`workers:search:${cat.toLowerCase()}:*`));
 
     for (const pattern of patterns) {
       let cursor = '0';
@@ -109,11 +110,37 @@ const invalidateWorkerCache = async (category) => {
   }
 };
 
+// ── Build the embedded categories array for a worker ───────────────────────
+// Validates every requested category name against the live, active
+// ServiceCategory collection and snapshots that category's current
+// admin-set pricing. Used at sign-up and whenever a worker edits their
+// category list from their profile.
+const resolveCategoriesArray = async (categoryNames) => {
+  const uniqueNames = [...new Set((categoryNames || []).map((n) => String(n).trim()).filter(Boolean))];
+  if (uniqueNames.length === 0) {
+    throw new AppError('Select at least one category.', 400);
+  }
+
+  const categoryDocs = await ServiceCategory.find({ name: { $in: uniqueNames }, active: true });
+  const foundNames   = new Set(categoryDocs.map((c) => c.name));
+  const missing      = uniqueNames.filter((n) => !foundNames.has(n));
+  if (missing.length) {
+    throw new AppError(`Category not available: ${missing.join(', ')}`, 400);
+  }
+
+  return categoryDocs.map((c) => ({
+    name:         c.name,
+    baseCharge:   c.baseCharge    || 0,
+    minCharge:    c.perHourCharge || 0,
+    perDayCharge: c.perDayCharge  || 0,
+  }));
+};
+
 // ── Sign Up ────────────────────────────────────────────────────────────────
 const signUpWorker = async (data) => {
   const {
     fullName, username, password, phone, email,
-    category, skills, locationText,
+    categories, skills, locationText,
     experience, bio, profileImage,
   } = data;
 
@@ -135,12 +162,9 @@ const signUpWorker = async (data) => {
   }
 
   // Pricing is admin-managed per category — business partners can only pick
-  // a category, never set their own rates. Look up the category's current
-  // base charges and stamp them onto the new worker record.
-  const categoryDoc = await ServiceCategory.findOne({ name: category, active: true });
-  if (!categoryDoc) {
-    throw new AppError('Selected category is not available.', 400);
-  }
+  // categories, never set their own rates. A worker can register under any
+  // number of categories at once; each one gets its own pricing snapshot.
+  const categoriesArray = await resolveCategoriesArray(categories);
 
   const worker = await Worker.create({
     fullName,
@@ -149,11 +173,8 @@ const signUpWorker = async (data) => {
     phone,
     email:        email || undefined,
     profileImage: profileImage || null,
-    category,
+    categories:   categoriesArray,
     skills:       skills || [],
-    minCharge:    categoryDoc.perHourCharge || 0,
-    baseCharge:   categoryDoc.baseCharge    || 0,
-    perDayCharge: categoryDoc.perDayCharge  || 0,
     locationText: locationText || '',
     experience:   experience || null,
     bio:          bio || '',
@@ -165,11 +186,29 @@ const signUpWorker = async (data) => {
     isVerified:   false,
   });
 
-  // Bust category cache so newly registered worker appears when they go online
-  await invalidateWorkerCache(category);
+  // Bust category cache for every category so the newly registered worker
+  // appears when they go online
+  await invalidateWorkerCache(categoriesArray.map((c) => c.name));
 
   const token = generateToken(worker._id);
   return { worker: worker.toSafeObject(), token };
+};
+
+// ── Update a worker's category list (from profile edit) ────────────────────
+// Re-resolves pricing for every selected category from the live
+// ServiceCategory rates — never trusts a client-supplied rate.
+const updateWorkerCategories = async (workerId, categoryNames) => {
+  const categoriesArray = await resolveCategoriesArray(categoryNames);
+
+  const worker = await Worker.findByIdAndUpdate(
+    workerId,
+    { $set: { categories: categoriesArray } },
+    { new: true, runValidators: true, select: '-password' }
+  );
+  if (!worker) throw new AppError('Worker not found.', 404);
+
+  await invalidateWorkerCache(categoriesArray.map((c) => c.name));
+  return worker;
 };
 
 // ── Log In ─────────────────────────────────────────────────────────────────
@@ -201,7 +240,7 @@ const loginWorker = async (identifier, password) => {
     try {
       await getRedis().del(`worker:session:${worker._id.toString()}`);
     } catch (_) {}
-    await invalidateWorkerCache(worker.category);
+    await invalidateWorkerCache((worker.categories || []).map((c) => c.name));
   }
 
   const token = generateToken(worker._id);
@@ -229,7 +268,7 @@ const toggleOnlineStatus = async (workerId) => {
     await getRedis().del(`worker:session:${workerId.toString()}`);
   } catch (_) {}
 
-  await invalidateWorkerCache(worker.category);
+  await invalidateWorkerCache((worker.categories || []).map((c) => c.name));
 
   return worker;
 };
@@ -319,6 +358,8 @@ const updateProfileImage = async (workerId, imageUrl) => {
 };
 
 module.exports = {
+  resolveCategoriesArray,
+  updateWorkerCategories,
   signUpWorker,
   loginWorker,
   getWorkerProfile,

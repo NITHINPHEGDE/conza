@@ -1,6 +1,20 @@
 const mongoose = require('mongoose');
 const bcrypt   = require('bcryptjs');
 
+// Each entry is a category this worker registered under, with that
+// category's admin-set pricing snapshotted at the time it was added/last
+// synced. A worker can belong to any number of categories at once — see
+// workerService.resolveCategoriesArray().
+const workerCategorySchema = new mongoose.Schema(
+  {
+    name:         { type: String, required: true, trim: true },
+    baseCharge:   { type: Number, default: 0 },   // Base Minimum Charge (flat call-out fee)
+    minCharge:    { type: Number, default: 0 },   // Per Hour Minimum Charge
+    perDayCharge: { type: Number, default: 0 },   // Per Day Charge (multi-day bookings)
+  },
+  { _id: false }
+);
+
 const workerSchema = new mongoose.Schema(
   {
     fullName:     { type: String, required: true, trim: true },
@@ -11,13 +25,19 @@ const workerSchema = new mongoose.Schema(
 
     profileImage: { type: String, default: null },
 
-    // Category is now dynamic — validated against ServiceCategory collection
-    // in workerService.signUpWorker() instead of a hardcoded enum.
-    category:     { type: String, required: true, trim: true },
+    // Categories are dynamic — each validated against the ServiceCategory
+    // collection in workerService.signUpWorker()/updateWorkerCategories().
+    // A worker can hold multiple categories at once (e.g. Plumber +
+    // Electrician), each with its own admin-set pricing snapshot.
+    categories: {
+      type: [workerCategorySchema],
+      required: true,
+      validate: {
+        validator: (arr) => Array.isArray(arr) && arr.length > 0,
+        message: 'Worker must have at least one category.',
+      },
+    },
     skills:       { type: [String], default: [] },
-    minCharge:    { type: Number, default: null },   // Per Hour Minimum Charge
-    baseCharge:   { type: Number, default: null },   // Base Minimum Charge (flat call-out fee)
-    perDayCharge: { type: Number, default: null },   // Per Day Charge (multi-day bookings)
     locationText: { type: String, default: '' },   // human-readable city/area
     experience:   { type: Number, default: null },
     bio:          { type: String, default: '' },
@@ -60,13 +80,13 @@ const workerSchema = new mongoose.Schema(
 );
 
 // Compound geo index — single 2dsphere field index removed
-workerSchema.index({ location: '2dsphere', category: 1, isAvailable: 1 });
+workerSchema.index({ location: '2dsphere', 'categories.name': 1, isAvailable: 1 });
 
 // category listing + online status
-workerSchema.index({ category: 1, isOnline: 1, isAvailable: 1 });
+workerSchema.index({ 'categories.name': 1, isOnline: 1, isAvailable: 1 });
 
 // general availability filter
-workerSchema.index({ category: 1, isAvailable: 1 });
+workerSchema.index({ 'categories.name': 1, isAvailable: 1 });
 
 // ── Hash password before save ──────────────────────────────────────────────
 workerSchema.pre('save', async function (next) {
