@@ -87,9 +87,12 @@ const loadAttachments = async (attachments) => {
   return items;
 };
 
-// Validates that every requested attachment belongs to this customer AND is
-// currently ongoing (not completed / cancelled / delivered / returned),
-// matching "only ongoing labour bookings and placed orders" can be attached.
+// Validates that every requested attachment belongs to this customer.
+// Bookings/orders of ANY status (ongoing, completed, or cancelled) can be
+// attached — a project spans the customer's whole job, so it should be able
+// to hold a full record of everything tied to it, not just what's still
+// in progress. Ownership is still enforced so nobody can attach someone
+// else's booking/order.
 const sanitizeAttachments = async (attachments, userId) => {
   if (!Array.isArray(attachments) || !attachments.length) return [];
 
@@ -98,10 +101,10 @@ const sanitizeAttachments = async (attachments, userId) => {
 
   const [ownedBookings, ownedOrders] = await Promise.all([
     bookingIds.length
-      ? Booking.find({ _id: { $in: bookingIds }, user: userId, status: { $nin: ['completed', 'cancelled'] } }).select('_id').lean()
+      ? Booking.find({ _id: { $in: bookingIds }, user: userId }).select('_id').lean()
       : [],
     orderIds.length
-      ? SellerOrder.find({ _id: { $in: orderIds }, customer: userId, status: { $nin: ['delivered', 'returned', 'cancelled'] } }).select('_id').lean()
+      ? SellerOrder.find({ _id: { $in: orderIds }, customer: userId }).select('_id').lean()
       : [],
   ]);
 
@@ -125,18 +128,20 @@ const sanitizeAttachments = async (attachments, userId) => {
   return clean;
 };
 
-// @desc    Get the customer's ongoing labour bookings + orders that can be attached to a project
+// @desc    Get the customer's labour bookings + orders that can be attached to a project
+//          (any status — see sanitizeAttachments above for why completed/
+//          cancelled items are included too)
 // @route   GET /api/projects/attachable-items
 // @access  Private
 const getAttachableItems = async (req, res, next) => {
   try {
     const userId = req.user._id;
     const [bookings, orders] = await Promise.all([
-      Booking.find({ user: userId, status: { $nin: ['completed', 'cancelled'] } })
+      Booking.find({ user: userId })
         .sort({ createdAt: -1 })
         .select('category status total city createdAt')
         .lean(),
-      SellerOrder.find({ customer: userId, status: { $nin: ['delivered', 'returned', 'cancelled'] } })
+      SellerOrder.find({ customer: userId })
         .sort({ createdAt: -1 })
         .select('orderType items status total city createdAt')
         .lean(),

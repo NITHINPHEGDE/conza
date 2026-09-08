@@ -116,6 +116,8 @@ const BookingTrackingScreen = ({ navigation, route }) => {
   const fetchActiveBooking   = useAppStore((s) => s.fetchActiveBooking);
   const cancelActiveBooking  = useAppStore((s) => s.cancelActiveBooking);
   const clearActiveBooking   = useAppStore((s) => s.clearActiveBooking);
+  const pendingWorkerCompletion       = useAppStore((s) => s.pendingWorkerCompletion);
+  const clearPendingWorkerCompletion  = useAppStore((s) => s.clearPendingWorkerCompletion);
 
   // Modals & States
   const [showCancelModal, setShowCancelModal]     = useState(false);
@@ -314,6 +316,14 @@ const BookingTrackingScreen = ({ navigation, route }) => {
       await bookingAPI.confirmCompletion(activeBookingId);
       await fetchActiveBooking(activeBookingId);
       setShowEndWorkModal(false);
+      // This booking is now confirmed complete — if the app-wide "worker
+      // marked work done" banner is still showing for THIS booking, clear
+      // it too. Otherwise it keeps floating on every screen (including
+      // Status) forever, since nothing else ever un-sets it once the
+      // customer confirms via this screen instead of tapping the banner.
+      if (pendingWorkerCompletion?.bookingId?.toString() === activeBookingId?.toString()) {
+        clearPendingWorkerCompletion();
+      }
       if (worker) {
         setRatingTarget({
           workerId:    (worker._id || worker).toString(),
@@ -327,7 +337,7 @@ const BookingTrackingScreen = ({ navigation, route }) => {
     } finally {
       setConfirming(false);
     }
-  }, [activeBookingId, fetchActiveBooking, worker]);
+  }, [activeBookingId, fetchActiveBooking, worker, pendingWorkerCompletion, clearPendingWorkerCompletion]);
 
   const handleOpenEditNote = useCallback(() => {
     setEditingNoteText(activeBooking?.notes || '');
@@ -405,7 +415,10 @@ const BookingTrackingScreen = ({ navigation, route }) => {
     if (currentStatus === 'accepted')  stepIndex = 2;
     if (currentStatus === 'arrived')   stepIndex = 3;
     if (currentStatus === 'in_progress') stepIndex = 4;
-    if (currentStatus === 'awaiting_customer_confirmation') stepIndex = 4;
+    // Worker has already ended the job and is waiting on the customer to
+    // confirm — visually that means "Work Ended" is the current step (not
+    // still "Work Started"), even though it isn't a green checkmark yet.
+    if (currentStatus === 'awaiting_customer_confirmation') stepIndex = 5;
     if (currentStatus === 'completed') stepIndex = 5;
     if (currentStatus === 'cancelled') stepIndex = 1;
 
@@ -413,7 +426,12 @@ const BookingTrackingScreen = ({ navigation, route }) => {
     const time2 = formatStepTime(activeBooking?.acceptedAt || (stepIndex >= 2 ? '2026-09-16T11:02:00Z' : null));
     const time3 = formatStepTime(activeBooking?.checkInTime || (stepIndex >= 3 ? '2026-09-16T09:05:00Z' : null));
     const time4 = formatStepTime(activeBooking?.workStartTime || (stepIndex >= 4 ? '2026-09-16T09:08:00Z' : null));
-    const time5 = formatStepTime(activeBooking?.checkOutTime || (stepIndex >= 5 ? activeBooking?.updatedAt : null));
+    const time5 = formatStepTime(
+      activeBooking?.checkOutTime ||
+      (currentStatus === 'awaiting_customer_confirmation' || currentStatus === 'completed'
+        ? activeBooking?.updatedAt
+        : null)
+    );
 
     return {
       stepIndex,
@@ -427,7 +445,55 @@ const BookingTrackingScreen = ({ navigation, route }) => {
     };
   }, [activeBooking]);
 
-  const statusBadge = getStatusBadgeMeta(activeBooking?.status || 'in_progress');
+  const statusBadge = getStatusBadgeMeta(activeBooking?.status);
+
+  // A booking is "done by any means" once it's completed, cancelled, or
+  // expired (no worker ever accepted it) — nothing about the job can be
+  // ended from here once it's in one of these states.
+  const isBookingFinished = ['completed', 'cancelled', 'expired'].includes(activeBooking?.status);
+
+  // Drives Card 3 (working-time card): what it should say/look like depends
+  // on the booking's real current status, not just "in progress" always.
+  // Returning null means the card is not shown at all (work hasn't started).
+  const getWorkTimerMeta = (status) => {
+    switch (status) {
+      case 'in_progress':
+        return {
+          label: 'WORK IN PROGRESS',
+          dotColor: '#D97706',
+          borderColor: '#FEF3C7',
+          amountLabel: 'Live Amount',
+          timeSubtitle: 'Working time (live)',
+          infoText: (hrs) =>
+            `Your booked duration was ${hrs} hours. Charges will continue as long as work is in progress.`,
+        };
+      case 'awaiting_customer_confirmation':
+        return {
+          label: 'AWAITING YOUR CONFIRMATION',
+          dotColor: '#EA580C',
+          borderColor: '#FFEDD5',
+          amountLabel: 'Amount Due',
+          timeSubtitle: 'Total working time',
+          infoText: () =>
+            'The worker has marked this job as done. Please confirm completion below to finalize your bill.',
+        };
+      case 'completed':
+        return {
+          label: 'WORK COMPLETED',
+          dotColor: '#4F46E5',
+          borderColor: '#E0E7FF',
+          amountLabel: 'Final Amount',
+          timeSubtitle: 'Total working time',
+          infoText: () => 'This job is complete. The final bill is shown below.',
+        };
+      default:
+        // pending / accepted / arrived / cancelled — work hasn't started yet,
+        // so there's nothing to time or bill; hide the card entirely.
+        return null;
+    }
+  };
+
+  const workTimerMeta = getWorkTimerMeta(activeBooking?.status);
 
   // Loading / Empty state
   if (!activeBookingId) {
@@ -666,42 +732,75 @@ const BookingTrackingScreen = ({ navigation, route }) => {
           </View>
         )}
 
-        {/* ── CARD 3: LIVE WORKING TIME & AMOUNT (WORK IN PROGRESS) ── */}
-        <View style={styles.liveTimerCard}>
-          {/* Header row with Status & Start Time */}
-          <View style={styles.liveTimerHeader}>
-            <View style={styles.liveStatusRow}>
-              <View style={styles.liveAmberDot} />
-              <Text style={styles.liveStatusTitle}>WORK IN PROGRESS</Text>
-            </View>
-            <Text style={styles.liveStartedAtText}>Started at {startTimeStr}</Text>
-          </View>
-
-          {/* Working Time & Live Amount Stat Boxes */}
-          <View style={styles.liveStatRow}>
-            {/* Left: Working Time */}
-            <View style={styles.liveTimeBox}>
-              <Text style={styles.liveTimeNumber}>{liveTimeDisplay}</Text>
-              <Text style={styles.liveTimeSubtitle}>Working time (live)</Text>
+        {/* ── CARD 3: WORKING TIME & AMOUNT — label/content reflects the real status ── */}
+        {!!workTimerMeta && (
+          <View style={[styles.liveTimerCard, { borderColor: workTimerMeta.borderColor }]}>
+            {/* Header row with Status & Start Time */}
+            <View style={styles.liveTimerHeader}>
+              <View style={styles.liveStatusRow}>
+                <View style={[styles.liveAmberDot, { backgroundColor: workTimerMeta.dotColor }]} />
+                <Text style={[styles.liveStatusTitle, { color: workTimerMeta.dotColor }]}>
+                  {workTimerMeta.label}
+                </Text>
+              </View>
+              <Text style={styles.liveStartedAtText}>Started at {startTimeStr}</Text>
             </View>
 
-            {/* Right: Live Amount Box */}
-            <View style={styles.liveAmountBox}>
-              <Text style={styles.liveAmountLabel}>Live Amount</Text>
-              <Text style={styles.liveAmountValue}>₹{liveAmount}</Text>
-              <Text style={styles.liveAmountRate}>₹{hourlyRate} / hour</Text>
-            </View>
-            {/* NOTE: Pause Work button removed per user request */}
-          </View>
+            {/* Working Time & Amount Stat Boxes */}
+            <View style={styles.liveStatRow}>
+              {/* Left: Working Time */}
+              <View style={styles.liveTimeBox}>
+                <Text style={styles.liveTimeNumber}>{liveTimeDisplay}</Text>
+                <Text style={styles.liveTimeSubtitle}>{workTimerMeta.timeSubtitle}</Text>
+              </View>
 
-          {/* Blue Info Notice Banner */}
-          <View style={styles.infoBanner}>
-            <Ionicons name="information-circle" size={16} color="#2563EB" style={{ marginTop: 1 }} />
-            <Text style={styles.infoBannerText}>
-              Your booked duration was {bookedDurationHours} hours. Charges will continue as long as work is in progress.
-            </Text>
+              {/* Right: Amount Box */}
+              <View style={styles.liveAmountBox}>
+                <Text style={styles.liveAmountLabel}>{workTimerMeta.amountLabel}</Text>
+                <Text style={styles.liveAmountValue}>₹{liveAmount}</Text>
+                <Text style={styles.liveAmountRate}>₹{hourlyRate} / hour</Text>
+              </View>
+              {/* NOTE: Pause Work button removed per user request */}
+            </View>
+
+            {/* Blue Info Notice Banner */}
+            <View style={styles.infoBanner}>
+              <Ionicons name="information-circle" size={16} color="#2563EB" style={{ marginTop: 1 }} />
+              <Text style={styles.infoBannerText}>
+                {workTimerMeta.infoText(bookedDurationHours)}
+              </Text>
+            </View>
+
+            {/* Explicit confirm/dispute actions — the only doorway to this
+                before was the generic bottom "End Work" button, which reads
+                as "I am ending the work" rather than "confirm the worker's
+                completion", so customers had no visible way to act on it. */}
+            {activeBooking?.status === 'awaiting_customer_confirmation' && (
+              <View style={styles.confirmActionsRow}>
+                <TouchableOpacity
+                  style={styles.confirmCompletionBtn}
+                  onPress={confirmEndWork}
+                  disabled={confirming}
+                  activeOpacity={0.85}
+                >
+                  {confirming ? (
+                    <ActivityIndicator color="#FFF" size="small" />
+                  ) : (
+                    <Text style={styles.confirmCompletionText}>✓ Confirm Completion</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.reportIssueBtn}
+                  onPress={openIssueModal2}
+                  disabled={confirming}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.reportIssueText}>Report Issue</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-        </View>
+        )}
 
         {/* ── TWO-COLUMN GRID: WORK DETAILS & ESTIMATED VS ACTUAL ── */}
         <View style={styles.twoColumnRow}>
@@ -837,18 +936,24 @@ const BookingTrackingScreen = ({ navigation, route }) => {
           <Text style={styles.addToProjectText}>Add to Project</Text>
         </TouchableOpacity>
 
-        {/* Right: End Work */}
-        <TouchableOpacity
-          style={styles.endWorkBtn}
-          onPress={handleEndWorkPress}
-          activeOpacity={0.8}
-        >
-          <View style={styles.endWorkRow}>
-            <View style={styles.redSquareIcon} />
-            <Text style={styles.endWorkTitle}>End Work</Text>
-          </View>
-          <Text style={styles.endWorkSubtitle}>(when work is completed)</Text>
-        </TouchableOpacity>
+        {/* Right: End Work — only relevant while the job can still be ended.
+            Once it's completed, cancelled, or expired there is nothing left
+            to "end", so the button is removed instead of just erroring out
+            when pressed. Add to Project (flex: 1) fills the freed-up width
+            on its own since it's the only remaining child in this row. */}
+        {!isBookingFinished && (
+          <TouchableOpacity
+            style={styles.endWorkBtn}
+            onPress={handleEndWorkPress}
+            activeOpacity={0.8}
+          >
+            <View style={styles.endWorkRow}>
+              <View style={styles.redSquareIcon} />
+              <Text style={styles.endWorkTitle}>End Work</Text>
+            </View>
+            <Text style={styles.endWorkSubtitle}>(when work is completed)</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* ── ADD TO PROJECT SHEET ── */}
@@ -1580,6 +1685,38 @@ const styles = StyleSheet.create({
     color: '#1E3A8A',
     lineHeight: 16,
     flex: 1,
+  },
+  confirmActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  confirmCompletionBtn: {
+    flex: 1,
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmCompletionText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  reportIssueBtn: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+  },
+  reportIssueText: {
+    color: '#EF4444',
+    fontWeight: '700',
+    fontSize: 13,
   },
 
   /* Two Column Grid */
