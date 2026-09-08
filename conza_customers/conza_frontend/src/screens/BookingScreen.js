@@ -501,7 +501,7 @@ const MaterialView = React.memo(() => {
       </View>
 
       {/* Bulk Order Banner */}
-      <TouchableOpacity style={styles.bulkBanner} activeOpacity={0.88}>
+       {/*<TouchableOpacity style={styles.bulkBanner} activeOpacity={0.88}>
         <View style={styles.bulkBannerLeft}>
           <Image source={TRUCK_IMAGE} style={styles.bulkImage} resizeMode="contain" />
           <View style={{ flex: 1 }}>
@@ -512,7 +512,7 @@ const MaterialView = React.memo(() => {
         <View style={styles.bulkQuoteBtn}>
           <Text style={styles.bulkQuoteText}>Get Quote →</Text>
         </View>
-      </TouchableOpacity>
+      </TouchableOpacity>*/}
 
       {/* Shop by Category */}
       <View style={styles.sectionHeaderRow}>
@@ -788,7 +788,7 @@ const RentalView = React.memo(() => {
       </View>
 
       {/* Rental Inquiry Banner */}
-      <TouchableOpacity style={styles.bulkBanner} activeOpacity={0.88}>
+      {/*<TouchableOpacity style={styles.bulkBanner} activeOpacity={0.88}>
         <View style={styles.bulkBannerLeft}>
           <Image source={TRACTOR_IMAGE} style={styles.bulkImage} resizeMode="contain" />
           <View style={{ flex: 1 }}>
@@ -799,7 +799,7 @@ const RentalView = React.memo(() => {
         <View style={styles.bulkQuoteBtn}>
           <Text style={styles.bulkQuoteText}>Get Quote →</Text>
         </View>
-      </TouchableOpacity>
+      </TouchableOpacity>*/}
 
       {/* Shop by Category */}
       <View style={styles.sectionHeaderRow}>
