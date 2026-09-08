@@ -16,10 +16,14 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import useAppStore from '../store/useAppStore';
+import SavedAddressSheet from '../components/SavedAddressSheet';
 
 const CreateProjectScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { createProject } = useAppStore();
+  const userLat = useAppStore((s) => s.userLat);
+  const userLng = useAppStore((s) => s.userLng);
+  const userLocationText = useAppStore((s) => s.userLocationText);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -27,6 +31,8 @@ const CreateProjectScreen = ({ navigation }) => {
   const [imageUri, setImageUri] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [showAddressSheet, setShowAddressSheet] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState(null);
 
   const handleGoBack = useCallback(() => {
     navigation.goBack();
@@ -74,7 +80,7 @@ const CreateProjectScreen = ({ navigation }) => {
         name: name.trim(),
         description: description.trim(),
         budget: numBudget,
-        location: 'Bengaluru, Karnataka',
+        location: selectedLocation?.address || 'Bengaluru, Karnataka',
         image: imageUri || '',
       });
 
@@ -167,6 +173,25 @@ const CreateProjectScreen = ({ navigation }) => {
             </View>
           </View>
 
+          {/* Section 2b: Project Location */}
+          <View style={styles.section}>
+            <Text style={styles.fieldLabel}>Project Location</Text>
+            <TouchableOpacity
+              style={styles.inputRow}
+              onPress={() => setShowAddressSheet(true)}
+              activeOpacity={0.75}
+            >
+              <MaterialCommunityIcons name="map-marker-outline" size={18} color="#64748B" style={{ marginRight: 10 }} />
+              <Text
+                style={[styles.textInput, !selectedLocation && styles.locationPlaceholder]}
+                numberOfLines={1}
+              >
+                {selectedLocation?.address || 'Bengaluru, Karnataka'}
+              </Text>
+              <MaterialCommunityIcons name="chevron-down" size={16} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+
           {/* Section 3: Project Description (Optional) */}
           <View style={styles.section}>
             <Text style={styles.fieldLabel}>Project Description (Optional)</Text>
@@ -239,6 +264,18 @@ const CreateProjectScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <SavedAddressSheet
+        visible={showAddressSheet}
+        onClose={() => setShowAddressSheet(false)}
+        onSelect={(addr) => {
+          setSelectedLocation(addr);
+          setShowAddressSheet(false);
+        }}
+        currentLat={userLat}
+        currentLng={userLng}
+        currentAddress={userLocationText}
+      />
     </SafeAreaView>
   );
 };
@@ -402,6 +439,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0F172A',
     padding: 0,
+  },
+  locationPlaceholder: {
+    color: '#94A3B8',
   },
 
   // Textarea

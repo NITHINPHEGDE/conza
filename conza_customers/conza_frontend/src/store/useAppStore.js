@@ -953,8 +953,8 @@ const useAppStore = create((set, get) => ({
   },
 
   clearCart: () => {
-    get().persistCart({}, {});
     set({ cart: {}, cartItemsMap: {} });
+    get().persistCart({}, {});
   },
 
   getCartItems: () => {

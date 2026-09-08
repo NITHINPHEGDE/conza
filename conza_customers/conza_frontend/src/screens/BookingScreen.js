@@ -403,9 +403,11 @@ const MaterialView = React.memo(() => {
   }, []);
 
   const handleAddMaterialToCart = useCallback((item) => {
-    addToCart(item);
+    const currentQty = Number(cart[item.id]) || 0;
+    const addQty = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+    addToCart({ ...item, _setQty: currentQty + addQty });
     Alert.alert('Added to Cart', `${item.name} added to your cart.`, [{ text: 'OK' }]);
-  }, [addToCart]);
+  }, [addToCart, cart]);
 
   const renderItem = useCallback(({ item }) => (
     <View style={styles.materialCardWrapper}>

@@ -110,12 +110,9 @@ const MaterialCard = React.memo(({
     if (onAddToCart) {
       onAddToCart({ id, name, seller, price, unit, distance, image, rating, inStock, quantity: finalQty });
     }
-    if (onUpdate) {
-      onUpdate(id, finalQty);
-    }
     setCartAdded(true);
     setTimeout(() => setCartAdded(false), 1800);
-  }, [onAddToCart, onUpdate, id, name, seller, price, unit, distance, image, rating, inStock, localQty]);
+  }, [onAddToCart, id, name, seller, price, unit, distance, image, rating, inStock, localQty]);
 
   return (
     <View style={styles.card}>

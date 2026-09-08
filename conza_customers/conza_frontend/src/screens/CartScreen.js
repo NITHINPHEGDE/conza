@@ -159,12 +159,10 @@ const CartScreen = () => {
       let hasSelectedFromVendor = false;
       vendor.items.forEach((item) => {
         const itemId = String(item.id || item._id);
-        if (selectedItems[`mat_${itemId}`]) {
-          const qty = Number(cart[itemId]) || Number(cart[item.id]) || 1;
-          matCount += qty;
-          matSub += (Number(item.price) || 0) * qty;
-          hasSelectedFromVendor = true;
-        }
+        const qty = Number(cart[itemId]) || Number(cart[item.id]) || 1;
+        matCount += qty;
+        matSub += (Number(item.price) || 0) * qty;
+        hasSelectedFromVendor = true;
       });
       if (hasSelectedFromVendor) {
         matDeliv += vendor.deliveryCharge;
@@ -229,15 +227,19 @@ const CartScreen = () => {
   const handleClearAll = () => setShowClearConfirm(true);
 
   const performClearAll = () => {
-    if (activeTab === 'materials') {
-      clearCart();
-    } else if (activeTab === 'rentals') {
-      clearRentalCart();
-    } else {
-      clearCart();
-      clearRentalCart();
+    try {
+      if (activeTab === 'materials') {
+        clearCart();
+      } else if (activeTab === 'rentals') {
+        clearRentalCart();
+      } else {
+        clearCart();
+        clearRentalCart();
+      }
+    } finally {
+      setShowClearConfirm(false);
+      setSelectedItems({});
     }
-    setShowClearConfirm(false);
   };
 
   const handleProceedToCheckout = () => {
@@ -246,7 +248,7 @@ const CartScreen = () => {
       return;
     }
 
-    const selectedMatList = materialItems.filter((m) => selectedItems[`mat_${String(m.id || m._id)}`]);
+    const selectedMatList = materialItems;
     const selectedRenList = rentalCart.filter((r) => selectedItems[`ren_${String(r.id || r._id)}`]);
 
     navigation.navigate('Checkout', {
@@ -450,22 +452,11 @@ const CartScreen = () => {
                         {/* Vendor Items */}
                         {vendor.items.map((item) => {
                           const itemId = String(item.id || item._id);
-                          const itemKey = `mat_${itemId}`;
-                          const isSelected = !!selectedItems[itemKey];
                           const qty = Number(cart[itemId]) || Number(cart[item.id]) || 1;
                           const lineTotal = (Number(item.price) || 0) * qty;
 
                           return (
                             <View key={itemId} style={styles.itemRow}>
-                              {/* Checkbox */}
-                              <TouchableOpacity
-                                style={[styles.checkbox, isSelected && styles.checkboxChecked]}
-                                onPress={() => toggleItemSelect(itemKey)}
-                                activeOpacity={0.7}
-                              >
-                                {isSelected && <MaterialCommunityIcons name="check" size={13} color="#FFFFFF" />}
-                              </TouchableOpacity>
-
                               {/* Image */}
                               <Image
                                 source={item.image ? { uri: item.image } : require('../../assets/images/project_default.jpg')}
