@@ -28,7 +28,6 @@ const CartScreen = () => {
   const removeFromCart = useAppStore((s) => s.removeFromCart);
   const clearCart = useAppStore((s) => s.clearCart);
   const getCartItems = useAppStore((s) => s.getCartItems);
-  const loadPersistedCart = useAppStore((s) => s.loadPersistedCart);
   const fetchMaterials = useAppStore((s) => s.fetchMaterials);
   const fetchRentalData = useAppStore((s) => s.fetchRentalData);
 
@@ -56,12 +55,22 @@ const CartScreen = () => {
   // Breakup modal
   const [showBreakupModal, setShowBreakupModal] = useState(false);
 
+  // Clear-all confirmation modal (in-app, not the native Alert — matches
+  // the rest of this screen's own Project/Breakup modals so it always
+  // renders reliably regardless of platform)
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
   useEffect(() => {
-    loadPersistedCart();
+    // loadPersistedCart is intentionally NOT called here.
+    // It is already called once during app boot (initApp). Re-calling it on
+    // every CartScreen mount creates a race condition: persistCart() is
+    // fire-and-forget (no await), so loading from AsyncStorage before the
+    // latest write lands silently overwrites in-memory cart state with stale
+    // data, making freshly-added items disappear from the cart.
     fetchMyProjects();
     fetchMaterials();
     fetchRentalData();
-  }, [loadPersistedCart, fetchMyProjects, fetchMaterials, fetchRentalData]);
+  }, [fetchMyProjects, fetchMaterials, fetchRentalData]);
 
   useEffect(() => {
     if (activeProject) {
@@ -196,18 +205,39 @@ const CartScreen = () => {
 
   const totalCartCount = materialItems.length + rentalCart.length;
 
-  const handleClearAll = () => {
-    Alert.alert('Clear Cart', 'Remove all items from your cart?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear All',
-        style: 'destructive',
-        onPress: () => {
-          clearCart();
-          clearRentalCart();
-        },
-      },
-    ]);
+  // "Clear all" should only touch the tab you're currently looking at —
+  // clearing Rentals while browsing Materials (or vice-versa) would wipe
+  // items the customer never asked to remove and can't even see right now.
+  const currentTabCount =
+    activeTab === 'materials' ? materialItems.length :
+    activeTab === 'rentals'   ? rentalCart.length :
+    totalCartCount;
+
+  // What the confirmation modal should say/do, based on which tab is open
+  // right now. Recomputed on every render so it always reflects the tab
+  // the customer is actually looking at when they tap "Clear all".
+  const clearConfirmMeta = useMemo(() => {
+    if (activeTab === 'materials') {
+      return { title: 'Clear Materials', message: 'Remove all materials from your cart?' };
+    }
+    if (activeTab === 'rentals') {
+      return { title: 'Clear Rentals', message: 'Remove all rentals from your cart?' };
+    }
+    return { title: 'Clear Cart', message: 'Remove all materials and rentals from your cart?' };
+  }, [activeTab]);
+
+  const handleClearAll = () => setShowClearConfirm(true);
+
+  const performClearAll = () => {
+    if (activeTab === 'materials') {
+      clearCart();
+    } else if (activeTab === 'rentals') {
+      clearRentalCart();
+    } else {
+      clearCart();
+      clearRentalCart();
+    }
+    setShowClearConfirm(false);
   };
 
   const handleProceedToCheckout = () => {
@@ -239,7 +269,7 @@ const CartScreen = () => {
           <Text style={styles.headerTitle}>Cart</Text>
           <Text style={styles.headerSubtitle}>Review and place your order</Text>
         </View>
-        {totalCartCount > 0 && (
+        {currentTabCount > 0 && (
           <TouchableOpacity onPress={handleClearAll} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text style={styles.clearAllText}>Clear all</Text>
           </TouchableOpacity>
@@ -829,6 +859,43 @@ const CartScreen = () => {
         </Pressable>
       </Modal>
 
+      {/* Clear-All Confirmation Modal — uses a plain View for the card
+          (same as the Project/Breakup modals below), NOT a nested
+          Pressable. Nesting a Pressable inside another Pressable can let
+          the outer one claim the touch responder first on some platforms
+          (notably react-native-web), which silently eats taps on buttons
+          inside it — that was why "Clear All" appeared to do nothing. */}
+      <Modal
+        visible={showClearConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowClearConfirm(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{clearConfirmMeta.title}</Text>
+            <Text style={styles.modalSub}>{clearConfirmMeta.message}</Text>
+
+            <View style={styles.clearConfirmActions}>
+              <TouchableOpacity
+                style={styles.clearConfirmCancelBtn}
+                onPress={() => setShowClearConfirm(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.clearConfirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.clearConfirmDestructiveBtn}
+                onPress={performClearAll}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.clearConfirmDestructiveText}>Clear All</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Saved Address Sheet */}
       <SavedAddressSheet
         visible={showAddressSheet}
@@ -870,6 +937,38 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '400',
     marginTop: 2,
+  },
+  clearConfirmActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  clearConfirmCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.2,
+    borderColor: '#E2E8F0',
+  },
+  clearConfirmCancelText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  clearConfirmDestructiveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DC2626',
+  },
+  clearConfirmDestructiveText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#FFF',
   },
   clearAllText: {
     fontSize: 12.5,

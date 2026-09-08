@@ -364,11 +364,20 @@ const ProjectDetailScreen = ({ route, navigation }) => {
   };
 
   const handleViewAttachment = async (item) => {
+    // BookingDetail / OrderDetail live inside the Status tab's own stack,
+    // not the Projects tab's stack this screen belongs to — a bare
+    // navigation.navigate('OrderDetail') only bubbles UP to parent
+    // navigators, never sideways into a sibling tab, so it was never found.
+    // Cross-tab navigation needs the nested { screen, params } form, same
+    // pattern already used from App.js for these two screens.
     if (item.refModel === 'Booking') {
       await setActiveBookingId(item.refId?._id || item.refId);
-      navigation.navigate('BookingDetail');
+      navigation.navigate('Status', { screen: 'BookingDetail' });
     } else {
-      navigation.navigate('OrderDetail', { orderId: item.refId?._id || item.refId });
+      navigation.navigate('Status', {
+        screen: 'OrderDetail',
+        params: { orderId: item.refId?._id || item.refId },
+      });
     }
   };
 
