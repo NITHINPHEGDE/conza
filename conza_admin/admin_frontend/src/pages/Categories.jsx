@@ -53,6 +53,7 @@ export default function Categories() {
     { key: 'baseCharge',    title: 'Base',  render: (row) => `₹${row.baseCharge    ?? 0}` },
     { key: 'perHourCharge', title: 'Hour',  render: (row) => `₹${row.perHourCharge ?? 0}` },
     { key: 'perDayCharge',  title: 'Day',   render: (row) => `₹${row.perDayCharge  ?? 0}` },
+    { key: 'skills', title: 'Skills', render: (row) => (row.skills?.length ? `${row.skills.length}` : '0') },
     { key: 'radius', title: 'Radius', render: (row) => `${row.radius} km` },
     { key: 'workers', title: 'Workers' },
     { key: 'bookings', title: 'Bookings' },

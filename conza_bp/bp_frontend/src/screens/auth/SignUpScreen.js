@@ -88,9 +88,11 @@ const SignUpScreen = ({ navigation }) => {
   const setWorker       = usePartnerStore((s) => s.setWorker);
   const syncOnlineState = usePartnerStore((s) => s.syncOnlineState);
 
+  const MAX_SKILLS = 10;
+
   const [form, setForm] = useState({
     fullName: '', username: '', password: '', confirmPassword: '',
-    phone: '', category: '', skills: [],
+    phone: '', categories: [], skills: [],
     location: '', experience: '', bio: '', availability: true,
     email: '', profileImage: null,
   });
@@ -99,15 +101,29 @@ const SignUpScreen = ({ navigation }) => {
   const [loading, setLoading]       = useState(false);
   const [showPass, setShowPass]     = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [skillInput, setSkillInput]   = useState('');
   const [imgUploading, setImgUploading] = useState(false);
 
   const [categories, setCategories]         = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
 
-  // The category the partner picked, including its admin-set pricing —
-  // shown read-only so the partner knows their rate before submitting.
-  const selectedCategory = categories.find((c) => c.name === form.category) || null;
+  // The categories the partner picked, each including its admin-set
+  // pricing — shown read-only so the partner knows their rate before
+  // submitting. A partner can pick more than one category at once.
+  const selectedCategories = categories.filter((c) => form.categories.includes(c.name));
+
+  // All skills available across every category the partner has selected,
+  // deduped by name and tagged with which of the selected categories each
+  // one came from (for grouped display below).
+  const availableSkills = React.useMemo(() => {
+    const seen = new Map();
+    selectedCategories.forEach((cat) => {
+      (cat.skills || []).forEach((skill) => {
+        if (!seen.has(skill)) seen.set(skill, []);
+        seen.get(skill).push(cat.name);
+      });
+    });
+    return Array.from(seen.entries()).map(([skill, fromCategories]) => ({ skill, fromCategories }));
+  }, [selectedCategories]);
 
   useEffect(() => {
     let isMounted = true;
@@ -127,6 +143,31 @@ const SignUpScreen = ({ navigation }) => {
   const set = useCallback((key) => (val) =>
     setForm((prev) => ({ ...prev, [key]: val })),
   []);
+
+  // ── Category selection (multi-select) ──────────────────────────────────────
+  const toggleCategory = useCallback((categoryName) => {
+    setForm((prev) => {
+      const isSelected = prev.categories.includes(categoryName);
+      const nextCategories = isSelected
+        ? prev.categories.filter((c) => c !== categoryName)
+        : [...prev.categories, categoryName];
+
+      // Dropping a category also drops any already-selected skill that
+      // only belonged to that category, since skills are scoped to the
+      // categories the partner is registering under.
+      let nextSkills = prev.skills;
+      if (isSelected) {
+        const stillOffered = new Set(
+          categories
+            .filter((c) => nextCategories.includes(c.name))
+            .flatMap((c) => c.skills || [])
+        );
+        nextSkills = prev.skills.filter((s) => stillOffered.has(s));
+      }
+
+      return { ...prev, categories: nextCategories, skills: nextSkills };
+    });
+  }, [categories]);
 
   // ── Image picker ────────────────────────────────────────────────────────────
   const pickImage = useCallback(async () => {
@@ -158,23 +199,21 @@ const SignUpScreen = ({ navigation }) => {
   }, []);
 
   // ── Skills ──────────────────────────────────────────────────────────────────
-  const addSkill = useCallback(() => {
-    const s = skillInput.trim();
-    if (!s) return;
-    if (form.skills.length >= 5) {
-      Alert.alert('Limit reached', 'You can add up to 5 skills.');
-      return;
-    }
-    if (form.skills.includes(s)) {
-      Alert.alert('Duplicate', 'This skill is already added.');
-      return;
-    }
-    setForm((prev) => ({ ...prev, skills: [...prev.skills, s] }));
-    setSkillInput('');
-  }, [skillInput, form.skills]);
-
-  const removeSkill = useCallback((skill) => {
-    setForm((prev) => ({ ...prev, skills: prev.skills.filter((s) => s !== skill) }));
+  // Skills are admin-defined per category (no free text) — the partner
+  // taps to select/deselect from the skills offered by whichever
+  // categories they've picked, up to MAX_SKILLS in total.
+  const toggleSkill = useCallback((skill) => {
+    setForm((prev) => {
+      const isSelected = prev.skills.includes(skill);
+      if (!isSelected && prev.skills.length >= MAX_SKILLS) {
+        Alert.alert('Limit reached', `You can select up to ${MAX_SKILLS} skills.`);
+        return prev;
+      }
+      const nextSkills = isSelected
+        ? prev.skills.filter((s) => s !== skill)
+        : [...prev.skills, skill];
+      return { ...prev, skills: nextSkills };
+    });
   }, []);
 
   // ── Validation ──────────────────────────────────────────────────────────────
@@ -194,8 +233,8 @@ const SignUpScreen = ({ navigation }) => {
     if (!form.phone.trim())     e.phone     = 'Phone number is required.';
     else if (!/^[6-9]\d{9}$/.test(form.phone)) e.phone = 'Enter a valid 10-digit Indian mobile number.';
 
-    if (!form.category)         e.category  = 'Please select a category.';
-    if (!form.location.trim())  e.location  = 'Location is required.';
+    if (!form.categories.length) e.categories = 'Please select at least one category.';
+    if (!form.location.trim())   e.location   = 'Location is required.';
 
     if (form.experience && isNaN(Number(form.experience)))
       e.experience = 'Enter a valid number.';
@@ -220,7 +259,7 @@ const SignUpScreen = ({ navigation }) => {
         username:    form.username.trim(),
         password:    form.password,
         phone:       form.phone.trim(),
-        category:    form.category,
+        categories:  form.categories,
         skills:      form.skills,
         locationText: form.location.trim(),
         experience:  form.experience ? Number(form.experience) : null,
@@ -334,94 +373,95 @@ const SignUpScreen = ({ navigation }) => {
           {/* ── Professional ─────────────────────────────────────────── */}
           <SectionHeader title="Professional Info" subtitle="This helps customers find the right person" />
 
-          {/* Category */}
+          {/* Category — a partner can select more than one */}
           <View style={fStyles.wrap}>
-            <Text style={fStyles.label}>Category</Text>
+            <View style={fStyles.labelRow}>
+              <Text style={fStyles.label}>Category</Text>
+              <Text style={fStyles.optional}>(select one or more)</Text>
+            </View>
             {categoriesLoading ? (
               <ActivityIndicator color={colors.accentAmber} style={{ marginTop: 8 }} />
             ) : (
               <View style={styles.categoryGrid}>
-                {categories.map((cat) => (
-                  <TouchableOpacity
-                    key={cat.id}
-                    onPress={() => setForm((prev) => ({ ...prev, category: cat.name }))}
-                    style={[styles.catChip, form.category === cat.name && styles.catChipActive]}
-                    activeOpacity={0.8}
-                  >
-                    {cat.image ? (
-                      <Image source={{ uri: cat.image }} style={styles.catChipImage} />
-                    ) : null}
-                    <Text style={[styles.catChipText, form.category === cat.name && styles.catChipTextActive]}>
-                      {cat.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {categories.map((cat) => {
+                  const isSelected = form.categories.includes(cat.name);
+                  return (
+                    <TouchableOpacity
+                      key={cat.id}
+                      onPress={() => toggleCategory(cat.name)}
+                      style={[styles.catChip, isSelected && styles.catChipActive]}
+                      activeOpacity={0.8}
+                    >
+                      {cat.image ? (
+                        <Image source={{ uri: cat.image }} style={styles.catChipImage} />
+                      ) : null}
+                      <Text style={[styles.catChipText, isSelected && styles.catChipTextActive]}>
+                        {cat.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
             {!categoriesLoading && categories.length === 0 && (
               <Text style={fStyles.errorText}>No categories available yet. Please check back later.</Text>
             )}
-            {errors.category && <Text style={fStyles.errorText}>{errors.category}</Text>}
+            {errors.categories && <Text style={fStyles.errorText}>{errors.categories}</Text>}
           </View>
 
-          {/* Admin-set pricing preview — read-only, cannot be edited here */}
-          {!!selectedCategory && (
-            <View style={styles.priceInfoBox}>
-              <Text style={styles.priceInfoTitle}>Pricing for {selectedCategory.name}</Text>
+          {/* Admin-set pricing preview — read-only, cannot be edited here.
+              One card per selected category. */}
+          {selectedCategories.map((cat) => (
+            <View key={cat.id} style={styles.priceInfoBox}>
+              <Text style={styles.priceInfoTitle}>Pricing for {cat.name}</Text>
               <Text style={styles.priceInfoSub}>
                 Set by Conza admin. All partners in this category are charged the same rate.
               </Text>
               <View style={styles.priceInfoRow}>
                 <View style={styles.priceInfoItem}>
                   <Text style={styles.priceInfoLabel}>Per Hour</Text>
-                  <Text style={styles.priceInfoValue}>₹{selectedCategory.perHourCharge || 0}</Text>
+                  <Text style={styles.priceInfoValue}>₹{cat.perHourCharge || 0}</Text>
                 </View>
                 <View style={styles.priceInfoItem}>
                   <Text style={styles.priceInfoLabel}>Per Day</Text>
-                  <Text style={styles.priceInfoValue}>₹{selectedCategory.perDayCharge || 0}</Text>
+                  <Text style={styles.priceInfoValue}>₹{cat.perDayCharge || 0}</Text>
                 </View>
               </View>
             </View>
-          )}
+          ))}
 
-          {/* Skills */}
+          {/* Skills — admin-defined per category, picked from whichever
+              categories the partner has selected above, capped at MAX_SKILLS
+              total across all of them. */}
           <View style={fStyles.wrap}>
             <View style={fStyles.labelRow}>
               <Text style={fStyles.label}>Skills</Text>
-              <Text style={fStyles.optional}>(up to 5)</Text>
+              <Text style={fStyles.optional}>(up to {MAX_SKILLS})</Text>
             </View>
-            <View style={[fStyles.inputRow, { marginBottom: 10 }]}>
-              <TextInput
-                style={fStyles.input}
-                value={skillInput}
-                onChangeText={setSkillInput}
-                placeholder="e.g. Pipe fitting, Leak repair"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="words"
-                onSubmitEditing={addSkill}
-                returnKeyType="done"
-              />
-              <TouchableOpacity
-                onPress={addSkill}
-                style={[styles.addSkillBtn, form.skills.length >= 5 && styles.addSkillBtnDisabled]}
-                disabled={form.skills.length >= 5}
-              >
-                <Text style={styles.addSkillBtnText}>+ Add</Text>
-              </TouchableOpacity>
-            </View>
-            {form.skills.length > 0 && (
+            {form.categories.length === 0 ? (
+              <Text style={styles.skillsCount}>Select a category above to see its skills.</Text>
+            ) : availableSkills.length === 0 ? (
+              <Text style={styles.skillsCount}>No skills have been added for the selected category yet.</Text>
+            ) : (
               <View style={styles.skillsWrap}>
-                {form.skills.map((skill) => (
-                  <View key={skill} style={styles.skillTag}>
-                    <Text style={styles.skillTagText}>{skill}</Text>
-                    <TouchableOpacity onPress={() => removeSkill(skill)} style={styles.skillRemove}>
-                      <Text style={styles.skillRemoveText}>✕</Text>
+                {availableSkills.map(({ skill }) => {
+                  const isSelected = form.skills.includes(skill);
+                  return (
+                    <TouchableOpacity
+                      key={skill}
+                      onPress={() => toggleSkill(skill)}
+                      style={[styles.catChip, isSelected && styles.catChipActive]}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.catChipText, isSelected && styles.catChipTextActive]}>
+                        {skill}
+                      </Text>
                     </TouchableOpacity>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             )}
-            <Text style={styles.skillsCount}>{form.skills.length}/5 skills added</Text>
+            <Text style={styles.skillsCount}>{form.skills.length}/{MAX_SKILLS} skills selected</Text>
           </View>
 
           <Field label="Location / Address" value={form.location} onChangeText={set('location')} placeholder="e.g. Whitefield, Bangalore" error={errors.location} />

@@ -18,9 +18,26 @@ exports.getCategories = async (req, res, next) => {
   }
 }
 
+// Sanitize an incoming skills array: strings only, trimmed, empty entries
+// dropped, duplicates removed (case-insensitive), order preserved.
+const sanitizeSkills = (skills) => {
+  if (!Array.isArray(skills)) return undefined
+  const seen = new Set()
+  const out = []
+  for (const raw of skills) {
+    const s = String(raw ?? '').trim()
+    if (!s) continue
+    const key = s.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(s)
+  }
+  return out
+}
+
 exports.createCategory = async (req, res, next) => {
   try {
-    const { name, image, commission, radius, description, baseCharge, perHourCharge, perDayCharge } = req.body
+    const { name, image, commission, radius, description, baseCharge, perHourCharge, perDayCharge, skills } = req.body
     if (!name || !image) return next(createError(400, 'Name and service image are required.'))
 
     // If the frontend sent a base64 data-URI, upload it to Cloudinary.
@@ -38,6 +55,7 @@ exports.createCategory = async (req, res, next) => {
       baseCharge:    baseCharge    != null ? Number(baseCharge)    : 0,
       perHourCharge: perHourCharge != null ? Number(perHourCharge) : 0,
       perDayCharge:  perDayCharge  != null ? Number(perDayCharge)  : 0,
+      skills: sanitizeSkills(skills) || [],
     })
     req.auditTarget = `Service Category - ${name}`
     req.auditDetails = `Created service category`
@@ -66,8 +84,26 @@ exports.updateCategory = async (req, res, next) => {
     if (updates.baseCharge    !== undefined) updates.baseCharge    = Number(updates.baseCharge)    || 0
     if (updates.perHourCharge !== undefined) updates.perHourCharge = Number(updates.perHourCharge) || 0
     if (updates.perDayCharge  !== undefined) updates.perDayCharge  = Number(updates.perDayCharge)  || 0
+    if (updates.skills        !== undefined) updates.skills        = sanitizeSkills(updates.skills) || []
 
     const category = await ServiceCategory.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true })
+
+    // If skills were edited/removed, drop any worker-selected skill that no
+    // longer exists in this category's skill list so worker profiles never
+    // hold a skill the admin has since removed. Workers keep everything
+    // else about their category (pricing sync stays as-is below).
+    if (updates.skills !== undefined) {
+      const allowed = new Set(category.skills || [])
+      const affected = await Worker.find({ 'categories.name': category.name }).select('skills')
+      const bulkOps = affected
+        .map((w) => {
+          const pruned = (w.skills || []).filter((s) => allowed.has(s))
+          if (pruned.length === (w.skills || []).length) return null
+          return { updateOne: { filter: { _id: w._id }, update: { $set: { skills: pruned } } } }
+        })
+        .filter(Boolean)
+      if (bulkOps.length) await Worker.bulkWrite(bulkOps, { ordered: false })
+    }
 
     // Pricing is category-wide: whenever the admin edits pricing for a
     // category, push the new charges onto every worker already registered

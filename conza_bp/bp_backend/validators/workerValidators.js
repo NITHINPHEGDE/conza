@@ -33,6 +33,16 @@ const signupRules = [
   // collection in workerService.resolveCategoriesArray() — the list is
   // admin-managed and changes over time, so it can no longer be a static
   // enum here. A worker can select any number of categories.
+  body('skills')
+    .optional({ nullable: true })
+    .isArray({ max: 10 }).withMessage('You can select at most 10 skills.'),
+  body('skills.*')
+    .optional()
+    .isString().withMessage('Invalid skill selected.')
+    .trim().notEmpty().withMessage('Invalid skill selected.'),
+  // Membership of each skill inside the worker's selected categories is
+  // checked in workerService.validateSkillsSelection() — skills are
+  // admin-managed per category and change over time.
   body('locationText').trim().notEmpty().withMessage('Location is required.'),
   body('email').optional({ nullable: true, checkFalsy: true }).isEmail().withMessage('Invalid email address.'),
   // Pricing (minCharge / baseCharge / perDayCharge) is admin-managed per

@@ -10,7 +10,7 @@ const Review           = require('../models/Review');
 // GET /api/workers/categories — public, used on the sign-up / edit-profile screens
 const getCategories = asyncHandler(async (req, res) => {
   const categories = await ServiceCategory.find({ active: true })
-    .select('name image commission radius description perHourCharge perDayCharge')
+    .select('name image commission radius description perHourCharge perDayCharge skills')
     .sort({ name: 1 })
     .lean();
 
@@ -24,6 +24,9 @@ const getCategories = asyncHandler(async (req, res) => {
       // automatically once they register under this category.
       perHourCharge: c.perHourCharge || 0,
       perDayCharge:  c.perDayCharge || 0,
+      // Admin-managed skill list for this category — shown to the partner
+      // once they select this category during sign-up.
+      skills: c.skills || [],
     })),
   });
 });
@@ -120,6 +123,19 @@ const updateProfile = asyncHandler(async (req, res) => {
       { new: true, runValidators: true, select: '-password' }
     );
     if (!worker) throw new AppError('Worker not found.', 404);
+  }
+
+  // Skills changed without a category change: still re-validate against
+  // the worker's current categories so an invalid/removed skill can't
+  // sneak in through a plain profile update. If categories are also
+  // changing in this same request, updateWorkerCategories below already
+  // prunes skills against the new category list, so skip the duplicate
+  // work here.
+  if (updates.skills !== undefined && req.body.categories === undefined) {
+    updates.skills = await workerService.validateSkillsSelection(
+      updates.skills,
+      (req.worker.categories || []).map((c) => c.name)
+    );
   }
 
   // Categories are handled separately from the generic $set above —

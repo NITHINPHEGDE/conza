@@ -22,6 +22,13 @@ const serviceCategorySchema = new mongoose.Schema({
   baseCharge:    { type: Number, default: 0, min: 0 }, // fixed call-out / base fee
   perHourCharge: { type: Number, default: 0, min: 0 }, // rate per hour
   perDayCharge:  { type: Number, default: 0, min: 0 }, // rate per day
+
+  // ── Skills catalog for this category ─────────────────────────────────────
+  // Admin-managed list of selectable skills shown to a business partner
+  // during registration once they pick this category. See
+  // serviceCategoryController.createCategory/updateCategory and
+  // conza_bp workerService.validateSkillsSelection.
+  skills: { type: [String], default: [] },
 }, { timestamps: true })
 
 module.exports = workersDB.model('ServiceCategory', serviceCategorySchema)

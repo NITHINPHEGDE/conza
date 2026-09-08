@@ -20,6 +20,10 @@ const serviceCategorySchema = new mongoose.Schema({
   baseCharge:    { type: Number, default: 0, min: 0 }, // fixed call-out / base fee
   perHourCharge: { type: Number, default: 0, min: 0 }, // rate per hour
   perDayCharge:  { type: Number, default: 0, min: 0 }, // rate per day
+
+  // ── Skills catalog for this category (mirrors conza_admin) ──────────────
+  // Shown to the business partner at sign-up once they pick this category.
+  skills: { type: [String], default: [] },
 }, { timestamps: true });
 
 module.exports = mongoose.model('ServiceCategory', serviceCategorySchema);

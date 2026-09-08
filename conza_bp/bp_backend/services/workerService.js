@@ -136,6 +136,35 @@ const resolveCategoriesArray = async (categoryNames) => {
   }));
 };
 
+// ── Skills ───────────────────────────────────────────────────────────────
+// Skills are admin-managed per category (see ServiceCategory.skills). A
+// worker may only pick skills that exist inside at least one of their
+// selected categories, and at most MAX_WORKER_SKILLS in total across all
+// of their categories combined.
+const MAX_WORKER_SKILLS = 10;
+
+const validateSkillsSelection = async (skills, categoryNames) => {
+  const list = Array.isArray(skills)
+    ? [...new Set(skills.map((s) => String(s).trim()).filter(Boolean))]
+    : [];
+
+  if (list.length > MAX_WORKER_SKILLS) {
+    throw new AppError(`You can select at most ${MAX_WORKER_SKILLS} skills.`, 400);
+  }
+  if (list.length === 0) return list;
+
+  const uniqueCategoryNames = [...new Set((categoryNames || []).map((n) => String(n).trim()).filter(Boolean))];
+  const categoryDocs = await ServiceCategory.find({ name: { $in: uniqueCategoryNames } }).select('skills');
+  const allowedSkills = new Set(categoryDocs.flatMap((c) => c.skills || []));
+
+  const invalid = list.filter((s) => !allowedSkills.has(s));
+  if (invalid.length) {
+    throw new AppError(`Invalid skill selection: ${invalid.join(', ')}`, 400);
+  }
+
+  return list;
+};
+
 // ── Sign Up ────────────────────────────────────────────────────────────────
 const signUpWorker = async (data) => {
   const {
@@ -166,6 +195,10 @@ const signUpWorker = async (data) => {
   // number of categories at once; each one gets its own pricing snapshot.
   const categoriesArray = await resolveCategoriesArray(categories);
 
+  // Skills must belong to one of the selected categories, and are capped
+  // at MAX_WORKER_SKILLS in total across every selected category.
+  const validatedSkills = await validateSkillsSelection(skills, categoriesArray.map((c) => c.name));
+
   const worker = await Worker.create({
     fullName,
     username:     username.toLowerCase(),
@@ -174,7 +207,7 @@ const signUpWorker = async (data) => {
     email:        email || undefined,
     profileImage: profileImage || null,
     categories:   categoriesArray,
-    skills:       skills || [],
+    skills:       validatedSkills,
     locationText: locationText || '',
     experience:   experience || null,
     bio:          bio || '',
@@ -200,9 +233,20 @@ const signUpWorker = async (data) => {
 const updateWorkerCategories = async (workerId, categoryNames) => {
   const categoriesArray = await resolveCategoriesArray(categoryNames);
 
+  // Skills are admin-managed per category. If the worker's category list
+  // changes, drop any previously-selected skill that no longer belongs to
+  // one of the new categories, so the worker never carries a skill that's
+  // invalid for their current category selection.
+  const existingWorker = await Worker.findById(workerId).select('skills');
+  if (!existingWorker) throw new AppError('Worker not found.', 404);
+
+  const categoryDocs  = await ServiceCategory.find({ name: { $in: categoriesArray.map((c) => c.name) } }).select('skills');
+  const allowedSkills = new Set(categoryDocs.flatMap((c) => c.skills || []));
+  const prunedSkills  = (existingWorker.skills || []).filter((s) => allowedSkills.has(s)).slice(0, MAX_WORKER_SKILLS);
+
   const worker = await Worker.findByIdAndUpdate(
     workerId,
-    { $set: { categories: categoriesArray } },
+    { $set: { categories: categoriesArray, skills: prunedSkills } },
     { new: true, runValidators: true, select: '-password' }
   );
   if (!worker) throw new AppError('Worker not found.', 404);
@@ -359,6 +403,8 @@ const updateProfileImage = async (workerId, imageUrl) => {
 
 module.exports = {
   resolveCategoriesArray,
+  validateSkillsSelection,
+  MAX_WORKER_SKILLS,
   updateWorkerCategories,
   signUpWorker,
   loginWorker,
