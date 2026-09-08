@@ -212,6 +212,23 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
     navigation.navigate('WorkersNearby', { category: item.label || item.name });
   }, [navigation]);
 
+  // "Helper" is just another admin-controlled ServiceCategory (created,
+  // edited, activated/deactivated from Services → Categories in the admin
+  // panel, exactly like Mason/Electrician/etc). The only thing that's
+  // different for it in the customer app is *how* it's displayed — as the
+  // pinned banner via HelperBannerCard instead of a grid tile. So we pull
+  // it out of labourCategories here, using the same real data + the same
+  // handlePress every other category card uses, and it only appears when
+  // admin has actually created & activated it.
+  const isHelperCategory = useCallback((name) => {
+    return (name || '').trim().toLowerCase().includes('helper');
+  }, []);
+
+  const helperCategory = useMemo(() => {
+    if (!labourCategories || labourCategories.length === 0) return null;
+    return labourCategories.find((c) => isHelperCategory(c.label || c.name)) || null;
+  }, [labourCategories, isHelperCategory]);
+
   const displayedCategories = useMemo(() => {
     const isMatch = (catName, defName) => {
       const a = (catName || '').trim().toLowerCase();
@@ -242,8 +259,13 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
       return def;
     });
 
+    // Exclude the Helper category from the normal grid — it gets its own
+    // banner treatment below via HelperBannerCard, so it must not also
+    // render as a duplicate grid tile.
     const extras = labourCategories.filter(
-      (c) => !POPULAR_SERVICES_DEFAULTS.some((def) => isMatch(c.label || c.name, def.label))
+      (c) =>
+        !POPULAR_SERVICES_DEFAULTS.some((def) => isMatch(c.label || c.name, def.label)) &&
+        !isHelperCategory(c.label || c.name)
     );
 
     const allItems = [...matched, ...extras];
@@ -251,7 +273,7 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
       return [...allItems, { id: '__spacer__', empty: true }];
     }
     return allItems;
-  }, [labourCategories]);
+  }, [labourCategories, isHelperCategory]);
 
   const renderItem = useCallback(({ item }) => {
     if (item.empty) {
@@ -322,10 +344,14 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
         removeClippedSubviews={true}
       />
 
-      {/* Static "Need a Helper?" banner pinned at the bottom */}
-      <View style={styles.staticHelperWrap}>
-        <HelperBannerCard />
-      </View>
+      {/* "Need a Helper?" banner — only shown when admin has created &
+          activated a "Helper" category, wired to the same real data and
+          navigation as every other category card. */}
+      {!!helperCategory && (
+        <View style={styles.staticHelperWrap}>
+          <HelperBannerCard item={helperCategory} onPress={handlePress} />
+        </View>
+      )}
     </View>
   );
 });

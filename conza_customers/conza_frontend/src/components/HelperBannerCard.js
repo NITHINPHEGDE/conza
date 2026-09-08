@@ -1,10 +1,15 @@
 import React, { useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-
-const HelperBannerCard = React.memo(() => {
-  const navigation = useNavigation();
+// Now driven by a real, admin-controlled ServiceCategory (same data source
+// as every other category card: labourCategories from useAppStore). The
+// parent (BookingScreen) only renders this component when the admin has
+// actually created & activated a "Helper" category, and passes that
+// category's real data + the same onPress handler used by LabourCategoryCard
+// — so clicking it, hiding/showing it, and its backend matching all behave
+// exactly like every other category. Only the visual presentation (banner
+// instead of grid tile) is intentionally different in the customer app.
+const HelperBannerCard = React.memo(({ item, onPress }) => {
   const scale = useRef(new Animated.Value(1)).current;
 
   const animateIn = () => {
@@ -26,8 +31,12 @@ const HelperBannerCard = React.memo(() => {
   };
 
   const handlePress = () => {
-    navigation.navigate('WorkersNearby', { category: 'Helper' });
+    if (item && onPress) {
+      onPress(item);
+    }
   };
+
+  const sub = item?.description || 'General helpers for shifting, clearing & aid';
 
   return (
     <Animated.View style={[styles.wrapper, { transform: [{ scale }] }]}>
@@ -43,8 +52,8 @@ const HelperBannerCard = React.memo(() => {
         </View>
 
         <View style={styles.textContainer}>
-          <Text style={styles.title}>Need a Helper?</Text>
-          <Text style={styles.sub}>General helpers for shifting, clearing & aid</Text>
+          <Text style={styles.title} numberOfLines={1}>Need a Helper?</Text>
+          <Text style={styles.sub} numberOfLines={1}>{sub}</Text>
         </View>
 
         <MaterialCommunityIcons name="chevron-right" size={16} color="#94A3B8" />
