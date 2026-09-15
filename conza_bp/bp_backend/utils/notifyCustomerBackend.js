@@ -9,7 +9,7 @@ const logger = require('./logger');
 // customer's socket actually lives.
 const CUSTOMER_BACKEND_URL =
   process.env.CUSTOMER_BACKEND_INTERNAL_URL ||
-  'https://conza-production-88dd.up.railway.app';
+  'https://conza-production-b541.up.railway.app';
 const INTERNAL_SOCKET_SECRET = process.env.INTERNAL_SOCKET_SECRET || '';
 
 const notifyCustomerBackend = async (room, event, payload) => {

@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || 'https://conza-production-9145.up.railway.app/api';
+  process.env.EXPO_PUBLIC_API_URL || 'https://conza-production-9d11.up.railway.app/api';
 
 const getToken = () => AsyncStorage.getItem('conza_token');
 
