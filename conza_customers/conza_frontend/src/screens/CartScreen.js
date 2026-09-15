@@ -15,6 +15,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import useAppStore from '../store/useAppStore';
 import SavedAddressSheet from '../components/SavedAddressSheet';
+import { getVendorDeliveryCharge } from '../utils/deliveryCharge';
 
 const CartScreen = () => {
   const insets = useSafeAreaInsets();
@@ -111,7 +112,11 @@ const CartScreen = () => {
         map[vendorName] = {
           name: vendorName,
           subtitle: 'Building better together',
-          deliveryCharge: 250,
+          // Delivery charge is vendor-specific (based on seller ID, falling
+          // back to vendor name) instead of a flat rate for every vendor —
+          // different vendors are in different locations, so two vendors
+          // in the same cart show two different delivery charges.
+          deliveryCharge: getVendorDeliveryCharge(item.sellerId || vendorName, 'material'),
           deliveryTime: '1 - 2 days',
           items: [],
         };
@@ -130,7 +135,8 @@ const CartScreen = () => {
         map[vendorName] = {
           name: vendorName,
           subtitle: 'Equip your ambition',
-          deliveryCharge: 800,
+          // Same vendor-specific delivery charge logic as materials above.
+          deliveryCharge: getVendorDeliveryCharge(item.sellerId || vendorName, 'rental'),
           deliveryTime: 'Same day',
           items: [],
         };

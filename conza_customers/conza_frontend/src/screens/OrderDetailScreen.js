@@ -761,15 +761,21 @@ const OrderDetailScreen = ({ route, navigation }) => {
 
       {/* ── FIXED BOTTOM ACTION BAR ── */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-        {/* Left: Add to Project */}
-        <TouchableOpacity
-          style={styles.addToProjectBtn}
-          onPress={() => setShowAddToProject(true)}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="folder-plus-outline" size={19} color="#1E293B" />
-          <Text style={styles.addToProjectText}>Add to Project</Text>
-        </TouchableOpacity>
+        {/* Left: Add to Project — hidden for cancelled orders, since
+            there's nothing meaningful to attach to a project anymore.
+            Reorder (right) still makes sense for a cancelled order, so it
+            stays and simply takes the full width on its own when this is
+            hidden. */}
+        {order.status !== 'cancelled' && (
+          <TouchableOpacity
+            style={styles.addToProjectBtn}
+            onPress={() => setShowAddToProject(true)}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="folder-plus-outline" size={19} color="#1E293B" />
+            <Text style={styles.addToProjectText}>Add to Project</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Right: Reorder */}
         <TouchableOpacity

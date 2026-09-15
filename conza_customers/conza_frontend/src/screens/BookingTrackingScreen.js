@@ -924,37 +924,43 @@ const BookingTrackingScreen = ({ navigation, route }) => {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* ── FIXED BOTTOM ACTION BAR ── */}
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-        {/* Left: Add to Project */}
-        <TouchableOpacity
-          style={styles.addToProjectBtn}
-          onPress={() => setShowAddToProject(true)}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="folder-plus-outline" size={19} color="#1E293B" />
-          <Text style={styles.addToProjectText}>Add to Project</Text>
-        </TouchableOpacity>
-
-        {/* Right: End Work — only relevant while the job can still be ended.
-            Once it's completed, cancelled, or expired there is nothing left
-            to "end", so the button is removed instead of just erroring out
-            when pressed. Add to Project (flex: 1) fills the freed-up width
-            on its own since it's the only remaining child in this row. */}
-        {!isBookingFinished && (
+      {/* ── FIXED BOTTOM ACTION BAR ──
+          Hidden entirely for cancelled bookings — cancelled bookings have
+          neither "Add to Project" (nothing to attach) nor "End Work"
+          (isBookingFinished already hides that), so an empty bar would
+          otherwise render at the bottom of the screen. */}
+      {activeBooking?.status !== 'cancelled' && (
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+          {/* Left: Add to Project */}
           <TouchableOpacity
-            style={styles.endWorkBtn}
-            onPress={handleEndWorkPress}
+            style={styles.addToProjectBtn}
+            onPress={() => setShowAddToProject(true)}
             activeOpacity={0.8}
           >
-            <View style={styles.endWorkRow}>
-              <View style={styles.redSquareIcon} />
-              <Text style={styles.endWorkTitle}>End Work</Text>
-            </View>
-            <Text style={styles.endWorkSubtitle}>(when work is completed)</Text>
+            <MaterialCommunityIcons name="folder-plus-outline" size={19} color="#1E293B" />
+            <Text style={styles.addToProjectText}>Add to Project</Text>
           </TouchableOpacity>
-        )}
-      </View>
+
+          {/* Right: End Work — only relevant while the job can still be ended.
+              Once it's completed, cancelled, or expired there is nothing left
+              to "end", so the button is removed instead of just erroring out
+              when pressed. Add to Project (flex: 1) fills the freed-up width
+              on its own since it's the only remaining child in this row. */}
+          {!isBookingFinished && (
+            <TouchableOpacity
+              style={styles.endWorkBtn}
+              onPress={handleEndWorkPress}
+              activeOpacity={0.8}
+            >
+              <View style={styles.endWorkRow}>
+                <View style={styles.redSquareIcon} />
+                <Text style={styles.endWorkTitle}>End Work</Text>
+              </View>
+              <Text style={styles.endWorkSubtitle}>(when work is completed)</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {/* ── ADD TO PROJECT SHEET ── */}
       <AddToProjectSheet

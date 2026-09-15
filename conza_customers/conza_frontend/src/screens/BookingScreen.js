@@ -10,6 +10,8 @@ import {
   Image,
   ScrollView,
   Alert,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -356,6 +358,92 @@ const LabourView = React.memo(({ search, onSearchChange, onClearSearch }) => {
   );
 });
 
+// ─── Filter / Sort ────────────────────────────────────────────────────────────
+// Shared sort options for the Material & Rental grids. Kept generic (price
+// field name is passed in) so both views can reuse the exact same modal +
+// sorting logic instead of duplicating dummy, non-functional "Filter" UI.
+const SORT_OPTIONS = [
+  { id: 'popular',    label: 'Popular (Default)',   icon: 'fire' },
+  { id: 'price_low',  label: 'Price: Low to High',  icon: 'sort-ascending' },
+  { id: 'price_high', label: 'Price: High to Low',  icon: 'sort-descending' },
+  { id: 'name_asc',   label: 'Name: A to Z',        icon: 'sort-alphabetical-ascending' },
+  { id: 'discount',   label: 'Discount: High to Low', icon: 'sale' },
+];
+
+// Applies the chosen sort option to a list. `priceKey` lets the same helper
+// work for both materials (`price`) and rentals (`pricePerDay`).
+const applySort = (list, sortBy, priceKey = 'price') => {
+  const arr = [...list];
+  switch (sortBy) {
+    case 'price_low':
+      return arr.sort((a, b) => (Number(a[priceKey]) || 0) - (Number(b[priceKey]) || 0));
+    case 'price_high':
+      return arr.sort((a, b) => (Number(b[priceKey]) || 0) - (Number(a[priceKey]) || 0));
+    case 'name_asc':
+      return arr.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+    case 'discount':
+      return arr.sort((a, b) => (Number(b.discountPercent) || 0) - (Number(a.discountPercent) || 0));
+    case 'popular':
+    default:
+      return arr;
+  }
+};
+
+const FilterSortModal = React.memo(({ visible, onClose, sortBy, onSelectSort, title = 'Filter & Sort' }) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Pressable style={fsStyles.backdrop} onPress={onClose}>
+      <Pressable style={fsStyles.sheet} onPress={() => {}}>
+        <View style={fsStyles.handle} />
+        <Text style={fsStyles.title}>{title}</Text>
+        <Text style={fsStyles.subtitle}>Sort by</Text>
+        {SORT_OPTIONS.map((opt) => {
+          const active = sortBy === opt.id;
+          return (
+            <TouchableOpacity
+              key={opt.id}
+              style={[fsStyles.optionRow, active && fsStyles.optionRowActive]}
+              activeOpacity={0.75}
+              onPress={() => {
+                onSelectSort(opt.id);
+                onClose();
+              }}
+            >
+              <MaterialCommunityIcons
+                name={opt.icon}
+                size={18}
+                color={active ? '#F59E0B' : '#6B7280'}
+              />
+              <Text style={[fsStyles.optionLabel, active && fsStyles.optionLabelActive]}>
+                {opt.label}
+              </Text>
+              {active && (
+                <MaterialCommunityIcons name="check-circle" size={18} color="#F59E0B" style={{ marginLeft: 'auto' }} />
+              )}
+            </TouchableOpacity>
+          );
+        })}
+        <TouchableOpacity style={fsStyles.closeBtn} activeOpacity={0.85} onPress={onClose}>
+          <Text style={fsStyles.closeBtnText}>Done</Text>
+        </TouchableOpacity>
+      </Pressable>
+    </Pressable>
+  </Modal>
+));
+
+const fsStyles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 28 },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E2E8F0', alignSelf: 'center', marginBottom: 14 },
+  title: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
+  subtitle: { fontSize: 12.5, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 8, marginBottom: 8 },
+  optionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4 },
+  optionRowActive: { backgroundColor: 'rgba(245,158,11,0.08)' },
+  optionLabel: { fontSize: 14, fontWeight: '600', color: '#374151' },
+  optionLabelActive: { color: '#B45309', fontWeight: '800' },
+  closeBtn: { marginTop: 14, backgroundColor: '#0F172A', borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
+  closeBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+});
+
 // ─── Material View ────────────────────────────────────────────────────────────
 const MaterialView = React.memo(() => {
   const navigation      = useNavigation();
@@ -373,6 +461,8 @@ const MaterialView = React.memo(() => {
 
   const [query,       setQuery]       = useState('');
   const [selectedCat, setSelectedCat] = useState('all');
+  const [sortBy,       setSortBy]       = useState('popular');
+  const [showFilter,   setShowFilter]   = useState(false);
 
   // Self-heals the "skeleton → No materials found" glitch: if this tab is
   // opened before/around the app-boot fetchMaterials() call has actually
@@ -387,7 +477,12 @@ const MaterialView = React.memo(() => {
   }, []);
 
   const filtered     = useMemo(() => filterMaterials(selectedCat, query), [materials, filterMaterials, selectedCat, query]);
+  const sorted       = useMemo(() => applySort(filtered, sortBy, 'price'), [filtered, sortBy]);
   const activeCat    = useMemo(() => materialCategories.find((c) => c.id === selectedCat), [materialCategories, selectedCat]);
+  const activeSortLabel = useMemo(
+    () => SORT_OPTIONS.find((o) => o.id === sortBy)?.label.replace(' (Default)', '') || 'Popular',
+    [sortBy]
+  );
   const totalItems   = useMemo(
     () => Object.values(cart).reduce((a, b) => (Number(a) || 0) + (Number(b) || 0), 0),
     [cart]
@@ -493,10 +588,10 @@ const MaterialView = React.memo(() => {
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity style={styles.mFilterBtn} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.mFilterBtn} activeOpacity={0.8} onPress={() => setShowFilter(true)}>
           <MaterialCommunityIcons name="tune-variant" size={17} color="#374151" />
           <Text style={styles.mFilterText}>Filter</Text>
-          <View style={styles.mFilterDot} />
+          {sortBy !== 'popular' && <View style={styles.mFilterDot} />}
         </TouchableOpacity>
       </View>
 
@@ -580,13 +675,13 @@ const MaterialView = React.memo(() => {
         <Text style={styles.sectionHeaderTitle}>
           {selectedCat !== 'all' ? (activeCat?.label || 'Materials') : 'Top Picks for You'}
         </Text>
-        <View style={styles.sortRow}>
+        <TouchableOpacity style={styles.sortRow} activeOpacity={0.7} onPress={() => setShowFilter(true)}>
           <Text style={styles.sortText}>Sort by: </Text>
-          <Text style={styles.sortValue}>Popular ▾</Text>
-        </View>
+          <Text style={styles.sortValue}>{activeSortLabel} ▾</Text>
+        </TouchableOpacity>
       </View>
     </View>
-  ), [query, handleClearQuery, selectedCat, activeCat, handleClearCat]);
+  ), [query, handleClearQuery, selectedCat, activeCat, handleClearCat, activeSortLabel]);
 
   const listEmpty = useMemo(() => (
     materialsFetched ? (
@@ -609,7 +704,7 @@ const MaterialView = React.memo(() => {
   return (
     <View style={{ flex: 1 }}>
       <FlatList
-        data={filtered}
+        data={sorted}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         numColumns={2}
@@ -623,6 +718,14 @@ const MaterialView = React.memo(() => {
         windowSize={5}
         removeClippedSubviews={true}
         extraData={cart}
+      />
+
+      <FilterSortModal
+        visible={showFilter}
+        onClose={() => setShowFilter(false)}
+        sortBy={sortBy}
+        onSelectSort={setSortBy}
+        title="Filter Materials"
       />
 
       {/* Statically fixed sleek and slender trust banner */}
@@ -706,9 +809,16 @@ const RentalView = React.memo(() => {
 
   const [query,       setQuery]       = useState('');
   const [selectedCat, setSelectedCat] = useState('all');
+  const [sortBy,       setSortBy]       = useState('popular');
+  const [showFilter,   setShowFilter]   = useState(false);
 
   const filtered  = useMemo(() => filterRentalItems(selectedCat, query), [rentalItems, filterRentalItems, selectedCat, query]);
+  const sorted    = useMemo(() => applySort(filtered, sortBy, 'pricePerDay'), [filtered, sortBy]);
   const activeCat = useMemo(() => rentalCategories.find((c) => c.id === selectedCat), [rentalCategories, selectedCat]);
+  const activeSortLabel = useMemo(
+    () => SORT_OPTIONS.find((o) => o.id === sortBy)?.label.replace(' (Default)', '') || 'Popular',
+    [sortBy]
+  );
 
   const handleClearQuery = useCallback(() => setQuery(''), []);
   const handleClearCat = useCallback(() => setSelectedCat('all'), []);
@@ -781,9 +891,10 @@ const RentalView = React.memo(() => {
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity style={styles.mFilterBtn} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.mFilterBtn} activeOpacity={0.8} onPress={() => setShowFilter(true)}>
           <MaterialCommunityIcons name="tune-variant" size={17} color="#374151" />
           <Text style={styles.mFilterText}>Filter</Text>
+          {sortBy !== 'popular' && <View style={styles.mFilterDot} />}
         </TouchableOpacity>
       </View>
 
@@ -854,13 +965,13 @@ const RentalView = React.memo(() => {
         <Text style={styles.sectionHeaderTitle}>
           {selectedCat !== 'all' ? (activeCat?.label || 'Equipment') : 'Available Equipment'}
         </Text>
-        <View style={styles.sortRow}>
+        <TouchableOpacity style={styles.sortRow} activeOpacity={0.7} onPress={() => setShowFilter(true)}>
           <Text style={styles.sortText}>Sort by: </Text>
-          <Text style={styles.sortValue}>Popular ▾</Text>
-        </View>
+          <Text style={styles.sortValue}>{activeSortLabel} ▾</Text>
+        </TouchableOpacity>
       </View>
     </View>
-  ), [query, handleClearQuery, selectedCat, activeCat, rentalCategories, renderCategoryTile, handleClearCat]);
+  ), [query, handleClearQuery, selectedCat, activeCat, rentalCategories, renderCategoryTile, handleClearCat, activeSortLabel]);
 
   const listEmpty = useMemo(() => (
     <EmptyState
@@ -873,7 +984,7 @@ const RentalView = React.memo(() => {
   return (
     <View style={{ flex: 1 }}>
       <FlatList
-        data={filtered}
+        data={sorted}
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={styles.rentalGridRow}
@@ -886,6 +997,14 @@ const RentalView = React.memo(() => {
         maxToRenderPerBatch={10}
         windowSize={5}
         removeClippedSubviews={true}
+      />
+
+      <FilterSortModal
+        visible={showFilter}
+        onClose={() => setShowFilter(false)}
+        sortBy={sortBy}
+        onSelectSort={setSortBy}
+        title="Filter Equipment"
       />
 
       {/* Statically fixed sleek and slender trust banner */}

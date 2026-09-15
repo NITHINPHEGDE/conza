@@ -16,6 +16,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import useAppStore from '../store/useAppStore';
 import SavedAddressSheet from '../components/SavedAddressSheet';
 import { bookingAPI } from '../api/bookingAPI';
+import { getVendorDeliveryCharge } from '../utils/deliveryCharge';
 
 const MaterialCheckoutScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
@@ -65,7 +66,10 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
         map[vendor] = {
           vendorName: vendor,
           sellerId: item.sellerId || item.seller,
-          deliveryCharge: 250,
+          // Vendor-specific delivery charge (different vendors → different
+          // locations → different charges) instead of a flat ₹250 for
+          // every vendor.
+          deliveryCharge: getVendorDeliveryCharge(item.sellerId || vendor, 'material'),
           deliveryTime: '1 - 2 days',
           items: [],
         };
@@ -84,7 +88,8 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
         map[vendor] = {
           vendorName: vendor,
           sellerId: item.sellerId || item.seller,
-          deliveryCharge: 800,
+          // Same vendor-specific delivery charge logic as materials above.
+          deliveryCharge: getVendorDeliveryCharge(item.sellerId || vendor, 'rental'),
           deliveryTime: '12 Sep, 9:00 AM',
           items: [],
         };
