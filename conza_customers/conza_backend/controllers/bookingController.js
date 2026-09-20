@@ -21,7 +21,7 @@ const Booking         = require('../models/Booking');
 const Worker           = require('../models/Worker');
 const ServiceCategory  = require('../models/ServiceCategory');
 const Review           = require('../models/Review');
-const { getLabourPricingConfig, getLabourPricingConfigFresh, computeLabourBill } = require('../utils/pricingEngine');
+const { getLabourPricingConfig, getLabourPricingConfigFresh, computeLabourBill, computeLabourScenarioEstimates } = require('../utils/pricingEngine');
 
 // Category names must match tolerantly (case/whitespace) — mirrors the
 // matcher already used by workerController's getNearbyWorkers.
@@ -390,7 +390,10 @@ const createAutobookBooking = async (req, res) => {
     const radiusRadians  = radiusKm / 6371;
 
     const candidates = await Worker.find({
-      category: categoryMatcher(category),
+      $or: [
+        { 'categories.name': categoryMatcher(category) },
+        { category: categoryMatcher(category) },
+      ],
       isAvailable: { $ne: false },
       status:      { $not: { $eq: 'suspended' } },
       isVerified:  true,
@@ -1098,33 +1101,72 @@ const getLabourBillPreview = async (req, res) => {
       isAutobook = false, requiredWorkers = 0, category = '',
     } = req.body;
 
+    // Basic input validation / sanitising — the payload is client supplied.
+    const safeWorkers = Array.isArray(workers)
+      ? workers.filter((w) => w && typeof w === 'object').slice(0, 50)
+      : [];
+    const safeTotalDays = Math.min(Math.max(parseInt(totalDays, 10) || 1, 1), 365);
+    const safeCategory = typeof category === 'string' ? category : '';
+
     // Always read fresh from the admin DB (no Redis cache) so the config
     // and per-category minimum charge returned to the checkout screen are
     // never stale after an admin save.
     const [config, categoryDoc] = await Promise.all([
       getLabourPricingConfigFresh(),
-      ServiceCategory.findOne({ name: categoryMatcher(category) }).select('baseCharge').lean(),
+      safeCategory.trim()
+        ? ServiceCategory.findOne({ name: categoryMatcher(safeCategory) })
+            .select('baseCharge perHourCharge perDayCharge')
+            .lean()
+        : Promise.resolve(null),
     ]);
     const categoryBaseCharge = categoryDoc?.baseCharge || 0;
     const isScheduled = !isImmediate;
 
+    // Two-scenario estimate for the checkout "Price Summary":
+    //   immediate → { lessThanHour (base charge), oneHour (per-hour rate) }
+    //   scheduled → { scheduled (per-day rate × days) }
+    // Each scenario runs through the same computeLabourBill() pipeline with
+    // the live admin Labour pricing settings.
+    const estimates = computeLabourScenarioEstimates({
+      workers: safeWorkers,
+      config,
+      // Admin → Finance → Categories rates for this worker category:
+      // Base charge (< 1 hr), Per-hour charge (1 hr), Per-day charge.
+      categoryRates: categoryDoc
+        ? {
+            baseCharge: categoryDoc.baseCharge,
+            perHourCharge: categoryDoc.perHourCharge,
+            perDayCharge: categoryDoc.perDayCharge,
+          }
+        : null,
+      isImmediate: !isScheduled,
+      totalDays: safeTotalDays,
+      isAutobook: !!isAutobook,
+      requiredWorkers,
+    });
+
     if (isAutobook) {
       const need = parseInt(requiredWorkers) || 0;
-      const avgRate = workers.length
-        ? workers.reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0) / workers.length
+      const avgRate = safeWorkers.length
+        ? safeWorkers.reduce((s, w) => s + (Number(w.pricePerDay) || 0), 0) / safeWorkers.length
         : 0;
-      const rawBase = isScheduled ? avgRate * need * (Number(totalDays) || 1) : avgRate * need;
+      const rawBase = isScheduled ? avgRate * need * safeTotalDays : avgRate * need;
       const bill = computeLabourBill(rawBase, config, categoryBaseCharge);
-      return res.json({ success: true, config: { ...config, categoryBaseCharge }, summary: bill });
+      return res.json({
+        success: true,
+        config: { ...config, categoryBaseCharge },
+        summary: bill,
+        estimates,
+      });
     }
 
     // Sum all workers' raw costs to get a single combined base, then run
     // computeLabourBill ONCE. This ensures serviceCharge, cancellationFee,
     // the per-category minimum charge, and platformCommission are applied
     // at the booking level — not multiplied by the number of workers.
-    const perWorker = (workers || []).map((w) => {
+    const perWorker = safeWorkers.map((w) => {
       const rawBase = isScheduled
-        ? (Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * (Number(totalDays) || 1)
+        ? (Number(w.perDayCharge) || Number(w.pricePerDay) || 0) * safeTotalDays
         : (Number(w.pricePerDay) || 0);
       return rawBase;
     });
@@ -1132,7 +1174,12 @@ const getLabourBillPreview = async (req, res) => {
     const totalRawBase = perWorker.reduce((s, n) => s + n, 0);
     const summary = computeLabourBill(totalRawBase, config, categoryBaseCharge);
 
-    res.json({ success: true, config: { ...config, categoryBaseCharge }, summary });
+    res.json({
+      success: true,
+      config: { ...config, categoryBaseCharge },
+      summary,
+      estimates,
+    });
   } catch (err) {
     logger.error({ err }, 'getLabourBillPreview failed');
     res.status(500).json({ success: false, message: err.message });

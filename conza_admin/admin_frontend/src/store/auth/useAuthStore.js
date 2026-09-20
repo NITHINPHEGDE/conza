@@ -40,7 +40,7 @@ const useAuthStore = create((set, get) => ({
       const token = localStorage.getItem(TOKEN_KEY)
       if (!token) return
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/me`,
+        `${import.meta.env.VITE_API_URL || 'https://conza-production-2328.up.railway.app/api'}/auth/me`,
         {
           headers: {
             'Content-Type': 'application/json',

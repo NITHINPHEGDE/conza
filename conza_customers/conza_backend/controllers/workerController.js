@@ -30,9 +30,35 @@ const categoryMatcher = (category) =>
 // rate, since it no longer exists.
 const pickCategoryEntry = (worker, categoryName) => {
   const list = worker.categories || [];
-  if (!categoryName) return list[0] || null;
+  if (!categoryName) {
+    if (list[0]) return list[0];
+    if (worker.category) {
+      return {
+        name: worker.category,
+        minCharge: worker.minCharge || 0,
+        baseCharge: worker.baseCharge || 0,
+        perDayCharge: worker.perDayCharge || 0,
+      };
+    }
+    return null;
+  }
   const target = categoryName.trim().toLowerCase();
-  return list.find((c) => (c.name || '').trim().toLowerCase() === target) || list[0] || null;
+  const found = list.find((c) => (c.name || '').trim().toLowerCase() === target);
+  if (found) return found;
+  if ((worker.category || '').trim().toLowerCase() === target) {
+    return {
+      name: worker.category,
+      minCharge: worker.minCharge || 0,
+      baseCharge: worker.baseCharge || 0,
+      perDayCharge: worker.perDayCharge || 0,
+    };
+  }
+  return list[0] || (worker.category ? {
+    name: worker.category,
+    minCharge: worker.minCharge || 0,
+    baseCharge: worker.baseCharge || 0,
+    perDayCharge: worker.perDayCharge || 0,
+  } : null);
 };
 
 // ── GET /api/workers/nearby ────────────────────────────────────────────────────
@@ -44,7 +70,12 @@ const getNearbyWorkers = async (req, res) => {
     // GET /api/workers/nearby?category=Plumber&lat=12.97&lng=77.49&debug=1
     if (debug) {
       const query = {};
-      if (category) query['categories.name'] = categoryMatcher(category);
+      if (category) {
+        query.$or = [
+          { 'categories.name': categoryMatcher(category) },
+          { category: categoryMatcher(category) },
+        ];
+      }
       const workers = await Worker.find(query).lean();
       const serviceCategories = await ServiceCategory.find({ active: true }).select('name radius').lean();
 
@@ -132,7 +163,12 @@ const getNearbyWorkers = async (req, res) => {
         // through.
         isVerified:  true,
       };
-      if (category) safeQuery['categories.name'] = categoryMatcher(category);
+      if (category) {
+        safeQuery.$or = [
+          { 'categories.name': categoryMatcher(category) },
+          { category: categoryMatcher(category) },
+        ];
+      }
       const workers = await Worker.find(safeQuery).select(
         'fullName username profileImage categories skills locationText experience bio isOnline rating totalJobs memberSince location'
       ).lean();
@@ -205,14 +241,17 @@ const getNearbyWorkers = async (req, res) => {
         const radiusRadians = radiusKm / EARTH_RADIUS_KM;
         const workers = await Worker.find({
           ...baseFilter,
-          'categories.name': categoryMatcher(sc.name),
+          $or: [
+            { 'categories.name': categoryMatcher(sc.name) },
+            { category: categoryMatcher(sc.name) },
+          ],
           location: {
             $geoWithin: {
               $centerSphere: [[userLng, userLat], radiusRadians],
             },
           },
         }).select(
-          'fullName username profileImage categories skills locationText experience bio isOnline rating totalJobs memberSince location'
+          'fullName username profileImage categories category minCharge baseCharge perDayCharge skills locationText experience bio isOnline rating totalJobs memberSince location'
         ).lean();
         // Tag which ServiceCategory this worker was matched under so the
         // mapping step below resolves the RIGHT pricing entry, even if the
@@ -306,7 +345,10 @@ const getCategories = async (req, res) => {
             const radiusRadians = sc.radius / EARTH_RADIUS_KM;
             const workers = await Worker.find({
               ...baseFilter,
-              'categories.name': categoryMatcher(sc.name),
+              $or: [
+                { 'categories.name': categoryMatcher(sc.name) },
+                { category: categoryMatcher(sc.name) },
+              ],
               location: {
                 $geoWithin: {
                   $centerSphere: [[parsedLng, parsedLat], radiusRadians],

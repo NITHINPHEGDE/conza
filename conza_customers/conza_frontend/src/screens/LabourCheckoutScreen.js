@@ -22,6 +22,8 @@ import { reverseGeocodeFullAddress } from '../hooks/useAuth';
 import useAppStore from '../store/useAppStore';
 import { useBooking } from '../hooks/useBooking';
 import SavedAddressSheet from '../components/SavedAddressSheet';
+import LabourPriceEstimate from '../components/LabourPriceEstimate';
+import { useLabourPriceEstimate } from '../hooks/useLabourPriceEstimate';
 
 // Subtle top-down vector map tile background asset
 const mapPreviewBg = require('../../assets/images/map_preview_bg.jpg');
@@ -152,15 +154,32 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
     ? Number(primaryWorker.baseCharge)
     : 150;
 
-  // Pricing calculation
-  const perDayOrHourRate = bookingType === 'scheduled'
-    ? (Number(primaryWorker.perDayCharge) || Number(primaryWorker.pricePerDay) || 200)
-    : hourlyRate;
+  // Pricing calculation — fetched live from the server, which applies the
+  // admin panel's Finance → Pricing → Labour settings to:
+  //   • lessThanHour → the worker's base charge as the foundation
+  //   • oneHour      → the worker's per-hour charge as the foundation
+  //   • scheduled    → the per-day charge × number of days
+  const {
+    estimates: priceEstimates,
+    loading: priceLoading,
+    error: priceError,
+    refetch: refetchPriceEstimate,
+  } = useLabourPriceEstimate({
+    enabled: currentStep === 2,
+    workers: effectiveWorkers,
+    category: workerCategory,
+    isImmediate: bookingType === 'immediate',
+    totalDays,
+    isAutobook,
+    requiredWorkers,
+  });
 
-  const labourCharge = bookingType === 'scheduled'
-    ? perDayOrHourRate * totalDays
-    : hourlyRate * 4; // Baseline estimated labour charge (matches design ₹800)
-  const estimatedTotal = labourCharge + travelCharge; // Matches design ₹950
+  const bottomTotal = bookingType === 'scheduled'
+    ? priceEstimates?.scheduled?.total
+    : priceEstimates?.lessThanHour?.total;
+  const bottomTotalLabel = bookingType === 'scheduled'
+    ? 'Estimated Total'
+    : 'Estimated · starts from';
 
   // Original labour uploaded image (fallback to safe avatar)
   const [imageFailed, setImageFailed] = useState(false);
@@ -730,33 +749,13 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
               </View>
             </View>
 
-            <View style={styles.priceSummaryCard}>
-              <View style={styles.priceSummaryRow}>
-                <Text style={styles.priceSummaryLabel}>
-                  {bookingType === 'scheduled'
-                    ? `Labour charge (${totalDays} day${totalDays > 1 ? 's' : ''})`
-                    : `Labour charge (${hourlyRate > 0 ? `₹${hourlyRate}/hr` : 'Hourly'})`}
-                </Text>
-                <Text style={styles.priceSummaryValue}>₹{labourCharge}</Text>
-              </View>
-
-              <View style={styles.priceSummaryRow}>
-                <Text style={styles.priceSummaryLabel}>Base / Travel charge</Text>
-                <Text style={styles.priceSummaryValue}>₹{travelCharge}</Text>
-              </View>
-
-              <View style={styles.estimatedTotalBox}>
-                <Text style={styles.estimatedTotalLabel}>Estimated Total</Text>
-                <Text style={styles.estimatedTotalValue}>₹{estimatedTotal}</Text>
-              </View>
-
-              <View style={styles.estimateDisclaimerBox}>
-                <MaterialCommunityIcons name="information" size={16} color="#2563EB" style={{ marginTop: 1 }} />
-                <Text style={styles.estimateDisclaimerText}>
-                  This is an estimated amount. You will be charged based on actual working time. Final bill will be generated after the work is completed.
-                </Text>
-              </View>
-            </View>
+            <LabourPriceEstimate
+              isImmediate={bookingType === 'immediate'}
+              estimates={priceEstimates}
+              loading={priceLoading}
+              error={priceError}
+              onRetry={refetchPriceEstimate}
+            />
 
             {/* Payment Method Section */}
             <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
@@ -951,10 +950,12 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         <View style={styles.bottomBarDual}>
           <View style={styles.bottomPriceCol}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={styles.bottomTotalAmount}>₹{estimatedTotal}</Text>
+              <Text style={styles.bottomTotalAmount}>
+                {bottomTotal != null ? `₹${bottomTotal}` : '—'}
+              </Text>
               <MaterialCommunityIcons name="information-outline" size={15} color="#64748B" />
             </View>
-            <Text style={styles.bottomTotalSub}>Estimated Total</Text>
+            <Text style={styles.bottomTotalSub}>{bottomTotalLabel}</Text>
           </View>
 
           <View style={styles.bottomActionCol}>

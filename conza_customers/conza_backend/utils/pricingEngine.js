@@ -119,5 +119,136 @@ const computeLabourBill = (rawBase, config, categoryMinCharge) => {
   };
 };
 
-module.exports = { getLabourPricingConfig, getLabourPricingConfigFresh, computeLabourBill, DEFAULT_LABOUR_CONFIG };
+// ── Checkout price-estimate scenarios ───────────────────────────────────
+// Used by POST /api/bookings/labour/bill-preview to show the customer TWO
+// estimates side by side for an immediate (hourly) labour booking:
+//   • lessThanHour — foundation is the worker's fixed BASE charge
+//   • oneHour      — foundation is the worker's PER-HOUR rate
+// and ONE estimate (scheduled) for a multi-day booking, where the
+// foundation is the per-day rate × number of days.
+// Every scenario runs through the exact same computeLabourBill() pipeline
+// (surge → minimum charge → GST → platform commission → service charge)
+// using the admin's live Finance → Pricing → Labour settings. Each worker is
+// billed as their own booking (one Booking document per worker), so the
+// bill is computed per worker and the results are summed.
+const positiveNumber = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+// Foundation rates come from the worker's CATEGORY (Admin → Finance →
+// Categories: Base / Hour / Day) — the category is the source of truth.
+// The worker's own snapshot is only a fallback when the category rate is
+// missing/0 or the category can't be found.
+const normaliseWorkerRates = (w, categoryRates) => {
+  const workerHourly = positiveNumber(w && w.pricePerDay) || positiveNumber(w && w.minCharge);
+  const cat = categoryRates || {};
+  const hourlyRate = positiveNumber(cat.perHourCharge) || workerHourly;
+  return {
+    hourlyRate,
+    baseCharge: positiveNumber(cat.baseCharge) || positiveNumber(w && w.baseCharge),
+    perDayCharge:
+      positiveNumber(cat.perDayCharge) || positiveNumber(w && w.perDayCharge) || hourlyRate,
+  };
+};
+
+const buildScenario = (rawBases, config, categoryBaseCharge) => {
+  const totals = {
+    baseCost: 0,
+    surgeAmount: 0,
+    minChargeAdjustment: 0,
+    subtotal: 0,
+    serviceCharge: 0,
+    costRateAmount: 0,
+    platformCommissionAmount: 0,
+    total: 0,
+  };
+  let minBookingFeeApplied = false;
+
+  rawBases.forEach((rawBase) => {
+    const bill = computeLabourBill(rawBase, config, categoryBaseCharge);
+    const afterSurge = Math.round(bill.baseCost * bill.peakHourMultiplier);
+    totals.baseCost += bill.baseCost;
+    totals.surgeAmount += afterSurge - bill.baseCost;
+    totals.minChargeAdjustment += bill.subtotal - afterSurge;
+    totals.subtotal += bill.subtotal;
+    totals.serviceCharge += bill.serviceCharge;
+    totals.costRateAmount += bill.costRateAmount;
+    totals.platformCommissionAmount += bill.platformCommissionAmount;
+    totals.total += bill.total;
+    if (bill.minBookingFeeApplied) minBookingFeeApplied = true;
+  });
+
+  return {
+    ...totals,
+    costRate: Number(config.costRate) || 0,
+    platformCommission: Number(config.platformCommission) || 0,
+    peakHourMultiplier: Number(config.peakHourMultiplier) || 1,
+    minBookingFeeApplied,
+  };
+};
+
+const computeLabourScenarioEstimates = ({
+  workers = [],
+  config,
+  categoryRates = null, // { baseCharge, perHourCharge, perDayCharge } from ServiceCategory
+  isImmediate = true,
+  totalDays = 1,
+  isAutobook = false,
+  requiredWorkers = 0,
+}) => {
+  // The per-category minimum-charge floor is the category's Base charge.
+  const categoryBaseCharge = categoryRates ? positiveNumber(categoryRates.baseCharge) : 0;
+
+  const rates = (Array.isArray(workers) ? workers : []).map((w) =>
+    normaliseWorkerRates(w, categoryRates)
+  );
+
+  let units = rates;
+  if (isAutobook) {
+    // Quick Auto Book: any nearby worker may accept, so estimate with the
+    // category rates × the number of workers requested.
+    const need = Math.max(parseInt(requiredWorkers, 10) || 0, 1);
+    const avg = (key) =>
+      rates.length ? rates.reduce((s, r) => s + r[key], 0) / rates.length : 0;
+    const avgUnit = rates.length
+      ? {
+          hourlyRate: avg('hourlyRate'),
+          baseCharge: avg('baseCharge'),
+          perDayCharge: avg('perDayCharge'),
+        }
+      : normaliseWorkerRates({}, categoryRates);
+    units = Array.from({ length: need }, () => avgUnit);
+  }
+
+  const days = Math.max(parseInt(totalDays, 10) || 1, 1);
+
+  if (!isImmediate) {
+    return {
+      mode: 'scheduled',
+      workerCount: units.length,
+      totalDays: days,
+      scheduled: buildScenario(
+        units.map((u) => u.perDayCharge * days),
+        config,
+        categoryBaseCharge
+      ),
+    };
+  }
+
+  return {
+    mode: 'immediate',
+    workerCount: units.length,
+    lessThanHour: buildScenario(units.map((u) => u.baseCharge), config, categoryBaseCharge),
+    oneHour: buildScenario(units.map((u) => u.hourlyRate), config, categoryBaseCharge),
+  };
+};
+
+module.exports = {
+  getLabourPricingConfig,
+  getLabourPricingConfigFresh,
+  computeLabourBill,
+  computeLabourScenarioEstimates,
+  DEFAULT_LABOUR_CONFIG,
+};
 
