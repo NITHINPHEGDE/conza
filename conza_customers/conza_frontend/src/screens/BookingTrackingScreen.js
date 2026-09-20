@@ -23,6 +23,7 @@ import SlideToast from '../components/SlideToast';
 import RatingReviewModal from '../components/RatingReviewModal';
 import AddToProjectSheet from '../components/AddToProjectSheet';
 import { socket } from '../utils/socket';
+import { getBookingPaymentState } from '../utils/bookingPayment';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -138,6 +139,9 @@ const BookingTrackingScreen = ({ navigation, route }) => {
   const [ratingTarget, setRatingTarget]           = useState(null);
   const [submittingReview, setSubmittingReview]   = useState(false);
 
+  // Payment (after the work is completed)
+  const [openingPayment, setOpeningPayment]       = useState(false);
+
   // Dynamic live timer state (seconds elapsed)
   const [elapsedSeconds, setElapsedSeconds]       = useState(0);
 
@@ -156,10 +160,14 @@ const BookingTrackingScreen = ({ navigation, route }) => {
     };
   }, [activeBookingId]);
 
-  // Fallback polling every 30s
+  // Fallback polling every 30s. Keeps going after completion while the bill
+  // is still unpaid, so "Continue to Payment" disappears on its own if the
+  // labour marks the cash as collected and the socket update is missed.
+  const paymentOpen = getBookingPaymentState(activeBooking).canPay;
   useEffect(() => {
     let intervalId;
-    if (activeBookingId && activeBooking?.status !== 'completed' && activeBooking?.status !== 'cancelled') {
+    const stillActive = activeBooking?.status !== 'completed' && activeBooking?.status !== 'cancelled';
+    if (activeBookingId && (stillActive || paymentOpen)) {
       intervalId = setInterval(() => {
         fetchActiveBooking(activeBookingId);
       }, 30000);
@@ -167,7 +175,7 @@ const BookingTrackingScreen = ({ navigation, route }) => {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [activeBookingId, activeBooking?.status]);
+  }, [activeBookingId, activeBooking?.status, paymentOpen]);
 
   useEffect(() => {
     if (activeBookingId) fetchActiveBooking(activeBookingId);
@@ -407,6 +415,34 @@ const BookingTrackingScreen = ({ navigation, route }) => {
 
   const handleSkipRating = useCallback(() => setRatingTarget(null), []);
 
+  // Continue to Payment — opens the payment page for a completed booking.
+  // The server is asked again right before navigating: if the labour already
+  // tapped "Cash Collected" (or the bill is already paid) the customer is told
+  // so and never reaches the payment page, so nobody pays twice.
+  const handleContinueToPayment = useCallback(async () => {
+    if (!activeBookingId || openingPayment) return;
+    setOpeningPayment(true);
+    try {
+      const res = await bookingAPI.getBookingPayment(activeBookingId);
+      if (!res?.payment?.canPay) {
+        await fetchActiveBooking(activeBookingId);
+        if (res?.payment?.cashCollected) {
+          Alert.alert('Cash Already Collected', 'Your worker has already collected the cash for this booking. No further payment is needed.');
+        } else if (res?.payment?.settled) {
+          Alert.alert('Already Paid', 'This booking has already been paid.');
+        } else {
+          Alert.alert('Payment Not Available', 'Payment opens once the work is completed and confirmed.');
+        }
+        return;
+      }
+      navigation.navigate('LabourPayment', { bookingId: activeBookingId });
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Could not open the payment page.');
+    } finally {
+      setOpeningPayment(false);
+    }
+  }, [activeBookingId, openingPayment, fetchActiveBooking, navigation]);
+
   // Stepper timeline progress calculations
   const stepperState = useMemo(() => {
     const currentStatus = activeBooking?.status;
@@ -446,6 +482,10 @@ const BookingTrackingScreen = ({ navigation, route }) => {
   }, [activeBooking]);
 
   const statusBadge = getStatusBadgeMeta(activeBooking?.status);
+
+  // Payment state for a completed booking: unpaid (button shown), paid online,
+  // or cash collected by the labour (no button — nothing left to pay).
+  const paymentState = useMemo(() => getBookingPaymentState(activeBooking), [activeBooking]);
 
   // A booking is "done by any means" once it's completed, cancelled, or
   // expired (no worker ever accepted it) — nothing about the job can be
@@ -802,6 +842,36 @@ const BookingTrackingScreen = ({ navigation, route }) => {
           </View>
         )}
 
+        {/* ── PAYMENT STATUS (after the work is completed) ──
+            The "Continue to Payment" button lives in the bottom bar and is
+            only rendered while the bill is genuinely unpaid — it disappears
+            as soon as the labour taps "Cash Collected" or the bill is paid. */}
+        {activeBooking?.status === 'completed' && (paymentState.settled || paymentState.canPay) && (
+          <View style={[styles.paymentCard, paymentState.settled ? styles.paymentCardDone : styles.paymentCardDue]}>
+            <View style={[styles.paymentIconWrap, { backgroundColor: paymentState.settled ? '#DCFCE7' : '#FFEDD5' }]}>
+              <MaterialCommunityIcons
+                name={paymentState.settled ? (paymentState.cashCollected ? 'cash-check' : 'check-decagram') : 'cash-multiple'}
+                size={22}
+                color={paymentState.settled ? '#059669' : '#EA580C'}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.paymentCardTitle, { color: paymentState.settled ? '#047857' : '#C2410C' }]}>
+                {paymentState.settled
+                  ? (paymentState.cashCollected ? 'Cash Collected' : 'Payment Completed')
+                  : 'Payment Pending'}
+              </Text>
+              <Text style={styles.paymentCardText}>
+                {paymentState.settled
+                  ? (paymentState.cashCollected
+                      ? 'Your worker collected the cash for this booking. Nothing more to pay.'
+                      : 'This booking has been paid in full.')
+                  : `Amount due ₹${Math.round(paymentState.payableAmount)}. Tap Continue to Payment below to pay.`}
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* ── TWO-COLUMN GRID: WORK DETAILS & ESTIMATED VS ACTUAL ── */}
         <View style={styles.twoColumnRow}>
           {/* Left Column: Work Details */}
@@ -957,6 +1027,24 @@ const BookingTrackingScreen = ({ navigation, route }) => {
                 <Text style={styles.endWorkTitle}>End Work</Text>
               </View>
               <Text style={styles.endWorkSubtitle}>(when work is completed)</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Right: Continue to Payment — only while the completed booking is
+              still unpaid. Hidden once the labour marks cash as collected or
+              the bill has been paid. */}
+          {paymentState.canPay && (
+            <TouchableOpacity
+              style={styles.continuePaymentBtn}
+              onPress={handleContinueToPayment}
+              disabled={openingPayment}
+              activeOpacity={0.85}
+            >
+              {openingPayment ? (
+                <ActivityIndicator color="#0F172A" size="small" />
+              ) : (
+                <Text style={styles.continuePaymentText}>Continue to Payment  →</Text>
+              )}
             </TouchableOpacity>
           )}
         </View>
@@ -2120,6 +2208,55 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '600',
     color: '#64748B',
+  },
+
+  // Payment status card + Continue to Payment button
+  paymentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 14,
+  },
+  paymentCardDue: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FFEDD5',
+  },
+  paymentCardDone: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#DCFCE7',
+  },
+  paymentIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  paymentCardText: {
+    fontSize: 12,
+    color: '#475569',
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  continuePaymentBtn: {
+    flex: 1.15,
+    height: 46,
+    backgroundColor: '#F59E0B',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  continuePaymentText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
   },
 });
 

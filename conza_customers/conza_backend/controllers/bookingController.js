@@ -68,6 +68,193 @@ const computeFinalHourlyBase = (hourlyRateInput, workerSnapshot, hoursWorkedInpu
 
 const ACTIVE_WORKER_STATUSES = ['accepted', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed'];
 
+// ── Labour payment settlement ──────────────────────────────────────────────
+// A labour booking is created UNPAID (paymentMethod 'pending') and is settled
+// after the work is completed in exactly ONE of two ways:
+//   1. the customer pays online from Booking Details → Continue to Payment
+//      (payBooking below), or
+//   2. the labour collects cash and taps "Cash Collected" in the labour app.
+// Once settled either way the booking must never be payable again. The state,
+// quote and pay endpoints all go through the same helpers so the customer can
+// never pay twice.
+const PAID_STATUS_VALUES = ['paid', 'collected', 'cash_collected', 'settled'];
+const CASH_STATUS_VALUES = ['collected', 'cash_collected'];
+const PAY_METHODS        = ['upi', 'card', 'wallet'];
+const lc       = (v) => String(v || '').toLowerCase();
+const roundNum = (n) => Math.round(Number(n) || 0);
+
+// A "unit" is either a whole booking or one autobook worker entry.
+const isCashCollectedUnit = (u) =>
+  !!u && (
+    u.cashCollected === true ||
+    u.isCashCollected === true ||
+    !!u.cashCollectedAt ||
+    CASH_STATUS_VALUES.includes(lc(u.paymentStatus))
+  );
+
+const isSettledUnit = (u) =>
+  !!u && (
+    isCashCollectedUnit(u) ||
+    u.isPaid === true ||
+    !!u.paidAt ||
+    PAID_STATUS_VALUES.includes(lc(u.paymentStatus))
+  );
+
+// Quick Auto Book immediate jobs are billed per worker (entry.total); every
+// other labour booking is billed on the booking itself.
+const usesPerWorkerBilling = (booking) =>
+  !!booking && !!booking.isAutobook &&
+  (booking.workerStatuses || []).some((w) => w.status === 'completed' && Number(w.total) > 0);
+
+const getPaymentState = (booking) => {
+  const none = { settled: false, paid: false, cashCollected: false, canPay: false, payableAmount: 0 };
+  if (!booking || booking.bookingType !== 'labour') return none;
+
+  if (usesPerWorkerBilling(booking)) {
+    const done = (booking.workerStatuses || []).filter((w) => w.status === 'completed' && Number(w.total) > 0);
+    const open = done.filter((w) => !isSettledUnit(w));
+    const openAmount = open.reduce((sum, w) => sum + (Number(w.total) || 0), 0);
+    return {
+      settled:       open.length === 0,
+      paid:          done.some((w) => lc(w.paymentStatus) === 'paid'),
+      cashCollected: done.some(isCashCollectedUnit),
+      canPay:        booking.status === 'completed' && open.length > 0,
+      payableAmount: open.length > 0 ? openAmount : 0,
+    };
+  }
+
+  const completedEntries = (booking.workerStatuses || []).filter((w) => w.status === 'completed');
+  const entriesAllSettled = !!booking.isAutobook && completedEntries.length > 0 && completedEntries.every(isSettledUnit);
+  const settled = isSettledUnit(booking) || entriesAllSettled;
+  const amount  = Number(booking.total) || 0;
+  return {
+    settled,
+    paid:          lc(booking.paymentStatus) === 'paid',
+    cashCollected: isCashCollectedUnit(booking) || (entriesAllSettled && completedEntries.some(isCashCollectedUnit)),
+    canPay:        booking.status === 'completed' && !settled && amount > 0,
+    payableAmount: settled ? 0 : amount,
+  };
+};
+
+const getPaymentBlockReason = (state, booking) => {
+  if (state.canPay) return null;
+  if (state.settled) return state.cashCollected ? 'cash_collected' : 'already_paid';
+  if (!booking || booking.status !== 'completed') return 'not_completed';
+  return 'nothing_due';
+};
+
+// One bill line-up for the payment page. Foundation rule:
+//   • work under 1 hour  → the category BASE PRICE is the foundation
+//   • work of 1 hour+    → the price calculated by the pricing calculation
+//                          (base price + extra time at the hourly rate)
+// then surge → minimum charge → service → GST → platform, exactly as it was
+// persisted when the customer confirmed the work.
+const makeQuoteUnit = (raw) => {
+  const subtotal = roundNum(raw.subtotal);
+  let multiplier = Number(raw.peak) || 1;
+  let foundation = roundNum(raw.foundation);
+  let afterSurge = roundNum(foundation * multiplier);
+  // Foundation missing / stale (older bookings): fall back to the stored subtotal
+  if (!(foundation > 0) || afterSurge > subtotal) {
+    foundation = subtotal;
+    multiplier = 1;
+    afterSurge = subtotal;
+  }
+  const serviceCharge            = roundNum(raw.serviceCharge);
+  const costRateAmount           = roundNum(raw.costRateAmount);
+  const platformCommissionAmount = roundNum(raw.platformCommissionAmount);
+  const total                    = roundNum(raw.total);
+  return {
+    foundation,
+    peakHourMultiplier:  multiplier,
+    surgeAmount:         afterSurge - foundation,
+    minChargeAdjustment: Math.max(0, subtotal - afterSurge),
+    subtotal,
+    serviceCharge,
+    costRate:            Number(raw.costRate) || 0,
+    costRateAmount,
+    platformCommission:  Number(raw.platformCommission) || 0,
+    platformCommissionAmount,
+    otherCharges:        Math.max(0, total - (subtotal + serviceCharge + costRateAmount + platformCommissionAmount)),
+    total,
+    hoursWorked:         raw.hoursWorked != null ? Number(raw.hoursWorked) : null,
+    hourlyRate:          raw.hourlyRate != null ? Number(raw.hourlyRate) : null,
+    baseFeeApplied:      !!raw.baseFeeApplied,
+  };
+};
+
+const buildPaymentQuote = async (booking) => {
+  const units = [];
+
+  if (usesPerWorkerBilling(booking)) {
+    const categoryDoc = await ServiceCategory.findOne({ name: categoryMatcher(booking.category) }).select('baseCharge').lean();
+    (booking.workerStatuses || [])
+      .filter((w) => w.status === 'completed' && Number(w.total) > 0 && !isSettledUnit(w))
+      .forEach((w) => {
+        const { rawBase } = computeFinalHourlyBase(
+          w.hourlyRate,
+          w.workerSnapshot ? [w.workerSnapshot] : [],
+          w.hoursWorked,
+          categoryDoc?.baseCharge
+        );
+        const b = w.billing || {};
+        units.push(makeQuoteUnit({
+          foundation: rawBase,
+          peak: b.peakHourMultiplier,
+          subtotal: w.subtotal,
+          serviceCharge: b.serviceCharge,
+          costRate: b.costRate,
+          costRateAmount: b.costRateAmount,
+          platformCommission: b.platformCommission,
+          platformCommissionAmount: b.platformCommissionAmount,
+          total: w.total,
+          hoursWorked: w.hoursWorked,
+          hourlyRate: w.hourlyRate,
+          baseFeeApplied: w.baseFeeApplied,
+        }));
+      });
+  } else {
+    const b = booking.billing || {};
+    units.push(makeQuoteUnit({
+      foundation: b.baseCost,
+      peak: b.peakHourMultiplier,
+      subtotal: booking.subtotal,
+      serviceCharge: b.serviceCharge,
+      costRate: b.costRate,
+      costRateAmount: b.costRateAmount,
+      platformCommission: b.platformCommission,
+      platformCommissionAmount: b.platformCommissionAmount,
+      total: booking.total,
+      hoursWorked: booking.hoursWorked,
+      hourlyRate: booking.hourlyRate,
+      baseFeeApplied: booking.baseFeeApplied,
+    }));
+  }
+
+  const sum   = (key) => units.reduce((s, u) => s + (Number(u[key]) || 0), 0);
+  const first = units[0];
+  return {
+    isImmediate:  booking.isImmediate !== false,
+    totalDays:    Number(booking.totalDays) || 1,
+    workerCount:  units.length,
+    baseFeeApplied: units.every((u) => u.baseFeeApplied),
+    hoursWorked:  units.length === 1 ? first.hoursWorked : null,
+    hourlyRate:   units.length === 1 ? first.hourlyRate : null,
+    foundation:   sum('foundation'),
+    peakHourMultiplier: first.peakHourMultiplier,
+    surgeAmount:  sum('surgeAmount'),
+    minChargeAdjustment: sum('minChargeAdjustment'),
+    subtotal:     sum('subtotal'),
+    serviceCharge: sum('serviceCharge'),
+    costRate:     first.costRate,
+    costRateAmount: sum('costRateAmount'),
+    platformCommission: first.platformCommission,
+    platformCommissionAmount: sum('platformCommissionAmount'),
+    otherCharges: sum('otherCharges'),
+    total:        sum('total'),
+  };
+};
+
 // ── Quick Auto Book: auto-expire if the required category never accepts ──
 // This project has no cron/queue infra, so this is scheduled with a plain
 // setTimeout right after the autobook request is created (see
@@ -233,8 +420,9 @@ const createBooking = async (req, res) => {
     }
 
     try {
-      // Deduct from wallet if payment method is wallet
-      if ((paymentMethod === 'wallet') && computedTotal > 0) {
+      // Labour bookings are paid AFTER the work is completed (see payBooking),
+      // so nothing is deducted from the wallet when the request is sent.
+      if (bookingType !== 'labour' && (paymentMethod === 'wallet') && computedTotal > 0) {
         const User = require('../models/User');
         const freshUser = await User.findById(req.user._id).select('walletBalance');
         if (!freshUser) throw new Error('User not found');
@@ -266,7 +454,7 @@ const createBooking = async (req, res) => {
         platformFee:    computedPlatformFee,
         total:          computedTotal,
         billing:        billing         || undefined,
-        paymentMethod:  paymentMethod   || 'cod',
+        paymentMethod:  bookingType === 'labour' ? 'pending' : (paymentMethod || 'cod'),
         scheduledDate:    scheduledDate    || null,
         scheduledEndDate: scheduledEndDate || null,
         scheduledDates:   scheduledDates   || [],
@@ -450,15 +638,8 @@ const createAutobookBooking = async (req, res) => {
       cancellationFee: bill.cancellationFee,
     };
 
-    if ((paymentMethod === 'wallet') && (estimatedSubtotal + fee) > 0) {
-      const User = require('../models/User');
-      const freshUser = await User.findById(req.user._id).select('walletBalance');
-      if (!freshUser) return res.status(400).json({ success: false, message: 'User not found' });
-      if ((freshUser.walletBalance || 0) < (estimatedSubtotal + fee)) {
-        return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
-      }
-      await User.findByIdAndUpdate(req.user._id, { $inc: { walletBalance: -(estimatedSubtotal + fee) } });
-    }
+    // Labour bookings are paid AFTER the work is completed (see payBooking),
+    // so nothing is deducted from the wallet when the request is sent.
 
     const booking = await Booking.create({
       user: req.user._id,
@@ -483,7 +664,7 @@ const createAutobookBooking = async (req, res) => {
       platformFee: fee,
       total:       estimatedSubtotal + fee,
       billing,
-      paymentMethod: paymentMethod || 'cod',
+      paymentMethod: 'pending',
       scheduledDate:    scheduledDate    || null,
       scheduledEndDate: scheduledEndDate || null,
       scheduledDates:   scheduledDates   || [],
@@ -584,6 +765,7 @@ const getBookingById = async (req, res) => {
         .populate('workers', 'fullName category profileImage rating phone bio experience totalJobs isVerified')
         .lean();
       if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+      booking.paymentState = getPaymentState(booking);
       return res.json({ success: true, booking });
     }
 
@@ -597,6 +779,7 @@ const getBookingById = async (req, res) => {
     );
 
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+    booking.paymentState = getPaymentState(booking);
     res.json({ success: true, booking });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -1204,4 +1387,226 @@ const updateBookingNotes = async (req, res) => {
   }
 };
 
-module.exports = { createBooking, createAutobookBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue, submitReview, getLabourBillPreview, updateBookingNotes }; 
+// ── GET /api/bookings/:id/payment ─────────────────────────────────────────
+// Always read fresh from the DB (never cached): drives the "Continue to
+// Payment" page and must reflect a labour tapping "Cash Collected" instantly.
+const getBookingPayment = async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id })
+      .populate('workers', 'fullName category')
+      .lean();
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+    if (booking.bookingType !== 'labour') {
+      return res.status(400).json({ success: false, message: 'Only labour bookings are paid from here' });
+    }
+
+    const state  = getPaymentState(booking);
+    const reason = getPaymentBlockReason(state, booking);
+    const quote  = state.canPay ? await buildPaymentQuote(booking) : null;
+
+    const workerNames = (Array.isArray(booking.workers) && booking.workers.length
+      ? booking.workers.map((w) => w && w.fullName)
+      : (booking.workerSnapshot || []).map((w) => w && (w.fullName || w.name))
+    ).filter(Boolean);
+
+    res.json({
+      success: true,
+      booking: {
+        _id:         booking._id,
+        category:    booking.category,
+        status:      booking.status,
+        isImmediate: booking.isImmediate !== false,
+        totalDays:   booking.totalDays || 1,
+        workerNames,
+      },
+      payment: {
+        settled:       state.settled,
+        paid:          state.paid,
+        cashCollected: state.cashCollected,
+        canPay:        state.canPay,
+        payableAmount: state.payableAmount,
+        reason,
+        quote,
+      },
+    });
+  } catch (err) {
+    logger.error({ err, bookingId: req.params.id }, 'getBookingPayment failed');
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── POST /api/bookings/:id/pay ────────────────────────────────────────────
+// Customer pays the final bill after the work is completed. Safe against
+// double payment:
+//   • refused when the labour already collected cash / it is already paid
+//   • an atomic claim (paymentStatus → 'processing') makes concurrent taps /
+//     retries mutually exclusive, so only one request can ever charge
+//   • wallet debit is atomic (balance >= amount) and refunded on any failure
+const payBooking = async (req, res) => {
+  const bookingId = req.params.id;
+  const { paymentMethod } = req.body || {};
+
+  if (!PAY_METHODS.includes(paymentMethod)) {
+    return res.status(400).json({ success: false, message: 'Please choose a valid payment method' });
+  }
+
+  let claimed        = false;
+  let previousStatus = 'unpaid';
+  let walletDebited  = 0;
+  let finalized      = false;
+
+  const release = async () => {
+    await Booking.updateOne(
+      { _id: bookingId, paymentStatus: 'processing' },
+      { $set: { paymentStatus: previousStatus } }
+    ).catch(() => {});
+  };
+  const settledMessage = (state) =>
+    state.cashCollected
+      ? 'Your worker has already collected the cash for this booking. No payment is needed.'
+      : 'This booking has already been paid.';
+
+  try {
+    const probe = await Booking.findOne({ _id: bookingId, user: req.user._id }).lean();
+    if (!probe) return res.status(404).json({ success: false, message: 'Booking not found' });
+    if (probe.bookingType !== 'labour') {
+      return res.status(400).json({ success: false, message: 'Only labour bookings are paid from here' });
+    }
+
+    const probeState = getPaymentState(probe);
+    if (probeState.settled) return res.status(409).json({ success: false, message: settledMessage(probeState) });
+    if (!probeState.canPay) {
+      return res.status(400).json({ success: false, message: 'Payment is available only after the work is completed.' });
+    }
+
+    // ── Atomic claim ────────────────────────────────────────────────────
+    const perWorker = usesPerWorkerBilling(probe);
+    const claimFilter = perWorker
+      ? { _id: bookingId, user: req.user._id, paymentStatus: { $ne: 'processing' } }
+      : {
+          _id: bookingId,
+          user: req.user._id,
+          paymentStatus: { $nin: [...PAID_STATUS_VALUES, 'processing'] },
+          cashCollected: { $ne: true },
+          cashCollectedAt: null,
+        };
+    const before = await Booking.findOneAndUpdate(
+      claimFilter,
+      { $set: { paymentStatus: 'processing' } },
+      { new: false }
+    ).lean();
+
+    if (!before) {
+      const current = await Booking.findOne({ _id: bookingId, user: req.user._id }).lean();
+      const currentState = getPaymentState(current);
+      if (currentState.settled) return res.status(409).json({ success: false, message: settledMessage(currentState) });
+      return res.status(409).json({ success: false, message: 'A payment for this booking is already being processed. Please wait a moment.' });
+    }
+    claimed = true;
+    previousStatus = before.paymentStatus && before.paymentStatus !== 'processing' ? before.paymentStatus : 'unpaid';
+
+    // Re-check on the exact document we claimed (a labour may have tapped
+    // "Cash Collected" between the probe above and the claim).
+    const state = getPaymentState(before);
+    if (!state.canPay) {
+      await release();
+      claimed = false;
+      return state.settled
+        ? res.status(409).json({ success: false, message: settledMessage(state) })
+        : res.status(400).json({ success: false, message: 'Payment is available only after the work is completed.' });
+    }
+
+    const amount = state.payableAmount;
+    let walletBalanceAfter = null;
+
+    // ── Wallet: atomic debit ────────────────────────────────────────────
+    if (paymentMethod === 'wallet') {
+      const User = require('../models/User');
+      const debited = await User.findOneAndUpdate(
+        { _id: req.user._id, walletBalance: { $gte: amount } },
+        { $inc: { walletBalance: -amount } },
+        { new: true }
+      ).select('walletBalance').lean();
+      if (!debited) {
+        await release();
+        claimed = false;
+        return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
+      }
+      walletDebited = amount;
+      walletBalanceAfter = debited.walletBalance;
+    }
+
+    // ── Mark paid ───────────────────────────────────────────────────────
+    const now = new Date();
+    if (perWorker) {
+      const openWorkerIds = (before.workerStatuses || [])
+        .filter((w) => w.status === 'completed' && Number(w.total) > 0 && !isSettledUnit(w))
+        .map((w) => w.worker);
+      await Booking.updateOne(
+        { _id: bookingId },
+        {
+          $set: {
+            paymentStatus: 'paid',
+            paymentMethod,
+            paidAt: now,
+            'workerStatuses.$[e].paymentStatus': 'paid',
+            'workerStatuses.$[e].paymentMethod': paymentMethod,
+            'workerStatuses.$[e].paidAt': now,
+          },
+          $inc: { paidAmount: amount },
+        },
+        { arrayFilters: [{ 'e.worker': { $in: openWorkerIds }, 'e.status': 'completed' }] }
+      );
+    } else {
+      await Booking.updateOne(
+        { _id: bookingId },
+        { $set: { paymentStatus: 'paid', paymentMethod, paidAt: now, paidAmount: amount } }
+      );
+    }
+    finalized = true;
+
+    // ── Caches + realtime (best effort — payment is already recorded) ──
+    const workerIds = (before.workers || []).map((w) => w.toString());
+    await invalidateCache(
+      `bookings:detail:${bookingId}`,
+      `bookings:user:${req.user._id}:*`
+    ).catch(() => {});
+    await Promise.allSettled([
+      invalidateCache(`bp:booking:${bookingId}`),
+      ...workerIds.map((wId) => invalidateCache(`bp:worker:${wId}:history:*`)),
+    ]).catch(() => {});
+
+    try {
+      const io = getIO();
+      const payload = { bookingId: bookingId.toString(), paymentStatus: 'paid', paymentMethod, amount };
+      io.to(`customer_${req.user._id}`).emit('booking_updated', {
+        operationType: 'update', bookingId: bookingId.toString(), status: before.status, bookingSnapshot: null,
+      });
+      io.to(`booking_${bookingId}`).emit('booking_payment_updated', payload);
+      workerIds.forEach((wId) => io.to(`worker_${wId}`).emit('booking_payment_updated', payload));
+    } catch (_) {}
+
+    return res.json({
+      success: true,
+      message: 'Payment successful',
+      payment: { paid: true, amount, paymentMethod, paidAt: now },
+      walletBalance: walletBalanceAfter,
+    });
+  } catch (err) {
+    logger.error({ err, bookingId, userId: req.user?._id }, 'payBooking failed');
+    if (!finalized) {
+      if (walletDebited > 0) {
+        try {
+          const User = require('../models/User');
+          await User.updateOne({ _id: req.user._id }, { $inc: { walletBalance: walletDebited } });
+        } catch (refundErr) {
+          logger.error({ err: refundErr, bookingId }, 'payBooking wallet refund failed');
+        }
+      }
+      if (claimed) await release();
+    }
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { createBooking, createAutobookBooking, getMyBookings, getBookingById, cancelBooking, confirmCompletion, reportIssue, submitReview, getLabourBillPreview, updateBookingNotes, getBookingPayment, payBooking }; 

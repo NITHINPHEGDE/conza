@@ -12,6 +12,7 @@ import CreateProjectScreen    from '../screens/CreateProjectScreen';
 import ProjectDetailScreen    from '../screens/ProjectDetailScreen';
 import ProfileScreen          from '../screens/ProfileScreen';
 import LabourCheckoutScreen   from '../screens/LabourCheckoutScreen';
+import LabourPaymentScreen    from '../screens/LabourPaymentScreen';
 import MaterialCheckoutScreen from '../screens/MaterialCheckoutScreen';
 import BookingConfirmationScreen from '../screens/BookingConfirmationScreen';
 import MaterialDetailScreen   from '../screens/MaterialDetailScreen';
@@ -68,6 +69,8 @@ const StatusStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="StatusList"    component={StatusScreen}          />
     <Stack.Screen name="BookingDetail" component={BookingTrackingScreen} />
+    <Stack.Screen name="LabourPayment" component={LabourPaymentScreen}   />
+    <Stack.Screen name="Wallet"        component={WalletScreen}          />
     <Stack.Screen name="OrderDetail"   component={OrderDetailScreen}     />
   </Stack.Navigator>
 );

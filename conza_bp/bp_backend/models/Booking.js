@@ -34,8 +34,15 @@ const bookingSchema = new mongoose.Schema(
     platformFee: { type: Number, default: 0 },
     total:       { type: Number, required: true },
     paymentMethod: {
-      type: String, enum: ['cod', 'upi', 'card', 'wallet', 'pending'], default: 'cod',
+      type: String, enum: ['cod', 'upi', 'card', 'wallet', 'cash', 'pending'], default: 'cod',
     },
+
+    // ── Payment settlement (labour) ───────────────────────────────────────
+    // Set by the labour app when the worker collects cash from the customer.
+    // Once cashCollected=true the customer's "Continue to Payment" button is hidden.
+    paymentStatus:   { type: String, default: 'unpaid' }, // 'unpaid' | 'cash_collected' | 'paid'
+    cashCollected:   { type: Boolean, default: false },
+    cashCollectedAt: { type: Date, default: null },
 
     // Status
     status: {
@@ -81,6 +88,10 @@ const bookingSchema = new mongoose.Schema(
       subtotal:       { type: Number, default: 0 },
       total:          { type: Number, default: 0 },
       paymentMethod:  { type: String, default: null },
+      // Per-worker settlement fields for autobook
+      paymentStatus:   { type: String, default: 'unpaid' },
+      cashCollected:   { type: Boolean, default: false },
+      cashCollectedAt: { type: Date, default: null },
     }],
 
     // Issue Reporting

@@ -565,6 +565,17 @@ lastPaymentMethod: null,
     setTrackingMode(TRACKING_MODE.IDLE);  // guard: ensure mode resets on any job reset
   },
 
+  // ── Mark Cash Collected ───────────────────────────────────────────────
+  // Tells the backend the worker has collected cash from the customer.
+  // The backend relays the event to the customer app so the
+  // "Continue to Payment" button disappears in real-time.
+  markCashCollected: async (bookingId) => {
+    const { api } = require('../services/apiClient');
+    const data = await api.patch(`/bookings/${bookingId}/cash-collected`, {});
+    return data;
+  },
+
+
   activeJobId: null,
 
   setActiveJobId: async (id) => {

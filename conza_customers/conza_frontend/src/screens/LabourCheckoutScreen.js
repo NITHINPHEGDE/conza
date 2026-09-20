@@ -22,8 +22,7 @@ import { reverseGeocodeFullAddress } from '../hooks/useAuth';
 import useAppStore from '../store/useAppStore';
 import { useBooking } from '../hooks/useBooking';
 import SavedAddressSheet from '../components/SavedAddressSheet';
-import LabourPriceEstimate from '../components/LabourPriceEstimate';
-import { useLabourPriceEstimate } from '../hooks/useLabourPriceEstimate';
+
 
 // Subtle top-down vector map tile background asset
 const mapPreviewBg = require('../../assets/images/map_preview_bg.jpg');
@@ -57,7 +56,6 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
   const primaryWorker = effectiveWorkers[0] || {};
 
   const scrollRef = useRef(null);
-  const [currentStep, setCurrentStep] = useState(1); // 1 = Details, 2 = Payment
 
   // Project linkage
   const activeProject = useAppStore((s) => s.activeProject);
@@ -139,9 +137,10 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
 
   const totalDays = bookingType === 'scheduled' ? Math.max(scheduledDates.length, 1) : 1;
 
-  // Step 2 state: Payment method & terms
-  const [paymentMethod, setPaymentMethod] = useState('cod'); // Default to Cash on Delivery
-  const [agreeTerms, setAgreeTerms]       = useState(true);
+  // Labour bookings are NOT paid at request time — the request goes straight
+  // to the labour(s). The customer pays after the work is completed from
+  // Booking Details → Continue to Payment (unless the labour collects cash).
+  const paymentMethod = 'pending';
 
   // Worker display values
   const workerName = primaryWorker.fullName || primaryWorker.name || 'Ramesh Kumar';
@@ -154,32 +153,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
     ? Number(primaryWorker.baseCharge)
     : 150;
 
-  // Pricing calculation — fetched live from the server, which applies the
-  // admin panel's Finance → Pricing → Labour settings to:
-  //   • lessThanHour → the worker's base charge as the foundation
-  //   • oneHour      → the worker's per-hour charge as the foundation
-  //   • scheduled    → the per-day charge × number of days
-  const {
-    estimates: priceEstimates,
-    loading: priceLoading,
-    error: priceError,
-    refetch: refetchPriceEstimate,
-  } = useLabourPriceEstimate({
-    enabled: currentStep === 2,
-    workers: effectiveWorkers,
-    category: workerCategory,
-    isImmediate: bookingType === 'immediate',
-    totalDays,
-    isAutobook,
-    requiredWorkers,
-  });
 
-  const bottomTotal = bookingType === 'scheduled'
-    ? priceEstimates?.scheduled?.total
-    : priceEstimates?.lessThanHour?.total;
-  const bottomTotalLabel = bookingType === 'scheduled'
-    ? 'Estimated Total'
-    : 'Estimated · starts from';
 
   // Original labour uploaded image (fallback to safe avatar)
   const [imageFailed, setImageFailed] = useState(false);
@@ -203,23 +177,8 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
 
   // Handle header back button
   const handleBack = useCallback(() => {
-    if (currentStep === 2) {
-      setCurrentStep(1);
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    } else {
-      navigation.goBack();
-    }
-  }, [currentStep, navigation]);
-
-  // Handle step transition
-  const handleContinueToPayment = useCallback(() => {
-    if (!city || !pincode) {
-      Alert.alert('Address Needed', 'Please provide a valid delivery address with city and pincode.');
-      return;
-    }
-    setCurrentStep(2);
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
-  }, [city, pincode]);
+    navigation.goBack();
+  }, [navigation]);
 
   // Handle address selection from sheet
   const handleSavedAddressSelect = useCallback((item) => {
@@ -239,8 +198,10 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
 
   // Handle confirm booking
   const handleConfirmBooking = useCallback(async () => {
-    if (!agreeTerms) {
-      Alert.alert('Terms Required', 'Please accept the Terms & Conditions and Privacy Policy to proceed.');
+    if (submitting) return;
+
+    if (!city || !pincode) {
+      Alert.alert('Address Needed', 'Please provide a valid delivery address with city and pincode.');
       return;
     }
 
@@ -263,7 +224,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       district,
       state,
       pincode,
-      paymentMethod, // 'cod' or other
+      paymentMethod, // always 'pending' — paid after the work is completed
       description: notes,
       isImmediate: bookingType === 'immediate',
       scheduledDate: bookingType === 'scheduled' ? combinedScheduledDate : null,
@@ -279,14 +240,14 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         attachment: result,
         title: 'Booking Confirmed! ⚡',
         message: selectedProject
-          ? `Your labour booking has been confirmed and linked to "${selectedProject.name}". Track it from Status.`
-          : paymentMethod === 'cod'
-            ? 'Your booking is confirmed! Pay in cash after the work is completed.'
-            : 'Your labour booking has been confirmed successfully.',
+          ? `Your request has been sent and linked to "${selectedProject.name}". Track it from Status. You can pay once the work is completed.`
+          : 'Your request has been sent to the labour. Track it from Status — you can pay from Booking Details once the work is completed.',
       });
+    } else {
+      Alert.alert('Booking Failed', 'We could not send your request. Please check your details and try again.');
     }
   }, [
-    agreeTerms,
+    submitting,
     scheduledDate,
     scheduledTime,
     toDate,
@@ -378,34 +339,19 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
       <View style={styles.stepperContainer}>
         {/* Step 1: Details */}
         <View style={styles.stepItem}>
-          <View style={[styles.stepCircle, currentStep === 1 ? styles.stepCircleActive : styles.stepCircleDone]}>
-            {currentStep > 1 ? (
-              <MaterialCommunityIcons name="check" size={16} color="#0F172A" />
-            ) : (
-              <Text style={styles.stepNumberActive}>1</Text>
-            )}
+          <View style={[styles.stepCircle, styles.stepCircleActive]}>
+            <Text style={styles.stepNumberActive}>1</Text>
           </View>
-          <Text style={[styles.stepLabel, currentStep === 1 && styles.stepLabelActive]}>Details</Text>
+          <Text style={[styles.stepLabel, styles.stepLabelActive]}>Details</Text>
         </View>
 
         {/* Line 1 -> 2 */}
-        <View style={[styles.stepLine, currentStep > 1 ? styles.stepLineActive : styles.stepLineInactive]} />
-
-        {/* Step 2: Payment */}
-        <View style={styles.stepItem}>
-          <View style={[styles.stepCircle, currentStep === 2 ? styles.stepCircleActive : styles.stepCircleInactive]}>
-            <Text style={currentStep === 2 ? styles.stepNumberActive : styles.stepNumberInactive}>2</Text>
-          </View>
-          <Text style={[styles.stepLabel, currentStep === 2 && styles.stepLabelActive]}>Payment</Text>
-        </View>
-
-        {/* Line 2 -> 3 */}
         <View style={styles.stepLine} />
 
-        {/* Step 3: Confirmation */}
+        {/* Step 2: Confirmation */}
         <View style={styles.stepItem}>
           <View style={[styles.stepCircle, styles.stepCircleInactive]}>
-            <Text style={styles.stepNumberInactive}>3</Text>
+            <Text style={styles.stepNumberInactive}>2</Text>
           </View>
           <Text style={styles.stepLabel}>Confirmation</Text>
         </View>
@@ -417,11 +363,7 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {currentStep === 1 ? (
-          /* ========================================================================= */
-          /*                             STEP 1: DETAILS                               */
-          /* ========================================================================= */
-          <>
+        <>
             {/* Worker Card */}
             <View style={styles.workerCard}>
               <View style={styles.workerAvatarContainer}>
@@ -734,247 +676,33 @@ const LabourCheckoutScreen = ({ route, navigation }) => {
               <Text style={styles.notesCharCount}>{notes.length}/200</Text>
             </View>
 
-            <View style={{ height: 90 }} />
+            <View style={{ height: 160 }} />
           </>
-        ) : (
-          /* ========================================================================= */
-          /*                             STEP 2: PAYMENT                               */
-          /* ========================================================================= */
-          <>
-            {/* Price Summary (Estimated) */}
-            <View style={styles.sectionHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialCommunityIcons name="currency-inr" size={18} color="#0F172A" />
-                <Text style={styles.sectionTitle}>Price Summary (Estimated)</Text>
-              </View>
-            </View>
-
-            <LabourPriceEstimate
-              isImmediate={bookingType === 'immediate'}
-              estimates={priceEstimates}
-              loading={priceLoading}
-              error={priceError}
-              onRetry={refetchPriceEstimate}
-            />
-
-            {/* Payment Method Section */}
-            <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialCommunityIcons name="credit-card-outline" size={18} color="#0F172A" />
-                <Text style={styles.sectionTitle}>Payment Method</Text>
-              </View>
-            </View>
-            <Text style={styles.sectionSubTitle}>Choose how you want to pay</Text>
-
-            {/* Method 1: UPI */}
-            <TouchableOpacity
-              style={[styles.paymentMethodCard, paymentMethod === 'upi' && styles.paymentMethodCardSelected]}
-              activeOpacity={0.8}
-              onPress={() => setPaymentMethod('upi')}
-            >
-              <View style={styles.paymentMethodTop}>
-                <View style={[styles.radioCircle, paymentMethod === 'upi' && styles.radioCircleSelected]}>
-                  {paymentMethod === 'upi' && <View style={styles.radioDot} />}
-                </View>
-                <View style={styles.upiLogoBox}>
-                  <Text style={styles.upiLogoText}>UPI</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.paymentMethodTitle}>UPI (Recommended)</Text>
-                  <View style={styles.upiBadgesRow}>
-                    <View style={styles.brandBadge}>
-                      <Text style={[styles.brandBadgeText, { color: '#4285F4' }]}>G</Text>
-                      <Text style={[styles.brandBadgeText, { color: '#EA4335' }]}>P</Text>
-                      <Text style={[styles.brandBadgeText, { color: '#FBBC05' }]}>a</Text>
-                      <Text style={[styles.brandBadgeText, { color: '#34A853' }]}>y</Text>
-                    </View>
-                    <View style={[styles.brandBadge, { backgroundColor: '#5F259F' }]}>
-                      <Text style={[styles.brandBadgeText, { color: '#FFFFFF' }]}>PhonePe</Text>
-                    </View>
-                    <View style={[styles.brandBadge, { backgroundColor: '#00B9F5' }]}>
-                      <Text style={[styles.brandBadgeText, { color: '#FFFFFF' }]}>Paytm</Text>
-                    </View>
-                    <View style={[styles.brandBadge, { backgroundColor: '#006699' }]}>
-                      <Text style={[styles.brandBadgeText, { color: '#FFFFFF' }]}>BHIM</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* Method 2: Cards */}
-            <TouchableOpacity
-              style={[styles.paymentMethodCard, paymentMethod === 'card' && styles.paymentMethodCardSelected]}
-              activeOpacity={0.8}
-              onPress={() => setPaymentMethod('card')}
-            >
-              <View style={styles.paymentMethodTop}>
-                <View style={[styles.radioCircle, paymentMethod === 'card' && styles.radioCircleSelected]}>
-                  {paymentMethod === 'card' && <View style={styles.radioDot} />}
-                </View>
-                <View style={styles.paymentIconBox}>
-                  <MaterialCommunityIcons name="credit-card-outline" size={20} color="#0F172A" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.paymentMethodTitle}>Credit / Debit Card</Text>
-                  <Text style={styles.paymentMethodSub}>Visa, Mastercard, RuPay, Maestro</Text>
-                  <View style={styles.cardBadgesRow}>
-                    <View style={[styles.brandBadge, { backgroundColor: '#1A1F71' }]}>
-                      <Text style={[styles.brandBadgeText, { color: '#FFFFFF', fontStyle: 'italic', fontWeight: '600' }]}>VISA</Text>
-                    </View>
-                    <View style={[styles.brandBadge, { backgroundColor: '#EB001B' }]}>
-                      <Text style={[styles.brandBadgeText, { color: '#FF5F00', fontWeight: '600' }]}>●●</Text>
-                    </View>
-                    <View style={[styles.brandBadge, { backgroundColor: '#00529B' }]}>
-                      <Text style={[styles.brandBadgeText, { color: '#F7A800', fontWeight: '600' }]}>RuPay</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* Method 3: Wallet */}
-            <TouchableOpacity
-              style={[styles.paymentMethodCard, paymentMethod === 'wallet' && styles.paymentMethodCardSelected]}
-              activeOpacity={0.8}
-              onPress={() => setPaymentMethod('wallet')}
-            >
-              <View style={styles.paymentMethodTop}>
-                <View style={[styles.radioCircle, paymentMethod === 'wallet' && styles.radioCircleSelected]}>
-                  {paymentMethod === 'wallet' && <View style={styles.radioDot} />}
-                </View>
-                <View style={[styles.paymentIconBox, { backgroundColor: '#0F172A' }]}>
-                  <MaterialCommunityIcons name="wallet-outline" size={18} color="#FFFFFF" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.paymentMethodTitle}>Wallet</Text>
-                  <Text style={styles.paymentMethodSub}>Use your CONZAA wallet</Text>
-                  <Text style={styles.walletBalanceText}>Available balance: ₹{walletBalance}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.addMoneyBtn}
-                  activeOpacity={0.7}
-                  onPress={() => navigation.navigate('Wallet')}
-                >
-                  <Text style={styles.addMoneyBtnText}>Add Money</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-
-            {/* Method 4: Cash on Delivery / Pay After Service */}
-            <TouchableOpacity
-              style={[styles.paymentMethodCard, paymentMethod === 'cod' && styles.paymentMethodCardSelected]}
-              activeOpacity={0.8}
-              onPress={() => setPaymentMethod('cod')}
-            >
-              <View style={styles.paymentMethodTop}>
-                <View style={[styles.radioCircle, paymentMethod === 'cod' && styles.radioCircleSelected]}>
-                  {paymentMethod === 'cod' && <View style={styles.radioDot} />}
-                </View>
-                <View style={[styles.paymentIconBox, { backgroundColor: '#0F172A' }]}>
-                  <MaterialCommunityIcons name="cash-multiple" size={18} color="#FFFFFF" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.paymentMethodTitle}>Cash / Pay After Service</Text>
-                  <Text style={styles.paymentMethodSub}>Pay after the work is completed</Text>
-                </View>
-                <View style={styles.popularBadge}>
-                  <Text style={styles.popularBadgeText}>Popular</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* Booking Policies Section */}
-            <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialCommunityIcons name="shield-check-outline" size={18} color="#0F172A" />
-                <Text style={styles.sectionTitle}>Booking Policies</Text>
-              </View>
-            </View>
-
-            <View style={styles.policiesCard}>
-              <View style={styles.policyRow}>
-                <MaterialCommunityIcons name="calendar-clock-outline" size={18} color="#475569" />
-                <Text style={styles.policyText}>Free cancellation before work starts</Text>
-              </View>
-              <View style={styles.policyRow}>
-                <MaterialCommunityIcons name="clock-outline" size={18} color="#475569" />
-                <Text style={styles.policyText}>You will be charged for actual working time</Text>
-              </View>
-              <View style={styles.policyRow}>
-                <MaterialCommunityIcons name="shield-check-outline" size={18} color="#475569" />
-                <Text style={styles.policyText}>Verified and background-checked labourers</Text>
-              </View>
-              <View style={styles.policyRow}>
-                <MaterialCommunityIcons name="headphones" size={18} color="#475569" />
-                <Text style={styles.policyText}>24/7 customer support</Text>
-              </View>
-            </View>
-
-            {/* Terms and conditions Checkbox */}
-            <TouchableOpacity
-              style={styles.termsRow}
-              activeOpacity={0.8}
-              onPress={() => setAgreeTerms(!agreeTerms)}
-            >
-              <MaterialCommunityIcons
-                name={agreeTerms ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                size={20}
-                color={agreeTerms ? '#2563EB' : '#94A3B8'}
-              />
-              <Text style={styles.termsText}>
-                I agree to the <Text style={styles.termsLink}>Terms & Conditions</Text> and{' '}
-                <Text style={styles.termsLink}>Privacy Policy</Text>
-              </Text>
-            </TouchableOpacity>
-
-            <View style={{ height: 110 }} />
-          </>
-        )}
       </ScrollView>
 
       {/* ========================================================================= */}
       {/*                             BOTTOM ACTION BAR                             */}
       {/* ========================================================================= */}
-      {currentStep === 1 ? (
-        <View style={styles.bottomBarSingle}>
-          <TouchableOpacity
-            style={styles.continueBtn}
-            activeOpacity={0.88}
-            onPress={handleContinueToPayment}
-          >
-            <Text style={styles.continueBtnText}>Continue to Payment  →</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.bottomBarDual}>
-          <View style={styles.bottomPriceCol}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={styles.bottomTotalAmount}>
-                {bottomTotal != null ? `₹${bottomTotal}` : '—'}
-              </Text>
-              <MaterialCommunityIcons name="information-outline" size={15} color="#64748B" />
-            </View>
-            <Text style={styles.bottomTotalSub}>{bottomTotalLabel}</Text>
-          </View>
-
-          <View style={styles.bottomActionCol}>
-            <TouchableOpacity
-              style={styles.confirmBookingBtn}
-              activeOpacity={0.88}
-              onPress={handleConfirmBooking}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#0F172A" />
-              ) : (
-                <Text style={styles.confirmBookingText}>Confirm Booking  →</Text>
-              )}
-            </TouchableOpacity>
-            <Text style={styles.cancelAnytimeText}>You can cancel anytime before work starts</Text>
-          </View>
-        </View>
-      )}
+      <View style={styles.bottomBarSingle}>
+        <TouchableOpacity
+          style={[styles.continueBtn, submitting && styles.continueBtnDisabled]}
+          activeOpacity={0.88}
+          onPress={handleConfirmBooking}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#0F172A" />
+          ) : (
+            <Text style={styles.continueBtnText}>Confirm Booking  →</Text>
+          )}
+        </TouchableOpacity>
+        <Text style={styles.confirmNoteText}>
+          Your request goes straight to the labour. You pay only after the work is completed.
+        </Text>
+        <Text style={styles.confirmNoteSub}>
+          By confirming you agree to our Terms & Conditions and Privacy Policy
+        </Text>
+      </View>
 
       {/* Saved Address Sheet Modal */}
       <SavedAddressSheet
@@ -1674,6 +1402,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#0F172A',
+  },
+  continueBtnDisabled: {
+    opacity: 0.7,
+  },
+  confirmNoteText: {
+    fontSize: 11,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  confirmNoteSub: {
+    fontSize: 10,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 2,
   },
 
   bottomBarDual: {

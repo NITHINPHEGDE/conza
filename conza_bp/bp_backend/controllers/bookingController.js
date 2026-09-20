@@ -560,4 +560,114 @@ const getEarningEstimate = async (req, res) => {
   }
 };
 
-module.exports = { getWorkerRequests, acceptAutobookRequest, updateBookingStatus, getWorkerHistory, getBookingById, getEarningEstimate };
+
+// ── PATCH /api/bookings/:id/cash-collected ────────────────────────────────
+// Called by the labour app after collecting cash from the customer.
+// Atomically sets cashCollected=true on the booking so the customer's
+// "Continue to Payment" button is hidden immediately.
+// For autobook: sets the per-worker entry AND the top-level fields if ALL
+// assigned workers have collected their share.
+const markCashCollected = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const workerId  = req.worker._id.toString();
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Only allow after work is fully completed
+    if (!['awaiting_customer_confirmation', 'completed'].includes(booking.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cash can only be collected after the work is completed.',
+      });
+    }
+
+    // Guard: never allow double-marking
+    if (booking.cashCollected) {
+      return res.status(409).json({
+        success: false,
+        message: 'Cash has already been marked as collected for this booking.',
+      });
+    }
+
+    const now = new Date();
+
+    if (booking.isAutobook) {
+      // Update the worker's own workerStatuses entry
+      const entry = booking.workerStatuses.find(
+        (w) => w.worker.toString() === workerId
+      );
+      if (!entry) {
+        return res.status(403).json({ success: false, message: 'Not authorized for this booking.' });
+      }
+      if (entry.cashCollected) {
+        return res.status(409).json({ success: false, message: 'You have already marked cash as collected.' });
+      }
+      entry.cashCollected   = true;
+      entry.cashCollectedAt = now;
+      entry.paymentStatus   = 'cash_collected';
+      entry.paymentMethod   = 'cash';
+
+      // If every worker has collected, also mark the booking-level fields
+      const allCollected = booking.workerStatuses
+        .filter(w => ['accepted','arrived','in_progress','awaiting_customer_confirmation','completed'].includes(w.status))
+        .every(w => w.cashCollected);
+      if (allCollected) {
+        booking.cashCollected   = true;
+        booking.cashCollectedAt = now;
+        booking.paymentStatus   = 'cash_collected';
+        booking.paymentMethod   = 'cash';
+      }
+    } else {
+      // Validate the worker is assigned
+      const isAssigned = booking.workers.some(id => id.toString() === workerId);
+      if (!isAssigned) {
+        return res.status(403).json({ success: false, message: 'Not authorized for this booking.' });
+      }
+      booking.cashCollected   = true;
+      booking.cashCollectedAt = now;
+      booking.paymentStatus   = 'cash_collected';
+      booking.paymentMethod   = 'cash';
+    }
+
+    await booking.save();
+
+    await Promise.allSettled([
+      invalidateCache(
+        `bp:worker:${workerId}:history:*`,
+        `bp:booking:${bookingId}`
+      ),
+      invalidateCache(`bookings:user:${booking.user}:*`, `bookings:detail:${bookingId}`),
+    ]);
+
+    // Relay to the customer backend so the customer's tracking screen
+    // updates in real-time and hides the "Continue to Payment" button.
+    try {
+      notifyCustomerBackend(`customer_${booking.user}`, 'booking_updated', {
+        operationType: 'update',
+        bookingId,
+        cashCollected: true,
+        paymentStatus: 'cash_collected',
+      });
+      notifyCustomerBackend(`booking_${bookingId}`, 'booking_updated', {
+        operationType: 'update',
+        bookingId,
+        cashCollected: true,
+        paymentStatus: 'cash_collected',
+      });
+    } catch (err) {
+      logger.error({ err }, 'Failed to relay cash-collected event to customer backend');
+    }
+
+    logger.info({ bookingId, workerId }, 'Cash marked as collected');
+    res.json({ success: true, booking });
+  } catch (err) {
+    logger.error({ err }, 'markCashCollected failed');
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { getWorkerRequests, acceptAutobookRequest, updateBookingStatus, getWorkerHistory, getBookingById, getEarningEstimate, markCashCollected };

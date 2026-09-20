@@ -87,20 +87,15 @@ const MapPlaceholder = React.memo(({ onNavigate, address, latitude, longitude })
 });
 
 // ── CompletionModal ───────────────────────────────────────────────────────────
-const CompletionModal = React.memo(({ visible, amount, onFinished }) => {
+const CompletionModal = React.memo(({ visible, amount, onFinished, onCashCollect, cashLoading }) => {
   const [showQR, setShowQR]           = useState(false);
   const [paymentDone, setPaymentDone] = useState(false);
   const [paymentType, setPaymentType] = useState('cash'); // 'cash' | 'online'
 
   const handleCash = useCallback(() => {
-    setPaymentType('cash');
-    setShowQR(false);
-    setPaymentDone(true);
-    setTimeout(() => {
-      setPaymentDone(false);
-      onFinished('cash');
-    }, 1800);
-  }, [onFinished]);
+    // Delegate to parent — parent calls the backend and then calls onFinished
+    onCashCollect?.();
+  }, [onCashCollect]);
 
   const handleQRDone = useCallback(() => {
     setPaymentType('online');
@@ -129,7 +124,7 @@ const CompletionModal = React.memo(({ visible, amount, onFinished }) => {
               <Text style={styles.modalTitle}>Money Received!</Text>
               <Text style={styles.modalAmount}>+₹{amount}</Text>
               <Text style={styles.modalSub}>
-                {paymentType === 'online' ? '📱 Online · Added to Online Earned' : '💵 Cash · Commission due to Conza'}
+                {paymentType === 'online' ? '📱 Online · Customer paid digitally' : '💵 Cash · Marked as collected'}
               </Text>
             </>
           ) : !showQR ? (
@@ -138,14 +133,24 @@ const CompletionModal = React.memo(({ visible, amount, onFinished }) => {
               <Text style={styles.modalTitle}>Collect Payment</Text>
               <Text style={styles.modalAmount}>₹{amount}</Text>
               <Text style={styles.modalSub}>How did the customer pay?</Text>
-              <TouchableOpacity onPress={handleCash} activeOpacity={0.85} style={styles.fullWidth}>
+              <TouchableOpacity
+                onPress={handleCash}
+                activeOpacity={0.85}
+                style={styles.fullWidth}
+                disabled={cashLoading}
+              >
                 <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} start={GRAD_START} end={GRAD_END} style={styles.modalBtn}>
-                  <Text style={styles.modalBtnText}>💵  Cash Received</Text>
+                  <Text style={styles.modalBtnText}>
+                    {cashLoading ? 'Marking...' : '💵  Cash Received'}
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleShowQR} activeOpacity={0.8} style={styles.qrBtn}>
                 <Text style={styles.qrBtnText}>📲  Show QR Code</Text>
               </TouchableOpacity>
+              <Text style={styles.cashNote}>
+                Tapping "Cash Received" notifies the customer that cash has been collected.
+              </Text>
             </>
           ) : (
             <>
@@ -177,6 +182,7 @@ const CompletionModal = React.memo(({ visible, amount, onFinished }) => {
     </Modal>
   );
 });
+
 
 // ── AwaitingConfirmationModal ────────────────────────────────────────────────
 const AwaitingConfirmationModal = React.memo(({ visible }) => (
@@ -248,6 +254,8 @@ const ActiveJobScreen = ({ navigation }) => {
 
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [cancelling, setCancelling]                 = useState(false);
+  const [cashLoading, setCashLoading]               = useState(false);
+
 
   const stepStatuses = useMemo(() => {
     const order = ['pending', 'accepted', 'arrived', 'in_progress', 'awaiting_customer_confirmation', 'completed'];
@@ -293,6 +301,26 @@ const ActiveJobScreen = ({ navigation }) => {
     resetActiveJob();
     navigation.navigate('Tabs', { screen: 'Home' });
   }, [completeJob, resetActiveJob, navigation]);
+
+  // ── Cash Collected ────────────────────────────────────────────────────────
+  // Calls the backend to mark cashCollected=true, which relays the event to
+  // the customer app so their "Continue to Payment" button disappears.
+  const handleCashCollect = useCallback(async () => {
+    if (!activeJob || cashLoading) return;
+    try {
+      setCashLoading(true);
+      await usePartnerStore.getState().markCashCollected(activeJob.id || activeJob._id);
+      // Mark locally completed and navigate away
+      await completeJob('cash');
+      resetActiveJob();
+      navigation.navigate('Tabs', { screen: 'Home' });
+    } catch (err) {
+      console.error('[ActiveJob] markCashCollected failed:', err);
+      Alert.alert('Error', err.message || 'Could not mark cash collected. Please try again.');
+    } finally {
+      setCashLoading(false);
+    }
+  }, [activeJob, cashLoading, completeJob, resetActiveJob, navigation]);
 
   // ── Navigate button — opens Google Maps ──────────────────────────────────
   const handleNavigate = useCallback(() => {
@@ -430,6 +458,8 @@ const ActiveJobScreen = ({ navigation }) => {
         visible={jobStatus === 'completed'}
         amount={activeJob.estimatedAmount}
         onFinished={handleFinished}
+        onCashCollect={handleCashCollect}
+        cashLoading={cashLoading}
       />
       
       <AwaitingConfirmationModal 
@@ -508,6 +538,7 @@ const styles = StyleSheet.create({
   cancelConfirmBtnText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
   cancelDismissBtn: { paddingVertical: 12, alignItems: 'center', marginTop: 6 },
   cancelDismissBtnText: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  cashNote:         { fontSize: 11, color: colors.textMuted, marginTop: 12, textAlign: 'center', lineHeight: 16, paddingHorizontal: 4 },
 });
 
 export default ActiveJobScreen;

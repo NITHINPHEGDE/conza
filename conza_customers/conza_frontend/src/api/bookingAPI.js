@@ -52,6 +52,17 @@ export const bookingAPI = {
     return res.data;
   },
 
+  // ── Labour payment (after the work is completed) ───────────────────────
+  getBookingPayment: async (id) => {
+    const res = await api.get(`/bookings/${id}/payment`);
+    return res.data;
+  },
+
+  payBooking: async (id, paymentMethod) => {
+    const res = await api.post(`/bookings/${id}/pay`, { paymentMethod });
+    return res.data;
+  },
+
   // ── Seller orders (material / rental) ──────────────────────────────────
   placeSellerOrder: async (data) => {
     const res = await api.post('/orders/seller', data);

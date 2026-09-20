@@ -34,8 +34,21 @@ const bookingSchema = new mongoose.Schema(
     platformFee: { type: Number, default: 0 },
     total:       { type: Number, required: true },
     paymentMethod: {
-      type: String, enum: ['cod', 'upi', 'card', 'wallet', 'pending'], default: 'cod',
+      type: String, enum: ['cod', 'upi', 'card', 'wallet', 'cash', 'pending'], default: 'cod',
     },
+
+    // ── Payment settlement (labour) ───────────────────────────────────────
+    // Labour bookings are created with paymentMethod 'pending' and are paid
+    // AFTER the work is completed — either online by the customer (payBooking)
+    // or in cash, in which case the labour app marks `cashCollected`.
+    // Once either happens the booking is "settled" and can never be paid again.
+    // NOTE: intentionally NOT an enum so values written by the labour app
+    // (e.g. 'collected') never fail validation when this document is saved.
+    paymentStatus:   { type: String, default: 'unpaid' },   // 'unpaid' | 'processing' | 'paid' | (labour app values)
+    paidAt:          { type: Date, default: null },
+    paidAmount:      { type: Number, default: 0 },
+    cashCollected:   { type: Boolean, default: false },
+    cashCollectedAt: { type: Date, default: null },
 
     // ── Billing breakdown (Finance → Pricing → Labour, admin-configured) ──
     // Populated server-side from the admin panel's Labour pricing settings
@@ -99,6 +112,12 @@ const bookingSchema = new mongoose.Schema(
         cancellationFee:          { type: Number, default: 0 },
       },
       paymentMethod:  { type: String, default: null },
+      // Per-worker payment settlement (autobook) — same meaning as the
+      // booking-level fields above.
+      paymentStatus:   { type: String, default: 'unpaid' },
+      paidAt:          { type: Date, default: null },
+      cashCollected:   { type: Boolean, default: false },
+      cashCollectedAt: { type: Date, default: null },
     }],
 
     // Status

@@ -97,6 +97,10 @@ const watchChanges = () => {
           checkInTime:  doc.checkInTime,
           checkOutTime: doc.checkOutTime,
           issueReport:  doc.issueReport,
+          paymentStatus:   doc.paymentStatus,
+          cashCollected:   doc.cashCollected,
+          cashCollectedAt: doc.cashCollectedAt,
+          paidAt:          doc.paidAt,
         } : null;
 
         // Notify the specific customer who owns this booking (StatusScreen list)
