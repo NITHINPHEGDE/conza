@@ -1,14 +1,17 @@
 // src/screens/RequestDetailsScreen.js
 import React, { useCallback, memo } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, StatusBar,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, StatusBar, Alert,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import usePartnerStore, {
   selectAcceptJob, selectDeclineJob,
 } from '../store/usePartnerStore';
 import { colors } from '../theme/colors';
+import EarningEstimateCard, { getEarningHeadline } from '../components/EarningEstimateCard';
+import { useEarningEstimate } from '../hooks/useEarningEstimate';
 
 const GRAD_START = { x: 0, y: 0 };
 const GRAD_END   = { x: 1, y: 0 };
@@ -35,6 +38,18 @@ const RequestDetailsScreen = ({ navigation, route }) => {
   const insets     = useSafeAreaInsets();
   const updateRequestStatus = usePartnerStore((s) => s.updateRequestStatus);
   const [updating, setUpdating] = React.useState(false);
+
+  // Live estimate of what THIS worker earns on this request — rates and
+  // commission % come from the request's category (admin → Finance →
+  // Categories) and refresh while this screen is open.
+  const isFocused = useIsFocused();
+  const {
+    estimate: earningEstimate,
+    loading: earningLoading,
+    error: earningError,
+    refetch: refetchEarning,
+  } = useEarningEstimate(request.id || request._id, isFocused);
+  const earningHeadline = getEarningHeadline(earningEstimate);
 
   const handleAccept = useCallback(async () => {
     try {
@@ -89,10 +104,17 @@ const RequestDetailsScreen = ({ navigation, route }) => {
               <Text style={styles.urgentText}>⚡ {request.acceptedCount}/{request.requiredWorkers} accepted — first come, first served</Text>
             </View>
           )}
-          <Text style={styles.amountLabel}>Estimated Earning</Text>
-          <Text style={styles.amountValue}>₹{request.estimatedAmount}</Text>
+          <Text style={styles.amountLabel}>{earningHeadline ? earningHeadline.label : 'Estimated Earning'}</Text>
+          <Text style={styles.amountValue}>{earningHeadline ? earningHeadline.value : '—'}</Text>
           <Text style={styles.amountSub}>{request.distance} · {request.timeAway}</Text>
         </LinearGradient>
+
+        <EarningEstimateCard
+          estimate={earningEstimate}
+          loading={earningLoading}
+          error={earningError}
+          onRetry={refetchEarning}
+        />
 
         <SectionBox title="Customer Info">
           <InfoRow icon="👤" label="Name"  value={request.userName} />

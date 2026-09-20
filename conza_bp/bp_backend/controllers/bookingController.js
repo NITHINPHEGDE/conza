@@ -5,6 +5,8 @@ const logger  = require('../utils/logger');
 const { withCache, invalidateCache } = require('../utils/cacheHelpers');
 const { getDistanceInMeters } = require('../utils/geoUtils');
 const { calculateHourlyCharge } = require('../utils/billingUtils');
+const ServiceCategory = require('../models/ServiceCategory');
+const { computeWorkerEarningEstimate } = require('../utils/earningEstimate');
 const { notifyCustomerBackend } = require('../utils/notifyCustomerBackend');
 require('../models/User');
 
@@ -499,4 +501,63 @@ const getBookingById = async (req, res) => {
   }
 };
 
-module.exports = { getWorkerRequests, acceptAutobookRequest, updateBookingStatus, getWorkerHistory, getBookingById };
+// ── GET /api/bookings/:id/earning-estimate ────────────────────────────────
+// What THIS worker can earn on a request, shown on Request Details before
+// accepting. Rates + commission % come live from the request's category
+// (admin panel → Finance → Categories). Deliberately NOT cached so an
+// admin change shows up the next time the worker opens / refreshes it.
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const getEarningEstimate = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({ success: false, message: 'Invalid booking id' });
+    }
+    const workerId = req.worker._id.toString();
+
+    const booking = await Booking.findById(bookingId)
+      .select('bookingType category isImmediate totalDays workers workerStatuses.worker')
+      .lean();
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Only a worker who was sent this request may see its earning.
+    const isAssigned =
+      (booking.workers || []).some((w) => w && w.toString() === workerId) ||
+      (booking.workerStatuses || []).some((ws) => ws.worker && ws.worker.toString() === workerId);
+    if (!isAssigned) {
+      return res.status(403).json({ success: false, message: 'This request is not assigned to you.' });
+    }
+
+    if (booking.bookingType && booking.bookingType !== 'labour') {
+      return res.status(400).json({ success: false, message: 'Earning estimate is only available for labour requests.' });
+    }
+
+    const categoryName = String(booking.category || '').trim();
+    const categoryDoc = categoryName
+      ? await ServiceCategory.findOne({ name: new RegExp(`^${escapeRegex(categoryName)}$`, 'i') })
+          .select('name commission baseCharge perHourCharge perDayCharge')
+          .lean()
+      : null;
+
+    const ownEntry = (req.worker.categories || []).find(
+      (c) => c && c.name && c.name.trim().toLowerCase() === categoryName.toLowerCase()
+    );
+
+    const estimate = computeWorkerEarningEstimate({
+      category: categoryDoc,
+      workerCategoryEntry: ownEntry,
+      isImmediate: booking.isImmediate !== false,
+      totalDays: booking.totalDays,
+    });
+
+    res.json({ success: true, estimate });
+  } catch (err) {
+    logger.error({ err }, 'getEarningEstimate failed');
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { getWorkerRequests, acceptAutobookRequest, updateBookingStatus, getWorkerHistory, getBookingById, getEarningEstimate };
