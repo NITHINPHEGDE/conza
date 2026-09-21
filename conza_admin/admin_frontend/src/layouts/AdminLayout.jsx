@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import Sidebar from '../components/layout/Sidebar'
 import Header from '../components/layout/Header'
 import Footer from '../components/layout/Footer'
 import PageWrapper from '../components/layout/PageWrapper'
 
 export default function AdminLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useLocalStorage('adminSidebarOpen', true)
 
   return (
     <div className="flex h-screen bg-background">

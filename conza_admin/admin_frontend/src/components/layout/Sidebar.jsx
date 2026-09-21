@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, HardHat, Store, Package, Truck, Boxes,
   Handshake, CalendarCheck, ShoppingCart, Wrench, Wallet, CreditCard,
   Map, Bell, TicketCheck, Star, Gift, FileText, BarChart3, ShieldCheck,
-  ScrollText, ChevronDown, ChevronRight, Menu, X, DollarSign
+  ScrollText, ChevronDown, ChevronRight, Menu, X, DollarSign, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react'
 import useAuthStore from '../../store/auth/useAuthStore'
 import { usePermission } from '../../hooks/usePermission'
@@ -235,8 +235,21 @@ export default function Sidebar({ open, setOpen }) {
           ))}
         </nav>
 
-        {/* Logout - Fixed at bottom */}
-        <div className="flex-shrink-0 p-2 border-t border-border bg-surface">
+        {/* Sidebar toggle + Logout - Fixed at bottom */}
+        <div className="flex-shrink-0 p-2 border-t border-border bg-surface space-y-1">
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            className="hidden lg:flex w-full items-center gap-3 px-3 py-2 rounded-lg text-sm text-textSecondary hover:bg-surfaceElevated hover:text-textPrimary transition-colors"
+            title={open ? 'Collapse sidebar' : 'Expand sidebar'}
+            aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
+            aria-expanded={open}
+          >
+            {open
+              ? <PanelLeftClose size={18} className="text-textMuted" />
+              : <PanelLeftOpen size={18} className="text-textMuted" />}
+            {open && <span>Collapse</span>}
+          </button>
           <button
             onClick={logout}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-danger hover:bg-red-50 transition-colors"

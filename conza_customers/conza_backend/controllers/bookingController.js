@@ -275,6 +275,11 @@ const syncBillWithPricingToggles = async (bookingId, userId) => {
       ServiceCategory.findOne({ name: categoryMatcher(booking.category) }).select('baseCharge').lean(),
     ]);
 
+    logger.info(
+      { bookingId, enabledFields: config.enabledFields || null },
+      'Payment bill: checking pricing entity checkboxes'
+    );
+
     let changed = false;
 
     if (usesPerWorkerBilling(booking)) {
@@ -377,6 +382,7 @@ const syncBillWithPricingToggles = async (bookingId, userId) => {
     }
 
     if (changed) {
+      logger.info({ bookingId }, 'Payment bill re-priced to match pricing entity checkboxes');
       const workerIds = (booking.workers || []).map((w) => w.toString());
       await invalidateCache(
         `bookings:detail:*:${bookingId}`,
@@ -389,7 +395,7 @@ const syncBillWithPricingToggles = async (bookingId, userId) => {
     }
     return changed;
   } catch (err) {
-    logger.warn({ err, bookingId }, 'syncBillWithPricingToggles failed (using stored bill)');
+    logger.error({ err, bookingId }, 'syncBillWithPricingToggles failed (using stored bill)');
     return false;
   }
 };
@@ -891,6 +897,21 @@ const getMyBookings = async (req, res) => {
 };
 
 // ── GET /api/bookings/:id ─────────────────────────────────────────────────
+// Before a completed, unpaid labour booking is returned to the app, apply the
+// admin's Finance → Pricing checkboxes to its stored bill (see
+// syncBillWithPricingToggles) so the booking screen's "Amount due" always
+// matches what "Continue to Payment" shows and charges.
+const withPricingTogglesApplied = async (booking, bookingId, userId) => {
+  if (!booking || booking.bookingType !== 'labour' || booking.status !== 'completed') return booking;
+  if (!getPaymentState(booking).canPay) return booking;
+  const changed = await syncBillWithPricingToggles(bookingId, userId);
+  if (!changed) return booking;
+  const fresh = await Booking.findOne({ _id: bookingId, user: userId })
+    .populate('workers', 'fullName category profileImage rating phone bio experience totalJobs isVerified')
+    .lean();
+  return fresh || booking;
+};
+
 const getBookingById = async (req, res) => {
   try {
     const bookingId = req.params.id;
@@ -904,8 +925,9 @@ const getBookingById = async (req, res) => {
         .populate('workers', 'fullName category profileImage rating phone bio experience totalJobs isVerified')
         .lean();
       if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
-      booking.paymentState = getPaymentState(booking);
-      return res.json({ success: true, booking });
+      const current = await withPricingTogglesApplied(booking, bookingId, req.user._id);
+      current.paymentState = getPaymentState(current);
+      return res.json({ success: true, booking: current });
     }
 
     const cacheKey = `bookings:detail:${req.user._id}:${bookingId}`;
@@ -918,8 +940,9 @@ const getBookingById = async (req, res) => {
     );
 
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
-    booking.paymentState = getPaymentState(booking);
-    res.json({ success: true, booking });
+    const current = await withPricingTogglesApplied(booking, bookingId, req.user._id);
+    current.paymentState = getPaymentState(current);
+    res.json({ success: true, booking: current });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

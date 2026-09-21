@@ -13,6 +13,7 @@ import {
   Linking,
   Platform,
   Dimensions,
+  AppState,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -170,12 +171,22 @@ const BookingTrackingScreen = ({ navigation, route }) => {
     if (activeBookingId && (stillActive || paymentOpen)) {
       intervalId = setInterval(() => {
         fetchActiveBooking(activeBookingId);
-      }, 30000);
+      }, paymentOpen ? 10000 : 30000);
     }
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
   }, [activeBookingId, activeBooking?.status, paymentOpen]);
+
+  // Coming back to the app (e.g. after the admin changed Finance → Pricing)
+  // re-fetches the booking so the amount due is never stale.
+  useEffect(() => {
+    if (!activeBookingId) return undefined;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') fetchActiveBooking(activeBookingId);
+    });
+    return () => sub.remove();
+  }, [activeBookingId]);
 
   useEffect(() => {
     if (activeBookingId) fetchActiveBooking(activeBookingId);
@@ -435,6 +446,9 @@ const BookingTrackingScreen = ({ navigation, route }) => {
         }
         return;
       }
+      // The server just re-priced the bill against the current Finance → Pricing
+      // checkboxes — refresh the booking so this screen shows the same amount.
+      fetchActiveBooking(activeBookingId);
       navigation.navigate('LabourPayment', { bookingId: activeBookingId });
     } catch (err) {
       if (err?.response?.status === 404) {
