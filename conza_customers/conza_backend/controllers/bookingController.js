@@ -1,3 +1,4 @@
+const mongoose         = require('mongoose');
 const Redlock          = require('redlock');
 const { getRedis }     = require('../config/redis');
 
