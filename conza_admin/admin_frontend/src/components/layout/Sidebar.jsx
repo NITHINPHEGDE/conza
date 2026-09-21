@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, HardHat, Store, Package, Truck, Boxes,
   Handshake, CalendarCheck, ShoppingCart, Wrench, Wallet, CreditCard,
   Map, Bell, TicketCheck, Star, Gift, FileText, BarChart3, ShieldCheck,
-  ScrollText, ChevronDown, ChevronRight, Menu, X, DollarSign, PanelLeftClose, PanelLeftOpen
+  ScrollText, ChevronDown, ChevronRight, Menu, X, DollarSign, MoreVertical
 } from 'lucide-react'
 import useAuthStore from '../../store/auth/useAuthStore'
 import { usePermission } from '../../hooks/usePermission'
@@ -118,6 +118,58 @@ const menuGroups = [
   },
 ]
 
+function SidebarMenuItem({ item, open, location }) {
+  const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/')
+  const hasChildren = item.children && item.children.length > 0
+  const isChildActive = hasChildren && item.children.some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/'))
+  const [subOpen, setSubOpen] = useState(isChildActive)
+
+  return (
+    <div>
+      <NavLink
+        to={item.path}
+        className={({ isActive: navActive }) =>
+          `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${navActive || isChildActive ? 'bg-accentYellowSoft text-accentAmber font-medium' : 'text-textSecondary hover:bg-surfaceElevated hover:text-textPrimary'}`
+        }
+        title={!open ? item.label : ''}
+      >
+        <item.icon size={18} className={isActive || isChildActive ? 'text-accentAmber' : 'text-textMuted'} />
+        {open && (
+          <>
+            <span className="flex-1">{item.label}</span>
+            {hasChildren && (
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); setSubOpen(!subOpen) }}
+                className="p-0.5 hover:bg-surfaceElevated rounded cursor-pointer"
+              >
+                {subOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+            )}
+          </>
+        )}
+      </NavLink>
+      {open && hasChildren && subOpen && (
+        <div className="ml-8 mt-1 space-y-0.5">
+          {item.children.map((child) => {
+            return (
+              <NavLink
+                key={child.path}
+                to={child.path}
+                className={({ isActive: navActive }) =>
+                  `block px-3 py-1.5 rounded-md text-sm transition-colors ${navActive ? 'text-accentAmber font-medium bg-accentYellowSoft/50' : 'text-textSecondary hover:text-textPrimary hover:bg-surfaceElevated'}`
+                }
+              >
+                {child.label}
+              </NavLink>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Sidebar({ open, setOpen }) {
   const [expandedGroups, setExpandedGroups] = useState(() => {
     const initial = {}
@@ -155,13 +207,46 @@ export default function Sidebar({ open, setOpen }) {
       </button>
 
       <aside className={`fixed top-0 left-0 h-full bg-surface border-r border-border z-40 transition-all duration-300 flex flex-col ${open ? 'w-64' : 'w-16'} ${open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        {/* Logo - Fixed */}
-        <div className="p-4 flex items-center gap-3 border-b border-border flex-shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-accentYellow flex items-center justify-center">
-            <span className="text-white font-bold text-sm">CZ</span>
+        {/* Logo & Toggle - Fixed */}
+        {open ? (
+          <div className="p-4 flex items-center justify-between border-b border-border flex-shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-accentYellow flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-sm">CZ</span>
+              </div>
+              <span className="font-semibold text-textPrimary truncate">Conza Admin</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="hidden lg:flex p-1.5 rounded-lg text-textMuted hover:text-textPrimary hover:bg-surfaceElevated transition-colors cursor-pointer"
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
+            >
+              <MoreVertical size={18} />
+            </button>
           </div>
-          {open && <span className="font-semibold text-textPrimary">Conza Admin</span>}
-        </div>
+        ) : (
+          <div className="p-3 flex flex-col items-center gap-2 border-b border-border flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="w-8 h-8 rounded-lg bg-accentYellow flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
+              title="Expand sidebar"
+            >
+              <span className="text-white font-bold text-sm">CZ</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="hidden lg:flex p-1 rounded-md text-textMuted hover:text-textPrimary hover:bg-surfaceElevated transition-colors cursor-pointer"
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
+            >
+              <MoreVertical size={16} />
+            </button>
+          </div>
+        )}
 
         {/* Nav - Scrollable */}
         <nav className="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
@@ -178,78 +263,22 @@ export default function Sidebar({ open, setOpen }) {
               )}
               {(!open || expandedGroups[gIdx]) && (
                 <div className="space-y-1">
-                  {group.items.map((item) => {
-                    const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/')
-                    const hasChildren = item.children && item.children.length > 0
-                    const isChildActive = hasChildren && item.children.some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/'))
-                    const [subOpen, setSubOpen] = useState(isChildActive)
-
-                    return (
-                      <div key={item.path}>
-                        <NavLink
-                          to={item.path}
-                          className={({ isActive: navActive }) =>
-                            `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${navActive || isChildActive ? 'bg-accentYellowSoft text-accentAmber font-medium' : 'text-textSecondary hover:bg-surfaceElevated hover:text-textPrimary'}`
-                          }
-                          title={!open ? item.label : ''}
-                        >
-                          <item.icon size={18} className={isActive || isChildActive ? 'text-accentAmber' : 'text-textMuted'} />
-                          {open && (
-                            <>
-                              <span className="flex-1">{item.label}</span>
-                              {hasChildren && (
-                                <button
-                                  onClick={(e) => { e.preventDefault(); setSubOpen(!subOpen) }}
-                                  className="p-0.5 hover:bg-surfaceElevated rounded"
-                                >
-                                  {subOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </NavLink>
-                        {open && hasChildren && subOpen && (
-                          <div className="ml-8 mt-1 space-y-0.5">
-                            {item.children.map((child) => {
-                              const childActive = location.pathname === child.path || location.pathname.startsWith(child.path + '/')
-                              return (
-                                <NavLink
-                                  key={child.path}
-                                  to={child.path}
-                                  className={({ isActive: navActive }) =>
-                                    `block px-3 py-1.5 rounded-md text-sm transition-colors ${navActive ? 'text-accentAmber font-medium bg-accentYellowSoft/50' : 'text-textSecondary hover:text-textPrimary hover:bg-surfaceElevated'}`
-                                  }
-                                >
-                                  {child.label}
-                                </NavLink>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                  {group.items.map((item) => (
+                    <SidebarMenuItem
+                      key={item.path}
+                      item={item}
+                      open={open}
+                      location={location}
+                    />
+                  ))}
                 </div>
               )}
             </div>
           ))}
         </nav>
 
-        {/* Sidebar toggle + Logout - Fixed at bottom */}
-        <div className="flex-shrink-0 p-2 border-t border-border bg-surface space-y-1">
-          <button
-            type="button"
-            onClick={() => setOpen(!open)}
-            className="hidden lg:flex w-full items-center gap-3 px-3 py-2 rounded-lg text-sm text-textSecondary hover:bg-surfaceElevated hover:text-textPrimary transition-colors"
-            title={open ? 'Collapse sidebar' : 'Expand sidebar'}
-            aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
-            aria-expanded={open}
-          >
-            {open
-              ? <PanelLeftClose size={18} className="text-textMuted" />
-              : <PanelLeftOpen size={18} className="text-textMuted" />}
-            {open && <span>Collapse</span>}
-          </button>
+        {/* Logout - Fixed at bottom */}
+        <div className="flex-shrink-0 p-2 border-t border-border bg-surface">
           <button
             onClick={logout}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-danger hover:bg-red-50 transition-colors"
