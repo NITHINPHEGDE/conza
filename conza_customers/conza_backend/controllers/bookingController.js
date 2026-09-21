@@ -279,7 +279,7 @@ const checkAutobookNoAcceptance = async (bookingId, userId) => {
     await booking.save();
 
     await invalidateCache(
-      `bookings:detail:${booking._id}`,
+      `bookings:detail:*:${booking._id}`,
       `bookings:user:${userId}:*`
     ).catch(() => {});
 
@@ -769,7 +769,7 @@ const getBookingById = async (req, res) => {
       return res.json({ success: true, booking });
     }
 
-    const cacheKey = `bookings:detail:${bookingId}`;
+    const cacheKey = `bookings:detail:${req.user._id}:${bookingId}`;
     const TTL      = 30;
 
     const booking = await withCache(cacheKey, TTL, () =>
@@ -818,7 +818,7 @@ const cancelBooking = async (req, res) => {
       await booking.save();
 
       await invalidateCache(
-        `bookings:detail:${booking._id}`,
+        `bookings:detail:*:${booking._id}`,
         `bookings:user:${req.user._id}:*`
       );
 
@@ -848,7 +848,7 @@ const cancelBooking = async (req, res) => {
 
     // Invalidate caches for this booking and the user's list
     await invalidateCache(
-      `bookings:detail:${booking._id}`,
+      `bookings:detail:*:${booking._id}`,
       `bookings:user:${req.user._id}:*`
     );
 
@@ -955,7 +955,7 @@ const confirmCompletion = async (req, res) => {
       await Worker.findByIdAndUpdate(workerId, { isAvailable: true }).catch(() => {});
 
       await invalidateCache(
-        `bookings:detail:${booking._id}`,
+        `bookings:detail:*:${booking._id}`,
         `bookings:user:${req.user._id}:*`
       );
 
@@ -1048,7 +1048,7 @@ const confirmCompletion = async (req, res) => {
     }
 
     await invalidateCache(
-      `bookings:detail:${booking._id}`,
+      `bookings:detail:*:${booking._id}`,
       `bookings:user:${req.user._id}:*`
     );
 
@@ -1114,7 +1114,7 @@ const reportIssue = async (req, res) => {
     await booking.save();
 
     await invalidateCache(
-      `bookings:detail:${booking._id}`,
+      `bookings:detail:*:${booking._id}`,
       `bookings:user:${req.user._id}:*`
     );
 
@@ -1242,7 +1242,7 @@ const submitReview = async (req, res) => {
     }
 
     try {
-      await invalidateCache(`bookings:detail:${booking._id}`, `bookings:user:${req.user._id}:*`);
+      await invalidateCache(`bookings:detail:*:${booking._id}`, `bookings:user:${req.user._id}:*`);
     } catch (_) {}
 
     try {
@@ -1378,7 +1378,7 @@ const updateBookingNotes = async (req, res) => {
     booking.notes = (notes || '').trim();
     await booking.save();
     await invalidateCache(
-      `bookings:detail:${booking._id}`,
+      `bookings:detail:*:${booking._id}`,
       `bookings:user:${req.user._id}:*`
     );
     res.json({ success: true, booking });
@@ -1392,7 +1392,11 @@ const updateBookingNotes = async (req, res) => {
 // Payment" page and must reflect a labour tapping "Cash Collected" instantly.
 const getBookingPayment = async (req, res) => {
   try {
-    const booking = await Booking.findOne({ _id: req.params.id, user: req.user._id })
+    const bookingId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({ success: false, message: 'Invalid booking ID' });
+    }
+    const booking = await Booking.findOne({ _id: bookingId, user: req.user._id })
       .populate('workers', 'fullName category')
       .lean();
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
@@ -1444,6 +1448,9 @@ const getBookingPayment = async (req, res) => {
 //   • wallet debit is atomic (balance >= amount) and refunded on any failure
 const payBooking = async (req, res) => {
   const bookingId = req.params.id;
+  if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+    return res.status(400).json({ success: false, message: 'Invalid booking ID' });
+  }
   const { paymentMethod } = req.body || {};
 
   if (!PAY_METHODS.includes(paymentMethod)) {
@@ -1568,7 +1575,7 @@ const payBooking = async (req, res) => {
     // ── Caches + realtime (best effort — payment is already recorded) ──
     const workerIds = (before.workers || []).map((w) => w.toString());
     await invalidateCache(
-      `bookings:detail:${bookingId}`,
+      `bookings:detail:*:${bookingId}`,
       `bookings:user:${req.user._id}:*`
     ).catch(() => {});
     await Promise.allSettled([

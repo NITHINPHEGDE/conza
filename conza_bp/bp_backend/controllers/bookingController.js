@@ -139,7 +139,7 @@ const acceptAutobookRequest = async (req, res) => {
     await Promise.allSettled(
       updated.workerStatuses.map((w) => invalidateCache(`bp:worker:${w.worker}:requests:pending:*`))
     );
-    await invalidateCache(`bookings:user:${updated.user}:*`, `bookings:detail:${bookingId}`).catch(() => {});
+    await invalidateCache(`bookings:user:${updated.user}:*`, `bookings:detail:*:${bookingId}`).catch(() => {});
 
     try {
       const { getIO } = require('../services/socketService');
@@ -256,7 +256,7 @@ const updateBookingStatus = async (req, res) => {
 
       await Promise.allSettled([
         invalidateCache(`bp:worker:${workerIdStr}:requests:pending:*`, `bp:worker:${workerIdStr}:history:*`, `bp:booking:${bookingId}`),
-        invalidateCache(`bookings:user:${booking.user}:*`, `bookings:detail:${bookingId}`),
+        invalidateCache(`bookings:user:${booking.user}:*`, `bookings:detail:*:${bookingId}`),
       ]);
 
       try {
@@ -391,7 +391,7 @@ const updateBookingStatus = async (req, res) => {
 
     await invalidateCache(
       `bookings:user:${booking.user}:*`,
-      `bookings:detail:${bookingId}`
+      `bookings:detail:*:${bookingId}`
     ).catch(() => {});
 
     // Emit socket event to customer for confirmation
@@ -640,7 +640,7 @@ const markCashCollected = async (req, res) => {
         `bp:worker:${workerId}:history:*`,
         `bp:booking:${bookingId}`
       ),
-      invalidateCache(`bookings:user:${booking.user}:*`, `bookings:detail:${bookingId}`),
+      invalidateCache(`bookings:user:${booking.user}:*`, `bookings:detail:*:${bookingId}`),
     ]);
 
     // Relay to the customer backend so the customer's tracking screen

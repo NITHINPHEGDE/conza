@@ -88,6 +88,16 @@ const LabourPaymentScreen = ({ route, navigation }) => {
         setData(res);
         setError(null);
       } catch (err) {
+        if (err?.response?.status === 404) {
+          useAppStore.getState().clearActiveBooking();
+          if (!silent) {
+            setError('Booking not found or already expired');
+            Alert.alert('Booking Not Found', 'This booking was not found or has already expired.', [
+              { text: 'OK', onPress: () => handleBack() },
+            ]);
+          }
+          return;
+        }
         if (!silent) setError(err?.message || 'Could not load payment details');
       } finally {
         if (!silent) setLoading(false);

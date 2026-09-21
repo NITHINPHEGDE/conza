@@ -50,7 +50,7 @@ const invalidateCache = async (...keys) => {
   const redis = getRedis();
   for (const key of keys) {
     try {
-      if (key.endsWith('*')) {
+      if (key.includes('*')) {
         let cursor = '0';
         do {
           const [next, found] = await redis.scan(cursor, 'MATCH', key, 'COUNT', 100);

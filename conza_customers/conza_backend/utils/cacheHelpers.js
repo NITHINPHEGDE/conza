@@ -84,7 +84,7 @@ const invalidateCache = async (...keys) => {
   const redis = getRedis();
   for (const key of keys) {
     try {
-      if (key.endsWith('*')) {
+      if (key.includes('*')) {
         // Pattern scan — use SCAN to avoid blocking KEYS
         let cursor = '0';
         do {

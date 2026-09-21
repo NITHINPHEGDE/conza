@@ -437,11 +437,18 @@ const BookingTrackingScreen = ({ navigation, route }) => {
       }
       navigation.navigate('LabourPayment', { bookingId: activeBookingId });
     } catch (err) {
+      if (err?.response?.status === 404) {
+        await clearActiveBooking();
+        Alert.alert('Booking Expired', 'This booking was not found or has already expired.');
+        if (navigation.canGoBack()) navigation.goBack();
+        else navigation.navigate('MainTabs');
+        return;
+      }
       Alert.alert('Error', err.message || 'Could not open the payment page.');
     } finally {
       setOpeningPayment(false);
     }
-  }, [activeBookingId, openingPayment, fetchActiveBooking, navigation]);
+  }, [activeBookingId, openingPayment, fetchActiveBooking, clearActiveBooking, navigation]);
 
   // Stepper timeline progress calculations
   const stepperState = useMemo(() => {

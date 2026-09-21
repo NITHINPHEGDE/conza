@@ -792,11 +792,10 @@ const useAppStore = create((set, get) => ({
         set({ activeBookingId: null, activeBooking: null });
       }
     } catch (err) {
-      // 404 or network error — if it's a 404 the booking no longer exists;
-      // clear the stale ID so we stop polling on every reconnect/init.
+      // 404, 410, 401, 403 — if not found or not owned by user, clear stale ID
       const status = err?.response?.status;
-      if (status === 404 || status === 410) {
-        console.warn('[fetchActiveBooking] Booking not found — clearing stale ID:', bookingId);
+      if (status === 404 || status === 410 || status === 401 || status === 403) {
+        console.warn('[fetchActiveBooking] Booking not found or unauthorized — clearing stale ID:', bookingId);
         await AsyncStorage.removeItem('activeBookingId');
         set({ activeBookingId: null, activeBooking: null });
       } else {
@@ -819,6 +818,22 @@ const useAppStore = create((set, get) => ({
   clearActiveBooking: async () => {
     await AsyncStorage.removeItem('activeBookingId');
     set({ activeBookingId: null, activeBooking: null });
+  },
+
+  resetUserSession: async () => {
+    try {
+      await AsyncStorage.multiRemove(['activeBookingId']);
+    } catch (_) {}
+    set({
+      userProfile: null,
+      activeBookingId: null,
+      activeBooking: null,
+      activeBookings: [],
+      walletBalance: 0,
+      autobookToast: null,
+      pendingWorkerCompletion: null,
+      labourPopupQueue: [],
+    });
   },
 
   // ── Quick Auto Book: toast + direct-to-worker-card popup state ────────

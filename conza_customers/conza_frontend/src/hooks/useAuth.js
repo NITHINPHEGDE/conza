@@ -51,12 +51,17 @@ export const useAuth = () => {
         locationText = await reverseGeocodeWithMappls(latitude, longitude);
       }
 
+      await useAppStore.getState().resetUserSession();
       const data = await authAPI.signup({
         fullName, username, phone, email, password,
         latitude, longitude, locationText,
       });
 
       setUserProfile(data.user);
+      await Promise.all([
+        useAppStore.getState().fetchWalletBalance(),
+        useAppStore.getState().fetchActiveBookings(),
+      ]);
       return { success: true };
     } catch (err) {
       setError(err.message);
@@ -71,8 +76,13 @@ export const useAuth = () => {
     try {
       setLoading(true);
       setError(null);
+      await useAppStore.getState().resetUserSession();
       const data = await authAPI.login(phone, password);
       setUserProfile(data.user);
+      await Promise.all([
+        useAppStore.getState().fetchWalletBalance(),
+        useAppStore.getState().fetchActiveBookings(),
+      ]);
       return { success: true };
     } catch (err) {
       setError(err.message);
@@ -85,7 +95,7 @@ export const useAuth = () => {
   // ── Logout ─────────────────────────────────────────────────────────────────
   const logout = async () => {
     await authAPI.logout();
-    setUserProfile(null);
+    await useAppStore.getState().resetUserSession();
   };
 
   // ── Restore session on app open ────────────────────────────────────────────
@@ -97,7 +107,8 @@ export const useAuth = () => {
       setUserProfile(data.user);
       return true;
     } catch {
-      await AsyncStorage.removeItem('authToken');
+      await authAPI.logout();
+      await useAppStore.getState().resetUserSession();
       return false;
     }
   };
