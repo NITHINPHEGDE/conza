@@ -22,7 +22,7 @@ const Booking         = require('../models/Booking');
 const Worker           = require('../models/Worker');
 const ServiceCategory  = require('../models/ServiceCategory');
 const Review           = require('../models/Review');
-const { getLabourPricingConfig, getLabourPricingConfigFresh, computeLabourBill, computeLabourScenarioEstimates } = require('../utils/pricingEngine');
+const { getLabourPricingConfig, getLabourPricingConfigFresh, computeLabourBill, computeLabourScenarioEstimates, billNeedsRepricing } = require('../utils/pricingEngine');
 
 // Category names must match tolerantly (case/whitespace) — mirrors the
 // matcher already used by workerController's getNearbyWorkers.
@@ -254,6 +254,144 @@ const buildPaymentQuote = async (booking) => {
     otherCharges: sum('otherCharges'),
     total:        sum('total'),
   };
+};
+
+// ── Apply the admin's Finance → Pricing checkboxes at payment time ─────────
+// The final bill is persisted when the customer confirms the work, but the
+// admin may tick / untick a pricing entity afterwards. Before the "Continue to
+// Payment" page shows (and before it charges) an unpaid, completed labour
+// booking, its stored bill is re-priced if it no longer matches the ticked
+// entities — so an unticked entity is never shown or charged, and a ticked one
+// is included. Already-paid / cash-collected units are never touched. Any
+// failure is swallowed: the customer still sees / pays the stored bill.
+const syncBillWithPricingToggles = async (bookingId, userId) => {
+  try {
+    const booking = await Booking.findOne({ _id: bookingId, user: userId }).lean();
+    if (!booking || booking.bookingType !== 'labour' || booking.status !== 'completed') return false;
+    if (!getPaymentState(booking).canPay) return false;
+
+    const [config, categoryDoc] = await Promise.all([
+      getLabourPricingConfigFresh(),
+      ServiceCategory.findOne({ name: categoryMatcher(booking.category) }).select('baseCharge').lean(),
+    ]);
+
+    let changed = false;
+
+    if (usesPerWorkerBilling(booking)) {
+      // Quick Auto Book: each completed worker has its own bill.
+      for (const w of booking.workerStatuses || []) {
+        if (w.status !== 'completed' || !(Number(w.total) > 0) || isSettledUnit(w)) continue;
+        if (!billNeedsRepricing(w.billing, config)) continue;
+
+        const { rawBase } = computeFinalHourlyBase(
+          w.hourlyRate,
+          w.workerSnapshot ? [w.workerSnapshot] : [],
+          w.hoursWorked,
+          categoryDoc?.baseCharge
+        );
+        if (!(rawBase > 0)) continue;
+        const bill = computeLabourBill(rawBase, config, categoryDoc?.baseCharge);
+
+        const result = await Booking.updateOne(
+          { _id: bookingId, user: userId, paymentStatus: { $ne: 'processing' } },
+          {
+            $set: {
+              'workerStatuses.$[e].subtotal': bill.subtotal,
+              'workerStatuses.$[e].total': bill.total,
+              'workerStatuses.$[e].billing': {
+                costRate: bill.costRate,
+                costRateAmount: bill.costRateAmount,
+                peakHourMultiplier: bill.peakHourMultiplier,
+                serviceCharge: bill.serviceCharge,
+                platformCommission: bill.platformCommission,
+                platformCommissionAmount: bill.platformCommissionAmount,
+                cancellationFee: bill.cancellationFee,
+              },
+            },
+          },
+          {
+            arrayFilters: [{
+              'e.worker': w.worker,
+              'e.status': 'completed',
+              'e.paymentStatus': { $nin: PAID_STATUS_VALUES },
+              'e.cashCollected': { $ne: true },
+            }],
+          }
+        );
+        if (result && result.modifiedCount > 0) changed = true;
+      }
+
+      if (changed) {
+        // Roll the re-priced per-worker totals up into the booking-level total.
+        const fresh = await Booking.findById(bookingId).select('workerStatuses').lean();
+        const finished = (fresh?.workerStatuses || []).filter((w) => w.status === 'completed');
+        await Booking.updateOne(
+          { _id: bookingId },
+          {
+            $set: {
+              subtotal: finished.reduce((s, w) => s + (Number(w.subtotal) || 0), 0),
+              total: finished.reduce((s, w) => s + (Number(w.total) || 0), 0),
+            },
+          }
+        );
+      }
+    } else {
+      const stored = booking.billing || {};
+      if (!billNeedsRepricing(stored, config)) return false;
+
+      const rawBase = Number(stored.baseCost) || 0;
+      if (!(rawBase > 0)) return false;
+      const minCharge = stored.minBookingFee != null ? stored.minBookingFee : categoryDoc?.baseCharge;
+      const bill = computeLabourBill(rawBase, config, minCharge);
+
+      const result = await Booking.updateOne(
+        {
+          _id: bookingId,
+          user: userId,
+          paymentStatus: { $nin: [...PAID_STATUS_VALUES, 'processing'] },
+          cashCollected: { $ne: true },
+          cashCollectedAt: null,
+        },
+        {
+          $set: {
+            subtotal: bill.subtotal,
+            platformFee: bill.serviceCharge + bill.platformCommissionAmount,
+            total: bill.total,
+            billing: {
+              baseCost: bill.baseCost,
+              costRate: bill.costRate,
+              costRateAmount: bill.costRateAmount,
+              peakHourApplied: bill.peakHourApplied,
+              peakHourMultiplier: bill.peakHourMultiplier,
+              minBookingFeeApplied: bill.minBookingFeeApplied,
+              minBookingFee: bill.minBookingFee,
+              serviceCharge: bill.serviceCharge,
+              platformCommission: bill.platformCommission,
+              platformCommissionAmount: bill.platformCommissionAmount,
+              cancellationFee: bill.cancellationFee,
+            },
+          },
+        }
+      );
+      changed = !!(result && result.modifiedCount > 0);
+    }
+
+    if (changed) {
+      const workerIds = (booking.workers || []).map((w) => w.toString());
+      await invalidateCache(
+        `bookings:detail:*:${bookingId}`,
+        `bookings:user:${userId}:*`
+      ).catch(() => {});
+      await Promise.allSettled([
+        invalidateCache(`bp:booking:${bookingId}`),
+        ...workerIds.map((wId) => invalidateCache(`bp:worker:${wId}:history:*`)),
+      ]).catch(() => {});
+    }
+    return changed;
+  } catch (err) {
+    logger.warn({ err, bookingId }, 'syncBillWithPricingToggles failed (using stored bill)');
+    return false;
+  }
 };
 
 // ── Quick Auto Book: auto-expire if the required category never accepts ──
@@ -1397,6 +1535,10 @@ const getBookingPayment = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(bookingId)) {
       return res.status(400).json({ success: false, message: 'Invalid booking ID' });
     }
+    // Apply the admin's current Finance → Pricing checkboxes to the unpaid bill
+    // BEFORE it is shown, so unticked entities never appear on this page.
+    await syncBillWithPricingToggles(bookingId, req.user._id);
+
     const booking = await Booking.findOne({ _id: bookingId, user: req.user._id })
       .populate('workers', 'fullName category')
       .lean();
@@ -1475,6 +1617,10 @@ const payBooking = async (req, res) => {
       : 'This booking has already been paid.';
 
   try {
+    // Same re-pricing as the payment page, so the amount charged always
+    // matches the ticked entities and what the customer was just shown.
+    await syncBillWithPricingToggles(bookingId, req.user._id);
+
     const probe = await Booking.findOne({ _id: bookingId, user: req.user._id }).lean();
     if (!probe) return res.status(404).json({ success: false, message: 'Booking not found' });
     if (probe.bookingType !== 'labour') {

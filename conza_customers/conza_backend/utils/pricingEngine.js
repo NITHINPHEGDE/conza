@@ -17,6 +17,55 @@ const DEFAULT_LABOUR_CONFIG = {
   peakHourMultiplier: 1.5,
 };
 
+// ── Per-entity checkboxes (Admin → Finance → Pricing → Labour) ─────────────
+// The admin ticks/unticks each pricing entity. `config.enabledFields[key]`
+// === false means the entity is unticked: it is treated as absent (0 / ×1),
+// so it is never shown to the customer and never added to any bill. A config
+// saved before the checkboxes existed has no `enabledFields`, so everything
+// stays applied exactly as before.
+const LABOUR_ENTITY_KEYS = [
+  'platformCommission',
+  'costRate',
+  'serviceCharge',
+  'cancellationFee',
+  'peakHourMultiplier',
+];
+
+const isEntityEnabled = (config, key) => {
+  const flags = config && config.enabledFields;
+  if (!flags || typeof flags !== 'object') return true;
+  return flags[key] !== false && flags[key] !== 'false';
+};
+
+// The values that actually apply to a bill: unticked entities collapse to
+// 0 (charges) or 1 (peak-hour multiplier).
+const resolveLabourConfig = (config) => {
+  const cfg = config || {};
+  const peakHourEnabled = isEntityEnabled(cfg, 'peakHourMultiplier');
+  return {
+    platformCommission: isEntityEnabled(cfg, 'platformCommission') ? (Number(cfg.platformCommission) || 0) : 0,
+    costRate: isEntityEnabled(cfg, 'costRate') ? (Number(cfg.costRate) || 0) : 0,
+    serviceCharge: isEntityEnabled(cfg, 'serviceCharge') ? (Number(cfg.serviceCharge) || 0) : 0,
+    cancellationFee: isEntityEnabled(cfg, 'cancellationFee') ? (Number(cfg.cancellationFee) || 0) : 0,
+    peakHourMultiplier: peakHourEnabled ? (Number(cfg.peakHourMultiplier) || 1) : 1,
+    peakHourEnabled,
+  };
+};
+
+// True when a stored bill breakdown no longer agrees with which entities are
+// currently ticked (an unticked entity still charged, or a ticked one that is
+// missing) — used to re-price an unpaid completed booking before payment.
+const billNeedsRepricing = (billing, config) => {
+  const b = billing || {};
+  const eff = resolveLabourConfig(config);
+  const has = (n) => Number(n) > 0;
+  if (has(eff.serviceCharge) !== has(b.serviceCharge)) return true;
+  if (has(eff.costRate) !== has(b.costRate)) return true;
+  if (has(eff.platformCommission) !== has(b.platformCommission)) return true;
+  if ((eff.peakHourMultiplier !== 1) !== ((Number(b.peakHourMultiplier) || 1) !== 1)) return true;
+  return false;
+};
+
 const CACHE_KEY = 'pricing:config:labour';
 // Primary path: the admin backend actively busts this key on save (see
 // conza_admin/admin_backend/config/customersRedis.js → bustPricingConfigCache),
@@ -70,12 +119,14 @@ const getLabourPricingConfigFresh = async () => {
 //          ₹0). Callers must fetch this from ServiceCategory and pass it
 //          in explicitly.
 const computeLabourBill = (rawBase, config, categoryMinCharge) => {
-  const platformCommission = Number(config.platformCommission) || 0;
-  const costRate = Number(config.costRate) || 0; // GST %
-  const serviceCharge = Number(config.serviceCharge) || 0;
+  // Unticked entities (Finance → Pricing checkboxes) resolve to 0 / ×1.
+  const eff = resolveLabourConfig(config);
+  const platformCommission = eff.platformCommission;
+  const costRate = eff.costRate; // GST %
+  const serviceCharge = eff.serviceCharge;
   const minBookingFee = Number(categoryMinCharge) || 0;
-  const cancellationFee = Number(config.cancellationFee) || 0;
-  const peakHourMultiplier = Number(config.peakHourMultiplier) || 1;
+  const cancellationFee = eff.cancellationFee;
+  const peakHourMultiplier = eff.peakHourMultiplier;
 
   const baseCost = Math.round(Number(rawBase) || 0);
 
@@ -106,7 +157,7 @@ const computeLabourBill = (rawBase, config, categoryMinCharge) => {
     baseCost,
     costRate,
     costRateAmount,
-    peakHourApplied: true,
+    peakHourApplied: eff.peakHourEnabled,
     peakHourMultiplier,
     subtotal,
     minBookingFee,
@@ -179,11 +230,12 @@ const buildScenario = (rawBases, config, categoryBaseCharge) => {
     if (bill.minBookingFeeApplied) minBookingFeeApplied = true;
   });
 
+  const eff = resolveLabourConfig(config);
   return {
     ...totals,
-    costRate: Number(config.costRate) || 0,
-    platformCommission: Number(config.platformCommission) || 0,
-    peakHourMultiplier: Number(config.peakHourMultiplier) || 1,
+    costRate: eff.costRate,
+    platformCommission: eff.platformCommission,
+    peakHourMultiplier: eff.peakHourMultiplier,
     minBookingFeeApplied,
   };
 };
@@ -250,5 +302,9 @@ module.exports = {
   computeLabourBill,
   computeLabourScenarioEstimates,
   DEFAULT_LABOUR_CONFIG,
+  LABOUR_ENTITY_KEYS,
+  isEntityEnabled,
+  resolveLabourConfig,
+  billNeedsRepricing,
 };
 

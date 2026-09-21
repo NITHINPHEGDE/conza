@@ -6,6 +6,9 @@ import Input from '../components/common/Input'
 import Breadcrumb from '../components/layout/Breadcrumb'
 import pricingConfigService from '../services/pricingConfigService'
 
+// `enabledFields[key]` is the "apply in customer billing" checkbox for each
+// pricing entity. Ticked (true) = the customer app shows it and adds it to the
+// bill; unticked (false) = it is hidden and never charged.
 const initialPricing = {
   labour: {
     platformCommission: 12,
@@ -13,6 +16,13 @@ const initialPricing = {
     serviceCharge: 25,
     cancellationFee: 30,
     peakHourMultiplier: 1.5,
+    enabledFields: {
+      platformCommission: true,
+      costRate: true,
+      serviceCharge: true,
+      cancellationFee: true,
+      peakHourMultiplier: true,
+    },
   },
   materials: {
     platformCommission: 8,
@@ -21,6 +31,14 @@ const initialPricing = {
     minOrderValue: 200,
     bulkDiscount: 5,
     vendorCommission: 92,
+    enabledFields: {
+      platformCommission: true,
+      gstRate: true,
+      deliveryCharge: true,
+      minOrderValue: true,
+      bulkDiscount: true,
+      vendorCommission: true,
+    },
   },
   rentals: {
     platformCommission: 10,
@@ -29,7 +47,43 @@ const initialPricing = {
     damageWaiver: 50,
     lateReturnFee: 100,
     cleaningFee: 30,
+    enabledFields: {
+      platformCommission: true,
+      gstRate: true,
+      securityDepositPercent: true,
+      damageWaiver: true,
+      lateReturnFee: true,
+      cleaningFee: true,
+    },
   },
+}
+
+// Entities shown for each category, in display order. `percent` adds the %
+// icon, `bounded` limits the input to 0-100.
+const FIELD_CONFIG = {
+  labour: [
+    { key: 'platformCommission', label: 'Platform Commission (%)', percent: true, bounded: true, hint: 'Percentage taken from each transaction' },
+    { key: 'costRate', label: 'Cost Rate (%)', percent: true, bounded: true, hint: "Markup applied on top of the worker's base rate" },
+    { key: 'serviceCharge', label: 'Service Charge (₹)', hint: 'Minimum charge is set per-category instead — see Categories → Base Price.' },
+    { key: 'cancellationFee', label: 'Cancellation Fee (₹)' },
+    { key: 'peakHourMultiplier', label: 'Peak Hour Multiplier', step: 0.1 },
+  ],
+  materials: [
+    { key: 'platformCommission', label: 'Platform Commission (%)', percent: true, bounded: true, hint: 'Percentage taken from each transaction' },
+    { key: 'gstRate', label: 'GST Rate (%)', percent: true, bounded: true },
+    { key: 'deliveryCharge', label: 'Delivery Charge (₹)' },
+    { key: 'minOrderValue', label: 'Min Order Value (₹)' },
+    { key: 'bulkDiscount', label: 'Bulk Discount (%)' },
+    { key: 'vendorCommission', label: 'Vendor Commission (%)', hint: 'Amount vendor receives per sale' },
+  ],
+  rentals: [
+    { key: 'platformCommission', label: 'Platform Commission (%)', percent: true, bounded: true, hint: 'Percentage taken from each transaction' },
+    { key: 'gstRate', label: 'GST Rate (%)', percent: true, bounded: true },
+    { key: 'securityDepositPercent', label: 'Security Deposit (%)' },
+    { key: 'damageWaiver', label: 'Damage Waiver (₹)' },
+    { key: 'lateReturnFee', label: 'Late Return Fee (₹)' },
+    { key: 'cleaningFee', label: 'Cleaning Fee (₹)' },
+  ],
 }
 
 export default function PricingManagement() {
@@ -45,11 +99,21 @@ export default function PricingManagement() {
       try {
         const res = await pricingConfigService.getAll()
         if (mounted && res.success && res.pricing) {
-          setPricing(prev => ({
-            labour: { ...prev.labour, ...res.pricing.labour },
-            materials: { ...prev.materials, ...res.pricing.materials },
-            rentals: { ...prev.rentals, ...res.pricing.rentals },
-          }))
+          setPricing(prev => {
+            const merge = (key) => ({
+              ...prev[key],
+              ...(res.pricing[key] || {}),
+              enabledFields: {
+                ...prev[key].enabledFields,
+                ...((res.pricing[key] && res.pricing[key].enabledFields) || {}),
+              },
+            })
+            return {
+              labour: merge('labour'),
+              materials: merge('materials'),
+              rentals: merge('rentals'),
+            }
+          })
         }
       } catch (err) {
         // Keep defaults if the fetch fails; admin can still edit and save.
@@ -75,6 +139,20 @@ export default function PricingManagement() {
         ...prev[activeCategory],
         [field]: value,
       }
+    }))
+    setSaved(false)
+  }
+
+  const handleToggle = (field, checked) => {
+    setPricing(prev => ({
+      ...prev,
+      [activeCategory]: {
+        ...prev[activeCategory],
+        enabledFields: {
+          ...prev[activeCategory].enabledFields,
+          [field]: checked,
+        },
+      },
     }))
     setSaved(false)
   }
@@ -130,163 +208,52 @@ export default function PricingManagement() {
             </div>
           </div>
 
+          <p className="text-sm text-textMuted">
+            Tick an entity to apply it in the customer app's billing. Unticked entities are hidden from the
+            customer and are not added to the bill.
+          </p>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Platform Commission */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-textSecondary flex items-center gap-2">
-                <Percent size={14} />
-                Platform Commission (%)
-              </label>
-              <Input
-                type="number"
-                value={current.platformCommission}
-                onChange={(e) => handleChange('platformCommission', parseFloat(e.target.value))}
-                min={0}
-                max={100}
-              />
-              <p className="text-xs text-textMuted">Percentage taken from each transaction</p>
-            </div>
-
-            {/* Cost Rate (labour) / GST Rate (materials & rentals) */}
-            {activeCategory === 'labour' ? (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-textSecondary flex items-center gap-2">
-                  <Percent size={14} />
-                  Cost Rate (%)
-                </label>
-                <Input
-                  type="number"
-                  value={current.costRate}
-                  onChange={(e) => handleChange('costRate', parseFloat(e.target.value))}
-                  min={0}
-                  max={100}
-                />
-                <p className="text-xs text-textMuted">Markup applied on top of the worker's base rate</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-textSecondary flex items-center gap-2">
-                  <Percent size={14} />
-                  GST Rate (%)
-                </label>
-                <Input
-                  type="number"
-                  value={current.gstRate}
-                  onChange={(e) => handleChange('gstRate', parseFloat(e.target.value))}
-                  min={0}
-                  max={100}
-                />
-              </div>
-            )}
-
-            {/* Category-specific fields */}
-            {activeCategory === 'labour' && (
-              <>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-textSecondary">Service Charge (₹)</label>
+            {(FIELD_CONFIG[activeCategory] || []).map((field) => {
+              const enabled = current.enabledFields?.[field.key] !== false
+              const rawValue = current[field.key]
+              return (
+                <div key={field.key} className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-sm font-medium text-textSecondary flex items-center gap-2">
+                      {field.percent && <Percent size={14} />}
+                      {field.label}
+                    </label>
+                    <label
+                      className="flex items-center gap-1.5 text-xs text-textMuted cursor-pointer select-none"
+                      title="Apply this entity in the customer app billing"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={enabled}
+                        onChange={(e) => handleToggle(field.key, e.target.checked)}
+                        className="h-4 w-4 cursor-pointer accent-accentAmber"
+                      />
+                      Apply
+                    </label>
+                  </div>
                   <Input
                     type="number"
-                    value={current.serviceCharge}
-                    onChange={(e) => handleChange('serviceCharge', parseFloat(e.target.value))}
+                    value={Number.isFinite(rawValue) ? rawValue : ''}
+                    onChange={(e) => handleChange(field.key, parseFloat(e.target.value))}
+                    disabled={!enabled}
+                    className={enabled ? '' : 'opacity-50'}
+                    {...(field.bounded ? { min: 0, max: 100 } : {})}
+                    {...(field.step ? { step: field.step } : {})}
                   />
-                  <p className="text-xs text-textMuted">
-                    Minimum charge is set per-category instead — see Categories → Base Price.
-                  </p>
+                  {!enabled ? (
+                    <p className="text-xs text-danger">Not applied — hidden from customer billing.</p>
+                  ) : (
+                    field.hint && <p className="text-xs text-textMuted">{field.hint}</p>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-textSecondary">Cancellation Fee (₹)</label>
-                  <Input
-                    type="number"
-                    value={current.cancellationFee}
-                    onChange={(e) => handleChange('cancellationFee', parseFloat(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-textSecondary">Peak Hour Multiplier</label>
-                  <Input
-                    type="number"
-                    value={current.peakHourMultiplier}
-                    onChange={(e) => handleChange('peakHourMultiplier', parseFloat(e.target.value))}
-                    step={0.1}
-                  />
-                </div>
-              </>
-            )}
-
-            {activeCategory === 'materials' && (
-              <>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-textSecondary">Delivery Charge (₹)</label>
-                  <Input
-                    type="number"
-                    value={current.deliveryCharge}
-                    onChange={(e) => handleChange('deliveryCharge', parseFloat(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-textSecondary">Min Order Value (₹)</label>
-                  <Input
-                    type="number"
-                    value={current.minOrderValue}
-                    onChange={(e) => handleChange('minOrderValue', parseFloat(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-textSecondary">Bulk Discount (%)</label>
-                  <Input
-                    type="number"
-                    value={current.bulkDiscount}
-                    onChange={(e) => handleChange('bulkDiscount', parseFloat(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-textSecondary">Vendor Commission (%)</label>
-                  <Input
-                    type="number"
-                    value={current.vendorCommission}
-                    onChange={(e) => handleChange('vendorCommission', parseFloat(e.target.value))}
-                  />
-                  <p className="text-xs text-textMuted">Amount vendor receives per sale</p>
-                </div>
-              </>
-            )}
-
-            {activeCategory === 'rentals' && (
-              <>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-textSecondary">Security Deposit (%)</label>
-                  <Input
-                    type="number"
-                    value={current.securityDepositPercent}
-                    onChange={(e) => handleChange('securityDepositPercent', parseFloat(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-textSecondary">Damage Waiver (₹)</label>
-                  <Input
-                    type="number"
-                    value={current.damageWaiver}
-                    onChange={(e) => handleChange('damageWaiver', parseFloat(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-textSecondary">Late Return Fee (₹)</label>
-                  <Input
-                    type="number"
-                    value={current.lateReturnFee}
-                    onChange={(e) => handleChange('lateReturnFee', parseFloat(e.target.value))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-textSecondary">Cleaning Fee (₹)</label>
-                  <Input
-                    type="number"
-                    value={current.cleaningFee}
-                    onChange={(e) => handleChange('cleaningFee', parseFloat(e.target.value))}
-                  />
-                </div>
-              </>
-            )}
+              )
+            })}
           </div>
 
           <div className="flex justify-end pt-4 border-t border-border">

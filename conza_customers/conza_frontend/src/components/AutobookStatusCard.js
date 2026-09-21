@@ -80,22 +80,30 @@ const AutobookStatusCard = React.memo(({ entry, highlighted, onConfirm, onReport
               <Text style={styles.billValue}>{formatDurationHours(entry.hoursWorked)}</Text>
             </View>
           )}
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Surge</Text>
-            <Text style={styles.billValue}>×{entry.billing?.peakHourMultiplier ?? 1}</Text>
-          </View>
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Service Charge</Text>
-            <Text style={styles.billValue}>₹{entry.billing?.serviceCharge ?? 0}</Text>
-          </View>
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>GST ({entry.billing?.costRate ?? 0}%)</Text>
-            <Text style={styles.billValue}>₹{entry.billing?.costRateAmount ?? 0}</Text>
-          </View>
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Platform Commission ({entry.billing?.platformCommission ?? 0}%)</Text>
-            <Text style={styles.billValue}>₹{entry.billing?.platformCommissionAmount ?? 0}</Text>
-          </View>
+          {Number(entry.billing?.peakHourMultiplier ?? 1) !== 1 && (
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Surge</Text>
+              <Text style={styles.billValue}>×{entry.billing?.peakHourMultiplier ?? 1}</Text>
+            </View>
+          )}
+          {Number(entry.billing?.serviceCharge) > 0 && (
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Service Charge</Text>
+              <Text style={styles.billValue}>₹{entry.billing?.serviceCharge ?? 0}</Text>
+            </View>
+          )}
+          {Number(entry.billing?.costRate) > 0 && (
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>GST ({entry.billing?.costRate ?? 0}%)</Text>
+              <Text style={styles.billValue}>₹{entry.billing?.costRateAmount ?? 0}</Text>
+            </View>
+          )}
+          {Number(entry.billing?.platformCommission) > 0 && (
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>Platform Commission ({entry.billing?.platformCommission ?? 0}%)</Text>
+              <Text style={styles.billValue}>₹{entry.billing?.platformCommissionAmount ?? 0}</Text>
+            </View>
+          )}
           <View style={[styles.billRow, styles.billTotalRow]}>
             <Text style={styles.billTotalLabel}>Total</Text>
             <Text style={styles.billTotalValue}>₹{entry.total}</Text>

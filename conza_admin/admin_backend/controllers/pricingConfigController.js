@@ -33,6 +33,31 @@ const DEFAULT_SETTINGS = {
 
 const VALID_CATEGORIES = ['labour', 'materials', 'rentals']
 
+// Every pricing entity that has an "apply in customer billing" checkbox in
+// Finance → Pricing. `settings.enabledFields[<key>] === false` means the
+// entity is unticked: the customer app must neither show it nor add it to a
+// bill.
+const ENTITY_KEYS = {
+  labour: ['platformCommission', 'costRate', 'serviceCharge', 'cancellationFee', 'peakHourMultiplier'],
+  materials: ['platformCommission', 'gstRate', 'deliveryCharge', 'minOrderValue', 'bulkDiscount', 'vendorCommission'],
+  rentals: ['platformCommission', 'gstRate', 'securityDepositPercent', 'damageWaiver', 'lateReturnFee', 'cleaningFee'],
+}
+
+const toBool = (v) => v !== false && v !== 'false' && v !== 0 && v !== '0'
+
+// Returns `settings` with a complete boolean `enabledFields` map. Anything
+// missing (e.g. a config saved before the checkboxes existed) defaults to
+// ticked, so existing behaviour is unchanged until the admin unticks something.
+const withEnabledFields = (category, settings) => {
+  const base = settings && typeof settings === 'object' ? settings : {}
+  const incoming = base.enabledFields && typeof base.enabledFields === 'object' ? base.enabledFields : {}
+  const enabledFields = {}
+  ENTITY_KEYS[category].forEach((key) => {
+    enabledFields[key] = toBool(incoming[key])
+  })
+  return { ...base, enabledFields }
+}
+
 exports.getPricingConfig = async (req, res, next) => {
   try {
     const { category } = req.query
@@ -42,7 +67,7 @@ exports.getPricingConfig = async (req, res, next) => {
         return next(createError(400, 'Invalid pricing category.'))
       }
       const doc = await PricingConfig.findOne({ category })
-      const settings = doc ? doc.settings : DEFAULT_SETTINGS[category]
+      const settings = withEnabledFields(category, doc ? doc.settings : DEFAULT_SETTINGS[category])
       return sendSuccess(res, 200, 'Pricing config fetched', {
         category,
         settings,
@@ -54,7 +79,7 @@ exports.getPricingConfig = async (req, res, next) => {
     const byCategory = {}
     VALID_CATEGORIES.forEach((cat) => {
       const found = docs.find((d) => d.category === cat)
-      byCategory[cat] = found ? found.settings : DEFAULT_SETTINGS[cat]
+      byCategory[cat] = withEnabledFields(cat, found ? found.settings : DEFAULT_SETTINGS[cat])
     })
     sendSuccess(res, 200, 'Pricing config fetched', { pricing: byCategory })
   } catch (err) {
@@ -78,7 +103,7 @@ exports.upsertPricingConfig = async (req, res, next) => {
       { category },
       {
         category,
-        settings,
+        settings: withEnabledFields(category, settings),
         updatedByAdmin: req.admin?.name || '',
       },
       { new: true, upsert: true, setDefaultsOnInsert: true }
@@ -92,7 +117,11 @@ exports.upsertPricingConfig = async (req, res, next) => {
     await bustPricingConfigCache(category)
 
     req.auditTarget = `Pricing Config - ${category}`
-    req.auditDetails = `Updated ${category} pricing settings`
+    const disabledEntities = Object.entries(doc.settings?.enabledFields || {})
+      .filter(([, on]) => on === false)
+      .map(([key]) => key)
+    req.auditDetails = `Updated ${category} pricing settings` +
+      (disabledEntities.length ? ` (not applied: ${disabledEntities.join(', ')})` : '')
 
     sendSuccess(res, 200, 'Pricing config saved', {
       category: doc.category,
