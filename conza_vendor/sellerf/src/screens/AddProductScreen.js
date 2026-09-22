@@ -42,8 +42,20 @@ const AddProductScreen = ({ navigation }) => {
   const { addProduct } = useVendorStore();
   const { mode } = useModeStore();
 
-  // 'catalogue' | 'manual'
-  const [tab, setTab] = useState('catalogue');
+  // null (option selector) | 'catalogue' | 'manual'
+  const [option, setOption] = useState(null);
+
+  const handleBack = () => {
+    if (selected) {
+      onClearSelected();
+      return;
+    }
+    if (option) {
+      setOption(null);
+      return;
+    }
+    navigation.goBack();
+  };
 
   const [loading,        setLoading]        = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
@@ -141,7 +153,7 @@ const AddProductScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const fromCatalogue = tab === 'catalogue' && !!selected;
+      const fromCatalogue = option === 'catalogue' && !!selected;
 
       // Catalogue photos are already Cloudinary URLs owned by the admin
       // product — only the manual tab's freshly-picked local URIs need
@@ -179,33 +191,145 @@ const AddProductScreen = ({ navigation }) => {
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.7}>
           <Text style={styles.backIcon}>&#8249;</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Product</Text>
+        <Text style={styles.headerTitle}>
+          {!option ? 'Add Product' : option === 'catalogue' ? 'From Catalogue' : 'Add Manually'}
+        </Text>
         <View style={{ width: 36 }} />
       </View>
 
-      {/* Tabs */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'catalogue' && styles.tabActive]}
-          onPress={() => setTab('catalogue')}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.tabText, tab === 'catalogue' && styles.tabTextActive]}>From Catalogue</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'manual' && styles.tabActive]}
-          onPress={() => setTab('manual')}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.tabText, tab === 'manual' && styles.tabTextActive]}>Add Manually</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Two Options View (Initial State) */}
+      {!option && (
+        <ScrollView contentContainerStyle={styles.optionsScroll} showsVerticalScrollIndicator={false}>
+          <View style={styles.optionsHeader}>
+            <Text style={styles.optionsTitle}>Choose How to Add Product</Text>
+            <Text style={styles.optionsSubtitle}>
+              Select an option below to add items to your inventory
+            </Text>
+          </View>
+
+          {/* Option 1: From Catalogue */}
+          <TouchableOpacity
+            style={styles.optionCard}
+            onPress={() => setOption('catalogue')}
+            activeOpacity={0.88}
+          >
+            <View style={styles.optionBadge}>
+              <Text style={styles.optionBadgeText}>RECOMMENDED &bull; FASTEST</Text>
+            </View>
+
+            <View style={styles.optionCardHeader}>
+              <View style={styles.optionIconWrap}>
+                <Text style={styles.optionIcon}>📦</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.optionCardTitle}>From Master Catalogue</Text>
+                <Text style={styles.optionCardTagline}>Instant listing with ready photos &amp; details</Text>
+              </View>
+            </View>
+
+            <Text style={styles.optionDesc}>
+              Search pre-approved products with high-resolution photos, verified brand names, specifications and descriptions already configured. Just set your price and stock quantity.
+            </Text>
+
+            <View style={styles.optionFeatures}>
+              <View style={styles.optionFeatureItem}>
+                <Text style={styles.optionCheck}>✓</Text>
+                <Text style={styles.optionFeatureText}>Ready product photos included</Text>
+              </View>
+              <View style={styles.optionFeatureItem}>
+                <Text style={styles.optionCheck}>✓</Text>
+                <Text style={styles.optionFeatureText}>Pre-filled category, unit &amp; specs</Text>
+              </View>
+              <View style={styles.optionFeatureItem}>
+                <Text style={styles.optionCheck}>✓</Text>
+                <Text style={styles.optionFeatureText}>Live in your store in seconds</Text>
+              </View>
+            </View>
+
+            <View style={styles.optionActionRow}>
+              <Text style={styles.optionActionText}>Select from Catalogue</Text>
+              <Text style={styles.optionActionArrow}>&rarr;</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Option 2: Add Manually */}
+          <TouchableOpacity
+            style={[styles.optionCard, styles.optionCardSecondary]}
+            onPress={() => setOption('manual')}
+            activeOpacity={0.88}
+          >
+            <View style={[styles.optionBadge, styles.optionBadgeSecondary]}>
+              <Text style={[styles.optionBadgeText, styles.optionBadgeTextSecondary]}>CUSTOM LISTING</Text>
+            </View>
+
+            <View style={styles.optionCardHeader}>
+              <View style={[styles.optionIconWrap, styles.optionIconWrapSecondary]}>
+                <Text style={styles.optionIcon}>✏️</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.optionCardTitle}>Add Manually</Text>
+                <Text style={styles.optionCardTagline}>Create a brand-new listing from scratch</Text>
+              </View>
+            </View>
+
+            <Text style={styles.optionDesc}>
+              Can&apos;t find your product in the catalogue? Create a custom listing with your own title, brand, description, and upload your own product photos.
+            </Text>
+
+            <View style={styles.optionFeatures}>
+              <View style={styles.optionFeatureItem}>
+                <Text style={styles.optionCheck}>✓</Text>
+                <Text style={styles.optionFeatureText}>Upload up to 5 custom photos</Text>
+              </View>
+              <View style={styles.optionFeatureItem}>
+                <Text style={styles.optionCheck}>✓</Text>
+                <Text style={styles.optionFeatureText}>Full control over title, brand &amp; specs</Text>
+              </View>
+              <View style={styles.optionFeatureItem}>
+                <Text style={styles.optionCheck}>✓</Text>
+                <Text style={styles.optionFeatureText}>Set custom SKU, min order &amp; HSN</Text>
+              </View>
+            </View>
+
+            <View style={styles.optionActionRow}>
+              <Text style={[styles.optionActionText, styles.optionActionTextSecondary]}>Create Manually</Text>
+              <Text style={[styles.optionActionArrow, styles.optionActionTextSecondary]}>&rarr;</Text>
+            </View>
+          </TouchableOpacity>
+        </ScrollView>
+      )}
+
+      {/* When an option is active, show the quick switcher */}
+      {option && (
+        <View style={styles.optionSwitchWrap}>
+          <TouchableOpacity
+            style={[styles.optionSwitchBtn, option === 'catalogue' && styles.optionSwitchBtnActive]}
+            onPress={() => { setOption('catalogue'); setSelected(null); }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.optionSwitchIcon}>📦</Text>
+            <Text style={[styles.optionSwitchText, option === 'catalogue' && styles.optionSwitchTextActive]}>
+              From Catalogue
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.optionSwitchBtn, option === 'manual' && styles.optionSwitchBtnActive]}
+            onPress={() => { setOption('manual'); setSelected(null); }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.optionSwitchIcon}>✏️</Text>
+            <Text style={[styles.optionSwitchText, option === 'manual' && styles.optionSwitchTextActive]}>
+              Add Manually
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── CATALOGUE TAB ── */}
-      {tab === 'catalogue' && !selected && (
+      {option === 'catalogue' && !selected && (
         <View style={{ flex: 1 }}>
           <View style={styles.searchWrap}>
             <Text style={styles.searchIcon}>&#128269;</Text>
@@ -261,8 +385,8 @@ const AddProductScreen = ({ navigation }) => {
         </View>
       )}
 
-      {/* ── CATALOGUE TAB: item selected → pricing form ── */}
-      {tab === 'catalogue' && selected && (
+      {/* ── CATALOGUE OPTION: item selected → pricing form ── */}
+      {option === 'catalogue' && selected && (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Selected banner */}
           <View style={styles.selectedBanner}>
@@ -355,8 +479,8 @@ const AddProductScreen = ({ navigation }) => {
         </ScrollView>
       )}
 
-      {/* ── MANUAL TAB ── */}
-      {tab === 'manual' && (
+      {/* ── MANUAL OPTION ── */}
+      {option === 'manual' && (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
           {/* Basic Info */}
@@ -498,32 +622,189 @@ const styles = StyleSheet.create({
   backIcon:    { fontSize: 24, color: colors.textPrimary, fontWeight: '300', lineHeight: 28 },
   headerTitle: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
 
-  // Tabs
-  tabBar: {
-    flexDirection: 'row',
+  // Options Selection Screen
+  optionsScroll: {
+    padding: 20,
+    paddingBottom: 60,
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  optionsHeader: {
+    marginBottom: 20,
+    marginTop: 6,
+  },
+  optionsTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  optionsSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+
+  // Option Cards
+  optionCard: {
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingHorizontal: 16,
-    paddingTop: 4,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: colors.accentAmber,
+    shadowColor: colors.cardShadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
+  optionCardSecondary: {
+    borderColor: colors.border,
+  },
+  optionBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.accentAmberSoft,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginBottom: 14,
+  },
+  optionBadgeSecondary: {
+    backgroundColor: colors.surfaceElevated,
+  },
+  optionBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.accentAmber,
+    letterSpacing: 0.6,
+  },
+  optionBadgeTextSecondary: {
+    color: colors.textSecondary,
+  },
+  optionCardHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    gap: 14,
+    marginBottom: 12,
   },
-  tabActive: {
-    borderBottomColor: colors.accentAmber,
+  optionIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: colors.accentAmberSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  tabText: {
+  optionIconWrapSecondary: {
+    backgroundColor: colors.surfaceElevated,
+  },
+  optionIcon: {
+    fontSize: 24,
+  },
+  optionCardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    marginBottom: 2,
+  },
+  optionCardTagline: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  optionDesc: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 19,
+    marginBottom: 16,
+  },
+  optionFeatures: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+    marginBottom: 16,
+  },
+  optionFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  optionCheck: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.success,
+  },
+  optionFeatureText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  optionActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+  },
+  optionActionText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.accentAmber,
+  },
+  optionActionTextSecondary: {
+    color: colors.textPrimary,
+  },
+  optionActionArrow: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.accentAmber,
+  },
+
+  // Segmented option switcher when inside a flow
+  optionSwitchWrap: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 14,
+    padding: 4,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxWidth: 680,
+    alignSelf: 'center',
+    width: 'calc(100% - 32px)',
+  },
+  optionSwitchBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 10,
+    gap: 6,
+  },
+  optionSwitchBtnActive: {
+    backgroundColor: colors.surface,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  optionSwitchIcon: {
+    fontSize: 14,
+  },
+  optionSwitchText: {
     fontSize: 13,
     fontWeight: '600',
     color: colors.textMuted,
   },
-  tabTextActive: {
-    color: colors.accentAmber,
+  optionSwitchTextActive: {
+    color: colors.textPrimary,
     fontWeight: '800',
   },
 
@@ -534,12 +815,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10,
     borderWidth: 1, borderColor: colors.border, gap: 8,
+    maxWidth: 680, alignSelf: 'center', width: 'calc(100% - 32px)',
   },
   searchIcon:  { fontSize: 14, color: colors.textMuted },
   searchInput: { flex: 1, fontSize: 13, color: colors.textPrimary, fontWeight: '500' },
   searchClear: { fontSize: 13, color: colors.textMuted, paddingHorizontal: 4 },
 
-  listContent: { paddingHorizontal: 16, paddingBottom: 40 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 40, maxWidth: 680, width: '100%', alignSelf: 'center' },
 
   catRow: {
     flexDirection: 'row', alignItems: 'center',
@@ -562,7 +844,7 @@ const styles = StyleSheet.create({
   emptyText:  { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   emptySub:   { fontSize: 12, color: colors.textMuted },
 
-  scroll: { padding: 16, paddingBottom: 50 },
+  scroll: { padding: 16, paddingBottom: 50, maxWidth: 680, width: '100%', alignSelf: 'center' },
 
   // Selected banner
   selectedBanner: {
