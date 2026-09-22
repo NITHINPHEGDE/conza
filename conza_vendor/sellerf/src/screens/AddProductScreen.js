@@ -200,104 +200,114 @@ const AddProductScreen = ({ navigation }) => {
         <View style={{ width: 36 }} />
       </View>
 
-      {/* Two Options View (Initial State) */}
+      {/* Two Options View (Initial State) - Matching Reference Design Exactly */}
       {!option && (
         <ScrollView contentContainerStyle={styles.optionsScroll} showsVerticalScrollIndicator={false}>
           <View style={styles.optionsHeader}>
-            <Text style={styles.optionsTitle}>Choose How to Add Product</Text>
-            <Text style={styles.optionsSubtitle}>
-              Select an option below to add items to your inventory
-            </Text>
+            <Text style={styles.optionsMainTitle}>Add Product</Text>
+            <Text style={styles.optionsSubTitle}>Choose how you want to add a product</Text>
           </View>
 
-          {/* Option 1: From Catalogue */}
+          {/* Option 1: Add from CONZA Catalog */}
           <TouchableOpacity
-            style={styles.optionCard}
+            style={styles.refCard}
             onPress={() => setOption('catalogue')}
-            activeOpacity={0.88}
+            activeOpacity={0.92}
           >
-            <View style={styles.optionBadge}>
-              <Text style={styles.optionBadgeText}>RECOMMENDED &bull; FASTEST</Text>
-            </View>
-
-            <View style={styles.optionCardHeader}>
-              <View style={styles.optionIconWrap}>
-                <Text style={styles.optionIcon}>📦</Text>
+            <View style={styles.refCardTop}>
+              <View style={[styles.refIconCircle, { backgroundColor: '#FFF0E5' }]}>
+                <Text style={{ fontSize: 22 }}>📦</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.optionCardTitle}>From Master Catalogue</Text>
-                <Text style={styles.optionCardTagline}>Instant listing with ready photos &amp; details</Text>
+                <Text style={styles.refCardTitle}>Add from CONZA Catalog</Text>
+                <Text style={styles.refCardDesc}>
+                  Browse and list thousands of construction products from our catalog.
+                </Text>
               </View>
             </View>
 
-            <Text style={styles.optionDesc}>
-              Search pre-approved products with high-resolution photos, verified brand names, specifications and descriptions already configured. Just set your price and stock quantity.
-            </Text>
-
-            <View style={styles.optionFeatures}>
-              <View style={styles.optionFeatureItem}>
-                <Text style={styles.optionCheck}>✓</Text>
-                <Text style={styles.optionFeatureText}>Ready product photos included</Text>
+            <View style={styles.refCheckList}>
+              <View style={styles.refCheckRow}>
+                <View style={styles.refCheckCircle}>
+                  <Text style={styles.refCheckMark}>✓</Text>
+                </View>
+                <Text style={styles.refCheckText}>Pre-filled product details</Text>
               </View>
-              <View style={styles.optionFeatureItem}>
-                <Text style={styles.optionCheck}>✓</Text>
-                <Text style={styles.optionFeatureText}>Pre-filled category, unit &amp; specs</Text>
+              <View style={styles.refCheckRow}>
+                <View style={styles.refCheckCircle}>
+                  <Text style={styles.refCheckMark}>✓</Text>
+                </View>
+                <Text style={styles.refCheckText}>Save time</Text>
               </View>
-              <View style={styles.optionFeatureItem}>
-                <Text style={styles.optionCheck}>✓</Text>
-                <Text style={styles.optionFeatureText}>Live in your store in seconds</Text>
+              <View style={styles.refCheckRow}>
+                <View style={styles.refCheckCircle}>
+                  <Text style={styles.refCheckMark}>✓</Text>
+                </View>
+                <Text style={styles.refCheckText}>Standardized information</Text>
+              </View>
+              <View style={styles.refCheckRow}>
+                <View style={styles.refCheckCircle}>
+                  <Text style={styles.refCheckMark}>✓</Text>
+                </View>
+                <Text style={styles.refCheckText}>Easier for customers to find</Text>
               </View>
             </View>
 
-            <View style={styles.optionActionRow}>
-              <Text style={styles.optionActionText}>Select from Catalogue</Text>
-              <Text style={styles.optionActionArrow}>&rarr;</Text>
-            </View>
+            <TouchableOpacity
+              style={styles.refPrimaryBtn}
+              onPress={() => setOption('catalogue')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.refPrimaryBtnText}>Search Catalog  →</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
 
-          {/* Option 2: Add Manually */}
+          {/* Option 2: Add Custom Product */}
           <TouchableOpacity
-            style={[styles.optionCard, styles.optionCardSecondary]}
+            style={styles.refCard}
             onPress={() => setOption('manual')}
-            activeOpacity={0.88}
+            activeOpacity={0.92}
           >
-            <View style={[styles.optionBadge, styles.optionBadgeSecondary]}>
-              <Text style={[styles.optionBadgeText, styles.optionBadgeTextSecondary]}>CUSTOM LISTING</Text>
-            </View>
-
-            <View style={styles.optionCardHeader}>
-              <View style={[styles.optionIconWrap, styles.optionIconWrapSecondary]}>
-                <Text style={styles.optionIcon}>✏️</Text>
+            <View style={styles.refCardTop}>
+              <View style={[styles.refIconCircle, { backgroundColor: '#EBF3FE' }]}>
+                <Text style={{ fontSize: 26, color: '#2563EB', fontWeight: '300', marginTop: -2 }}>+</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.optionCardTitle}>Add Manually</Text>
-                <Text style={styles.optionCardTagline}>Create a brand-new listing from scratch</Text>
+                <Text style={styles.refCardTitle}>Add Custom Product</Text>
+                <Text style={styles.refCardDesc}>
+                  Can&apos;t find the product in our catalog? Create your own listing.
+                </Text>
               </View>
             </View>
 
-            <Text style={styles.optionDesc}>
-              Can&apos;t find your product in the catalogue? Create a custom listing with your own title, brand, description, and upload your own product photos.
-            </Text>
-
-            <View style={styles.optionFeatures}>
-              <View style={styles.optionFeatureItem}>
-                <Text style={styles.optionCheck}>✓</Text>
-                <Text style={styles.optionFeatureText}>Upload up to 5 custom photos</Text>
+            <View style={styles.refCheckList}>
+              <View style={styles.refCheckRow}>
+                <View style={styles.refCheckCircle}>
+                  <Text style={styles.refCheckMark}>✓</Text>
+                </View>
+                <Text style={styles.refCheckText}>Add your own product details</Text>
               </View>
-              <View style={styles.optionFeatureItem}>
-                <Text style={styles.optionCheck}>✓</Text>
-                <Text style={styles.optionFeatureText}>Full control over title, brand &amp; specs</Text>
+              <View style={styles.refCheckRow}>
+                <View style={styles.refCheckCircle}>
+                  <Text style={styles.refCheckMark}>✓</Text>
+                </View>
+                <Text style={styles.refCheckText}>Upload images</Text>
               </View>
-              <View style={styles.optionFeatureItem}>
-                <Text style={styles.optionCheck}>✓</Text>
-                <Text style={styles.optionFeatureText}>Set custom SKU, min order &amp; HSN</Text>
+              <View style={styles.refCheckRow}>
+                <View style={styles.refCheckCircle}>
+                  <Text style={styles.refCheckMark}>✓</Text>
+                </View>
+                <Text style={styles.refCheckText}>Get listed after review (if required)</Text>
               </View>
             </View>
 
-            <View style={styles.optionActionRow}>
-              <Text style={[styles.optionActionText, styles.optionActionTextSecondary]}>Create Manually</Text>
-              <Text style={[styles.optionActionArrow, styles.optionActionTextSecondary]}>&rarr;</Text>
-            </View>
+            <TouchableOpacity
+              style={styles.refSecondaryBtn}
+              onPress={() => setOption('manual')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.refSecondaryBtnText}>Create Custom Product  →</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
         </ScrollView>
       )}
@@ -622,145 +632,125 @@ const styles = StyleSheet.create({
   backIcon:    { fontSize: 24, color: colors.textPrimary, fontWeight: '300', lineHeight: 28 },
   headerTitle: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
 
-  // Options Selection Screen
+  // Options Selection Screen (Matching Reference Design)
   optionsScroll: {
     padding: 20,
     paddingBottom: 60,
-    maxWidth: 680,
+    maxWidth: 480,
     width: '100%',
     alignSelf: 'center',
   },
   optionsHeader: {
     marginBottom: 20,
-    marginTop: 6,
+    marginTop: 4,
   },
-  optionsTitle: {
-    fontSize: 22,
+  optionsMainTitle: {
+    fontSize: 24,
     fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 6,
-    letterSpacing: -0.3,
+    color: '#0D1B2A',
+    marginBottom: 4,
+    letterSpacing: -0.4,
   },
-  optionsSubtitle: {
+  optionsSubTitle: {
     fontSize: 14,
-    color: colors.textSecondary,
-    lineHeight: 20,
+    color: '#64748B',
+    fontWeight: '400',
   },
 
-  // Option Cards
-  optionCard: {
-    backgroundColor: colors.surface,
+  // Reference Cards
+  refCard: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 20,
     marginBottom: 20,
-    borderWidth: 1.5,
-    borderColor: colors.accentAmber,
-    shadowColor: colors.cardShadow,
+    borderWidth: 1,
+    borderColor: '#E8ECEF',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
     elevation: 3,
   },
-  optionCardSecondary: {
-    borderColor: colors.border,
-  },
-  optionBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.accentAmberSoft,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginBottom: 14,
-  },
-  optionBadgeSecondary: {
-    backgroundColor: colors.surfaceElevated,
-  },
-  optionBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.accentAmber,
-    letterSpacing: 0.6,
-  },
-  optionBadgeTextSecondary: {
-    color: colors.textSecondary,
-  },
-  optionCardHeader: {
+  refCardTop: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 14,
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  optionIconWrap: {
+  refIconCircle: {
     width: 48,
     height: 48,
-    borderRadius: 14,
-    backgroundColor: colors.accentAmberSoft,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  optionIconWrapSecondary: {
-    backgroundColor: colors.surfaceElevated,
-  },
-  optionIcon: {
-    fontSize: 24,
-  },
-  optionCardTitle: {
-    fontSize: 18,
+  refCardTitle: {
+    fontSize: 16,
     fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 2,
+    color: '#0D1B2A',
+    marginBottom: 4,
   },
-  optionCardTagline: {
+  refCardDesc: {
     fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
+    color: '#64748B',
+    lineHeight: 18,
   },
-  optionDesc: {
+
+  refCheckList: {
+    paddingLeft: 2,
+    marginBottom: 20,
+    gap: 10,
+  },
+  refCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  refCheckCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: '#475569',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  refCheckMark: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#475569',
+    marginTop: -1,
+  },
+  refCheckText: {
     fontSize: 13,
-    color: colors.textSecondary,
-    lineHeight: 19,
-    marginBottom: 16,
+    fontWeight: '500',
+    color: '#475569',
   },
-  optionFeatures: {
-    backgroundColor: colors.surfaceElevated,
+
+  refPrimaryBtn: {
+    backgroundColor: '#0D1B2A',
     borderRadius: 12,
-    padding: 12,
-    gap: 8,
-    marginBottom: 16,
-  },
-  optionFeatureItem: {
-    flexDirection: 'row',
+    paddingVertical: 14,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
   },
-  optionCheck: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.success,
-  },
-  optionFeatureText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  optionActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 8,
-  },
-  optionActionText: {
+  refPrimaryBtnText: {
     fontSize: 14,
-    fontWeight: '800',
-    color: colors.accentAmber,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
-  optionActionTextSecondary: {
-    color: colors.textPrimary,
+
+  refSecondaryBtn: {
+    backgroundColor: '#EDF2FB',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  optionActionArrow: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.accentAmber,
+  refSecondaryBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0D1B2A',
   },
 
   // Segmented option switcher when inside a flow
