@@ -88,6 +88,37 @@ export default function BookingDetails() {
                 <FileText size={18} className="text-textMuted" />
                 <div><p className="text-xs text-textMuted">Payment</p><p className="text-sm font-medium text-textPrimary uppercase">{booking.paymentMethod}</p></div>
               </div>
+              <div className="flex items-center gap-3">
+                <Clock size={18} className="text-textMuted" />
+                <div>
+                  <p className="text-xs text-textMuted">Booked Time</p>
+                  <p className="text-sm font-medium text-textPrimary">
+                    {booking.createdAt ? new Date(booking.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Clock size={18} className="text-textMuted" />
+                <div>
+                  <p className="text-xs text-textMuted">Started Time</p>
+                  <p className="text-sm font-medium text-textPrimary">
+                    {booking.workStartTime || booking.checkInTime || (['in_progress', 'completed'].includes(booking.status) && booking.acceptedAt)
+                      ? new Date(booking.workStartTime || booking.checkInTime || booking.acceptedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+                      : '—'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Clock size={18} className="text-textMuted" />
+                <div>
+                  <p className="text-xs text-textMuted">Completed Time</p>
+                  <p className="text-sm font-medium text-textPrimary">
+                    {booking.status === 'completed' && (booking.checkOutTime || booking.updatedAt)
+                      ? new Date(booking.checkOutTime || booking.updatedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+                      : '—'}
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="mt-4">
               <p className="text-xs text-textMuted mb-1">Description</p>
