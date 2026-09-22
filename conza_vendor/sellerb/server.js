@@ -11,6 +11,7 @@ dotenv.config();
 const connectDB          = require('./config/db');
 const authRoutes         = require('./routes/authRoutes');
 const productRoutes      = require('./routes/productRoutes');
+const catalogueRoutes    = require('./routes/catalogueRoutes');
 const orderRoutes        = require('./routes/orderRoutes');
 const { getDashboard }   = require('./controllers/dashboardController');
 const { protect, requireActive } = require('./middleware/authMiddleware');
@@ -46,6 +47,7 @@ app.use(express.json({ limit: '5mb' }));
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth',     authRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/catalogue-products', catalogueRoutes);
 app.use('/api/orders',   orderRoutes);
 
 // Dashboard (seller only)

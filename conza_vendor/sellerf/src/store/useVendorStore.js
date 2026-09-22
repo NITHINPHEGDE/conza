@@ -317,6 +317,7 @@ const normalizeProduct = (p) => {
 
   return {
     id:          p._id?.toString() || p.id,
+    catalogueProductId: p.catalogueProduct?.toString?.() || p.catalogueProduct || null,
     name:        p.title,
     brand:       p.brand          || '',
     image:       p.images?.[0]    || null,

@@ -27,6 +27,7 @@ export const ROUTES = {
   MATERIALS: '/materials',
   MATERIAL_DETAILS: '/materials/:id',
   MATERIAL_CATEGORIES: '/materials/categories',
+  MATERIAL_CATALOGUE: '/materials/catalogue',
   FEATURED_PRODUCTS: '/materials/featured',
   
   RENTALS: '/rentals',

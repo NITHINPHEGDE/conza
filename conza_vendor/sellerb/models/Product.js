@@ -5,6 +5,12 @@ const productSchema = new mongoose.Schema(
   {
     seller:      { type: mongoose.Schema.Types.ObjectId, ref: 'Seller', required: true },
 
+    // Set when this listing was created by picking a product from the admin
+    // catalogue (see routes/catalogueRoutes.js). When present, the basic
+    // fields below (title, brand, sku, description, category, unit, images)
+    // are admin-owned and locked from vendor edits — see productController.js.
+    catalogueProduct: { type: mongoose.Schema.Types.ObjectId, ref: 'CatalogueProduct', default: null },
+
     title:       { type: String, required: true, trim: true },
     description: { type: String, default: '' },
     brand:       { type: String, default: '' },

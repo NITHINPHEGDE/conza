@@ -31,6 +31,10 @@ const EditProductScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { updateProduct } = useVendorStore();
   const item = route.params?.item;
+  // Basic info, category, unit and photos are admin-owned once a listing was
+  // created from the catalogue — the server ignores edits to them regardless,
+  // but showing them as locked here avoids a confusing "did that save?" UX.
+  const isFromCatalogue = Boolean(item?.catalogueProductId);
 
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
@@ -154,7 +158,7 @@ const EditProductScreen = ({ navigation, route }) => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Product Images</Text>
-            <Text style={styles.sectionSub}>{images.length}/{MAX_IMAGES} uploaded</Text>
+            <Text style={styles.sectionSub}>{isFromCatalogue ? 'From Catalogue' : `${images.length}/${MAX_IMAGES} uploaded`}</Text>
           </View>
           <View style={styles.imageGrid}>
             {images.map((uri, index) => (
@@ -165,12 +169,14 @@ const EditProductScreen = ({ navigation, route }) => {
                     <Text style={styles.primaryBadgeText}>Main</Text>
                   </View>
                 )}
-                <TouchableOpacity style={styles.removeImageBtn} onPress={() => handleRemoveImage(index)}>
-                  <Text style={styles.removeImageIcon}>✕</Text>
-                </TouchableOpacity>
+                {!isFromCatalogue && (
+                  <TouchableOpacity style={styles.removeImageBtn} onPress={() => handleRemoveImage(index)}>
+                    <Text style={styles.removeImageIcon}>✕</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ))}
-            {images.length < MAX_IMAGES && (
+            {!isFromCatalogue && images.length < MAX_IMAGES && (
               <TouchableOpacity style={styles.addImageBtn} onPress={handlePickImages} activeOpacity={0.8}>
                 <Text style={styles.addImageIcon}>📷</Text>
                 <Text style={styles.addImageText}>Add Photo</Text>
@@ -182,14 +188,23 @@ const EditProductScreen = ({ navigation, route }) => {
 
         {/* Basic Info */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Basic Information</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Basic Information</Text>
+            {isFromCatalogue && <Text style={styles.sectionSub}>From Catalogue</Text>}
+          </View>
           <Field label="Product Name *">
-            <TextInput style={styles.input} placeholder="e.g. Portland Cement 50kg"
-              placeholderTextColor={colors.textMuted} value={name} onChangeText={setName} />
+            {isFromCatalogue
+              ? <Text style={styles.lockedValue}>{name}</Text>
+              : <TextInput style={styles.input} placeholder="e.g. Portland Cement 50kg"
+                  placeholderTextColor={colors.textMuted} value={name} onChangeText={setName} />
+            }
           </Field>
           <Field label="Brand / Manufacturer">
-            <TextInput style={styles.input} placeholder="e.g. UltraTech, TATA Steel"
-              placeholderTextColor={colors.textMuted} value={brand} onChangeText={setBrand} />
+            {isFromCatalogue
+              ? <Text style={styles.lockedValue}>{brand || '—'}</Text>
+              : <TextInput style={styles.input} placeholder="e.g. UltraTech, TATA Steel"
+                  placeholderTextColor={colors.textMuted} value={brand} onChangeText={setBrand} />
+            }
           </Field>
           <Field label="SKU / Product Code">
             <TextInput style={styles.input} placeholder="e.g. CEM-001"
@@ -197,25 +212,32 @@ const EditProductScreen = ({ navigation, route }) => {
               autoCapitalize="characters" />
           </Field>
           <Field label="Description">
-            <TextInput style={[styles.input, styles.textArea]}
-              placeholder="Describe the product, grade, specifications..."
-              placeholderTextColor={colors.textMuted} value={description}
-              onChangeText={setDescription} multiline numberOfLines={4} textAlignVertical="top" />
+            {isFromCatalogue
+              ? <Text style={styles.lockedValue}>{description || '—'}</Text>
+              : <TextInput style={[styles.input, styles.textArea]}
+                  placeholder="Describe the product, grade, specifications..."
+                  placeholderTextColor={colors.textMuted} value={description}
+                  onChangeText={setDescription} multiline numberOfLines={4} textAlignVertical="top" />
+            }
           </Field>
         </View>
 
         {/* Category */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Category *</Text>
-          <View style={styles.chipGrid}>
-            {CATEGORIES.map((cat) => (
-              <TouchableOpacity key={cat}
-                style={[styles.chip, category === cat && styles.chipActive]}
-                onPress={() => setCategory(cat)} activeOpacity={0.8}>
-                <Text style={[styles.chipText, category === cat && styles.chipTextActive]}>{cat}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {isFromCatalogue ? (
+            <Text style={styles.lockedValue}>{category || '—'}</Text>
+          ) : (
+            <View style={styles.chipGrid}>
+              {CATEGORIES.map((cat) => (
+                <TouchableOpacity key={cat}
+                  style={[styles.chip, category === cat && styles.chipActive]}
+                  onPress={() => setCategory(cat)} activeOpacity={0.8}>
+                  <Text style={[styles.chipText, category === cat && styles.chipTextActive]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Pricing & Stock */}
@@ -255,15 +277,19 @@ const EditProductScreen = ({ navigation, route }) => {
         {/* Unit */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Unit of Measurement *</Text>
-          <View style={styles.chipGrid}>
-            {UNITS.map((u) => (
-              <TouchableOpacity key={u}
-                style={[styles.chip, unit === u && styles.chipActive]}
-                onPress={() => setUnit(u)} activeOpacity={0.8}>
-                <Text style={[styles.chipText, unit === u && styles.chipTextActive]}>{u}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {isFromCatalogue ? (
+            <Text style={styles.lockedValue}>{unit || '—'}</Text>
+          ) : (
+            <View style={styles.chipGrid}>
+              {UNITS.map((u) => (
+                <TouchableOpacity key={u}
+                  style={[styles.chip, unit === u && styles.chipActive]}
+                  onPress={() => setUnit(u)} activeOpacity={0.8}>
+                  <Text style={[styles.chipText, unit === u && styles.chipTextActive]}>{u}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Additional Details */}
@@ -342,6 +368,7 @@ const styles = StyleSheet.create({
   addImageIcon: { fontSize: 22 },
   addImageText: { fontSize: 10, fontWeight: '700', color: colors.textSecondary },
   addImageSub: { fontSize: 9, color: colors.textMuted },
+  lockedValue: { fontSize: 13, color: colors.textPrimary, fontWeight: '600', backgroundColor: colors.surfaceElevated, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: colors.border },
   field: { marginBottom: 12 },
   fieldLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, marginBottom: 6, letterSpacing: 0.2 },
   input: { backgroundColor: colors.surfaceElevated, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 13, color: colors.textPrimary, fontWeight: '500', borderWidth: 1, borderColor: colors.border },

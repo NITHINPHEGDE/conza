@@ -1,6 +1,7 @@
 // conzasb/controllers/productController.js
-const Product = require('../models/Product');
-const Seller  = require('../models/Seller');
+const Product          = require('../models/Product');
+const Seller           = require('../models/Seller');
+const CatalogueProduct = require('../models/CatalogueProduct');
 const {
   generateUploadSignature,
   deleteFromCloudinary,
@@ -14,6 +15,31 @@ const getUploadSignature = (req, res) => {
   try {
     const sig = generateUploadSignature('conza/products');
     res.json({ success: true, ...sig });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ── GET /api/catalogue-products/search  (admin catalogue lookup) ─────────────
+// Vendor searches the admin-managed catalogue while adding a product. Only
+// active products are returned; basic info here always reflects the admin's
+// latest edit since it's read straight from the shared collection.
+const searchCatalogueProducts = async (req, res) => {
+  try {
+    const { search = '', category = '', limit = 30 } = req.query;
+    const query = { isActive: true };
+    if (category) query.category = category;
+    if (search) {
+      const escaped = String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(escaped, 'i');
+      query.$or = [{ name: re }, { brand: re }, { sku: re }, { category: re }];
+    }
+
+    const products = await CatalogueProduct.find(query)
+      .sort({ name: 1 })
+      .limit(Math.min(Number(limit) || 30, 50));
+
+    res.json({ success: true, products });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -105,12 +131,30 @@ const getProductById = async (req, res) => {
 // Images arrive as Cloudinary URLs (uploaded directly from device)
 const createProduct = async (req, res) => {
   try {
-    const {
+    let {
       title, description, brand, category, unit, type,
       price, mrp, rentalPrice, deposit, minRentalDays,
       stock, sku, minOrder, weight, hsnCode, lowStockAt,
       images,
+      catalogueProductId,
     } = req.body;
+
+    let catalogueProduct = null;
+    if (catalogueProductId) {
+      catalogueProduct = await CatalogueProduct.findById(catalogueProductId);
+      if (!catalogueProduct || catalogueProduct.isActive === false) {
+        return res.status(400).json({ success: false, message: 'Selected catalogue product is not available.' });
+      }
+      // Basic info, category, unit and photos are admin-owned for a
+      // catalogue-linked listing — always take them from the catalogue
+      // record itself, never from the request body.
+      title       = catalogueProduct.name;
+      brand       = catalogueProduct.brand || '';
+      description = catalogueProduct.description || '';
+      category    = catalogueProduct.category;
+      unit        = catalogueProduct.unit || 'piece';
+      images      = catalogueProduct.images || [];
+    }
 
     if (!title || !category || !type || price === undefined) {
       return res.status(400).json({
@@ -121,6 +165,7 @@ const createProduct = async (req, res) => {
 
     const product = await Product.create({
       seller:        req.seller._id,
+      catalogueProduct: catalogueProduct ? catalogueProduct._id : null,
       title,
       description:   description   || '',
       brand:         brand         || '',
@@ -138,7 +183,7 @@ const createProduct = async (req, res) => {
       weight:        weight        || '',
       hsnCode:       hsnCode       || '',
       lowStockAt:    Number(lowStockAt) || 5,
-      images:        Array.isArray(images) ? images.slice(0, 5) : [],
+      images:        catalogueProduct ? images : (Array.isArray(images) ? images.slice(0, 5) : []),
     });
 
     // Bust the customer-facing catalog cache (conza_backend) so the new
@@ -170,18 +215,26 @@ const updateProduct = async (req, res) => {
       addImages,  // append new URLs to existing
     } = req.body;
 
+    // Basic info, category, unit and photos are admin-owned once a listing is
+    // linked to a catalogue product — silently ignore any attempt to edit
+    // them here instead of erroring, since the app UI never renders them as
+    // editable for a catalogue-linked listing in the first place.
+    const isLocked = Boolean(product.catalogueProduct);
+
     // Image replacement logic
-    if (Array.isArray(images)) {
-      product.images = images.slice(0, 5);
-    } else if (Array.isArray(addImages) && addImages.length) {
-      product.images = [...product.images, ...addImages].slice(0, 5);
+    if (!isLocked) {
+      if (Array.isArray(images)) {
+        product.images = images.slice(0, 5);
+      } else if (Array.isArray(addImages) && addImages.length) {
+        product.images = [...product.images, ...addImages].slice(0, 5);
+      }
     }
 
-    if (title !== undefined)         product.title         = title;
-    if (description !== undefined)   product.description   = description;
-    if (brand !== undefined)         product.brand         = brand;
-    if (category !== undefined)      product.category      = category;
-    if (unit !== undefined)          product.unit          = unit;
+    if (!isLocked && title !== undefined)         product.title         = title;
+    if (!isLocked && description !== undefined)   product.description   = description;
+    if (!isLocked && brand !== undefined)         product.brand         = brand;
+    if (!isLocked && category !== undefined)      product.category      = category;
+    if (!isLocked && unit !== undefined)          product.unit          = unit;
     if (price !== undefined)         product.price         = Number(price);
     if (mrp !== undefined)           product.mrp           = (mrp === null || mrp === '') ? null : Number(mrp);
     if (rentalPrice !== undefined)   product.rentalPrice   = Number(rentalPrice);
@@ -247,6 +300,7 @@ const toggleAvailability = async (req, res) => {
 
 module.exports = {
   getUploadSignature,
+  searchCatalogueProducts,
   getMyProducts,
   getPublicProducts,
   getProductById,

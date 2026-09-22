@@ -35,6 +35,7 @@ import VendorReviews from '../pages/VendorReviews'
 import MaterialList from '../pages/MaterialList'
 import MaterialDetails from '../pages/MaterialDetails'
 import MaterialCategories from '../pages/MaterialCategories'
+import CatalogueProducts from '../pages/CatalogueProducts'
 import FeaturedProducts from '../pages/FeaturedProducts'
 
 import RentalList from '../pages/RentalList'
@@ -184,6 +185,7 @@ export default function AppRoutes() {
             <Route path="/materials" element={<MaterialList />} />
             <Route path="/materials/:id" element={<MaterialDetails />} />
             <Route path="/materials/categories" element={<MaterialCategories />} />
+            <Route path="/materials/catalogue" element={<CatalogueProducts />} />
             <Route path="/inventory/material-categories" element={<MaterialCategories />} />
             <Route path="/materials/featured" element={<FeaturedProducts />} />
           </Route>

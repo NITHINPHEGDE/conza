@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, CheckCircle, XCircle, Package } from 'lucide-react'
+import { Eye, CheckCircle, XCircle, Package, LayoutGrid } from 'lucide-react'
 import useMaterialStore from '../store/materials/useMaterialStore'
 import Table from '../components/common/Table'
 import StatusBadge from '../components/common/StatusBadge'
@@ -73,7 +73,12 @@ export default function MaterialList() {
       <Breadcrumb items={[{ label: 'Materials' }]} />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-textPrimary">Materials & Products</h1>
-        <SearchBar placeholder="Search materials..." onSearch={setSearch} />
+        <div className="flex items-center gap-3">
+          <SearchBar placeholder="Search materials..." onSearch={setSearch} />
+          <Link to="/materials/catalogue">
+            <Button variant="outline"><LayoutGrid size={16} /> Product Catalogue</Button>
+          </Link>
+        </div>
       </div>
 
       {loading && <p className="text-sm text-textMuted">Loading materials...</p>}

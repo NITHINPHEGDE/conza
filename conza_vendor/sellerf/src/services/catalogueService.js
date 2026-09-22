@@ -1,7 +1,9 @@
 // conzavf/src/services/catalogueService.js
-// Fetches publicly available products from the customer-facing API
-// so vendors can pick from the existing catalogue instead of typing from scratch.
+import { api } from './apiClient';
 
+// Fetches publicly available rental/equipment products from the
+// customer-facing API. Unchanged — out of scope for the material catalogue
+// rework below.
 const CUSTOMER_API_URL = process.env.EXPO_PUBLIC_CUSTOMER_API_URL;
 
 const fetchJSON = async (url) => {
@@ -13,15 +15,18 @@ const fetchJSON = async (url) => {
 
 export const catalogueService = {
   /**
-   * Fetch material products from the public catalogue.
+   * Search the admin-managed material catalogue while adding a product —
+   * see AddProductScreen's "From Catalogue" tab. This hits the seller
+   * backend (sellerb) directly, since it reads the same shared
+   * 'catalogueproducts' collection the admin panel writes to.
    * @param {string} search - optional search query
    * @param {string} category - optional category filter
    */
   getMaterialCatalogue: (search = '', category = '') => {
-    const params = new URLSearchParams({ type: 'material', limit: '50' });
+    const params = new URLSearchParams({ limit: '30' });
     if (search)   params.append('search',   search);
     if (category) params.append('category', category);
-    return fetchJSON(`${CUSTOMER_API_URL}/products/public?${params.toString()}`)
+    return api.get(`/catalogue-products/search?${params.toString()}`)
       .then((d) => d.products || [])
       .catch(() => []);
   },

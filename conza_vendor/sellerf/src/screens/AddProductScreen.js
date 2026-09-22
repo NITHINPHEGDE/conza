@@ -105,12 +105,15 @@ const AddProductScreen = ({ navigation }) => {
     setUnit(item.unit || '');
     setPrice(''); setMrp(''); setStock('');
     setMinOrder(''); setWeight(''); setHsn(''); setSku('');
-    setImages([]);
+    // Photos come from the admin catalogue for a catalogue-linked product —
+    // not a fresh vendor upload.
+    setImages(item.images || []);
   };
 
   const onClearSelected = () => {
     setSelected(null);
     setName(''); setBrand(''); setCategory(''); setDescription(''); setUnit('');
+    setImages([]);
   };
 
   // Images
@@ -138,8 +141,13 @@ const AddProductScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      let imageUrls = [];
-      if (images.length > 0) {
+      const fromCatalogue = tab === 'catalogue' && !!selected;
+
+      // Catalogue photos are already Cloudinary URLs owned by the admin
+      // product — only the manual tab's freshly-picked local URIs need
+      // uploading.
+      let imageUrls = images;
+      if (!fromCatalogue && images.length > 0) {
         setUploadProgress('Uploading images...');
         imageUrls = await uploadImagesToCloudinary(images, (d, t) => setUploadProgress(`Uploading ${d}/${t}...`));
       }
@@ -152,6 +160,7 @@ const AddProductScreen = ({ navigation }) => {
         rentalPrice: productType === 'rental' ? parseFloat(price) : null,
         stock: parseInt(stock || '0'), sku, description,
         minOrder: parseInt(minOrder || '1'), weight, hsnCode: hsn, images: imageUrls,
+        ...(fromCatalogue ? { catalogueProductId: selected._id || selected.id } : {}),
       });
       navigation.navigate('InventoryList');
     } catch (err) {
@@ -311,30 +320,24 @@ const AddProductScreen = ({ navigation }) => {
             </View>
           </View>
 
-          {/* Photos */}
+          {/* Photos — fetched from the admin catalogue, read-only here */}
           <View style={styles.section}>
             <View style={styles.sectionRow}>
               <Text style={styles.sectionTitle}>Photos</Text>
-              <Text style={styles.sectionCount}>{images.length}/{MAX_IMAGES}</Text>
+              <Text style={styles.sectionCount}>From Catalogue</Text>
             </View>
-            <View style={styles.imageGrid}>
-              {images.map((uri, i) => (
-                <View key={i} style={styles.thumb}>
-                  <Image source={{ uri }} style={styles.thumbImg} resizeMode="cover" />
-                  {i === 0 && <View style={styles.mainBadge}><Text style={styles.mainBadgeText}>Main</Text></View>}
-                  <TouchableOpacity style={styles.removeBtn} onPress={() => removeImage(i)}>
-                    <Text style={styles.removeBtnText}>&#x2715;</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {images.length < MAX_IMAGES && (
-                <TouchableOpacity style={styles.addImgBtn} onPress={pickImages} activeOpacity={0.8}>
-                  <Text style={styles.addImgIcon}>&#128247;</Text>
-                  <Text style={styles.addImgText}>Add</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            {images.length === 0 && <Text style={styles.imgHint}>First photo will be the main image</Text>}
+            {images.length > 0 ? (
+              <View style={styles.imageGrid}>
+                {images.map((uri, i) => (
+                  <View key={i} style={styles.thumb}>
+                    <Image source={{ uri }} style={styles.thumbImg} resizeMode="cover" />
+                    {i === 0 && <View style={styles.mainBadge}><Text style={styles.mainBadgeText}>Main</Text></View>}
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.imgHint}>No photos have been added for this product yet</Text>
+            )}
           </View>
 
           {/* Submit */}

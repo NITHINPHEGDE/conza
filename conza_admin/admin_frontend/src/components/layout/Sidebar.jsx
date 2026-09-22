@@ -38,7 +38,11 @@ const menuGroups = [
   {
     title: 'Catalog',
     items: [
-      { icon: Package, label: 'Materials',  path: '/materials',  permission: 'materials' },
+      { icon: Package, label: 'Materials',  path: '/materials',  permission: 'materials',
+        children: [
+          { label: 'Product Catalogue', path: '/materials/catalogue' },
+          { label: 'Categories',        path: '/materials/categories' },
+        ] },
       { icon: Truck,   label: 'Rentals',    path: '/rentals',    permission: 'rentals' },
       { icon: Boxes,   label: 'Inventory',  path: '/inventory',  permission: 'inventory',
         children: [
