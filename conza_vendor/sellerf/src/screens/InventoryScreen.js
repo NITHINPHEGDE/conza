@@ -2,8 +2,9 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, Image, Switch, ScrollView, Alert, Platform, Modal, Pressable,
-  Dimensions,
+  Dimensions, useWindowDimensions,
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -113,106 +114,303 @@ const carouselStyles = StyleSheet.create({
 const MAT_TABS = ['All', 'Active', 'Inactive', 'Low Stock'];
 const RENTAL_TABS = ['All', 'Active', 'Inactive', 'Available', 'Rented Out'];
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const formatDate = (dateStr) => {
+  if (!dateStr) return '23 Sep 2026, 05:14 PM';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '23 Sep 2026, 05:14 PM';
+    const day = d.getDate();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    let hours = d.getHours();
+    const minutes = d.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const formattedHours = hours.toString().padStart(2, '0');
+    return `${day} ${month} ${year}, ${formattedHours}:${minutes} ${ampm}`;
+  } catch (e) {
+    return '23 Sep 2026, 05:14 PM';
+  }
+};
+
+const copyToClipboard = (text, setCopied) => {
+  if (!text) return;
+  if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+    navigator.clipboard.writeText(text);
+  }
+  setCopied(true);
+  setTimeout(() => setCopied(false), 2000);
+};
+
 // ── Material Product Card ─────────────────────────────────────────────────────
 const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
-  const stockColor = item.stock === 0 ? colors.red : item.lowStock ? colors.orange : colors.green;
-  const stockBg = item.stock === 0 ? colors.redSoft : item.lowStock ? colors.orangeSoft : colors.greenSoft;
+  const { width } = useWindowDimensions();
+  const isWide = width >= 720;
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  const stockColor = item.stock === 0 ? '#DC2626' : item.lowStock ? '#D97706' : '#059669';
+  const stockBg = item.stock === 0 ? '#FEF2F2' : item.lowStock ? '#FFFBEB' : '#F0FDF4';
+  const stockBorder = item.stock === 0 ? '#FEE2E2' : item.lowStock ? '#FEF3C7' : '#DCFCE7';
+  const stockIconBg = item.stock === 0 ? '#FEE2E2' : item.lowStock ? '#FEF3C7' : '#DCFCE7';
   const stockLabel = item.stock === 0 ? 'Out of Stock' : item.lowStock ? 'Low Stock' : 'In Stock';
-  const stockIcon = item.stock === 0 ? '❌' : item.lowStock ? '⚠️' : '✅';
+
   const catStyle = MAT_CATEGORY_COLORS[item.category] || { bg: colors.surfaceElevated, color: colors.textMuted };
   const catEmoji = MAT_CATEGORY_EMOJI[item.category] || '📦';
 
+  const allImages = (item.images && item.images.length > 0) ? item.images : (item.image ? [item.image] : []);
+  const currentImage = allImages[activeIdx] || allImages[0] || null;
+
   return (
-    <View style={[styles.card, !item.active && styles.cardInactive]}>
-      <View style={styles.imageBox}>
-        <ImageCarousel
-          images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}
-          height={160}
-          placeholderBg={catStyle.bg}
-          placeholderEmoji={catEmoji}
-          placeholderLabel={item.category}
-          placeholderColor={catStyle.color}
-        />
-        <View style={[styles.statusPill, { backgroundColor: item.active ? colors.greenSoft : colors.redSoft }]}>
-          <View style={[styles.statusDot, { backgroundColor: item.active ? colors.green : colors.red }]} />
-          <Text style={[styles.statusPillText, { color: item.active ? colors.green : colors.red }]}>
-            {item.active ? 'Active' : 'Inactive'}
-          </Text>
-        </View>
-        <View style={styles.skuPill}>
-          <Text style={styles.skuPillText}>{item.sku}</Text>
-        </View>
-      </View>
-
-      <View style={styles.cardBody}>
-        <View style={styles.nameRow}>
-          <View style={styles.nameBlock}>
-            <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.brandText}>{item.brand}</Text>
-          </View>
-          <Switch
-            value={item.active}
-            onValueChange={() => onToggleStatus(item.id)}
-            trackColor={{ false: colors.border, true: 'rgba(240,165,0,0.3)' }}
-            thumbColor={item.active ? colors.accentAmber : '#ccc'}
-            style={styles.switch}
-          />
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.priceStockRow}>
-          <View>
-            <Text style={styles.priceLabel}>Price</Text>
-            {item.mrp && item.mrp > item.price ? (
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-                <Text style={styles.priceText}>
-                  ₹{item.price.toLocaleString('en-IN')}
-                  <Text style={styles.unitText}> /{item.unit}</Text>
-                </Text>
-                <Text style={styles.mrpStrikeText}>₹{item.mrp.toLocaleString('en-IN')}</Text>
-                <Text style={styles.discountBadgeText}>{item.discountPercent}% OFF</Text>
-              </View>
+    <View style={[styles.modernCard, !item.active && styles.cardInactive]}>
+      {/* Top Body: 2 Columns on Desktop/Tablet */}
+      <View style={[styles.cardMainRow, { flexDirection: isWide ? 'row' : 'column' }]}>
+        
+        {/* Left Column: Image & Thumbnails */}
+        <View style={[styles.galleryCol, { width: isWide ? 280 : '100%' }]}>
+          <View style={styles.mainImageBox}>
+            {currentImage ? (
+              <Image source={{ uri: currentImage }} style={styles.mainImage} resizeMode="cover" />
             ) : (
-              <Text style={styles.priceText}>
-                ₹{item.price.toLocaleString('en-IN')}
-                <Text style={styles.unitText}> /{item.unit}</Text>
-              </Text>
+              <View style={[styles.mainImagePlaceholder, { backgroundColor: catStyle.bg }]}>
+                <Text style={styles.placeholderEmoji}>{catEmoji}</Text>
+                <Text style={[styles.placeholderCategory, { color: catStyle.color }]}>{item.category}</Text>
+              </View>
             )}
+
+            {/* Overlaid Status Pill */}
+            <View style={[styles.statusBadgePill, { backgroundColor: item.active ? 'rgba(236,253,245,0.95)' : 'rgba(254,242,242,0.95)', borderColor: item.active ? '#A7F3D0' : '#FECACA' }]}>
+              <View style={[styles.statusBadgeDot, { backgroundColor: item.active ? '#10B981' : '#EF4444' }]} />
+              <Text style={[styles.statusBadgeText, { color: item.active ? '#065F46' : '#991B1B' }]}>
+                {item.active ? 'Active' : 'Inactive'}
+              </Text>
+            </View>
+
+            {/* Overlaid SKU */}
+            <View style={styles.skuBadgePill}>
+              <Text style={styles.skuBadgeText}>#{item.sku || '32001'}</Text>
+            </View>
+
+            {/* Expand / View Fullscreen Button */}
+            <TouchableOpacity 
+              style={styles.expandBtn} 
+              onPress={() => onView(item)} 
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="crop-free" size={17} color="#374151" />
+            </TouchableOpacity>
           </View>
-          <View style={styles.stockBlock}>
-            <Text style={styles.priceLabel}>Stock</Text>
-            <View style={[styles.stockBadge, { backgroundColor: stockBg }]}>
-              <Text style={styles.stockIcon}>{stockIcon}</Text>
-              <Text style={[styles.stockText, { color: stockColor }]}>{stockLabel} · {item.stock}</Text>
+
+          {/* Thumbnails Row */}
+          {allImages.length > 0 && (
+            <View style={styles.thumbnailRow}>
+              {allImages.slice(0, 4).map((uri, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={() => setActiveIdx(idx)}
+                  activeOpacity={0.8}
+                  style={[
+                    styles.thumbnailBox,
+                    activeIdx === idx && styles.thumbnailBoxActive,
+                  ]}
+                >
+                  <Image source={{ uri }} style={styles.thumbnailImg} resizeMode="cover" />
+                </TouchableOpacity>
+              ))}
+              {allImages.length > 4 && (
+                <TouchableOpacity 
+                  style={styles.moreThumbBox} 
+                  onPress={() => onView(item)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.moreThumbPlus}>+</Text>
+                  <Text style={styles.moreThumbText}>{allImages.length - 4} more</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* Right Column: Details */}
+        <View style={[styles.detailsCol, { paddingLeft: isWide ? 18 : 0, paddingTop: isWide ? 0 : 16 }]}>
+          {/* Header Row: Title & Top Controls */}
+          <View style={styles.detailsHeaderRow}>
+            <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+            <View style={styles.topControls}>
+              <View style={styles.switchControl}>
+                <Switch
+                  value={item.active}
+                  onValueChange={() => onToggleStatus(item.id)}
+                  trackColor={{ false: '#E5E7EB', true: '#10B981' }}
+                  thumbColor={item.active ? '#FFFFFF' : '#F3F4F6'}
+                  style={styles.headerSwitch}
+                />
+                <Text style={[styles.switchText, { color: item.active ? '#059669' : '#9CA3AF' }]}>
+                  {item.active ? 'Active' : 'Inactive'}
+                </Text>
+              </View>
+
+              <TouchableOpacity style={styles.pillBtn} onPress={() => onEdit(item)} activeOpacity={0.7}>
+                <MaterialCommunityIcons name="pencil" size={13} color="#374151" />
+                <Text style={styles.pillBtnText}>Edit</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.pillDeleteBtn} onPress={() => onDelete(item.id)} activeOpacity={0.7}>
+                <MaterialCommunityIcons name="trash-can-outline" size={13} color="#EF4444" />
+                <Text style={styles.pillDeleteBtnText}>Delete</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.pillDotsBtn} onPress={() => onView(item)} activeOpacity={0.7}>
+                <MaterialCommunityIcons name="dots-horizontal" size={16} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Tags Row */}
+          <View style={styles.tagsRow}>
+            {item.brand ? (
+              <View style={styles.tagBadge}>
+                <Text style={styles.tagBadgeText}>{item.brand}</Text>
+              </View>
+            ) : null}
+            {item.category ? (
+              <View style={styles.tagBadge}>
+                <Text style={styles.tagBadgeText}>{item.category}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Description */}
+          <Text style={styles.descText} numberOfLines={2}>
+            {item.description || 'High quality materials and hardware for furniture, doors, interior and industrial use. Durable, reliable and long-lasting.'}
+          </Text>
+
+          {/* Price & Stock Status Cards Row */}
+          <View style={styles.dualCardsRow}>
+            {/* Price Card */}
+            <View style={styles.priceCard}>
+              <Text style={styles.subCardLabel}>Price</Text>
+              <View style={styles.priceValueRow}>
+                <Text style={styles.priceVal}>
+                  ₹{item.price?.toLocaleString('en-IN')}
+                  <Text style={styles.priceUnit}>/{item.unit || 'piece'}</Text>
+                </Text>
+                {item.mrp && item.mrp > item.price ? (
+                  <>
+                    <Text style={styles.mrpVal}>₹{item.mrp.toLocaleString('en-IN')}</Text>
+                    <View style={styles.discountBadge}>
+                      <Text style={styles.discountBadgeText}>{item.discountPercent}% OFF</Text>
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            </View>
+
+            {/* Stock Status Card */}
+            <View style={[styles.stockCard, { backgroundColor: stockBg, borderColor: stockBorder }]}>
+              <View style={styles.stockCardLeft}>
+                <View style={[styles.stockIconBox, { backgroundColor: stockIconBg }]}>
+                  <MaterialCommunityIcons name="cube-outline" size={20} color={stockColor} />
+                </View>
+                <View>
+                  <Text style={styles.subCardLabel}>Stock Status</Text>
+                  <View style={styles.stockStatusRow}>
+                    <View style={[styles.stockDot, { backgroundColor: stockColor }]} />
+                    <Text style={[styles.stockStatusText, { color: stockColor }]}>{stockLabel}</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={styles.stockCardRight}>
+                <Text style={styles.stockQty}>{item.stock}</Text>
+                <Text style={styles.stockUnit}>{item.unit ? `${item.unit}s` : 'pieces'}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Stats Bar */}
+          <View style={styles.statsBar}>
+            <View style={styles.statCol}>
+              <MaterialCommunityIcons name="cart-outline" size={18} color="#6B7280" />
+              <View style={styles.statTextWrap}>
+                <Text style={styles.statValText}>{item.sold || 0}</Text>
+                <Text style={styles.statLblText}>Sold</Text>
+              </View>
+            </View>
+            <View style={styles.statDividerLine} />
+            <View style={styles.statCol}>
+              <MaterialCommunityIcons name="cube-outline" size={18} color="#6B7280" />
+              <View style={styles.statTextWrap}>
+                <Text style={styles.statValText}>{item.stock}</Text>
+                <Text style={styles.statLblText}>In Stock</Text>
+              </View>
+            </View>
+            <View style={styles.statDividerLine} />
+            <View style={styles.statCol}>
+              <MaterialCommunityIcons name="chart-bar" size={18} color="#6B7280" />
+              <View style={styles.statTextWrap}>
+                <Text style={styles.statValText}>₹{((item.price || 0) * (item.sold || 0)).toLocaleString('en-IN')}</Text>
+                <Text style={styles.statLblText}>Revenue</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Meta Info: Product ID & Added On */}
+          <View style={styles.metaInfoRow}>
+            <View style={styles.metaBlockLeft}>
+              <MaterialCommunityIcons name="barcode" size={20} color="#9CA3AF" />
+              <View style={styles.metaTextCol}>
+                <Text style={styles.metaLabel}>Product ID</Text>
+                <View style={styles.idRow}>
+                  <Text style={styles.idVal} numberOfLines={1}>{item.id}</Text>
+                  <TouchableOpacity onPress={() => copyToClipboard(item.id, setCopied)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <MaterialCommunityIcons 
+                      name={copied ? "check" : "content-copy"} 
+                      size={13} 
+                      color={copied ? "#10B981" : "#9CA3AF"} 
+                    />
+                  </TouchableOpacity>
+                  {copied && <Text style={styles.copiedBadge}>Copied!</Text>}
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.metaBlockRight}>
+              <MaterialCommunityIcons name="calendar-blank-outline" size={18} color="#9CA3AF" />
+              <View style={styles.metaTextCol}>
+                <Text style={styles.metaLabel}>Added On</Text>
+                <Text style={styles.dateVal}>{formatDate(item.createdAt)}</Text>
+              </View>
             </View>
           </View>
         </View>
+      </View>
 
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}><Text style={styles.statValue}>{item.sold}</Text><Text style={styles.statLabel}>Sold</Text></View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}><Text style={styles.statValue}>{item.stock}</Text><Text style={styles.statLabel}>In Stock</Text></View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}><Text style={styles.statValue}>₹{(item.price * item.sold).toLocaleString('en-IN')}</Text><Text style={styles.statLabel}>Revenue</Text></View>
-        </View>
+      {/* Bottom Full Action Buttons */}
+      <View style={styles.bottomActions}>
+        <TouchableOpacity style={styles.bottomEditBtn} onPress={() => onEdit(item)} activeOpacity={0.8}>
+          <MaterialCommunityIcons name="pencil" size={15} color="#374151" />
+          <Text style={styles.bottomEditText}>Edit Product</Text>
+        </TouchableOpacity>
 
-        <Text style={styles.descText} numberOfLines={1}>{item.description}</Text>
-        <View style={styles.divider} />
+        <TouchableOpacity style={styles.bottomDeleteBtn} onPress={() => onDelete(item.id)} activeOpacity={0.8}>
+          <MaterialCommunityIcons name="trash-can-outline" size={15} color="#EF4444" />
+          <Text style={styles.bottomDeleteText}>Delete Product</Text>
+        </TouchableOpacity>
 
-        <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.editBtn} onPress={() => onEdit(item)} activeOpacity={0.8}>
-            <Text style={styles.editBtnText}>✏️  Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.deleteBtn} onPress={() => onDelete(item.id)} activeOpacity={0.8}>
-            <Text style={styles.deleteBtnText}>🗑️  Delete</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => onView(item)} activeOpacity={0.8} style={{ flex: 1 }}>
-            <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.viewBtn}>
-              <Text style={styles.viewBtnText}>👁️  View</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.bottomViewBtn} onPress={() => onView(item)} activeOpacity={0.8}>
+          <LinearGradient
+            colors={['#F59E0B', '#E58A00']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.bottomViewGradient}
+          >
+            <MaterialCommunityIcons name="eye-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.bottomViewText}>View Product</Text>
+          </LinearGradient>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -220,159 +418,279 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
 
 // ── Rental Equipment Card ─────────────────────────────────────────────────────
 const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 720;
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [copied, setCopied] = useState(false);
+
   const totalUnits = item.stock ?? 0;
   const rentedOut = item.rentedOut ?? 0;
   const available = totalUnits - rentedOut;
   const allRented = available === 0;
+
+  const availColor = allRented ? '#DC2626' : available <= 1 ? '#D97706' : '#059669';
+  const availBg = allRented ? '#FEF2F2' : available <= 1 ? '#FFFBEB' : '#F0FDF4';
+  const availBorder = allRented ? '#FEE2E2' : available <= 1 ? '#FEF3C7' : '#DCFCE7';
+  const availIconBg = allRented ? '#FEE2E2' : available <= 1 ? '#FEF3C7' : '#DCFCE7';
+  const availLabel = allRented ? 'All Rented Out' : `${available} Available`;
+
   const catStyle = RENTAL_CATEGORY_COLORS[item.category] || { bg: colors.surfaceElevated, color: colors.textMuted };
   const catEmoji = RENTAL_CATEGORY_EMOJI[item.category] || '📦';
 
-  const availColor = allRented ? colors.red : available <= 1 ? colors.orange : colors.green;
-  const availBg = allRented ? colors.redSoft : available <= 1 ? colors.orangeSoft : colors.greenSoft;
-  const availLabel = allRented ? 'All Rented Out' : `${available} Available`;
-  const availIcon = allRented ? '❌' : available <= 1 ? '⚠️' : '✅';
+  const allImages = (item.images && item.images.length > 0) ? item.images : (item.image ? [item.image] : []);
+  const currentImage = allImages[activeIdx] || allImages[0] || null;
 
   return (
-    <View style={[styles.card, !item.active && styles.cardInactive]}>
-
-      {/* Image area */}
-      {/* Image area */}
-      <View style={styles.imageBox}>
-        <ImageCarousel
-          images={item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : [])}
-          height={160}
-          placeholderBg={catStyle.bg}
-          placeholderEmoji={catEmoji}
-          placeholderLabel={item.category}
-          placeholderColor={catStyle.color}
-        />
-
-        <View style={[styles.statusPill, { backgroundColor: item.active ? colors.greenSoft : colors.redSoft }]}>
-          <View style={[styles.statusDot, { backgroundColor: item.active ? colors.green : colors.red }]} />
-          <Text style={[styles.statusPillText, { color: item.active ? colors.green : colors.red }]}>
-            {item.active ? 'Active' : 'Inactive'}
-          </Text>
-        </View>
-
-        <View style={styles.skuPill}>
-          <Text style={styles.skuPillText}>{item.sku}</Text>
-        </View>
-
-        {/* Rental tag */}
-        <View style={styles.rentalTag}>
-          <Text style={styles.rentalTagText}>🏗️ Rental</Text>
-        </View>
-      </View>
-
-      <View style={styles.cardBody}>
-
-        {/* Name + Toggle */}
-        <View style={styles.nameRow}>
-          <View style={styles.nameBlock}>
-            <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.brandText}>{item.brand}</Text>
-          </View>
-          <Switch
-            value={item.active}
-            onValueChange={() => onToggleStatus(item.id)}
-            trackColor={{ false: colors.border, true: 'rgba(240,165,0,0.3)' }}
-            thumbColor={item.active ? colors.accentAmber : '#ccc'}
-            style={styles.switch}
-          />
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* Price + Availability */}
-        <View style={styles.priceStockRow}>
-          <View>
-            <Text style={styles.priceLabel}>Rental Rate</Text>
-            {item.mrp && item.mrp > (item.rentalPrice || item.price || 0) ? (
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-                <Text style={styles.priceText}>
-                  ₹{(item.rentalPrice || item.price || 0).toLocaleString('en-IN')}
-                  <Text style={styles.unitText}> /day</Text>
-                </Text>
-                <Text style={styles.mrpStrikeText}>₹{item.mrp.toLocaleString('en-IN')}</Text>
-                <Text style={styles.discountBadgeText}>{item.discountPercent}% OFF</Text>
-              </View>
+    <View style={[styles.modernCard, !item.active && styles.cardInactive]}>
+      {/* Top Body: 2 Columns on Desktop/Tablet */}
+      <View style={[styles.cardMainRow, { flexDirection: isWide ? 'row' : 'column' }]}>
+        
+        {/* Left Column: Image & Thumbnails */}
+        <View style={[styles.galleryCol, { width: isWide ? 280 : '100%' }]}>
+          <View style={styles.mainImageBox}>
+            {currentImage ? (
+              <Image source={{ uri: currentImage }} style={styles.mainImage} resizeMode="cover" />
             ) : (
-              <Text style={styles.priceText}>
-                ₹{(item.rentalPrice || item.price || 0).toLocaleString('en-IN')}
-                <Text style={styles.unitText}> /day</Text>
-              </Text>
+              <View style={[styles.mainImagePlaceholder, { backgroundColor: catStyle.bg }]}>
+                <Text style={styles.placeholderEmoji}>{catEmoji}</Text>
+                <Text style={[styles.placeholderCategory, { color: catStyle.color }]}>{item.category}</Text>
+              </View>
             )}
-            <Text style={styles.depositText}>Deposit: ₹{item.deposit.toLocaleString('en-IN')}</Text>
+
+            {/* Overlaid Status Pill */}
+            <View style={[styles.statusBadgePill, { backgroundColor: item.active ? 'rgba(236,253,245,0.95)' : 'rgba(254,242,242,0.95)', borderColor: item.active ? '#A7F3D0' : '#FECACA' }]}>
+              <View style={[styles.statusBadgeDot, { backgroundColor: item.active ? '#10B981' : '#EF4444' }]} />
+              <Text style={[styles.statusBadgeText, { color: item.active ? '#065F46' : '#991B1B' }]}>
+                {item.active ? 'Active' : 'Inactive'}
+              </Text>
+            </View>
+
+            {/* Overlaid SKU */}
+            <View style={styles.skuBadgePill}>
+              <Text style={styles.skuBadgeText}>#{item.sku || '32001'}</Text>
+            </View>
+
+            {/* Expand / View Fullscreen Button */}
+            <TouchableOpacity 
+              style={styles.expandBtn} 
+              onPress={() => onView(item)} 
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="crop-free" size={17} color="#374151" />
+            </TouchableOpacity>
           </View>
-          <View style={styles.stockBlock}>
-            <Text style={styles.priceLabel}>Availability</Text>
-            <View style={[styles.stockBadge, { backgroundColor: availBg }]}>
-              <Text style={styles.stockIcon}>{availIcon}</Text>
-              <Text style={[styles.stockText, { color: availColor }]}>{availLabel}</Text>
+
+          {/* Thumbnails Row */}
+          {allImages.length > 0 && (
+            <View style={styles.thumbnailRow}>
+              {allImages.slice(0, 4).map((uri, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={() => setActiveIdx(idx)}
+                  activeOpacity={0.8}
+                  style={[
+                    styles.thumbnailBox,
+                    activeIdx === idx && styles.thumbnailBoxActive,
+                  ]}
+                >
+                  <Image source={{ uri }} style={styles.thumbnailImg} resizeMode="cover" />
+                </TouchableOpacity>
+              ))}
+              {allImages.length > 4 && (
+                <TouchableOpacity 
+                  style={styles.moreThumbBox} 
+                  onPress={() => onView(item)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.moreThumbPlus}>+</Text>
+                  <Text style={styles.moreThumbText}>{allImages.length - 4} more</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* Right Column: Details */}
+        <View style={[styles.detailsCol, { paddingLeft: isWide ? 18 : 0, paddingTop: isWide ? 0 : 16 }]}>
+          {/* Header Row: Title & Top Controls */}
+          <View style={styles.detailsHeaderRow}>
+            <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+            <View style={styles.topControls}>
+              <View style={styles.switchControl}>
+                <Switch
+                  value={item.active}
+                  onValueChange={() => onToggleStatus(item.id)}
+                  trackColor={{ false: '#E5E7EB', true: '#10B981' }}
+                  thumbColor={item.active ? '#FFFFFF' : '#F3F4F6'}
+                  style={styles.headerSwitch}
+                />
+                <Text style={[styles.switchText, { color: item.active ? '#059669' : '#9CA3AF' }]}>
+                  {item.active ? 'Active' : 'Inactive'}
+                </Text>
+              </View>
+
+              <TouchableOpacity style={styles.pillBtn} onPress={() => onEdit(item)} activeOpacity={0.7}>
+                <MaterialCommunityIcons name="pencil" size={13} color="#374151" />
+                <Text style={styles.pillBtnText}>Edit</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.pillDeleteBtn} onPress={() => onDelete(item.id)} activeOpacity={0.7}>
+                <MaterialCommunityIcons name="trash-can-outline" size={13} color="#EF4444" />
+                <Text style={styles.pillDeleteBtnText}>Delete</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.pillDotsBtn} onPress={() => onView(item)} activeOpacity={0.7}>
+                <MaterialCommunityIcons name="dots-horizontal" size={16} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Tags Row */}
+          <View style={styles.tagsRow}>
+            {item.brand ? (
+              <View style={styles.tagBadge}>
+                <Text style={styles.tagBadgeText}>{item.brand}</Text>
+              </View>
+            ) : null}
+            {item.category ? (
+              <View style={styles.tagBadge}>
+                <Text style={styles.tagBadgeText}>{item.category}</Text>
+              </View>
+            ) : null}
+            <View style={[styles.tagBadge, { backgroundColor: '#EEF2FF' }]}>
+              <Text style={[styles.tagBadgeText, { color: '#4F46E5' }]}>🏗️ Rental</Text>
+            </View>
+          </View>
+
+          {/* Description */}
+          <Text style={styles.descText} numberOfLines={2}>
+            {item.description || 'Heavy-duty construction equipment and rental machinery available for short and long-term project requirements.'}
+          </Text>
+
+          {/* Price & Stock Status Cards Row */}
+          <View style={styles.dualCardsRow}>
+            {/* Rental Rate Card */}
+            <View style={styles.priceCard}>
+              <Text style={styles.subCardLabel}>Rental Rate</Text>
+              <View style={styles.priceValueRow}>
+                <Text style={styles.priceVal}>
+                  ₹{(item.rentalPrice || item.price || 0).toLocaleString('en-IN')}
+                  <Text style={styles.priceUnit}> /day</Text>
+                </Text>
+                {item.mrp && item.mrp > (item.rentalPrice || item.price || 0) ? (
+                  <>
+                    <Text style={styles.mrpVal}>₹{item.mrp.toLocaleString('en-IN')}</Text>
+                    <View style={styles.discountBadge}>
+                      <Text style={styles.discountBadgeText}>{item.discountPercent}% OFF</Text>
+                    </View>
+                  </>
+                ) : null}
+              </View>
+              <Text style={styles.depositSmallText}>Deposit: ₹{(item.deposit || 0).toLocaleString('en-IN')}</Text>
+            </View>
+
+            {/* Availability Card */}
+            <View style={[styles.stockCard, { backgroundColor: availBg, borderColor: availBorder }]}>
+              <View style={styles.stockCardLeft}>
+                <View style={[styles.stockIconBox, { backgroundColor: availIconBg }]}>
+                  <MaterialCommunityIcons name="cube-outline" size={20} color={availColor} />
+                </View>
+                <View>
+                  <Text style={styles.subCardLabel}>Stock Status</Text>
+                  <View style={styles.stockStatusRow}>
+                    <View style={[styles.stockDot, { backgroundColor: availColor }]} />
+                    <Text style={[styles.stockStatusText, { color: availColor }]}>{availLabel}</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={styles.stockCardRight}>
+                <Text style={styles.stockQty}>{available}</Text>
+                <Text style={styles.stockUnit}>of {totalUnits} units</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Fleet Metrics Bar */}
+          <View style={styles.statsBar}>
+            <View style={styles.statCol}>
+              <MaterialCommunityIcons name="cube-outline" size={18} color="#6B7280" />
+              <View style={styles.statTextWrap}>
+                <Text style={styles.statValText}>{totalUnits}</Text>
+                <Text style={styles.statLblText}>Total Fleet</Text>
+              </View>
+            </View>
+            <View style={styles.statDividerLine} />
+            <View style={styles.statCol}>
+              <MaterialCommunityIcons name="truck-outline" size={18} color="#6B7280" />
+              <View style={styles.statTextWrap}>
+                <Text style={[styles.statValText, { color: colors.orange }]}>{rentedOut}</Text>
+                <Text style={styles.statLblText}>Rented Out</Text>
+              </View>
+            </View>
+            <View style={styles.statDividerLine} />
+            <View style={styles.statCol}>
+              <MaterialCommunityIcons name="calendar-clock" size={18} color="#6B7280" />
+              <View style={styles.statTextWrap}>
+                <Text style={styles.statValText}>{item.minRentalDays || 1}d</Text>
+                <Text style={styles.statLblText}>Min Rental</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Meta Info: Product ID & Added On */}
+          <View style={styles.metaInfoRow}>
+            <View style={styles.metaBlockLeft}>
+              <MaterialCommunityIcons name="barcode" size={20} color="#9CA3AF" />
+              <View style={styles.metaTextCol}>
+                <Text style={styles.metaLabel}>Product ID</Text>
+                <View style={styles.idRow}>
+                  <Text style={styles.idVal} numberOfLines={1}>{item.id}</Text>
+                  <TouchableOpacity onPress={() => copyToClipboard(item.id, setCopied)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <MaterialCommunityIcons 
+                      name={copied ? "check" : "content-copy"} 
+                      size={13} 
+                      color={copied ? "#10B981" : "#9CA3AF"} 
+                    />
+                  </TouchableOpacity>
+                  {copied && <Text style={styles.copiedBadge}>Copied!</Text>}
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.metaBlockRight}>
+              <MaterialCommunityIcons name="calendar-blank-outline" size={18} color="#9CA3AF" />
+              <View style={styles.metaTextCol}>
+                <Text style={styles.metaLabel}>Added On</Text>
+                <Text style={styles.dateVal}>{formatDate(item.createdAt)}</Text>
+              </View>
             </View>
           </View>
         </View>
+      </View>
 
-        {/* Fleet strip */}
-        <View style={styles.fleetStrip}>
-          <View style={styles.fleetCell}>
-            <Text style={styles.fleetValue}>{totalUnits}</Text>
-            <Text style={styles.fleetLabel}>Total Fleet</Text>
-          </View>
-          <View style={styles.fleetDivider} />
-          <View style={styles.fleetCell}>
-            <Text style={[styles.fleetValue, { color: colors.orange }]}>{rentedOut}</Text>
-            <Text style={styles.fleetLabel}>Rented Out</Text>
-          </View>
-          <View style={styles.fleetDivider} />
-          <View style={styles.fleetCell}>
-            <Text style={[styles.fleetValue, { color: availColor }]}>{available}</Text>
-            <Text style={styles.fleetLabel}>Available</Text>
-          </View>
-          <View style={styles.fleetDivider} />
-          <View style={styles.fleetCell}>
-            <Text style={[styles.fleetValue, { color: colors.indigo }]}>
-              {item.minRentalDays ?? '?'}–{'?'}d
-            </Text>
-            <Text style={styles.fleetLabel}>Duration</Text>
-          </View>
-        </View>
+      {/* Bottom Full Action Buttons */}
+      <View style={styles.bottomActions}>
+        <TouchableOpacity style={styles.bottomEditBtn} onPress={() => onEdit(item)} activeOpacity={0.8}>
+          <MaterialCommunityIcons name="pencil" size={15} color="#374151" />
+          <Text style={styles.bottomEditText}>Edit Product</Text>
+        </TouchableOpacity>
 
-        {/* Utilisation bar */}
-        <View style={styles.utilBlock}>
-          <View style={styles.utilHeader}>
-            <Text style={styles.utilLabel}>Utilisation</Text>
-            <Text style={[styles.utilPct, { color: availColor }]}>
-              {totalUnits > 0 ? Math.round((rentedOut / totalUnits) * 100) : 0}%
-            </Text>
-          </View>
-          <View style={styles.utilTrack}>
-            <View
-              style={[styles.utilFill, {
-                width: `${totalUnits > 0 ? (rentedOut / totalUnits) * 100 : 0}%`,
-                backgroundColor: availColor,
-              }]}
-            />
-          </View>
-        </View>
+        <TouchableOpacity style={styles.bottomDeleteBtn} onPress={() => onDelete(item.id)} activeOpacity={0.8}>
+          <MaterialCommunityIcons name="trash-can-outline" size={15} color="#EF4444" />
+          <Text style={styles.bottomDeleteText}>Delete Product</Text>
+        </TouchableOpacity>
 
-        <Text style={styles.descText} numberOfLines={1}>{item.description}</Text>
-        <View style={styles.divider} />
-
-        <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.editBtn} onPress={() => onEdit(item)} activeOpacity={0.8}>
-            <Text style={styles.editBtnText}>✏️  Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.deleteBtn} onPress={() => onDelete(item.id)} activeOpacity={0.8}>
-            <Text style={styles.deleteBtnText}>🗑️  Delete</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => onView(item)} activeOpacity={0.8} style={{ flex: 1 }}>
-            <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.viewBtn}>
-              <Text style={styles.viewBtnText}>👁️  View</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-
+        <TouchableOpacity style={styles.bottomViewBtn} onPress={() => onView(item)} activeOpacity={0.8}>
+          <LinearGradient
+            colors={['#F59E0B', '#E58A00']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.bottomViewGradient}
+          >
+            <MaterialCommunityIcons name="eye-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.bottomViewText}>View Product</Text>
+          </LinearGradient>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -772,76 +1090,514 @@ const styles = StyleSheet.create({
 
   list: { padding: 16, paddingBottom: 40 },
 
-  // ── Card ──────────────────────────────────────────────────────────────────
-  card: { backgroundColor: colors.surface, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: colors.border, elevation: 4, shadowColor: colors.cardShadow, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.09, shadowRadius: 10 },
+  // ── Modern 2-Column Card (Matches Target Design) ───────────────────────────
+  modernCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
   cardInactive: { opacity: 0.55 },
 
-  imageBox: { width: '100%', height: 160, backgroundColor: colors.surfaceElevated, position: 'relative' },
-  image: { width: '100%', height: '100%' },
-  imagePlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6 },
-  placeholderEmoji: { fontSize: 44 },
-  placeholderCategory: { fontSize: 12, fontWeight: '700' },
+  cardMainRow: {
+    width: '100%',
+  },
 
-  statusPill: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusPillText: { fontSize: 10, fontWeight: '800' },
-  skuPill: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  skuPillText: { fontSize: 9, fontWeight: '700', color: colors.white },
-  rentalTag: { position: 'absolute', bottom: 10, right: 10, backgroundColor: colors.indigoSoft, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: colors.indigo },
-  rentalTagText: { fontSize: 9, fontWeight: '800', color: colors.indigo },
+  // Gallery Column
+  galleryCol: {
+    alignSelf: 'flex-start',
+  },
+  mainImageBox: {
+    width: '100%',
+    height: 190,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#F1F5F9',
+    position: 'relative',
+  },
+  mainImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mainImagePlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  statusBadgePill: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    zIndex: 2,
+  },
+  statusBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  skuBadgePill: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    zIndex: 2,
+  },
+  skuBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  expandBtn: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 2,
+  },
 
-  cardBody: { padding: 16 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  nameBlock: { flex: 1, marginRight: 8 },
-  itemName: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, marginBottom: 2 },
-  brandText: { fontSize: 11, color: colors.textSecondary, fontWeight: '500' },
-  switch: { transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }] },
+  // Thumbnails Strip
+  thumbnailRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  thumbnailBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  thumbnailBoxActive: {
+    borderWidth: 2,
+    borderColor: '#0D9488',
+  },
+  thumbnailImg: {
+    width: '100%',
+    height: '100%',
+  },
+  moreThumbBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moreThumbPlus: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+    lineHeight: 14,
+  },
+  moreThumbText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748B',
+    textAlign: 'center',
+  },
 
-  divider: { height: 1, backgroundColor: colors.borderLight, marginVertical: 12 },
+  // Details Column
+  detailsCol: {
+    flex: 1,
+  },
+  detailsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  itemTitle: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: '#0F172A',
+    flex: 1,
+    minWidth: 160,
+  },
+  topControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  switchControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  headerSwitch: {
+    transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }],
+  },
+  switchText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  pillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  pillBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  pillDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  pillDeleteBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#EF4444',
+  },
+  pillDotsBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-  priceStockRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
-  priceLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
-  priceText: { fontSize: 22, fontWeight: '900', color: colors.accentAmber },
-  unitText: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
-  mrpStrikeText: { fontSize: 13, fontWeight: '600', color: colors.textMuted, textDecorationLine: 'line-through' },
-  discountBadgeText: { fontSize: 11, fontWeight: '800', color: colors.white, backgroundColor: colors.red, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden' },
-  depositText: { fontSize: 11, color: colors.textSecondary, fontWeight: '500', marginTop: 3 },
-  stockBlock: { alignItems: 'flex-end' },
-  stockBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
-  stockIcon: { fontSize: 11 },
-  stockText: { fontSize: 11, fontWeight: '700' },
+  // Tags
+  tagsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  tagBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  tagBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
 
-  // Material stats
-  statsRow: { flexDirection: 'row', backgroundColor: colors.surfaceElevated, borderRadius: 14, padding: 12, marginBottom: 12, alignItems: 'center' },
-  statItem: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 13, fontWeight: '800', color: colors.textPrimary, marginBottom: 2 },
-  statLabel: { fontSize: 9, color: colors.textMuted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
-  statDivider: { width: 1, height: 28, backgroundColor: colors.border },
+  descText: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
+    marginBottom: 10,
+  },
 
-  // Rental fleet strip
-  fleetStrip: { flexDirection: 'row', backgroundColor: colors.surfaceElevated, borderRadius: 14, padding: 12, marginBottom: 12, alignItems: 'center' },
-  fleetCell: { flex: 1, alignItems: 'center' },
-  fleetValue: { fontSize: 16, fontWeight: '900', color: colors.textPrimary, marginBottom: 2 },
-  fleetLabel: { fontSize: 9, color: colors.textMuted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
-  fleetDivider: { width: 1, height: 28, backgroundColor: colors.border },
+  // Dual Cards Row (Price & Stock)
+  dualCardsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 10,
+    flexWrap: 'wrap',
+  },
+  priceCard: {
+    flex: 1,
+    minWidth: 180,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  subCardLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  priceValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  priceVal: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#F59E0B',
+  },
+  priceUnit: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  mrpVal: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
+  },
+  discountBadge: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  discountBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  depositSmallText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 2,
+  },
 
-  // Utilisation bar
-  utilBlock: { marginBottom: 12 },
-  utilHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  utilLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
-  utilPct: { fontSize: 11, fontWeight: '800' },
-  utilTrack: { height: 6, backgroundColor: colors.borderLight, borderRadius: 3, overflow: 'hidden' },
-  utilFill: { height: '100%', borderRadius: 3 },
+  stockCard: {
+    flex: 1,
+    minWidth: 180,
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  stockCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stockIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stockStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  stockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  stockStatusText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  stockCardRight: {
+    alignItems: 'flex-end',
+  },
+  stockQty: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  stockUnit: {
+    fontSize: 11,
+    color: '#64748B',
+  },
 
-  descText: { fontSize: 11, color: colors.textMuted, fontWeight: '500', lineHeight: 16 },
+  // Stats Bar (Sold / In Stock / Revenue)
+  statsBar: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  statCol: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  statTextWrap: {
+    alignItems: 'flex-start',
+  },
+  statValText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  statLblText: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  statDividerLine: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+  },
 
-  actionsRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
-  editBtn: { flex: 1, backgroundColor: colors.surfaceElevated, paddingVertical: 10, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
-  editBtnText: { fontSize: 11, fontWeight: '700', color: colors.textSecondary },
-  deleteBtn: { flex: 1, backgroundColor: colors.redSoft, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
-  deleteBtnText: { fontSize: 11, fontWeight: '700', color: colors.red },
-  viewBtn: { paddingVertical: 10, borderRadius: 12, alignItems: 'center', width: '100%' },
-  viewBtnText: { fontSize: 11, fontWeight: '700', color: colors.white },
+  // Meta Info Row (Product ID & Added On)
+  metaInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  metaBlockLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    minWidth: 180,
+  },
+  metaBlockRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaTextCol: {
+    justifyContent: 'center',
+  },
+  metaLabel: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  idRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  idVal: {
+    fontSize: 11,
+    color: '#334155',
+    maxWidth: 180,
+  },
+  copiedBadge: {
+    fontSize: 10,
+    color: '#10B981',
+    fontWeight: '700',
+  },
+  dateVal: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '500',
+  },
+
+  // Bottom Full Action Buttons Row
+  bottomActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  bottomEditBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  bottomEditText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  bottomDeleteBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    borderRadius: 10,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  bottomDeleteText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  bottomViewBtn: {
+    flex: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  bottomViewGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 6,
+  },
+  bottomViewText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
 
   empty: { alignItems: 'center', paddingTop: 80 },
   emptyText: { fontSize: 15, color: colors.textMuted, fontWeight: '600', marginTop: 12 },

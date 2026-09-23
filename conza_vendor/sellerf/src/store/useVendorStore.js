@@ -337,6 +337,7 @@ const normalizeProduct = (p) => {
     deposit:     p.deposit        || 0,
     minRentalDays: p.minRentalDays || 1,
     rentalPrice: p.rentalPrice    || p.price,
+    createdAt:   p.createdAt      || null,
   };
 };
 
