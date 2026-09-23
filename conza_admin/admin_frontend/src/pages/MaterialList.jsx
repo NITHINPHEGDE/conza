@@ -10,6 +10,7 @@ import CatalogueProducts from './CatalogueProducts'
 const TABS = [
   { key: 'catalogue', label: 'Conza Catalogue' },
   { key: 'all', label: 'All Products' },
+  { key: 'catalogue_listings', label: 'Catalogue Products' },
   { key: 'custom', label: 'Custom Products' },
 ]
 
@@ -30,6 +31,7 @@ export default function MaterialList() {
 
       {activeTab === 'catalogue' && <CatalogueProducts embedded />}
       {activeTab === 'all' && <MaterialsTable source="all" />}
+      {activeTab === 'catalogue_listings' && <MaterialsTable source="catalogue" />}
       {activeTab === 'custom' && <MaterialsTable source="custom" />}
     </div>
   )

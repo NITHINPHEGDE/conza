@@ -76,7 +76,7 @@ export default function MaterialsTable({ source = 'all' }) {
     { key: 'status', title: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'actions', title: 'Actions', render: (row) => (
       <div className="flex items-center gap-2">
-        {row.source === 'custom' && (
+        {row.source === 'custom' && source !== 'catalogue' && (
           <Button variant="outline" size="sm" onClick={() => setCatalogueTarget(row)}>
             <BookPlus size={14} /> Add to Catalogue
           </Button>
@@ -104,7 +104,11 @@ export default function MaterialsTable({ source = 'all' }) {
           columns={columns}
           data={filtered}
           onRowClick={(row) => navigate(`/materials/${row.id}`)}
-          emptyText={source === 'custom' ? 'No custom vendor products found' : 'No products found'}
+          emptyText={
+            source === 'custom' ? 'No custom vendor products found' :
+            source === 'catalogue' ? 'No catalogue-sourced vendor listings found' :
+            'No products found'
+          }
         />
       )}
 
