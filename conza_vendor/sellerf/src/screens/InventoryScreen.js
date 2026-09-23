@@ -148,7 +148,7 @@ const copyToClipboard = (text, setCopied) => {
 // ── Material Product Card ─────────────────────────────────────────────────────
 const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
   const { width } = useWindowDimensions();
-  const galleryWidth = width < 500 ? 150 : width < 750 ? 190 : width < 1000 ? 240 : 280;
+  const galleryWidth = width < 500 ? 165 : width < 750 ? 195 : width < 1000 ? 230 : 250;
   const isCompact = width < 600;
   const [activeIdx, setActiveIdx] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -238,6 +238,37 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
               )}
             </ScrollView>
           )}
+
+          {/* Left Meta Info Card: Product ID & Added On */}
+          <View style={styles.leftMetaCard}>
+            <View style={styles.leftMetaRow}>
+              <MaterialCommunityIcons name="barcode" size={15} color="#94A3B8" />
+              <View style={styles.leftMetaTextCol}>
+                <Text style={styles.leftMetaLabel}>Product ID</Text>
+                <View style={styles.idRow}>
+                  <Text style={styles.leftIdVal} numberOfLines={1}>{item.id}</Text>
+                  <TouchableOpacity onPress={() => copyToClipboard(item.id, setCopied)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <MaterialCommunityIcons 
+                      name={copied ? "check" : "content-copy"} 
+                      size={11} 
+                      color={copied ? "#10B981" : "#94A3B8"} 
+                    />
+                  </TouchableOpacity>
+                  {copied && <Text style={styles.copiedBadge}>Copied!</Text>}
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.leftMetaDivider} />
+
+            <View style={styles.leftMetaRow}>
+              <MaterialCommunityIcons name="calendar-blank-outline" size={14} color="#94A3B8" />
+              <View style={styles.leftMetaTextCol}>
+                <Text style={styles.leftMetaLabel}>Added On</Text>
+                <Text style={styles.leftDateVal} numberOfLines={1}>{formatDate(item.createdAt)}</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
         {/* Right Column: Details */}
@@ -362,37 +393,6 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
               </View>
             </View>
           </View>
-
-          {/* Meta Info: Product ID & Added On */}
-          <View style={styles.metaInfoRow}>
-            <View style={styles.metaBlockLeft}>
-              <MaterialCommunityIcons name="barcode" size={20} color="#9CA3AF" />
-              <View style={styles.metaTextCol}>
-                <Text style={styles.metaLabel}>Product ID</Text>
-                <View style={styles.idRow}>
-                  <Text style={styles.idVal} numberOfLines={1}>{item.id}</Text>
-                  <TouchableOpacity onPress={() => copyToClipboard(item.id, setCopied)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                    <MaterialCommunityIcons 
-                      name={copied ? "check" : "content-copy"} 
-                      size={13} 
-                      color={copied ? "#10B981" : "#9CA3AF"} 
-                    />
-                  </TouchableOpacity>
-                  {copied && <Text style={styles.copiedBadge}>Copied!</Text>}
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.metaDividerLine} />
-
-            <View style={styles.metaBlockRight}>
-              <MaterialCommunityIcons name="calendar-blank-outline" size={18} color="#9CA3AF" />
-              <View style={styles.metaTextCol}>
-                <Text style={styles.metaLabel}>Added On</Text>
-                <Text style={styles.dateVal}>{formatDate(item.createdAt)}</Text>
-              </View>
-            </View>
-          </View>
         </View>
       </View>
 
@@ -427,7 +427,7 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
 // ── Rental Equipment Card ─────────────────────────────────────────────────────
 const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
   const { width } = useWindowDimensions();
-  const galleryWidth = width < 500 ? 150 : width < 750 ? 190 : width < 1000 ? 240 : 280;
+  const galleryWidth = width < 500 ? 165 : width < 750 ? 195 : width < 1000 ? 230 : 250;
   const isCompact = width < 600;
   const [activeIdx, setActiveIdx] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -522,6 +522,37 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
               )}
             </ScrollView>
           )}
+
+          {/* Left Meta Info Card: Product ID & Added On */}
+          <View style={styles.leftMetaCard}>
+            <View style={styles.leftMetaRow}>
+              <MaterialCommunityIcons name="barcode" size={15} color="#94A3B8" />
+              <View style={styles.leftMetaTextCol}>
+                <Text style={styles.leftMetaLabel}>Product ID</Text>
+                <View style={styles.idRow}>
+                  <Text style={styles.leftIdVal} numberOfLines={1}>{item.id}</Text>
+                  <TouchableOpacity onPress={() => copyToClipboard(item.id, setCopied)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <MaterialCommunityIcons 
+                      name={copied ? "check" : "content-copy"} 
+                      size={11} 
+                      color={copied ? "#10B981" : "#94A3B8"} 
+                    />
+                  </TouchableOpacity>
+                  {copied && <Text style={styles.copiedBadge}>Copied!</Text>}
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.leftMetaDivider} />
+
+            <View style={styles.leftMetaRow}>
+              <MaterialCommunityIcons name="calendar-blank-outline" size={14} color="#94A3B8" />
+              <View style={styles.leftMetaTextCol}>
+                <Text style={styles.leftMetaLabel}>Added On</Text>
+                <Text style={styles.leftDateVal} numberOfLines={1}>{formatDate(item.createdAt)}</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
         {/* Right Column: Details */}
@@ -647,37 +678,6 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
               <View style={styles.statTextWrap}>
                 <Text style={styles.statValText}>{item.minRentalDays || 1}d</Text>
                 <Text style={styles.statLblText}>Min Rental</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Meta Info: Product ID & Added On */}
-          <View style={styles.metaInfoRow}>
-            <View style={styles.metaBlockLeft}>
-              <MaterialCommunityIcons name="barcode" size={20} color="#9CA3AF" />
-              <View style={styles.metaTextCol}>
-                <Text style={styles.metaLabel}>Product ID</Text>
-                <View style={styles.idRow}>
-                  <Text style={styles.idVal} numberOfLines={1}>{item.id}</Text>
-                  <TouchableOpacity onPress={() => copyToClipboard(item.id, setCopied)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                    <MaterialCommunityIcons 
-                      name={copied ? "check" : "content-copy"} 
-                      size={13} 
-                      color={copied ? "#10B981" : "#9CA3AF"} 
-                    />
-                  </TouchableOpacity>
-                  {copied && <Text style={styles.copiedBadge}>Copied!</Text>}
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.metaDividerLine} />
-
-            <View style={styles.metaBlockRight}>
-              <MaterialCommunityIcons name="calendar-blank-outline" size={18} color="#9CA3AF" />
-              <View style={styles.metaTextCol}>
-                <Text style={styles.metaLabel}>Added On</Text>
-                <Text style={styles.dateVal}>{formatDate(item.createdAt)}</Text>
               </View>
             </View>
           </View>
@@ -1129,13 +1129,11 @@ const styles = StyleSheet.create({
 
   // Gallery Column
   galleryCol: {
-    alignSelf: 'stretch',
-    justifyContent: 'space-between',
+    alignSelf: 'flex-start',
   },
   mainImageBox: {
     width: '100%',
-    flex: 1,
-    minHeight: 140,
+    height: 135,
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#F1F5F9',
@@ -1143,11 +1141,11 @@ const styles = StyleSheet.create({
   },
   mainImage: {
     width: '100%',
-    height: '100%',
+    height: 135,
   },
   mainImagePlaceholder: {
     width: '100%',
-    height: '100%',
+    height: 135,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
@@ -1254,10 +1252,50 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  // Left Meta Info Card (Product ID & Added On under image)
+  leftMetaCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 5,
+    paddingHorizontal: 7,
+    marginTop: 8,
+    gap: 3,
+  },
+  leftMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  leftMetaTextCol: {
+    flex: 1,
+  },
+  leftMetaLabel: {
+    fontSize: 9,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  leftIdVal: {
+    fontSize: 10,
+    color: '#334155',
+    fontWeight: '600',
+    maxWidth: 130,
+  },
+  leftDateVal: {
+    fontSize: 10,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  leftMetaDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 2,
+  },
+
   // Details Column
   detailsCol: {
     flex: 1,
-    justifyContent: 'space-between',
   },
   detailsHeaderRow: {
     flexDirection: 'row',
