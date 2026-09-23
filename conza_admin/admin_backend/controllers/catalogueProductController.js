@@ -155,6 +155,9 @@ exports.uploadImage = async (req, res, next) => {
 }
 
 // ── POST /api/catalogue-products ─────────────────────────────────────────────
+// Optional body.linkMaterialId: when the catalogue product is being created
+// from a vendor's custom listing ("Add to Catalogue"), link that listing to
+// the new catalogue product so it's recognized as catalogue-sourced from now on.
 exports.createProduct = async (req, res, next) => {
   try {
     const name = cleanString(req.body.name)
@@ -184,8 +187,18 @@ exports.createProduct = async (req, res, next) => {
       createdBy: req.admin?._id || null,
     })
 
+    const linkMaterialId = cleanString(req.body.linkMaterialId)
+    if (linkMaterialId) {
+      await Product.updateOne(
+        { _id: linkMaterialId },
+        { $set: { catalogueProduct: product._id } }
+      ).catch(() => {})
+    }
+
     req.auditTarget = `Catalogue Product #${product._id} - ${product.name}`
-    req.auditDetails = 'Added product to the catalogue'
+    req.auditDetails = linkMaterialId
+      ? 'Added product to the catalogue from a vendor custom listing'
+      : 'Added product to the catalogue'
     sendSuccess(res, 201, 'Product added to catalogue', { product: mapProduct(product) })
   } catch (err) {
     next(err)

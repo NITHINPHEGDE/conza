@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, CheckCircle, XCircle, Package } from 'lucide-react'
+import { Eye, CheckCircle, XCircle, Package, BookPlus } from 'lucide-react'
 import useMaterialStore from '../../store/materials/useMaterialStore'
 import Table from '../common/Table'
 import StatusBadge from '../common/StatusBadge'
 import Button from '../common/Button'
 import Modal from '../common/Modal'
 import SearchBar from '../common/SearchBar'
+import AddToCatalogueModal from './AddToCatalogueModal'
 
 // Renders vendor product listings. `source` controls which subset is fetched:
 //  - 'all'    every vendor listing (materials & rentals aside — type='material' only)
@@ -18,6 +19,7 @@ export default function MaterialsTable({ source = 'all' }) {
   const [selected, setSelected] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalAction, setModalAction] = useState('')
+  const [catalogueTarget, setCatalogueTarget] = useState(null)
 
   useEffect(() => {
     fetchMaterials({ source })
@@ -38,6 +40,12 @@ export default function MaterialsTable({ source = 'all' }) {
     if (modalAction === 'approve') await updateMaterial(selected.id, { isAvailable: true })
     if (modalAction === 'remove') await deleteMaterial(selected.id)
     setModalOpen(false)
+  }
+
+  const handleCatalogueSuccess = () => {
+    // The linked listing is now catalogue-sourced, so refresh this view —
+    // it drops out of "Custom Products" and its badge updates in "All Products".
+    fetchMaterials({ source })
   }
 
   const columns = [
@@ -68,6 +76,11 @@ export default function MaterialsTable({ source = 'all' }) {
     { key: 'status', title: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'actions', title: 'Actions', render: (row) => (
       <div className="flex items-center gap-2">
+        {row.source === 'custom' && (
+          <Button variant="outline" size="sm" onClick={() => setCatalogueTarget(row)}>
+            <BookPlus size={14} /> Add to Catalogue
+          </Button>
+        )}
         <Link to={`/materials/${row.id}`}><Button variant="ghost" size="sm"><Eye size={14} /></Button></Link>
         <Button variant="ghost" size="sm" onClick={() => handleAction(row, 'approve')}><CheckCircle size={14} className="text-success" /></Button>
         <Button variant="ghost" size="sm" onClick={() => handleAction(row, 'remove')}><XCircle size={14} className="text-danger" /></Button>
@@ -108,6 +121,14 @@ export default function MaterialsTable({ source = 'all' }) {
       >
         <p className="text-textSecondary">Are you sure you want to {modalAction} <strong>{selected?.title}</strong>?</p>
       </Modal>
+
+      {catalogueTarget && (
+        <AddToCatalogueModal
+          material={catalogueTarget}
+          onClose={() => setCatalogueTarget(null)}
+          onSuccess={handleCatalogueSuccess}
+        />
+      )}
     </div>
   )
 }
