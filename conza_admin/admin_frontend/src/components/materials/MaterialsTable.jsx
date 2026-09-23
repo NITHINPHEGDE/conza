@@ -75,13 +75,13 @@ export default function MaterialsTable({ source = 'all' }) {
     { key: 'stock', title: 'Stock' },
     { key: 'status', title: 'Status', render: (row) => <StatusBadge status={row.status} /> },
     { key: 'actions', title: 'Actions', render: (row) => (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
         {row.source === 'custom' && source !== 'catalogue' && (
           <Button variant="outline" size="sm" onClick={() => setCatalogueTarget(row)}>
             <BookPlus size={14} /> Add to Catalogue
           </Button>
         )}
-        <Link to={`/materials/${row.id}`}><Button variant="ghost" size="sm"><Eye size={14} /></Button></Link>
+        <Link to={`/materials/${row.id}`} onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="sm"><Eye size={14} /></Button></Link>
         <Button variant="ghost" size="sm" onClick={() => handleAction(row, 'approve')}><CheckCircle size={14} className="text-success" /></Button>
         <Button variant="ghost" size="sm" onClick={() => handleAction(row, 'remove')}><XCircle size={14} className="text-danger" /></Button>
       </div>
