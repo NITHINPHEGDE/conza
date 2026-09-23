@@ -6,13 +6,11 @@ import Breadcrumb from '../components/layout/Breadcrumb'
 import Tabs from '../components/common/Tabs'
 import MaterialsTable from '../components/materials/MaterialsTable'
 import CatalogueProducts from './CatalogueProducts'
-import FeaturedProducts from './FeaturedProducts'
 
 const TABS = [
   { key: 'catalogue', label: 'Conza Catalogue' },
   { key: 'all', label: 'All Products' },
   { key: 'custom', label: 'Custom Products' },
-  { key: 'featured', label: 'Featured Products' },
 ]
 
 export default function MaterialList() {
@@ -33,7 +31,6 @@ export default function MaterialList() {
       {activeTab === 'catalogue' && <CatalogueProducts embedded />}
       {activeTab === 'all' && <MaterialsTable source="all" />}
       {activeTab === 'custom' && <MaterialsTable source="custom" />}
-      {activeTab === 'featured' && <FeaturedProducts embedded />}
     </div>
   )
 }
