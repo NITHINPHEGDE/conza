@@ -148,7 +148,8 @@ const copyToClipboard = (text, setCopied) => {
 // ── Material Product Card ─────────────────────────────────────────────────────
 const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
   const { width } = useWindowDimensions();
-  const isWide = width >= 720;
+  const galleryWidth = width < 480 ? 120 : width < 640 ? 160 : width < 900 ? 220 : 280;
+  const isCompact = width < 600;
   const [activeIdx, setActiveIdx] = useState(0);
   const [copied, setCopied] = useState(false);
 
@@ -166,11 +167,11 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
 
   return (
     <View style={[styles.modernCard, !item.active && styles.cardInactive]}>
-      {/* Top Body: 2 Columns on Desktop/Tablet */}
-      <View style={[styles.cardMainRow, { flexDirection: isWide ? 'row' : 'column' }]}>
+      {/* Top Body: ALWAYS Side-by-Side (Image to side, info to other side) */}
+      <View style={styles.cardMainRow}>
         
         {/* Left Column: Image & Thumbnails */}
-        <View style={[styles.galleryCol, { width: isWide ? 280 : '100%' }]}>
+        <View style={[styles.galleryCol, { width: galleryWidth }]}>
           <View style={styles.mainImageBox}>
             {currentImage ? (
               <Image source={{ uri: currentImage }} style={styles.mainImage} resizeMode="cover" />
@@ -200,13 +201,17 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
               onPress={() => onView(item)} 
               activeOpacity={0.8}
             >
-              <MaterialCommunityIcons name="crop-free" size={17} color="#374151" />
+              <MaterialCommunityIcons name="crop-free" size={isCompact ? 14 : 17} color="#374151" />
             </TouchableOpacity>
           </View>
 
           {/* Thumbnails Row */}
           {allImages.length > 0 && (
-            <View style={styles.thumbnailRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.thumbnailRow}
+            >
               {allImages.slice(0, 4).map((uri, idx) => (
                 <TouchableOpacity
                   key={idx}
@@ -214,6 +219,7 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
                   activeOpacity={0.8}
                   style={[
                     styles.thumbnailBox,
+                    { width: isCompact ? 32 : 44, height: isCompact ? 32 : 44 },
                     activeIdx === idx && styles.thumbnailBoxActive,
                   ]}
                 >
@@ -222,7 +228,7 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
               ))}
               {allImages.length > 4 && (
                 <TouchableOpacity 
-                  style={styles.moreThumbBox} 
+                  style={[styles.moreThumbBox, { width: isCompact ? 32 : 44, height: isCompact ? 32 : 44 }]} 
                   onPress={() => onView(item)}
                   activeOpacity={0.8}
                 >
@@ -230,15 +236,15 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
                   <Text style={styles.moreThumbText}>{allImages.length - 4} more</Text>
                 </TouchableOpacity>
               )}
-            </View>
+            </ScrollView>
           )}
         </View>
 
         {/* Right Column: Details */}
-        <View style={[styles.detailsCol, { paddingLeft: isWide ? 18 : 0, paddingTop: isWide ? 0 : 16 }]}>
+        <View style={[styles.detailsCol, { paddingLeft: isCompact ? 10 : 16 }]}>
           {/* Header Row: Title & Top Controls */}
           <View style={styles.detailsHeaderRow}>
-            <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+            <Text style={[styles.itemTitle, isCompact && { fontSize: 16 }]} numberOfLines={1}>{item.name}</Text>
             <View style={styles.topControls}>
               <View style={styles.switchControl}>
                 <Switch
@@ -289,7 +295,7 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
           </Text>
 
           {/* Price & Stock Status Cards Row */}
-          <View style={styles.dualCardsRow}>
+          <View style={[styles.dualCardsRow, { flexDirection: width < 768 ? 'column' : 'row' }]}>
             {/* Price Card */}
             <View style={styles.priceCard}>
               <Text style={styles.subCardLabel}>Price</Text>
@@ -419,7 +425,8 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
 // ── Rental Equipment Card ─────────────────────────────────────────────────────
 const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
   const { width } = useWindowDimensions();
-  const isWide = width >= 720;
+  const galleryWidth = width < 480 ? 120 : width < 640 ? 160 : width < 900 ? 220 : 280;
+  const isCompact = width < 600;
   const [activeIdx, setActiveIdx] = useState(0);
   const [copied, setCopied] = useState(false);
 
@@ -442,11 +449,11 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
 
   return (
     <View style={[styles.modernCard, !item.active && styles.cardInactive]}>
-      {/* Top Body: 2 Columns on Desktop/Tablet */}
-      <View style={[styles.cardMainRow, { flexDirection: isWide ? 'row' : 'column' }]}>
+      {/* Top Body: ALWAYS Side-by-Side (Image to side, info to other side) */}
+      <View style={styles.cardMainRow}>
         
         {/* Left Column: Image & Thumbnails */}
-        <View style={[styles.galleryCol, { width: isWide ? 280 : '100%' }]}>
+        <View style={[styles.galleryCol, { width: galleryWidth }]}>
           <View style={styles.mainImageBox}>
             {currentImage ? (
               <Image source={{ uri: currentImage }} style={styles.mainImage} resizeMode="cover" />
@@ -476,13 +483,17 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
               onPress={() => onView(item)} 
               activeOpacity={0.8}
             >
-              <MaterialCommunityIcons name="crop-free" size={17} color="#374151" />
+              <MaterialCommunityIcons name="crop-free" size={isCompact ? 14 : 17} color="#374151" />
             </TouchableOpacity>
           </View>
 
           {/* Thumbnails Row */}
           {allImages.length > 0 && (
-            <View style={styles.thumbnailRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.thumbnailRow}
+            >
               {allImages.slice(0, 4).map((uri, idx) => (
                 <TouchableOpacity
                   key={idx}
@@ -490,6 +501,7 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
                   activeOpacity={0.8}
                   style={[
                     styles.thumbnailBox,
+                    { width: isCompact ? 32 : 44, height: isCompact ? 32 : 44 },
                     activeIdx === idx && styles.thumbnailBoxActive,
                   ]}
                 >
@@ -498,7 +510,7 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
               ))}
               {allImages.length > 4 && (
                 <TouchableOpacity 
-                  style={styles.moreThumbBox} 
+                  style={[styles.moreThumbBox, { width: isCompact ? 32 : 44, height: isCompact ? 32 : 44 }]} 
                   onPress={() => onView(item)}
                   activeOpacity={0.8}
                 >
@@ -506,15 +518,15 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
                   <Text style={styles.moreThumbText}>{allImages.length - 4} more</Text>
                 </TouchableOpacity>
               )}
-            </View>
+            </ScrollView>
           )}
         </View>
 
         {/* Right Column: Details */}
-        <View style={[styles.detailsCol, { paddingLeft: isWide ? 18 : 0, paddingTop: isWide ? 0 : 16 }]}>
+        <View style={[styles.detailsCol, { paddingLeft: isCompact ? 10 : 16 }]}>
           {/* Header Row: Title & Top Controls */}
           <View style={styles.detailsHeaderRow}>
-            <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+            <Text style={[styles.itemTitle, isCompact && { fontSize: 16 }]} numberOfLines={1}>{item.name}</Text>
             <View style={styles.topControls}>
               <View style={styles.switchControl}>
                 <Switch
@@ -568,7 +580,7 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
           </Text>
 
           {/* Price & Stock Status Cards Row */}
-          <View style={styles.dualCardsRow}>
+          <View style={[styles.dualCardsRow, { flexDirection: width < 768 ? 'column' : 'row' }]}>
             {/* Rental Rate Card */}
             <View style={styles.priceCard}>
               <Text style={styles.subCardLabel}>Rental Rate</Text>
@@ -1108,6 +1120,7 @@ const styles = StyleSheet.create({
 
   cardMainRow: {
     width: '100%',
+    flexDirection: 'row',
   },
 
   // Gallery Column
@@ -1116,7 +1129,7 @@ const styles = StyleSheet.create({
   },
   mainImageBox: {
     width: '100%',
-    height: 190,
+    aspectRatio: 1.15,
     borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: '#F1F5F9',
