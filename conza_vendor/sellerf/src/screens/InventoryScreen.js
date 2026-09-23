@@ -272,126 +272,52 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
         </View>
 
         {/* Right Column: Details */}
-        <View style={[styles.detailsCol, { paddingLeft: isCompact ? 10 : 16 }]}>
-          {/* Header Row: Title & Top Controls */}
+        <View style={[styles.detailsCol, { paddingLeft: 10 }]}>
+          {/* Title + controls */}
           <View style={styles.detailsHeaderRow}>
-            <Text style={[styles.itemTitle, isCompact && { fontSize: 16 }]} numberOfLines={1}>{item.name}</Text>
-            <View style={styles.topControls}>
-              <View style={styles.switchControl}>
-                <Switch
-                  value={item.active}
-                  onValueChange={() => onToggleStatus(item.id)}
-                  trackColor={{ false: '#E5E7EB', true: '#10B981' }}
-                  thumbColor={item.active ? '#FFFFFF' : '#F3F4F6'}
-                  style={styles.headerSwitch}
-                />
-                <Text style={[styles.switchText, { color: item.active ? '#059669' : '#9CA3AF' }]}>
-                  {item.active ? 'Active' : 'Inactive'}
-                </Text>
-              </View>
+            <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+            <Switch
+              value={item.active}
+              onValueChange={() => onToggleStatus(item.id)}
+              trackColor={{ false: '#E5E7EB', true: '#10B981' }}
+              thumbColor={item.active ? '#FFFFFF' : '#F3F4F6'}
+              style={styles.headerSwitch}
+            />
+          </View>
 
-              <TouchableOpacity style={styles.pillBtn} onPress={() => onEdit(item)} activeOpacity={0.7}>
-                <MaterialCommunityIcons name="pencil" size={13} color="#374151" />
-                <Text style={styles.pillBtnText}>Edit</Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity style={styles.pillDeleteBtn} onPress={() => onDelete(item.id)} activeOpacity={0.7}>
-                <MaterialCommunityIcons name="trash-can-outline" size={13} color="#EF4444" />
-                <Text style={styles.pillDeleteBtnText}>Delete</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.pillDotsBtn} onPress={() => onView(item)} activeOpacity={0.7}>
-                <MaterialCommunityIcons name="dots-horizontal" size={16} color="#6B7280" />
-              </TouchableOpacity>
+          {/* Tags */}
+          {(item.brand || item.category) && (
+            <View style={styles.tagsRow}>
+              {item.brand ? <Text style={styles.tagText}>{item.brand}</Text> : null}
+              {item.category ? <Text style={styles.tagText}>{item.category}</Text> : null}
             </View>
-          </View>
-
-          {/* Tags Row */}
-          <View style={styles.tagsRow}>
-            {item.brand ? (
-              <View style={styles.tagBadge}>
-                <Text style={styles.tagBadgeText}>{item.brand}</Text>
-              </View>
-            ) : null}
-            {item.category ? (
-              <View style={styles.tagBadge}>
-                <Text style={styles.tagBadgeText}>{item.category}</Text>
-              </View>
-            ) : null}
-          </View>
+          )}
 
           {/* Description */}
           <Text style={styles.descText} numberOfLines={2}>
-            {item.description || 'High quality materials and hardware for furniture, doors, interior and industrial use. Durable, reliable and long-lasting.'}
+            {item.description || 'High quality materials and hardware for furniture, doors, interior and industrial use.'}
           </Text>
 
-          {/* Price & Stock Status Cards Row */}
-          <View style={styles.dualCardsRow}>
-            {/* Price Card */}
-            <View style={styles.priceCard}>
-              <Text style={styles.subCardLabel}>Price</Text>
-              <View style={styles.priceValueRow}>
-                <Text style={styles.priceVal}>
-                  ₹{item.price?.toLocaleString('en-IN')}
-                  <Text style={styles.priceUnit}>/{item.unit || 'piece'}</Text>
-                </Text>
-                {item.mrp && item.mrp > item.price ? (
-                  <>
-                    <Text style={styles.mrpVal}>₹{item.mrp.toLocaleString('en-IN')}</Text>
-                    <View style={styles.discountBadge}>
-                      <Text style={styles.discountBadgeText}>{item.discountPercent}% OFF</Text>
-                    </View>
-                  </>
-                ) : null}
-              </View>
-            </View>
-
-            {/* Stock Status Card */}
-            <View style={[styles.stockCard, { backgroundColor: stockBg, borderColor: stockBorder }]}>
-              <View style={styles.stockCardLeft}>
-                <View style={[styles.stockIconBox, { backgroundColor: stockIconBg }]}>
-                  <MaterialCommunityIcons name="cube-outline" size={20} color={stockColor} />
-                </View>
-                <View>
-                  <Text style={styles.subCardLabel}>Stock Status</Text>
-                  <View style={styles.stockStatusRow}>
-                    <View style={[styles.stockDot, { backgroundColor: stockColor }]} />
-                    <Text style={[styles.stockStatusText, { color: stockColor }]}>{stockLabel}</Text>
-                  </View>
-                </View>
-              </View>
-              <View style={styles.stockCardRight}>
-                <Text style={styles.stockQty}>{item.stock}</Text>
-                <Text style={styles.stockUnit}>{item.unit ? `${item.unit}s` : 'pieces'}</Text>
-              </View>
-            </View>
+          {/* Price + Stock inline */}
+          <View style={styles.infoRow}>
+            <Text style={styles.priceVal}>₹{item.price?.toLocaleString('en-IN')}</Text>
+            <Text style={styles.priceUnit}>/{item.unit || 'piece'}</Text>
+            {item.mrp && item.mrp > item.price ? (
+              <>
+                <Text style={styles.mrpVal}>₹{item.mrp.toLocaleString('en-IN')}</Text>
+                <Text style={styles.discountText}>{item.discountPercent}% off</Text>
+              </>
+            ) : null}
           </View>
 
-          {/* Stats Bar */}
-          <View style={styles.statsBar}>
-            <View style={styles.statCol}>
-              <MaterialCommunityIcons name="cart-outline" size={18} color="#6B7280" />
-              <View style={styles.statTextWrap}>
-                <Text style={styles.statValText}>{item.sold || 0}</Text>
-                <Text style={styles.statLblText}>Sold</Text>
-              </View>
-            </View>
-            <View style={styles.statDividerLine} />
-            <View style={styles.statCol}>
-              <MaterialCommunityIcons name="cube-outline" size={18} color="#6B7280" />
-              <View style={styles.statTextWrap}>
-                <Text style={styles.statValText}>{item.stock}</Text>
-                <Text style={styles.statLblText}>In Stock</Text>
-              </View>
-            </View>
-            <View style={styles.statDividerLine} />
-            <View style={styles.statCol}>
-              <MaterialCommunityIcons name="chart-bar" size={18} color="#6B7280" />
-              <View style={styles.statTextWrap}>
-                <Text style={styles.statValText}>₹{((item.price || 0) * (item.sold || 0)).toLocaleString('en-IN')}</Text>
-                <Text style={styles.statLblText}>Revenue</Text>
-              </View>
-            </View>
+          {/* Stock + stats simple row */}
+          <View style={styles.stockSimpleRow}>
+            <View style={[styles.stockDot, { backgroundColor: stockColor }]} />
+            <Text style={[styles.stockSimpleText, { color: stockColor }]}>{stockLabel}</Text>
+            <Text style={styles.stockSimpleQty}>{item.stock} {item.unit ? `${item.unit}s` : 'pcs'}</Text>
+            <Text style={styles.statSep}>·</Text>
+            <Text style={styles.stockSimpleQty}>{item.sold || 0} sold</Text>
           </View>
         </View>
       </View>
@@ -556,130 +482,49 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
         </View>
 
         {/* Right Column: Details */}
-        <View style={[styles.detailsCol, { paddingLeft: isCompact ? 10 : 16 }]}>
-          {/* Header Row: Title & Top Controls */}
+        <View style={[styles.detailsCol, { paddingLeft: 10 }]}>
+          {/* Title + controls */}
           <View style={styles.detailsHeaderRow}>
-            <Text style={[styles.itemTitle, isCompact && { fontSize: 16 }]} numberOfLines={1}>{item.name}</Text>
-            <View style={styles.topControls}>
-              <View style={styles.switchControl}>
-                <Switch
-                  value={item.active}
-                  onValueChange={() => onToggleStatus(item.id)}
-                  trackColor={{ false: '#E5E7EB', true: '#10B981' }}
-                  thumbColor={item.active ? '#FFFFFF' : '#F3F4F6'}
-                  style={styles.headerSwitch}
-                />
-                <Text style={[styles.switchText, { color: item.active ? '#059669' : '#9CA3AF' }]}>
-                  {item.active ? 'Active' : 'Inactive'}
-                </Text>
-              </View>
-
-              <TouchableOpacity style={styles.pillBtn} onPress={() => onEdit(item)} activeOpacity={0.7}>
-                <MaterialCommunityIcons name="pencil" size={13} color="#374151" />
-                <Text style={styles.pillBtnText}>Edit</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.pillDeleteBtn} onPress={() => onDelete(item.id)} activeOpacity={0.7}>
-                <MaterialCommunityIcons name="trash-can-outline" size={13} color="#EF4444" />
-                <Text style={styles.pillDeleteBtnText}>Delete</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.pillDotsBtn} onPress={() => onView(item)} activeOpacity={0.7}>
-                <MaterialCommunityIcons name="dots-horizontal" size={16} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+            <Switch
+              value={item.active}
+              onValueChange={() => onToggleStatus(item.id)}
+              trackColor={{ false: '#E5E7EB', true: '#10B981' }}
+              thumbColor={item.active ? '#FFFFFF' : '#F3F4F6'}
+              style={styles.headerSwitch}
+            />
           </View>
 
-          {/* Tags Row */}
+          {/* Tags */}
           <View style={styles.tagsRow}>
-            {item.brand ? (
-              <View style={styles.tagBadge}>
-                <Text style={styles.tagBadgeText}>{item.brand}</Text>
-              </View>
-            ) : null}
-            {item.category ? (
-              <View style={styles.tagBadge}>
-                <Text style={styles.tagBadgeText}>{item.category}</Text>
-              </View>
-            ) : null}
-            <View style={[styles.tagBadge, { backgroundColor: '#EEF2FF' }]}>
-              <Text style={[styles.tagBadgeText, { color: '#4F46E5' }]}>🏗️ Rental</Text>
-            </View>
+            {item.brand ? <Text style={styles.tagText}>{item.brand}</Text> : null}
+            {item.category ? <Text style={styles.tagText}>{item.category}</Text> : null}
+            <Text style={styles.tagText}>🏗️ Rental</Text>
           </View>
 
           {/* Description */}
           <Text style={styles.descText} numberOfLines={2}>
-            {item.description || 'Heavy-duty construction equipment and rental machinery available for short and long-term project requirements.'}
+            {item.description || 'Heavy-duty construction equipment and rental machinery for short and long-term projects.'}
           </Text>
 
-          {/* Price & Stock Status Cards Row */}
-          <View style={styles.dualCardsRow}>
-            {/* Rental Rate Card */}
-            <View style={styles.priceCard}>
-              <Text style={styles.subCardLabel}>Rental Rate</Text>
-              <View style={styles.priceValueRow}>
-                <Text style={styles.priceVal}>
-                  ₹{(item.rentalPrice || item.price || 0).toLocaleString('en-IN')}
-                  <Text style={styles.priceUnit}> /day</Text>
-                </Text>
-                {item.mrp && item.mrp > (item.rentalPrice || item.price || 0) ? (
-                  <>
-                    <Text style={styles.mrpVal}>₹{item.mrp.toLocaleString('en-IN')}</Text>
-                    <View style={styles.discountBadge}>
-                      <Text style={styles.discountBadgeText}>{item.discountPercent}% OFF</Text>
-                    </View>
-                  </>
-                ) : null}
-              </View>
-              <Text style={styles.depositSmallText}>Deposit: ₹{(item.deposit || 0).toLocaleString('en-IN')}</Text>
-            </View>
-
-            {/* Availability Card */}
-            <View style={[styles.stockCard, { backgroundColor: availBg, borderColor: availBorder }]}>
-              <View style={styles.stockCardLeft}>
-                <View style={[styles.stockIconBox, { backgroundColor: availIconBg }]}>
-                  <MaterialCommunityIcons name="cube-outline" size={20} color={availColor} />
-                </View>
-                <View>
-                  <Text style={styles.subCardLabel}>Stock Status</Text>
-                  <View style={styles.stockStatusRow}>
-                    <View style={[styles.stockDot, { backgroundColor: availColor }]} />
-                    <Text style={[styles.stockStatusText, { color: availColor }]}>{availLabel}</Text>
-                  </View>
-                </View>
-              </View>
-              <View style={styles.stockCardRight}>
-                <Text style={styles.stockQty}>{available}</Text>
-                <Text style={styles.stockUnit}>of {totalUnits} units</Text>
-              </View>
-            </View>
+          {/* Price inline */}
+          <View style={styles.infoRow}>
+            <Text style={styles.priceVal}>₹{(item.rentalPrice || item.price || 0).toLocaleString('en-IN')}</Text>
+            <Text style={styles.priceUnit}>/day</Text>
+            {item.deposit ? <Text style={styles.priceUnit}>· Deposit ₹{item.deposit.toLocaleString('en-IN')}</Text> : null}
+            {item.mrp && item.mrp > (item.rentalPrice || item.price || 0) ? (
+              <Text style={styles.discountText}>{item.discountPercent}% off</Text>
+            ) : null}
           </View>
 
-          {/* Fleet Metrics Bar */}
-          <View style={styles.statsBar}>
-            <View style={styles.statCol}>
-              <MaterialCommunityIcons name="cube-outline" size={18} color="#6B7280" />
-              <View style={styles.statTextWrap}>
-                <Text style={styles.statValText}>{totalUnits}</Text>
-                <Text style={styles.statLblText}>Total Fleet</Text>
-              </View>
-            </View>
-            <View style={styles.statDividerLine} />
-            <View style={styles.statCol}>
-              <MaterialCommunityIcons name="truck-outline" size={18} color="#6B7280" />
-              <View style={styles.statTextWrap}>
-                <Text style={[styles.statValText, { color: colors.orange }]}>{rentedOut}</Text>
-                <Text style={styles.statLblText}>Rented Out</Text>
-              </View>
-            </View>
-            <View style={styles.statDividerLine} />
-            <View style={styles.statCol}>
-              <MaterialCommunityIcons name="calendar-clock" size={18} color="#6B7280" />
-              <View style={styles.statTextWrap}>
-                <Text style={styles.statValText}>{item.minRentalDays || 1}d</Text>
-                <Text style={styles.statLblText}>Min Rental</Text>
-              </View>
-            </View>
+          {/* Availability simple row */}
+          <View style={styles.stockSimpleRow}>
+            <View style={[styles.stockDot, { backgroundColor: availColor }]} />
+            <Text style={[styles.stockSimpleText, { color: availColor }]}>{availLabel}</Text>
+            <Text style={styles.statSep}>·</Text>
+            <Text style={styles.stockSimpleQty}>{totalUnits} units</Text>
+            <Text style={styles.statSep}>·</Text>
+            <Text style={styles.stockSimpleQty}>Min {item.minRentalDays || 1}d</Text>
           </View>
         </View>
       </View>
@@ -1106,19 +951,19 @@ const styles = StyleSheet.create({
 
   list: { padding: 16, paddingBottom: 40 },
 
-  // ── Modern 2-Column Card (Matches Target Design) ───────────────────────────
+  // Card container
   modernCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    marginBottom: 16,
+    borderRadius: 12,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 16,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: '#E5E7EB',
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   cardInactive: { opacity: 0.55 },
 
@@ -1133,96 +978,91 @@ const styles = StyleSheet.create({
   },
   mainImageBox: {
     width: '100%',
-    height: 135,
-    borderRadius: 12,
+    height: 130,
+    borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F3F4F6',
     position: 'relative',
   },
   mainImage: {
     width: '100%',
-    height: 135,
+    height: 130,
   },
   mainImagePlaceholder: {
     width: '100%',
-    height: 135,
+    height: 130,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
   statusBadgePill: {
     position: 'absolute',
-    top: 10,
-    left: 10,
+    top: 8,
+    left: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 20,
     borderWidth: 1,
     zIndex: 2,
   },
   statusBadgeDot: {
-    width: 6,
-    height: 6,
+    width: 5,
+    height: 5,
     borderRadius: 3,
   },
   statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '500',
   },
   skuBadgePill: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
     zIndex: 2,
   },
   skuBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 9,
+    fontWeight: '500',
     color: '#FFFFFF',
   },
   expandBtn: {
     position: 'absolute',
-    bottom: 10,
-    right: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    bottom: 8,
+    right: 8,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
     zIndex: 2,
   },
 
   // Thumbnails Strip
   thumbnailRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginTop: 8,
+    gap: 5,
+    marginTop: 6,
     flexShrink: 0,
   },
   thumbnailBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 6,
+    width: 34,
+    height: 34,
+    borderRadius: 5,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
   },
   thumbnailBoxActive: {
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#0D9488',
   },
   thumbnailImg: {
@@ -1230,66 +1070,63 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   moreThumbBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 6,
-    backgroundColor: '#F1F5F9',
+    width: 34,
+    height: 34,
+    borderRadius: 5,
+    backgroundColor: '#F3F4F6',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5E7EB',
     alignItems: 'center',
     justifyContent: 'center',
   },
   moreThumbPlus: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#64748B',
-    lineHeight: 14,
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#6B7280',
+    lineHeight: 12,
   },
   moreThumbText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#64748B',
+    fontSize: 8,
+    fontWeight: '400',
+    color: '#6B7280',
     textAlign: 'center',
   },
 
   // Left Meta Info Card (Product ID & Added On under image)
   leftMetaCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingVertical: 5,
-    paddingHorizontal: 7,
-    marginTop: 8,
+    paddingTop: 6,
+    marginTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
     gap: 3,
   },
   leftMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
   },
   leftMetaTextCol: {
     flex: 1,
   },
   leftMetaLabel: {
     fontSize: 9,
-    color: '#94A3B8',
-    fontWeight: '600',
+    color: '#9CA3AF',
+    fontWeight: '400',
   },
   leftIdVal: {
     fontSize: 10,
-    color: '#334155',
-    fontWeight: '600',
+    color: '#374151',
+    fontWeight: '400',
     maxWidth: 130,
   },
   leftDateVal: {
     fontSize: 10,
-    color: '#475569',
-    fontWeight: '500',
+    color: '#374151',
+    fontWeight: '400',
   },
   leftMetaDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F3F4F6',
     marginVertical: 2,
   },
 
@@ -1301,72 +1138,71 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
+    marginBottom: 4,
   },
   itemTitle: {
-    fontSize: 21,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
     flex: 1,
-    minWidth: 160,
   },
   topControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 5,
   },
   switchControl: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
   },
   headerSwitch: {
-    transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }],
+    transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
   },
   switchText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '400',
   },
   pillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#F9FAFB',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5E7EB',
   },
   pillBtnText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#334155',
+    fontWeight: '400',
+    color: '#374151',
   },
   pillDeleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: '#FEF2F2',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#FFF5F5',
     borderWidth: 1,
-    borderColor: '#FEE2E2',
+    borderColor: '#FECACA',
   },
   pillDeleteBtnText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '400',
     color: '#EF4444',
   },
   pillDotsBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#F9FAFB',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5E7EB',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1375,292 +1211,182 @@ const styles = StyleSheet.create({
   tagsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-    marginBottom: 6,
+    gap: 5,
+    marginBottom: 4,
+    flexWrap: 'wrap',
+  },
+  tagText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '400',
   },
   tagBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 6,
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   tagBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
+    fontSize: 10,
+    fontWeight: '400',
+    color: '#6B7280',
   },
 
   descText: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 17,
-    marginBottom: 10,
+    fontSize: 11,
+    color: '#6B7280',
+    lineHeight: 16,
+    marginBottom: 6,
+    fontWeight: '400',
   },
 
-  // Dual Cards Row (Price & Stock)
-  dualCardsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-  priceCard: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  subCardLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 2,
-  },
-  priceValueRow: {
+  // Simple price + stock row (replaces heavy dual cards)
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 5,
+    gap: 4,
+    marginBottom: 4,
     flexWrap: 'wrap',
   },
   priceVal: {
-    fontSize: 19,
-    fontWeight: '900',
-    color: '#F59E0B',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
   },
   priceUnit: {
     fontSize: 11,
-    fontWeight: '500',
-    color: '#64748B',
+    fontWeight: '400',
+    color: '#6B7280',
   },
   mrpVal: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: '#9CA3AF',
     textDecorationLine: 'line-through',
+    fontWeight: '400',
   },
-  discountBadge: {
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 5,
-  },
-  discountBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  depositSmallText: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: '#64748B',
-    marginTop: 2,
-  },
-
-  stockCard: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  stockCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  stockIconBox: {
-    width: 30,
-    height: 30,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stockStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  stockDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-  },
-  stockStatusText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  stockCardRight: {
-    alignItems: 'flex-end',
-  },
-  stockQty: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#0F172A',
-  },
-  stockUnit: {
-    fontSize: 10,
-    color: '#64748B',
-  },
-
-  // Stats Bar (Sold / In Stock / Revenue)
-  statsBar: {
-    flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  statCol: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-  },
-  statTextWrap: {
-    alignItems: 'flex-start',
-  },
-  statValText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  statLblText: {
-    fontSize: 9,
-    color: '#64748B',
+  discountText: {
+    fontSize: 11,
+    color: '#059669',
     fontWeight: '500',
   },
-  statDividerLine: {
-    width: 1,
-    height: 20,
-    backgroundColor: '#E2E8F0',
-  },
 
-  // Meta Info Row (Product ID & Added On)
-  metaInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  metaBlockLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    flexShrink: 1,
-  },
-  metaDividerLine: {
-    width: 1,
-    height: 22,
-    backgroundColor: '#E2E8F0',
-    marginHorizontal: 10,
-  },
-  metaBlockRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 0,
-  },
-  metaTextCol: {
-    justifyContent: 'center',
-  },
-  metaLabel: {
-    fontSize: 10,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  idRow: {
+  // Simple stock row
+  stockSimpleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+    flexWrap: 'wrap',
   },
-  idVal: {
+  stockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  stockSimpleText: {
     fontSize: 11,
-    color: '#334155',
-    maxWidth: 160,
-  },
-  copiedBadge: {
-    fontSize: 10,
-    color: '#10B981',
-    fontWeight: '700',
-  },
-  dateVal: {
-    fontSize: 11,
-    color: '#334155',
     fontWeight: '500',
   },
+  stockSimpleQty: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '400',
+  },
+  statSep: {
+    fontSize: 11,
+    color: '#D1D5DB',
+  },
+
+  // Keep old styles that are still used
+  subCardLabel: { fontSize: 10, fontWeight: '400', color: '#6B7280', marginBottom: 1 },
+  priceValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, flexWrap: 'wrap' },
+  discountBadge: { backgroundColor: '#DEF7EC', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 },
+  discountBadgeText: { fontSize: 9, fontWeight: '500', color: '#059669' },
+  depositSmallText: { fontSize: 10, fontWeight: '400', color: '#6B7280', marginTop: 2 },
+  dualCardsRow: { flexDirection: 'row', gap: 6, marginBottom: 6 },
+  priceCard: { flex: 1, backgroundColor: '#F9FAFB', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 8, borderWidth: 1, borderColor: '#E5E7EB' },
+  stockCard: { flex: 1, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 8, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stockCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stockIconBox: { width: 26, height: 26, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
+  stockStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  stockStatusText: { fontSize: 11, fontWeight: '500' },
+  stockCardRight: { alignItems: 'flex-end' },
+  stockQty: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  stockUnit: { fontSize: 9, color: '#6B7280', fontWeight: '400' },
+  statsBar: { flexDirection: 'row', backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', paddingVertical: 5, paddingHorizontal: 8, alignItems: 'center', marginBottom: 0 },
+  statCol: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  statTextWrap: { alignItems: 'flex-start' },
+  statValText: { fontSize: 12, fontWeight: '500', color: '#111827' },
+  statLblText: { fontSize: 9, color: '#9CA3AF', fontWeight: '400' },
+  statDividerLine: { width: 1, height: 16, backgroundColor: '#E5E7EB' },
+  metaInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
+  metaBlockLeft: { flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1, flexShrink: 1 },
+  metaDividerLine: { width: 1, height: 18, backgroundColor: '#E5E7EB', marginHorizontal: 8 },
+  metaBlockRight: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 0 },
+  metaTextCol: { justifyContent: 'center' },
+  metaLabel: { fontSize: 9, color: '#9CA3AF', fontWeight: '400' },
+  idRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  idVal: { fontSize: 10, color: '#374151', maxWidth: 140, fontWeight: '400' },
+  copiedBadge: { fontSize: 9, color: '#10B981', fontWeight: '500' },
+  dateVal: { fontSize: 10, color: '#374151', fontWeight: '400' },
 
   // Bottom Full Action Buttons Row
   bottomActions: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-    paddingTop: 12,
+    gap: 8,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: '#F3F4F6',
   },
   bottomEditBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F9FAFB',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingVertical: 10,
-    gap: 6,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingVertical: 8,
+    gap: 5,
   },
   bottomEditText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: '500',
+    color: '#374151',
   },
   bottomDeleteBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#FFF5F5',
     borderWidth: 1,
-    borderColor: '#FEE2E2',
-    borderRadius: 10,
-    paddingVertical: 10,
-    gap: 6,
+    borderColor: '#FECACA',
+    borderRadius: 8,
+    paddingVertical: 8,
+    gap: 5,
   },
   bottomDeleteText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: '#EF4444',
   },
   bottomViewBtn: {
     flex: 1,
-    borderRadius: 10,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   bottomViewGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    gap: 6,
+    paddingVertical: 8,
+    gap: 5,
   },
   bottomViewText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: '#FFFFFF',
   },
 
