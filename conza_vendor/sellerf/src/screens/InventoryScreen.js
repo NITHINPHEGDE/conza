@@ -148,7 +148,7 @@ const copyToClipboard = (text, setCopied) => {
 // ── Material Product Card ─────────────────────────────────────────────────────
 const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
   const { width } = useWindowDimensions();
-  const galleryWidth = width < 500 ? 160 : width < 800 ? 200 : 240;
+  const galleryWidth = width < 500 ? 150 : width < 750 ? 190 : width < 1000 ? 240 : 280;
   const isCompact = width < 600;
   const [activeIdx, setActiveIdx] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -205,8 +205,8 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
             </TouchableOpacity>
           </View>
 
-          {/* Thumbnails Row */}
-          {allImages.length > 0 && (
+          {/* Thumbnails Row (Only shown when multiple images exist) */}
+          {allImages.length > 1 && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -219,7 +219,7 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
                   activeOpacity={0.8}
                   style={[
                     styles.thumbnailBox,
-                    { width: isCompact ? 32 : 44, height: isCompact ? 32 : 44 },
+                    { width: isCompact ? 32 : 40, height: isCompact ? 32 : 40 },
                     activeIdx === idx && styles.thumbnailBoxActive,
                   ]}
                 >
@@ -228,7 +228,7 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
               ))}
               {allImages.length > 4 && (
                 <TouchableOpacity 
-                  style={[styles.moreThumbBox, { width: isCompact ? 32 : 44, height: isCompact ? 32 : 44 }]} 
+                  style={[styles.moreThumbBox, { width: isCompact ? 32 : 40, height: isCompact ? 32 : 40 }]} 
                   onPress={() => onView(item)}
                   activeOpacity={0.8}
                 >
@@ -383,6 +383,8 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
               </View>
             </View>
 
+            <View style={styles.metaDividerLine} />
+
             <View style={styles.metaBlockRight}>
               <MaterialCommunityIcons name="calendar-blank-outline" size={18} color="#9CA3AF" />
               <View style={styles.metaTextCol}>
@@ -425,7 +427,7 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
 // ── Rental Equipment Card ─────────────────────────────────────────────────────
 const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
   const { width } = useWindowDimensions();
-  const galleryWidth = width < 500 ? 160 : width < 800 ? 200 : 240;
+  const galleryWidth = width < 500 ? 150 : width < 750 ? 190 : width < 1000 ? 240 : 280;
   const isCompact = width < 600;
   const [activeIdx, setActiveIdx] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -487,8 +489,8 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
             </TouchableOpacity>
           </View>
 
-          {/* Thumbnails Row */}
-          {allImages.length > 0 && (
+          {/* Thumbnails Row (Only shown when multiple images exist) */}
+          {allImages.length > 1 && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -501,7 +503,7 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
                   activeOpacity={0.8}
                   style={[
                     styles.thumbnailBox,
-                    { width: isCompact ? 32 : 44, height: isCompact ? 32 : 44 },
+                    { width: isCompact ? 32 : 40, height: isCompact ? 32 : 40 },
                     activeIdx === idx && styles.thumbnailBoxActive,
                   ]}
                 >
@@ -510,7 +512,7 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
               ))}
               {allImages.length > 4 && (
                 <TouchableOpacity 
-                  style={[styles.moreThumbBox, { width: isCompact ? 32 : 44, height: isCompact ? 32 : 44 }]} 
+                  style={[styles.moreThumbBox, { width: isCompact ? 32 : 40, height: isCompact ? 32 : 40 }]} 
                   onPress={() => onView(item)}
                   activeOpacity={0.8}
                 >
@@ -668,6 +670,8 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
                 </View>
               </View>
             </View>
+
+            <View style={styles.metaDividerLine} />
 
             <View style={styles.metaBlockRight}>
               <MaterialCommunityIcons name="calendar-blank-outline" size={18} color="#9CA3AF" />
@@ -1125,12 +1129,13 @@ const styles = StyleSheet.create({
 
   // Gallery Column
   galleryCol: {
-    width: 220,
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
+    justifyContent: 'space-between',
   },
   mainImageBox: {
     width: '100%',
-    height: 140,
+    flex: 1,
+    minHeight: 140,
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#F1F5F9',
@@ -1138,10 +1143,11 @@ const styles = StyleSheet.create({
   },
   mainImage: {
     width: '100%',
-    height: 140,
+    height: '100%',
   },
   mainImagePlaceholder: {
-    flex: 1,
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
@@ -1204,12 +1210,13 @@ const styles = StyleSheet.create({
   // Thumbnails Strip
   thumbnailRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
+    gap: 6,
+    marginTop: 8,
+    flexShrink: 0,
   },
   thumbnailBox: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: 6,
     overflow: 'hidden',
     borderWidth: 1,
@@ -1225,8 +1232,8 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   moreThumbBox: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: 6,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
@@ -1250,6 +1257,7 @@ const styles = StyleSheet.create({
   // Details Column
   detailsCol: {
     flex: 1,
+    justifyContent: 'space-between',
   },
   detailsHeaderRow: {
     flexDirection: 'row',
@@ -1514,12 +1522,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     flex: 1,
-    marginRight: 8,
+    flexShrink: 1,
+  },
+  metaDividerLine: {
+    width: 1,
+    height: 22,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 10,
   },
   metaBlockRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexShrink: 0,
   },
   metaTextCol: {
     justifyContent: 'center',
@@ -1537,7 +1552,7 @@ const styles = StyleSheet.create({
   idVal: {
     fontSize: 11,
     color: '#334155',
-    maxWidth: 180,
+    maxWidth: 160,
   },
   copiedBadge: {
     fontSize: 10,
