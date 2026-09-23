@@ -30,6 +30,21 @@ export default function AddToCatalogueModal({ material, onClose, onSuccess }) {
   const [uploadingImage, setUploadingImage] = useState(false)
   const fileInputRef = useRef(null)
 
+  // Re-sync the form every time a different material row is targeted
+  useEffect(() => {
+    if (!material) return
+    setFormError(null)
+    setForm({
+      name: material.title || '',
+      brand: material.brand || '',
+      sku: material.sku || '',
+      description: material.description || '',
+      category: material.category || '',
+      unit: UNITS.includes(material.unit) ? material.unit : 'piece',
+      images: (material.images || []).filter((u) => typeof u === 'string' && /^https:\/\//i.test(u)).slice(0, MAX_IMAGES),
+    })
+  }, [material])
+
   useEffect(() => {
     materialCategoryService.getAll({ limit: 100 })
       .then((res) => { if (res.success) setCategories((res.data || []).filter((c) => c.active !== false)) })
