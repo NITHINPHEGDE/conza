@@ -19,7 +19,7 @@ const emptyForm = {
   name: '', brand: '', sku: '', description: '', category: '', unit: 'piece', images: [],
 }
 
-export default function CatalogueProducts() {
+export default function CatalogueProducts({ embedded = false }) {
   const { products, fetchProducts, createProduct, updateProduct, deleteProduct, loading, error } = useCatalogueProductStore()
   const addToast = useToastStore((s) => s.addToast)
 
@@ -181,9 +181,11 @@ export default function CatalogueProducts() {
 
   return (
     <div className="space-y-4">
-      <Breadcrumb items={[{ label: 'Materials', path: '/materials' }, { label: 'Catalogue' }]} />
+      {!embedded && <Breadcrumb items={[{ label: 'Materials', path: '/materials' }, { label: 'Catalogue' }]} />}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-textPrimary">Product Catalogue</h1>
+        {embedded
+          ? <h2 className="text-lg font-semibold text-textPrimary">Conza Catalogue</h2>
+          : <h1 className="text-2xl font-bold text-textPrimary">Product Catalogue</h1>}
         <div className="flex items-center gap-3">
           <SearchBar placeholder="Search catalogue..." onSearch={setSearch} />
           <Button onClick={openAddModal}>

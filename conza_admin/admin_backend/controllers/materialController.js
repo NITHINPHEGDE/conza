@@ -8,6 +8,11 @@ const deriveStatus = (p) => {
   return 'active'
 }
 
+// A product listing is "from the Conza Catalogue" if it carries a
+// catalogueProduct reference (see admin_backend/models/CatalogueProduct.js).
+// Anything without one was added directly by the vendor, i.e. a "custom" product.
+const deriveSource = (p) => (p.catalogueProduct ? 'catalogue' : 'custom')
+
 const mapMaterial = (p) => ({
   id: p._id,
   product: p.title,
@@ -31,14 +36,27 @@ const mapMaterial = (p) => ({
   isAvailable: p.isAvailable,
   isFeatured: p.isFeatured,
   status: deriveStatus(p),
+  catalogueProduct: p.catalogueProduct || null,
+  source: deriveSource(p),
   createdAt: p.createdAt,
+  updatedAt: p.updatedAt,
 })
 
+// source query param:
+//  - 'all'       (default) every vendor product listing
+//  - 'catalogue' only listings created from a Conza Catalogue product
+//  - 'custom'    only listings the vendor added themselves (no catalogue link)
 exports.getMaterials = async (req, res, next) => {
   try {
-    const { search = '', status, category, page = 1, limit = 20 } = req.query
+    const { search = '', status, category, source, page = 1, limit = 20 } = req.query
     const query = { type: 'material' }
     if (category && category !== 'all') query.category = category
+
+    if (source === 'custom') {
+      query.$or = [{ catalogueProduct: { $exists: false } }, { catalogueProduct: null }]
+    } else if (source === 'catalogue') {
+      query.catalogueProduct = { $exists: true, $ne: null }
+    }
 
     const products = await Product.find(query)
       .populate('seller', 'name shopName phone city status')
