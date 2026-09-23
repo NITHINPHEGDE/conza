@@ -148,7 +148,7 @@ const copyToClipboard = (text, setCopied) => {
 // ── Material Product Card ─────────────────────────────────────────────────────
 const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
   const { width } = useWindowDimensions();
-  const galleryWidth = width < 480 ? 120 : width < 640 ? 160 : width < 900 ? 220 : 280;
+  const galleryWidth = width < 500 ? 160 : width < 800 ? 200 : 240;
   const isCompact = width < 600;
   const [activeIdx, setActiveIdx] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -295,7 +295,7 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
           </Text>
 
           {/* Price & Stock Status Cards Row */}
-          <View style={[styles.dualCardsRow, { flexDirection: width < 768 ? 'column' : 'row' }]}>
+          <View style={styles.dualCardsRow}>
             {/* Price Card */}
             <View style={styles.priceCard}>
               <Text style={styles.subCardLabel}>Price</Text>
@@ -425,7 +425,7 @@ const MaterialCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
 // ── Rental Equipment Card ─────────────────────────────────────────────────────
 const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
   const { width } = useWindowDimensions();
-  const galleryWidth = width < 480 ? 120 : width < 640 ? 160 : width < 900 ? 220 : 280;
+  const galleryWidth = width < 500 ? 160 : width < 800 ? 200 : 240;
   const isCompact = width < 600;
   const [activeIdx, setActiveIdx] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -580,7 +580,7 @@ const RentalCard = ({ item, onToggleStatus, onDelete, onEdit, onView }) => {
           </Text>
 
           {/* Price & Stock Status Cards Row */}
-          <View style={[styles.dualCardsRow, { flexDirection: width < 768 ? 'column' : 'row' }]}>
+          <View style={styles.dualCardsRow}>
             {/* Rental Rate Card */}
             <View style={styles.priceCard}>
               <Text style={styles.subCardLabel}>Rental Rate</Text>
@@ -1125,19 +1125,20 @@ const styles = StyleSheet.create({
 
   // Gallery Column
   galleryCol: {
+    width: 220,
     alignSelf: 'flex-start',
   },
   mainImageBox: {
     width: '100%',
-    aspectRatio: 1.15,
-    borderRadius: 14,
+    height: 140,
+    borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#F1F5F9',
     position: 'relative',
   },
   mainImage: {
     width: '100%',
-    height: '100%',
+    height: 140,
   },
   mainImagePlaceholder: {
     flex: 1,
@@ -1207,9 +1208,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   thumbnailBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 6,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -1224,9 +1225,9 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   moreThumbBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 6,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -1354,16 +1355,15 @@ const styles = StyleSheet.create({
   // Dual Cards Row (Price & Stock)
   dualCardsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 10,
-    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
   },
   priceCard: {
     flex: 1,
-    minWidth: 180,
     backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 10,
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
@@ -1376,32 +1376,32 @@ const styles = StyleSheet.create({
   priceValueRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 6,
+    gap: 5,
     flexWrap: 'wrap',
   },
   priceVal: {
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: '900',
     color: '#F59E0B',
   },
   priceUnit: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     color: '#64748B',
   },
   mrpVal: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#94A3B8',
     textDecorationLine: 'line-through',
   },
   discountBadge: {
     backgroundColor: '#EF4444',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 5,
   },
   discountBadgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     color: '#FFFFFF',
   },
@@ -1414,9 +1414,9 @@ const styles = StyleSheet.create({
 
   stockCard: {
     flex: 1,
-    minWidth: 180,
-    borderRadius: 12,
-    padding: 10,
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1425,12 +1425,12 @@ const styles = StyleSheet.create({
   stockCardLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
   },
   stockIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
+    width: 30,
+    height: 30,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1440,24 +1440,24 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   stockDot: {
-    width: 6,
-    height: 6,
+    width: 5,
+    height: 5,
     borderRadius: 3,
   },
   stockStatusText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   stockCardRight: {
     alignItems: 'flex-end',
   },
   stockQty: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '900',
     color: '#0F172A',
   },
   stockUnit: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748B',
   },
 
@@ -1465,36 +1465,37 @@ const styles = StyleSheet.create({
   statsBar: {
     flexDirection: 'row',
     backgroundColor: '#F8FAFC',
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     alignItems: 'center',
+    marginBottom: 8,
   },
   statCol: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 7,
   },
   statTextWrap: {
     alignItems: 'flex-start',
   },
   statValText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
   },
   statLblText: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#64748B',
     fontWeight: '500',
   },
   statDividerLine: {
     width: 1,
-    height: 24,
+    height: 20,
     backgroundColor: '#E2E8F0',
   },
 
@@ -1503,19 +1504,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 8,
+    marginTop: 4,
+    paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    flexWrap: 'wrap',
-    gap: 8,
   },
   metaBlockLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     flex: 1,
-    minWidth: 180,
+    marginRight: 8,
   },
   metaBlockRight: {
     flexDirection: 'row',
