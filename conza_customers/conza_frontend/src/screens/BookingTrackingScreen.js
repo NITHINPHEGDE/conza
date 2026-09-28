@@ -22,6 +22,7 @@ import { bookingAPI } from '../api/bookingAPI';
 import { BookingTrackingSkeleton } from '../components/Skeleton';
 import SlideToast from '../components/SlideToast';
 import RatingReviewModal from '../components/RatingReviewModal';
+import AutobookStatusCard from '../components/AutobookStatusCard';
 import AddToProjectSheet from '../components/AddToProjectSheet';
 import { socket } from '../utils/socket';
 import { getBookingPaymentState } from '../utils/bookingPayment';
@@ -125,6 +126,7 @@ const BookingTrackingScreen = ({ navigation, route }) => {
   const [showCancelModal, setShowCancelModal]     = useState(false);
   const [cancelling, setCancelling]               = useState(false);
   const [confirming, setConfirming]               = useState(false);
+  const [confirmingWorkerId, setConfirmingWorkerId] = useState(null);
   const [showEndWorkModal, setShowEndWorkModal]   = useState(false);
   const [showAddToProject, setShowAddToProject]   = useState(false);
   const [toast, setToast]                         = useState({ visible: false, message: '' });
@@ -214,6 +216,17 @@ const BookingTrackingScreen = ({ navigation, route }) => {
 
   // Derived Values
   const worker = activeBooking?.workers?.[0] || activeBooking?.workerSnapshot?.[0];
+
+  // Quick Auto Book: every worker who accepted gets an independent status card.
+  const isAutobook = !!activeBooking?.isAutobook;
+  const autobookEntries = useMemo(
+    () =>
+      (activeBooking?.workerStatuses || []).filter(
+        (e) => e && e.status !== 'pending' && e.status !== 'expired'
+      ),
+    [activeBooking?.workerStatuses]
+  );
+  const focusWorkerId = route?.params?.focusWorkerId?.toString() || null;
   const categoryName = activeBooking?.category || worker?.category || 'Mason';
   const categoryImage = getServiceImage(categoryName);
   const bookingCode = activeBooking?._id ? activeBooking._id.slice(-5).toUpperCase() : '48291';
@@ -357,6 +370,35 @@ const BookingTrackingScreen = ({ navigation, route }) => {
       setConfirming(false);
     }
   }, [activeBookingId, fetchActiveBooking, worker, pendingWorkerCompletion, clearPendingWorkerCompletion]);
+
+  const handleConfirmAutobookWorker = useCallback(async (entry) => {
+    const wId = (entry?.worker?._id || entry?.worker)?.toString();
+    if (!activeBookingId || !wId) return;
+    setConfirmingWorkerId(wId);
+    try {
+      await bookingAPI.confirmCompletion(activeBookingId, wId);
+      await fetchActiveBooking(activeBookingId);
+      if (
+        pendingWorkerCompletion?.bookingId?.toString() === activeBookingId?.toString() &&
+        (!pendingWorkerCompletion.workerId || pendingWorkerCompletion.workerId.toString() === wId)
+      ) {
+        clearPendingWorkerCompletion();
+      }
+      const snap = entry.workerSnapshot || {};
+      const populated = (activeBooking?.workers || []).find(
+        (w) => (w?._id || w)?.toString() === wId
+      );
+      setRatingTarget({
+        workerId:    wId,
+        workerName:  snap.name || snap.fullName || populated?.fullName || 'Worker',
+        workerImage: populated?.profileImage || snap.profileImage || DEFAULT_WORKER_IMAGE,
+      });
+    } catch (err) {
+      Alert.alert('Notice', err.response?.data?.message || err.message || 'Could not confirm completion.');
+    } finally {
+      setConfirmingWorkerId(null);
+    }
+  }, [activeBookingId, activeBooking?.workers, fetchActiveBooking, pendingWorkerCompletion, clearPendingWorkerCompletion]);
 
   const handleOpenEditNote = useCallback(() => {
     setEditingNoteText(activeBooking?.notes || '');
@@ -735,7 +777,23 @@ const BookingTrackingScreen = ({ navigation, route }) => {
           <Text style={styles.sectionTitle}>Assigned Worker</Text>
         </View>
 
-        {worker ? (
+        {isAutobook && autobookEntries.length > 0 ? (
+          <View>
+            {autobookEntries.map((entry, idx) => {
+              const wId = (entry.worker?._id || entry.worker)?.toString() || String(idx);
+              return (
+                <AutobookStatusCard
+                  key={wId}
+                  entry={entry}
+                  highlighted={!!focusWorkerId && focusWorkerId === wId}
+                  confirming={confirmingWorkerId === wId}
+                  onConfirm={() => handleConfirmAutobookWorker(entry)}
+                  onReportIssue={openIssueModal2}
+                />
+              );
+            })}
+          </View>
+        ) : worker ? (
           <View style={styles.workerCard}>
             {/* Worker Avatar */}
             <Image

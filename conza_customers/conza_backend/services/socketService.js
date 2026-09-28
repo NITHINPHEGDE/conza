@@ -28,8 +28,35 @@ const initSocket = (server) => {
   io.on('connection', (socket) => {
     logger.info({ socketId: socket.id }, 'Client connected');
 
-    socket.on('join_booking',      (id) => socket.join(`booking_${id}`));
-    socket.on('join_customer',     (id) => socket.join(`customer_${id}`));
+    socket.on('join_booking', (id) => {
+      if (!id) return;
+      socket.join(`booking_${id}`);
+    });
+    socket.on('leave_booking', (id) => {
+      if (!id) return;
+      socket.leave(`booking_${id}`);
+    });
+    // A socket may belong to ONE customer at a time. Switching customers
+    // (logout -> login on the same device) drops every stale customer_* and
+    // booking_* room so the previous customer's events never leak through.
+    socket.on('join_customer', (id) => {
+      if (!id) return;
+      const nextId = String(id);
+      const prevId = socket.data.customerId;
+      if (prevId && prevId !== nextId) {
+        Array.from(socket.rooms).forEach((r) => {
+          if (r.startsWith('customer_') || r.startsWith('booking_')) socket.leave(r);
+        });
+      }
+      socket.data.customerId = nextId;
+      socket.join(`customer_${nextId}`);
+    });
+    socket.on('leave_customer_session', () => {
+      Array.from(socket.rooms).forEach((r) => {
+        if (r.startsWith('customer_') || r.startsWith('booking_')) socket.leave(r);
+      });
+      socket.data.customerId = null;
+    });
     socket.on('join_worker',       (id) => socket.join(`worker_${id}`));
     socket.on('join_seller',       (id) => {
       socket.join(`seller_${id}`);
@@ -83,6 +110,11 @@ const watchChanges = () => {
           bookingType:  doc.bookingType,
           workers:      doc.workers || [],
           workerSnapshot: doc.workerSnapshot || [],
+          isAutobook:   doc.isAutobook || false,
+          workerStatuses: (doc.workerStatuses || []).map((w) => ({
+            ...w,
+            worker: w.worker?.toString(),
+          })),
           workerCancelled: doc.workerCancelled || false,
           isImmediate:  doc.isImmediate,
           requiredWorkers: doc.requiredWorkers,
@@ -106,6 +138,7 @@ const watchChanges = () => {
         // Notify the specific customer who owns this booking (StatusScreen list)
         if (userId) {
           io.to(`customer_${userId}`).emit('booking_updated', {
+            customerId:      userId,
             operationType:   c.operationType,
             bookingId,
             status,
@@ -138,6 +171,7 @@ const watchChanges = () => {
             const entry = (doc.workerStatuses || [])[Number(justCompletedIdx[1])];
             if (entry) {
               io.to(`customer_${userId}`).emit('worker_completion_requested', {
+                customerId: userId,
                 bookingId,
                 workerId: entry.worker?.toString() || null,
                 workerName: entry.workerSnapshot?.name || entry.workerSnapshot?.fullName || 'Your worker',
@@ -169,6 +203,7 @@ const watchChanges = () => {
 
           if (newStatus === 'accepted') {
             io.to(`customer_${userId}`).emit('manual_labour_accepted', {
+              customerId:  userId,
               bookingId,
               category:    doc.category,
               isImmediate: doc.isImmediate,
@@ -176,6 +211,7 @@ const watchChanges = () => {
             });
           } else if (newStatus === 'cancelled' && doc.workerCancelled) {
             io.to(`customer_${userId}`).emit('manual_labour_cancelled', {
+              customerId:  userId,
               bookingId,
               category:    doc.category,
               isImmediate: doc.isImmediate,
@@ -186,6 +222,7 @@ const watchChanges = () => {
 
         // Notify booking-specific room (BookingTrackingScreen detail)
         io.to(`booking_${bookingId}`).emit('booking_status_changed', {
+          customerId: userId,
           bookingId,
           status,
           bookingSnapshot,
@@ -209,6 +246,7 @@ const watchChanges = () => {
           status:        doc.status,
         });
         io.to(`customer_${doc.customer}`).emit('seller_order_status_changed', {
+          customerId: doc.customer?.toString(),
           orderId: c.documentKey._id.toString(),
           status:  doc.status,
         });

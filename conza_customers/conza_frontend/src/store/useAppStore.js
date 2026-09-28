@@ -14,6 +14,16 @@ import { socket, connectSocket } from '../utils/socket';
 
 export const EMPTY_ARRAY = [];
 const EMPTY_OBJ   = {};
+
+// A socket event is only acted on when a customer is logged in AND the event
+// (if it carries an owner) belongs to that customer. Prevents another
+// customer's booking events from raising popups or mutating local state.
+const isOwnSocketEvent = (get, data) => {
+  const myId = get().userProfile?._id?.toString();
+  if (!myId) return false;
+  const owner = data?.customerId?.toString();
+  return !owner || owner === myId;
+};
 import api from '../api/axiosInstance';
 
 // Normalizes a category title into the id format used by the filter chips
@@ -824,15 +834,23 @@ const useAppStore = create((set, get) => ({
     try {
       await AsyncStorage.multiRemove(['activeBookingId']);
     } catch (_) {}
+    // Leave every customer_* / booking_* room of the previous user so their
+    // booking events stop reaching this device after logout / account switch.
+    try {
+      if (socket.connected) socket.emit('leave_customer_session');
+    } catch (_) {}
     set({
       userProfile: null,
       activeBookingId: null,
       activeBooking: null,
       activeBookings: [],
+      labourBookings: [],
+      sellerOrders: [],
       walletBalance: 0,
       autobookToast: null,
       pendingWorkerCompletion: null,
       labourPopupQueue: [],
+      orderPopupQueue: [],
     });
   },
 
@@ -1233,6 +1251,7 @@ const useAppStore = create((set, get) => ({
     });
 
     socket.on('booking_updated', (data) => {
+      if (!isOwnSocketEvent(get, data)) return;
       const { bookingId, status, bookingSnapshot } = data;
 
       if (bookingId && status) {
@@ -1268,6 +1287,7 @@ const useAppStore = create((set, get) => ({
 
     socket.on('booking_status_changed', (data) => {
       console.log('🔔 booking_status_changed received:', data);
+      if (!isOwnSocketEvent(get, data)) return;
       const { bookingId, status, bookingSnapshot, isWorkCompletion } = data;
 
       if (bookingId && status) {
@@ -1303,6 +1323,7 @@ const useAppStore = create((set, get) => ({
     });
 
     socket.on('work_completion_requested', (data) => {
+      if (!isOwnSocketEvent(get, data)) return;
       const { bookingId } = data;
       if (!bookingId) return;
 
@@ -1335,6 +1356,7 @@ const useAppStore = create((set, get) => ({
     });
 
     socket.on('autobook_worker_accepted', (data) => {
+      if (!isOwnSocketEvent(get, data)) return;
       const { bookingId, acceptedCount, requiredWorkers } = data;
       set({
         autobookToast: {
@@ -1349,6 +1371,7 @@ const useAppStore = create((set, get) => ({
     });
 
     socket.on('worker_completion_requested', (data) => {
+      if (!isOwnSocketEvent(get, data)) return;
       set({ pendingWorkerCompletion: data });
       if (get().activeBookingId?.toString() === data.bookingId?.toString()) {
         get().fetchActiveBooking(data.bookingId);
@@ -1360,6 +1383,7 @@ const useAppStore = create((set, get) => ({
     // only emits this when the change stream sees a manual (non-autobook)
     // booking's status flip to 'accepted'.
     socket.on('manual_labour_accepted', (data) => {
+      if (!isOwnSocketEvent(get, data)) return;
       const { bookingId, category, isImmediate, workers } = data || {};
       const names = Array.isArray(workers) ? workers.filter(Boolean) : [];
       const who =
@@ -1381,6 +1405,7 @@ const useAppStore = create((set, get) => ({
     // backend only emits this when the worker app's cancel action set
     // booking.workerCancelled, not for a customer-initiated cancel.
     socket.on('manual_labour_cancelled', (data) => {
+      if (!isOwnSocketEvent(get, data)) return;
       const { bookingId, category, isImmediate, workers } = data || {};
       const names = Array.isArray(workers) ? workers.filter(Boolean) : [];
       const who =
@@ -1399,6 +1424,7 @@ const useAppStore = create((set, get) => ({
 
     // ── Quick Auto Book: nobody in the required category accepted in time ─
     socket.on('autobook_no_acceptance', (data) => {
+      if (!isOwnSocketEvent(get, data)) return;
       const { bookingId, category, requiredWorkers } = data || {};
       get().pushLabourPopup({
         type: 'autobook_no_accept',
@@ -1415,6 +1441,7 @@ const useAppStore = create((set, get) => ({
     });
 
     socket.on('worker_status_changed', (data) => {
+      if (!isOwnSocketEvent(get, data)) return;
       if (get().activeBookingId?.toString() === data.bookingId?.toString()) {
         get().fetchActiveBooking(data.bookingId);
       }
@@ -1432,7 +1459,8 @@ const useAppStore = create((set, get) => ({
       cancelled:        { type: 'order_rejected',   title: 'Order Rejected' },
     };
 
-    socket.on('seller_order_status_changed', ({ orderId, status, orderType, itemsSummary }) => {
+    socket.on('seller_order_status_changed', ({ orderId, status, orderType, itemsSummary, customerId }) => {
+      if (!isOwnSocketEvent(get, { customerId })) return;
       set((s) => ({
         sellerOrders: s.sellerOrders.map((o) =>
           o._id === orderId || o._id?.toString() === orderId

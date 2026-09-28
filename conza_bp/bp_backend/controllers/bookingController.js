@@ -264,6 +264,7 @@ const updateBookingStatus = async (req, res) => {
         const io = getIO();
         if (status === 'awaiting_customer_confirmation') {
           const completionPayload = {
+            customerId: booking.user.toString(),
             bookingId, workerId: workerIdStr,
             workerName: entry.workerSnapshot?.name || entry.workerSnapshot?.fullName || 'Your worker',
           };
@@ -273,7 +274,7 @@ const updateBookingStatus = async (req, res) => {
           io.to(`customer_${booking.user}`).emit('worker_completion_requested', completionPayload);
           notifyCustomerBackend(`customer_${booking.user}`, 'worker_completion_requested', completionPayload);
         } else {
-          const updatedPayload = { operationType: 'update', bookingId, status: booking.status };
+          const updatedPayload = { customerId: booking.user.toString(), operationType: 'update', bookingId, status: booking.status };
           io.to(`customer_${booking.user}`).emit('booking_updated', updatedPayload);
           notifyCustomerBackend(`customer_${booking.user}`, 'booking_updated', updatedPayload);
         }
@@ -406,9 +407,9 @@ const updateBookingStatus = async (req, res) => {
 
         // The customer's socket is connected to the customer backend, a
         // separate deployment from this one — relay so it actually arrives.
-        notifyCustomerBackend(`customer_${booking.user}`, 'work_completion_requested', { bookingId });
-        notifyCustomerBackend(`booking_${bookingId}`, 'work_completion_requested', { bookingId });
-        notifyCustomerBackend(`booking_${bookingId}`, 'booking_status_changed', { bookingId, status });
+        notifyCustomerBackend(`customer_${booking.user}`, 'work_completion_requested', { customerId: booking.user.toString(), bookingId });
+        notifyCustomerBackend(`booking_${bookingId}`, 'work_completion_requested', { customerId: booking.user.toString(), bookingId });
+        notifyCustomerBackend(`booking_${bookingId}`, 'booking_status_changed', { customerId: booking.user.toString(), bookingId, status });
       } catch (err) {
         logger.error({ err }, 'Failed to emit work_completion_requested');
       }

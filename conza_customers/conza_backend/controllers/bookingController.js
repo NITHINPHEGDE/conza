@@ -438,6 +438,7 @@ const checkAutobookNoAcceptance = async (bookingId, userId) => {
         bookingSnapshot: null,
       });
       io.to(`customer_${userId}`).emit('autobook_no_acceptance', {
+        customerId:      userId.toString(),
         bookingId:       booking._id.toString(),
         category:        booking.category,
         requiredWorkers: booking.requiredWorkers,
