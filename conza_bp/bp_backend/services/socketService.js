@@ -186,6 +186,7 @@ const watchChanges = () => {
         // Notify the specific customer who owns this booking
         if (userId) {
           io.to(`customer_${userId}`).emit('booking_updated', {
+            customerId: userId,
             operationType: c.operationType,
             bookingId,
             status,
@@ -195,6 +196,7 @@ const watchChanges = () => {
         // Notify booking-specific room (worker tracking screen + labour app)
         if (c.documentKey._id) {
           io.to(`booking_${bookingId}`).emit('booking_status_changed', {
+            customerId: userId,
             bookingId,
             status,
             isAutobook: c.fullDocument?.isAutobook || false,

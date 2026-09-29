@@ -5,8 +5,25 @@ const mongoose                    = require('mongoose');
 const { getRedis, getSubscriber } = require('../config/redis');
 const logger                      = require('../utils/logger');
 const Sentry                      = require('@sentry/node');
+const Booking                     = require('../models/Booking');
 
 let io;
+
+// A socket may only join a booking room for a booking that belongs to the
+// customer it is registered as. Prevents customer A from ever receiving
+// customer B's booking events (accepted / cancelled / completion popups).
+const joinBookingRoomIfOwner = async (socket, bookingId, customerId) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) return;
+    const owns = await Booking.exists({ _id: bookingId, user: customerId });
+    // Re-check after the async lookup: the socket may have switched customers meanwhile.
+    if (owns && socket.data.customerId === customerId) {
+      socket.join(`booking_${bookingId}`);
+    }
+  } catch (err) {
+    logger.warn({ err: err.message, bookingId }, 'join_booking ownership check failed');
+  }
+};
 
 const initSocket = (server) => {
   io = new Server(server, {
@@ -28,18 +45,31 @@ const initSocket = (server) => {
   io.on('connection', (socket) => {
     logger.info({ socketId: socket.id }, 'Client connected');
 
-    socket.on('join_booking', (id) => {
+    socket.on('join_booking', async (id) => {
       if (!id) return;
-      socket.join(`booking_${id}`);
+      const bookingId  = String(id);
+      const customerId = socket.data.customerId;
+      if (!customerId) {
+        // Customer not registered on this socket yet — remember the request and
+        // validate it as soon as join_customer arrives.
+        socket.data.pendingBookingJoins = Array.from(
+          new Set([...(socket.data.pendingBookingJoins || []), bookingId])
+        );
+        return;
+      }
+      await joinBookingRoomIfOwner(socket, bookingId, customerId);
     });
     socket.on('leave_booking', (id) => {
       if (!id) return;
       socket.leave(`booking_${id}`);
+      socket.data.pendingBookingJoins = (socket.data.pendingBookingJoins || []).filter(
+        (b) => b !== String(id)
+      );
     });
     // A socket may belong to ONE customer at a time. Switching customers
     // (logout -> login on the same device) drops every stale customer_* and
     // booking_* room so the previous customer's events never leak through.
-    socket.on('join_customer', (id) => {
+    socket.on('join_customer', async (id) => {
       if (!id) return;
       const nextId = String(id);
       const prevId = socket.data.customerId;
@@ -47,15 +77,23 @@ const initSocket = (server) => {
         Array.from(socket.rooms).forEach((r) => {
           if (r.startsWith('customer_') || r.startsWith('booking_')) socket.leave(r);
         });
+        socket.data.pendingBookingJoins = [];
       }
       socket.data.customerId = nextId;
       socket.join(`customer_${nextId}`);
+
+      const pending = socket.data.pendingBookingJoins || [];
+      socket.data.pendingBookingJoins = [];
+      for (const bookingId of pending) {
+        await joinBookingRoomIfOwner(socket, bookingId, nextId);
+      }
     });
     socket.on('leave_customer_session', () => {
       Array.from(socket.rooms).forEach((r) => {
         if (r.startsWith('customer_') || r.startsWith('booking_')) socket.leave(r);
       });
       socket.data.customerId = null;
+      socket.data.pendingBookingJoins = [];
     });
     socket.on('join_worker',       (id) => socket.join(`worker_${id}`));
     socket.on('join_seller',       (id) => {
@@ -201,7 +239,7 @@ const watchChanges = () => {
             .map((w) => w?.name || w?.fullName)
             .filter(Boolean);
 
-          if (newStatus === 'accepted') {
+          if (newStatus === 'accepted' && doc.status === 'accepted') {
             io.to(`customer_${userId}`).emit('manual_labour_accepted', {
               customerId:  userId,
               bookingId,
@@ -209,7 +247,7 @@ const watchChanges = () => {
               isImmediate: doc.isImmediate,
               workers:     workerNames,
             });
-          } else if (newStatus === 'cancelled' && doc.workerCancelled) {
+          } else if (newStatus === 'cancelled' && doc.status === 'cancelled' && doc.workerCancelled) {
             io.to(`customer_${userId}`).emit('manual_labour_cancelled', {
               customerId:  userId,
               bookingId,

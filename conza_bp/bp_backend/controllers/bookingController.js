@@ -145,13 +145,14 @@ const acceptAutobookRequest = async (req, res) => {
       const { getIO } = require('../services/socketService');
       const io = getIO();
       io.to(`customer_${updated.user}`).emit('autobook_worker_accepted', {
+        customerId: updated.user.toString(),
         bookingId, workerId: workerId.toString(), acceptedCount, requiredWorkers: updated.requiredWorkers, fullyStaffed,
       });
       closedWorkerIds.forEach((wId) => {
         io.to(`worker_${wId}`).emit('autobook_request_closed', { bookingId });
       });
       if (fullyStaffed) {
-        io.to(`booking_${bookingId}`).emit('booking_status_changed', { bookingId, status: 'accepted', isAutobook: true });
+        io.to(`booking_${bookingId}`).emit('booking_status_changed', { customerId: updated.user.toString(), bookingId, status: 'accepted', isAutobook: true });
       }
     } catch (err) {
       logger.error({ err }, 'Failed to emit autobook accept events');
@@ -279,6 +280,7 @@ const updateBookingStatus = async (req, res) => {
           notifyCustomerBackend(`customer_${booking.user}`, 'booking_updated', updatedPayload);
         }
         io.to(`booking_${bookingId}`).emit('worker_status_changed', {
+          customerId: booking.user.toString(),
           bookingId, workerId: workerIdStr, status: entry.status, isAutobook: true,
         });
       } catch (err) {
@@ -293,6 +295,12 @@ const updateBookingStatus = async (req, res) => {
     const isAssigned = booking.workers.some(id => id.toString() === req.worker._id.toString());
     if (!isAssigned) {
       return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
+    }
+
+    // A manual request can only be accepted while it is still pending — a
+    // stale / duplicate accept can never re-fire "accepted" on a booking.
+    if (status === 'accepted' && booking.status !== 'pending') {
+      return res.status(409).json({ success: false, message: 'This request is no longer available.' });
     }
 
     if (status === 'accepted'  && !booking.acceptedAt)   booking.acceptedAt   = new Date();
@@ -400,10 +408,10 @@ const updateBookingStatus = async (req, res) => {
       try {
         const { getIO } = require('../services/socketService');
         const io = getIO();
-        io.to(`customer_${booking.user}`).emit('work_completion_requested', { bookingId });
-        io.to(`booking_${bookingId}`).emit('work_completion_requested', { bookingId });
+        io.to(`customer_${booking.user}`).emit('work_completion_requested', { customerId: booking.user.toString(), bookingId });
+        io.to(`booking_${bookingId}`).emit('work_completion_requested', { customerId: booking.user.toString(), bookingId });
         // Also emit standard status change
-        io.to(`booking_${bookingId}`).emit('booking_status_changed', { bookingId, status });
+        io.to(`booking_${bookingId}`).emit('booking_status_changed', { customerId: booking.user.toString(), bookingId, status });
 
         // The customer's socket is connected to the customer backend, a
         // separate deployment from this one — relay so it actually arrives.
@@ -423,12 +431,14 @@ const updateBookingStatus = async (req, res) => {
         const io = getIO();
         // Notify customer's personal room (StatusScreen list updates)
         io.to(`customer_${booking.user}`).emit('booking_updated', {
+          customerId: booking.user.toString(),
           operationType: 'update',
           bookingId,
           status,
         });
         // Notify booking detail room (BookingTrackingScreen updates)
         io.to(`booking_${bookingId}`).emit('booking_status_changed', {
+          customerId: booking.user.toString(),
           bookingId,
           status,
         });
