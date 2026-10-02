@@ -1,0 +1,14 @@
+{
+  "name": "conza-socket-security-tests",
+  "version": "1.0.0",
+  "description": "Attack scenario tests for Conza Socket.IO security (Tasks 13–18)",
+  "main": "run_all.js",
+  "scripts": {
+    "test": "node run_all.js"
+  },
+  "dependencies": {
+    "jsonwebtoken": "^9.0.0",
+    "socket.io-client": "^4.8.3",
+    "dotenv": "^16.0.3"
+  }
+}

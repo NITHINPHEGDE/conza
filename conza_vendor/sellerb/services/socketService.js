@@ -4,6 +4,14 @@ const mongoose   = require('mongoose');
 const jwt        = require('jsonwebtoken');
 const Seller     = require('../models/Seller');
 
+// Minimal safe logger — replace with your structured logger if available.
+// Never surfaces internal details (stack traces, IDs, secrets) to clients.
+const log = {
+  info:  (...a) => console.info('[SellerSocket]', ...a),
+  warn:  (...a) => console.warn('[SellerSocket]', ...a),
+  error: (...a) => console.error('[SellerSocket]', ...a),
+};
+
 let io;
 
 const initSocket = (server) => {
@@ -22,7 +30,7 @@ const initSocket = (server) => {
         socket.handshake.headers?.authorization?.replace(/^Bearer\s+/i, '');
 
       if (!rawToken || typeof rawToken !== 'string' || !rawToken.trim()) {
-        console.warn('Seller Socket connection rejected: token missing');
+        log.warn('Connection rejected: token missing');
         return next(new Error('Authentication required'));
       }
 
@@ -31,7 +39,7 @@ const initSocket = (server) => {
       try {
         decoded = jwt.verify(token, process.env.JWT_SECRET || 'conza_vendor_jwt_secret_fallback_2026');
       } catch (err) {
-        console.warn('Seller Socket auth failed: invalid or expired token:', err.message);
+        log.warn('Auth failed: invalid or expired token');
         return next(new Error('Authentication failed'));
       }
 
@@ -41,7 +49,7 @@ const initSocket = (server) => {
 
       const seller = await Seller.findById(decoded.id).select('-password').lean();
       if (!seller || seller.status === 'suspended') {
-        console.warn('Seller Socket auth rejected: seller not found or suspended:', decoded.id);
+        log.warn('Auth rejected: seller not found or suspended');
         return next(new Error('Authentication failed'));
       }
 
@@ -58,24 +66,24 @@ const initSocket = (server) => {
       socket.seller             = seller;
       return next();
     } catch (err) {
-      console.error('Seller Socket handshake authentication error:', err);
+      log.error('Handshake authentication error');
       return next(new Error('Authentication failed'));
     }
   });
 
   io.on('connection', (socket) => {
-    console.log(`🔌 Connected: ${socket.id} (Seller: ${socket.sellerId})`);
+    log.info('Seller connected', { socketId: socket.id });
 
     // Automatically join the seller's private room
     socket.join(`seller_${socket.sellerId}`);
-    console.log(`🏪 Seller auto-joined room: seller_${socket.sellerId}`);
+    log.info('Seller auto-joined private room');
 
     // ── Enforce Token Expiry on Connected Socket ──────────────────────────
     if (socket.data.tokenExp) {
       const remainingMs = (socket.data.tokenExp * 1000) - Date.now();
       if (remainingMs > 0 && remainingMs < 0x7FFFFFFF) {
         const expiryTimer = setTimeout(() => {
-          console.log(`🏪 [Seller Socket] Session expired (JWT exp) for seller: ${socket.sellerId}`);
+          log.info('Session expired (JWT exp)');
           socket.emit('socket_error', { message: 'Session expired. Please reconnect.' });
           socket.disconnect(true);
         }, remainingMs);
@@ -93,7 +101,7 @@ const initSocket = (server) => {
       try {
         const s = await Seller.findById(socket.sellerId).select('status').lean();
         if (!s || s.status === 'suspended') {
-          console.warn(`🏪 [Seller Socket] Seller ${socket.sellerId} was suspended`);
+          log.warn('Active seller was suspended — disconnecting');
           socket.emit('socket_error', { message: 'Account suspended' });
           socket.disconnect(true);
         }
@@ -115,7 +123,7 @@ const initSocket = (server) => {
     socket.on('join_worker',   () => socket.emit('socket_error', { message: 'Not authorized' }));
 
     socket.on('disconnect', () => {
-      console.log(`🔌 Disconnected: ${socket.id} (Seller: ${socket.sellerId})`);
+      log.info('Seller disconnected');
     });
   });
 
@@ -127,7 +135,7 @@ const watchChanges = () => {
   const db = mongoose.connection;
 
   const startWatching = () => {
-    console.log('👀 Watching seller collections for changes...');
+    log.info('Watching seller collections for changes...');
 
     try {
       // Watch orders
@@ -168,8 +176,7 @@ const watchChanges = () => {
       productStream.on('error', () => setTimeout(startWatching, 5000));
 
     } catch (err) {
-      console.error('❌ Change streams failed:', err.message);
-      console.error('   → MongoDB must run as a replica set or use Atlas');
+      log.error('Change streams failed — MongoDB must run as a replica set or use Atlas');
     }
   };
 
