@@ -8,8 +8,75 @@ const Sentry                      = require('@sentry/node');
 const jwt                         = require('jsonwebtoken');
 const Worker                      = require('../models/Worker');
 const Booking                     = require('../models/Booking');
+const User                        = require('../models/User');
 
 let io;
+
+// Sanitize worker document before broadcasting to public workers_watch_room.
+const sanitizeWorkerForWatch = (doc) => {
+  if (!doc) return null;
+  return {
+    _id:          doc._id?.toString(),
+    fullName:     doc.fullName,
+    categories:   doc.categories || [],
+    skills:       doc.skills || [],
+    rating:       doc.rating,
+    totalJobs:    doc.totalJobs,
+    isOnline:     doc.isOnline,
+    isAvailable:  doc.isAvailable,
+    isVerified:   doc.isVerified,
+    status:       doc.status,
+    bio:          doc.bio,
+    experience:   doc.experience,
+    locationText: doc.locationText,
+    memberSince:  doc.memberSince,
+    profileImage: doc.profileImage,
+    location:     doc.location,
+  };
+};
+
+// ── Multi-Party Booking Authorization ───────────────────────────────────────
+const joinBookingRoomIfAuthorized = async (socket, bookingId) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return socket.emit('socket_error', { message: 'Invalid booking ID' });
+    }
+
+    const booking = await Booking.findById(bookingId)
+      .select('user workers workerStatuses')
+      .lean();
+
+    if (!booking) {
+      return socket.emit('socket_error', { message: 'Booking not found' });
+    }
+
+    const workerIdStr   = socket.data.workerId   || (socket.data.role === 'worker'   ? socket.data.userId : null);
+    const customerIdStr = socket.data.customerId || (socket.data.role === 'customer' ? socket.data.userId : null);
+    const genericUserId = socket.data.userId;
+
+    const isAssignedWorker =
+      Boolean(workerIdStr && (
+        (booking.workers || []).some((w) => (w?._id || w)?.toString() === workerIdStr) ||
+        (booking.workerStatuses || []).some((ws) => (ws?.worker?._id || ws?.worker)?.toString() === workerIdStr)
+      )) ||
+      Boolean(genericUserId && (
+        (booking.workers || []).some((w) => (w?._id || w)?.toString() === genericUserId) ||
+        (booking.workerStatuses || []).some((ws) => (ws?.worker?._id || ws?.worker)?.toString() === genericUserId)
+      ));
+
+    const isCustomerOwner =
+      Boolean(customerIdStr && booking.user?.toString() === customerIdStr) ||
+      Boolean(genericUserId && booking.user?.toString() === genericUserId);
+
+    if (isAssignedWorker || isCustomerOwner) {
+      socket.join(`booking_${bookingId}`);
+    } else {
+      socket.emit('socket_error', { message: 'Not authorized for this booking' });
+    }
+  } catch (err) {
+    logger.warn({ err: err.message, bookingId }, 'BP join_booking verification failed');
+  }
+};
 
 const initSocket = (server) => {
   io = new Server(server, {
@@ -45,8 +112,13 @@ const initSocket = (server) => {
       try {
         decoded = jwt.verify(token, process.env.JWT_SECRET || 'conza_bp_jwt_secret_fallback_2026');
       } catch (err) {
-        logger.warn({ err: err.message }, 'BP Socket auth failed: invalid or expired token');
-        return next(new Error('Authentication failed'));
+        // Fallback for customer token secret if customer connects
+        try {
+          decoded = jwt.verify(token, process.env.CUSTOMER_JWT_SECRET || 'conza_super_secret_jwt_key_2024');
+        } catch (_) {
+          logger.warn({ err: err.message }, 'BP Socket auth failed: invalid or expired token');
+          return next(new Error('Authentication failed'));
+        }
       }
 
       if (!decoded || !decoded.id) {
@@ -82,21 +154,43 @@ const initSocket = (server) => {
         }
       }
 
-      if (!worker || worker.status === 'suspended') {
-        logger.warn({ workerId: decoded.id }, 'BP Socket auth rejected: worker not found or suspended');
-        return next(new Error('Authentication failed'));
+      if (worker) {
+        if (worker.status === 'suspended') {
+          logger.warn({ workerId: decoded.id }, 'BP Socket auth rejected: worker suspended');
+          return next(new Error('Authentication failed'));
+        }
+
+        const workerId = worker._id.toString();
+        socket.data.authenticated = true;
+        socket.data.userId        = workerId;
+        socket.data.workerId      = workerId;
+        socket.data.role          = 'worker';
+        socket.data.tokenExp      = decoded.exp;
+        socket.data.authToken     = token;
+        socket.userId             = workerId;
+        socket.workerId           = workerId;
+        socket.role               = 'worker';
+        socket.worker             = worker;
+        return next();
       }
 
-      const workerId = worker._id.toString();
-      socket.data.authenticated = true;
-      socket.data.userId        = workerId;
-      socket.data.workerId      = workerId;
-      socket.data.role          = 'worker';
-      socket.userId             = workerId;
-      socket.workerId           = workerId;
-      socket.role               = 'worker';
-      socket.worker             = worker;
-      return next();
+      // Check User role fallback
+      const user = await User.findById(decoded.id).select('-password').lean();
+      if (user && user.status !== 'suspended') {
+        const userId = user._id.toString();
+        socket.data.authenticated = true;
+        socket.data.userId        = userId;
+        socket.data.customerId    = userId;
+        socket.data.role          = 'customer';
+        socket.data.tokenExp      = decoded.exp;
+        socket.data.authToken     = token;
+        socket.userId             = userId;
+        socket.customerId         = userId;
+        socket.role               = 'customer';
+        return next();
+      }
+
+      return next(new Error('Authentication failed'));
     } catch (err) {
       logger.error({ err }, 'BP Socket handshake authentication error');
       return next(new Error('Authentication failed'));
@@ -104,41 +198,91 @@ const initSocket = (server) => {
   });
 
   io.on('connection', (socket) => {
-    logger.info({ socketId: socket.id, workerId: socket.workerId }, 'BP Worker connected');
+    logger.info({ socketId: socket.id, workerId: socket.workerId, role: socket.role }, 'BP Client connected');
 
-    // Automatically join the authenticated worker's personal room
-    socket.join(`worker_${socket.workerId}`);
-    logger.info({ workerId: socket.workerId }, 'Worker auto-joined personal room');
+    // Automatically join the authenticated worker's or customer's personal room
+    if (socket.data.authenticated) {
+      if (socket.data.role === 'worker' && socket.data.workerId) {
+        socket.join(`worker_${socket.data.workerId}`);
+        logger.info({ workerId: socket.data.workerId }, 'Worker auto-joined personal room');
+      } else if (socket.data.role === 'customer' && socket.data.customerId) {
+        socket.join(`customer_${socket.data.customerId}`);
+        logger.info({ customerId: socket.data.customerId }, 'Customer auto-joined personal room');
+      }
+
+      // ── Enforce Token Expiry on Connected Socket ──────────────────────────
+      if (socket.data.tokenExp) {
+        const remainingMs = (socket.data.tokenExp * 1000) - Date.now();
+        if (remainingMs > 0 && remainingMs < 0x7FFFFFFF) {
+          const expiryTimer = setTimeout(() => {
+            logger.info({ socketId: socket.id, userId: socket.userId }, 'BP Socket auth expired (JWT exp)');
+            socket.emit('socket_error', { message: 'Session expired. Please reconnect.' });
+            socket.disconnect(true);
+          }, remainingMs);
+          socket.on('disconnect', () => clearTimeout(expiryTimer));
+        } else if (remainingMs <= 0) {
+          socket.emit('socket_error', { message: 'Token expired' });
+          socket.disconnect(true);
+          return;
+        }
+      }
+
+      // ── Periodic Revocation & Suspension Check (every 5 min) ──────────────
+      const revocationCheck = setInterval(async () => {
+        if (!socket.connected || !socket.data.authenticated) return;
+        try {
+          const redis = getRedis();
+          if (socket.data.authToken) {
+            const revoked = await redis.get(`blacklist:${socket.data.authToken}`);
+            if (revoked) {
+              logger.warn({ socketId: socket.id, userId: socket.userId }, 'Active socket token was revoked');
+              socket.emit('socket_error', { message: 'Token has been revoked' });
+              socket.disconnect(true);
+              return;
+            }
+          }
+          if (socket.data.role === 'worker' && socket.data.workerId) {
+            const w = await Worker.findById(socket.data.workerId).select('status').lean();
+            if (!w || w.status === 'suspended') {
+              logger.warn({ workerId: socket.data.workerId }, 'Active socket worker was suspended');
+              socket.emit('socket_error', { message: 'Account suspended' });
+              socket.disconnect(true);
+              return;
+            }
+          } else if (socket.data.role === 'customer' && socket.data.customerId) {
+            const u = await User.findById(socket.data.customerId).select('status').lean();
+            if (!u || u.status === 'suspended') {
+              logger.warn({ customerId: socket.data.customerId }, 'Active socket user was suspended');
+              socket.emit('socket_error', { message: 'Account suspended' });
+              socket.disconnect(true);
+              return;
+            }
+          }
+        } catch (_) {}
+      }, 5 * 60 * 1000);
+      socket.on('disconnect', () => clearInterval(revocationCheck));
+    }
 
     // Worker room: backwards compatibility for join_worker event, strictly rejecting ID mismatch
     socket.on('join_worker', (id) => {
+      if (!socket.data.authenticated || socket.data.role !== 'worker') {
+        return socket.emit('socket_error', { message: 'Not authorized' });
+      }
       const requestedId = id ? String(id) : null;
-      if (requestedId && requestedId !== socket.workerId) {
+      if (requestedId && requestedId !== socket.data.workerId) {
         return socket.emit('socket_error', { message: 'Not authorized for this worker room' });
       }
-      socket.join(`worker_${socket.workerId}`);
+      socket.join(`worker_${socket.data.workerId}`);
     });
 
-    // Booking room: verify worker is assigned to this booking
+    // Booking room: verify user is legitimate participant (assigned worker or customer owner)
     socket.on('join_booking', async (id) => {
-      if (!id || !mongoose.Types.ObjectId.isValid(id)) return;
+      if (!id) return;
       const bookingId = String(id);
-      try {
-        const isAssigned = await Booking.exists({
-          _id: bookingId,
-          $or: [
-            { workers: socket.workerId },
-            { 'workerStatuses.worker': socket.workerId },
-          ],
-        });
-        if (isAssigned) {
-          socket.join(`booking_${bookingId}`);
-        } else {
-          socket.emit('socket_error', { message: 'Not authorized for this booking' });
-        }
-      } catch (err) {
-        logger.warn({ err: err.message, bookingId }, 'BP join_booking verification failed');
+      if (!socket.data.authenticated) {
+        return socket.emit('socket_error', { message: 'Not authorized' });
       }
+      await joinBookingRoomIfAuthorized(socket, bookingId);
     });
 
     socket.on('leave_booking', (id) => {
@@ -146,9 +290,19 @@ const initSocket = (server) => {
       socket.leave(`booking_${id}`);
     });
 
-    // Reject joining unauthorized rooms
-    socket.on('join_customer', () => socket.emit('socket_error', { message: 'Not authorized' }));
-    socket.on('join_seller',   () => socket.emit('socket_error', { message: 'Not authorized' }));
+    // Customer room: backwards compatibility for join_customer if customer socket connects
+    socket.on('join_customer', (id) => {
+      if (!socket.data.authenticated || socket.data.role !== 'customer') {
+        return socket.emit('socket_error', { message: 'Not authorized' });
+      }
+      const requestedId = id ? String(id) : null;
+      if (requestedId && requestedId !== socket.data.customerId) {
+        return socket.emit('socket_error', { message: 'Not authorized for this customer room' });
+      }
+      socket.join(`customer_${socket.data.customerId}`);
+    });
+
+    socket.on('join_seller', () => socket.emit('socket_error', { message: 'Not authorized' }));
 
     // Public broadcast rooms
     socket.on('join_workers_watch', () => socket.join('workers_watch_room'));
@@ -248,7 +402,7 @@ const watchChanges = () => {
           io.to('workers_watch_room').emit('worker_updated', {
             operationType: c.operationType,
             workerId,
-            fullDocument:  doc,
+            fullDocument:  sanitizeWorkerForWatch(doc),
           });
         }
 

@@ -50,6 +50,8 @@ const initSocket = (server) => {
       socket.data.userId        = sellerId;
       socket.data.sellerId      = sellerId;
       socket.data.role          = 'seller';
+      socket.data.tokenExp      = decoded.exp;
+      socket.data.authToken     = token;
       socket.userId             = sellerId;
       socket.sellerId           = sellerId;
       socket.role               = 'seller';
@@ -67,6 +69,37 @@ const initSocket = (server) => {
     // Automatically join the seller's private room
     socket.join(`seller_${socket.sellerId}`);
     console.log(`🏪 Seller auto-joined room: seller_${socket.sellerId}`);
+
+    // ── Enforce Token Expiry on Connected Socket ──────────────────────────
+    if (socket.data.tokenExp) {
+      const remainingMs = (socket.data.tokenExp * 1000) - Date.now();
+      if (remainingMs > 0 && remainingMs < 0x7FFFFFFF) {
+        const expiryTimer = setTimeout(() => {
+          console.log(`🏪 [Seller Socket] Session expired (JWT exp) for seller: ${socket.sellerId}`);
+          socket.emit('socket_error', { message: 'Session expired. Please reconnect.' });
+          socket.disconnect(true);
+        }, remainingMs);
+        socket.on('disconnect', () => clearTimeout(expiryTimer));
+      } else if (remainingMs <= 0) {
+        socket.emit('socket_error', { message: 'Token expired' });
+        socket.disconnect(true);
+        return;
+      }
+    }
+
+    // ── Periodic Suspension Check (every 5 min) ───────────────────────────
+    const revocationCheck = setInterval(async () => {
+      if (!socket.connected || !socket.data.authenticated) return;
+      try {
+        const s = await Seller.findById(socket.sellerId).select('status').lean();
+        if (!s || s.status === 'suspended') {
+          console.warn(`🏪 [Seller Socket] Seller ${socket.sellerId} was suspended`);
+          socket.emit('socket_error', { message: 'Account suspended' });
+          socket.disconnect(true);
+        }
+      } catch (_) {}
+    }, 5 * 60 * 1000);
+    socket.on('disconnect', () => clearInterval(revocationCheck));
 
     // Backwards compatibility for join_seller event, strictly rejecting ID mismatch
     socket.on('join_seller', (id) => {

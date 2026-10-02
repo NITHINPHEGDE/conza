@@ -10,6 +10,13 @@ export const socket = io(SOCKET_URL, {
   transports: ['websocket'],
 });
 
+// Dynamically provide fresh token from storage on every connect/reconnect attempt
+socket.auth = (cb) => {
+  AsyncStorage.getItem('conza_token')
+    .then((token) => cb(token ? { token } : {}))
+    .catch(() => cb({}));
+};
+
 socket.on('connect_error', (err) => {
   if (err && err.message) {
     console.warn('🔌 [BP Socket] Connection error:', err.message);

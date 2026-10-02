@@ -9,6 +9,13 @@ const SOCKET_URL =
 
 export const socket = io(SOCKET_URL, { autoConnect: false, transports: ['websocket'] });
 
+// Dynamically provide fresh token from storage on every connect/reconnect attempt
+socket.auth = (cb) => {
+  AsyncStorage.getItem('vendor_token')
+    .then((token) => cb(token ? { token } : {}))
+    .catch(() => cb({}));
+};
+
 socket.on('connect_error', (err) => {
   if (err && err.message) {
     console.warn('🏪 [Vendor Socket] Connection error:', err.message);

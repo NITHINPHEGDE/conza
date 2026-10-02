@@ -14,6 +14,13 @@ export const socket = io(SOCKET_URL, {
   timeout: 10000,
 });
 
+// Dynamically provide fresh token from storage on every connect/reconnect attempt
+socket.auth = (cb) => {
+  AsyncStorage.getItem('authToken')
+    .then((token) => cb(token ? { token } : {}))
+    .catch(() => cb({}));
+};
+
 socket.on('connect_error', (err) => {
   if (err && err.message) {
     console.warn('[Customer Socket] Connection error:', err.message);
