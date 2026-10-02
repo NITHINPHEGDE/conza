@@ -1,6 +1,8 @@
 // conzasb/services/socketService.js
 const { Server } = require('socket.io');
 const mongoose   = require('mongoose');
+const jwt        = require('jsonwebtoken');
+const Seller     = require('../models/Seller');
 
 let io;
 
@@ -12,22 +14,75 @@ const initSocket = (server) => {
     pingInterval: 25000,
   });
 
+  // ── Handshake Authentication ──────────────────────────────────────────────
+  io.use(async (socket, next) => {
+    try {
+      const rawToken =
+        socket.handshake.auth?.token ||
+        socket.handshake.headers?.authorization?.replace(/^Bearer\s+/i, '');
+
+      if (!rawToken || typeof rawToken !== 'string' || !rawToken.trim()) {
+        console.warn('Seller Socket connection rejected: token missing');
+        return next(new Error('Authentication required'));
+      }
+
+      const token = rawToken.trim();
+      let decoded;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET || 'conza_vendor_jwt_secret_fallback_2026');
+      } catch (err) {
+        console.warn('Seller Socket auth failed: invalid or expired token:', err.message);
+        return next(new Error('Authentication failed'));
+      }
+
+      if (!decoded || !decoded.id) {
+        return next(new Error('Authentication failed'));
+      }
+
+      const seller = await Seller.findById(decoded.id).select('-password').lean();
+      if (!seller || seller.status === 'suspended') {
+        console.warn('Seller Socket auth rejected: seller not found or suspended:', decoded.id);
+        return next(new Error('Authentication failed'));
+      }
+
+      const sellerId = seller._id.toString();
+      socket.data.authenticated = true;
+      socket.data.userId        = sellerId;
+      socket.data.sellerId      = sellerId;
+      socket.data.role          = 'seller';
+      socket.userId             = sellerId;
+      socket.sellerId           = sellerId;
+      socket.role               = 'seller';
+      socket.seller             = seller;
+      return next();
+    } catch (err) {
+      console.error('Seller Socket handshake authentication error:', err);
+      return next(new Error('Authentication failed'));
+    }
+  });
+
   io.on('connection', (socket) => {
-    console.log(`🔌 Connected: ${socket.id}`);
+    console.log(`🔌 Connected: ${socket.id} (Seller: ${socket.sellerId})`);
 
-    // Seller joins their private room to receive order notifications
-    socket.on('join_seller', (sellerId) => {
-      socket.join(`seller_${sellerId}`);
-      console.log(`🏪 Seller joined room: seller_${sellerId}`);
+    // Automatically join the seller's private room
+    socket.join(`seller_${socket.sellerId}`);
+    console.log(`🏪 Seller auto-joined room: seller_${socket.sellerId}`);
+
+    // Backwards compatibility for join_seller event, strictly rejecting ID mismatch
+    socket.on('join_seller', (id) => {
+      const requestedId = id ? String(id) : null;
+      if (requestedId && requestedId !== socket.sellerId) {
+        return socket.emit('socket_error', { message: 'Not authorized for this seller room' });
+      }
+      socket.join(`seller_${socket.sellerId}`);
     });
 
-    // Customer joins to receive status updates
-    socket.on('join_customer', (customerId) => {
-      socket.join(`customer_${customerId}`);
-    });
+    // Reject unauthorized room join requests
+    socket.on('join_customer', () => socket.emit('socket_error', { message: 'Not authorized' }));
+    socket.on('join_worker',   () => socket.emit('socket_error', { message: 'Not authorized' }));
 
     socket.on('disconnect', () => {
-      console.log(`🔌 Disconnected: ${socket.id}`);
+      console.log(`🔌 Disconnected: ${socket.id} (Seller: ${socket.sellerId})`);
     });
   });
 

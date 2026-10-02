@@ -5,6 +5,9 @@ const mongoose                    = require('mongoose');
 const { getRedis, getSubscriber } = require('../config/redis');
 const logger                      = require('../utils/logger');
 const Sentry                      = require('@sentry/node');
+const jwt                         = require('jsonwebtoken');
+const User                        = require('../models/User');
+const Seller                      = require('../models/Seller');
 const Booking                     = require('../models/Booking');
 
 let io;
@@ -19,6 +22,8 @@ const joinBookingRoomIfOwner = async (socket, bookingId, customerId) => {
     // Re-check after the async lookup: the socket may have switched customers meanwhile.
     if (owns && socket.data.customerId === customerId) {
       socket.join(`booking_${bookingId}`);
+    } else {
+      socket.emit('socket_error', { message: 'Not authorized for this booking' });
     }
   } catch (err) {
     logger.warn({ err: err.message, bookingId }, 'join_booking ownership check failed');
@@ -42,23 +47,126 @@ const initSocket = (server) => {
     logger.warn({ err }, 'Socket.io Redis adapter failed (running in-memory)');
   }
 
+  // ── Handshake Authentication ──────────────────────────────────────────────
+  io.use(async (socket, next) => {
+    try {
+      const rawToken =
+        socket.handshake.auth?.token ||
+        socket.handshake.headers?.authorization?.replace(/^Bearer\s+/i, '');
+
+      if (!rawToken || typeof rawToken !== 'string' || !rawToken.trim()) {
+        // Unauthenticated connection (guest) — permitted for public rooms (e.g. workers_watch_room, products_room)
+        socket.data.authenticated = false;
+        socket.data.userId = null;
+        socket.data.role = 'guest';
+        socket.userId = null;
+        socket.role = 'guest';
+        return next();
+      }
+
+      const token = rawToken.trim();
+      let decoded;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET || 'conza_jwt_secret_fallback_2026');
+      } catch (err) {
+        logger.warn({ err: err.message }, 'Socket authentication failed: invalid or expired token');
+        return next(new Error('Authentication failed'));
+      }
+
+      if (!decoded || !decoded.id) {
+        return next(new Error('Authentication failed'));
+      }
+
+      // Check Redis blacklist for revoked tokens
+      try {
+        const redis = getRedis();
+        const revoked = await redis.get(`blacklist:${token}`);
+        if (revoked) {
+          logger.warn({ userId: decoded.id }, 'Socket authentication failed: token revoked');
+          return next(new Error('Authentication failed'));
+        }
+      } catch (_) {}
+
+      // Handle Seller role
+      if (decoded.role === 'seller') {
+        const seller = await Seller.findById(decoded.id).select('-password').lean();
+        if (!seller || seller.status === 'suspended') {
+          logger.warn({ sellerId: decoded.id }, 'Socket auth rejected: seller not found or suspended');
+          return next(new Error('Authentication failed'));
+        }
+        const sId = seller._id.toString();
+        socket.data.authenticated = true;
+        socket.data.userId        = sId;
+        socket.data.sellerId      = sId;
+        socket.data.role          = 'seller';
+        socket.userId             = sId;
+        socket.sellerId           = sId;
+        socket.role               = 'seller';
+        return next();
+      }
+
+      // Handle Customer role
+      let user = null;
+      const cacheKey = `user:session:${decoded.id}`;
+      try {
+        const redis = getRedis();
+        const cached = await redis.get(cacheKey);
+        if (cached) user = JSON.parse(cached);
+      } catch (_) {}
+
+      if (!user) {
+        user = await User.findById(decoded.id).select('-password').lean();
+        if (user) {
+          try {
+            const redis = getRedis();
+            await redis.set(cacheKey, JSON.stringify(user), 'EX', 60);
+          } catch (_) {}
+        }
+      }
+
+      if (!user || user.status === 'suspended') {
+        logger.warn({ userId: decoded.id }, 'Socket auth rejected: user not found or suspended');
+        return next(new Error('Authentication failed'));
+      }
+
+      const uId = user._id.toString();
+      socket.data.authenticated = true;
+      socket.data.userId        = uId;
+      socket.data.customerId    = uId;
+      socket.data.role          = 'customer';
+      socket.userId             = uId;
+      socket.customerId         = uId;
+      socket.role               = 'customer';
+      return next();
+    } catch (err) {
+      logger.error({ err }, 'Socket handshake authentication error');
+      return next(new Error('Authentication failed'));
+    }
+  });
+
   io.on('connection', (socket) => {
-    logger.info({ socketId: socket.id }, 'Client connected');
+    logger.info({ socketId: socket.id, userId: socket.userId, role: socket.role }, 'Client connected');
+
+    // Automatically join the authenticated customer's or seller's personal room
+    if (socket.data.authenticated) {
+      if (socket.data.role === 'customer' && socket.data.customerId) {
+        socket.join(`customer_${socket.data.customerId}`);
+        logger.info({ customerId: socket.data.customerId }, 'Customer joined private room');
+      } else if (socket.data.role === 'seller' && socket.data.sellerId) {
+        socket.join(`seller_${socket.data.sellerId}`);
+        logger.info({ sellerId: socket.data.sellerId }, 'Seller joined private room');
+      }
+    }
 
     socket.on('join_booking', async (id) => {
       if (!id) return;
-      const bookingId  = String(id);
-      const customerId = socket.data.customerId;
-      if (!customerId) {
-        // Customer not registered on this socket yet — remember the request and
-        // validate it as soon as join_customer arrives.
-        socket.data.pendingBookingJoins = Array.from(
-          new Set([...(socket.data.pendingBookingJoins || []), bookingId])
-        );
-        return;
+      const bookingId = String(id);
+      if (!socket.data.authenticated || socket.data.role !== 'customer') {
+        return socket.emit('socket_error', { message: 'Not authorized' });
       }
-      await joinBookingRoomIfOwner(socket, bookingId, customerId);
+      await joinBookingRoomIfOwner(socket, bookingId, socket.data.customerId);
     });
+
     socket.on('leave_booking', (id) => {
       if (!id) return;
       socket.leave(`booking_${id}`);
@@ -66,42 +174,62 @@ const initSocket = (server) => {
         (b) => b !== String(id)
       );
     });
-    // A socket may belong to ONE customer at a time. Switching customers
-    // (logout -> login on the same device) drops every stale customer_* and
-    // booking_* room so the previous customer's events never leak through.
+
+    // Customer room: backwards compatibility for join_customer event, strictly rejecting ID mismatch
     socket.on('join_customer', async (id) => {
-      if (!id) return;
-      const nextId = String(id);
-      const prevId = socket.data.customerId;
-      if (prevId && prevId !== nextId) {
-        Array.from(socket.rooms).forEach((r) => {
-          if (r.startsWith('customer_') || r.startsWith('booking_')) socket.leave(r);
-        });
-        socket.data.pendingBookingJoins = [];
+      if (!socket.data.authenticated || socket.data.role !== 'customer') {
+        return socket.emit('socket_error', { message: 'Not authorized' });
       }
-      socket.data.customerId = nextId;
-      socket.join(`customer_${nextId}`);
+      const requestedId = id ? String(id) : null;
+      if (requestedId && requestedId !== socket.data.customerId) {
+        return socket.emit('socket_error', { message: 'Not authorized for this customer room' });
+      }
+      socket.join(`customer_${socket.data.customerId}`);
 
       const pending = socket.data.pendingBookingJoins || [];
       socket.data.pendingBookingJoins = [];
       for (const bookingId of pending) {
-        await joinBookingRoomIfOwner(socket, bookingId, nextId);
+        await joinBookingRoomIfOwner(socket, bookingId, socket.data.customerId);
       }
     });
+
     socket.on('leave_customer_session', () => {
       Array.from(socket.rooms).forEach((r) => {
-        if (r.startsWith('customer_') || r.startsWith('booking_')) socket.leave(r);
+        if (r.startsWith('customer_') || r.startsWith('booking_') || r.startsWith('seller_')) {
+          socket.leave(r);
+        }
       });
+      socket.data.authenticated = false;
       socket.data.customerId = null;
+      socket.data.sellerId = null;
+      socket.data.userId = null;
+      socket.data.role = 'guest';
+      socket.userId = null;
+      socket.customerId = null;
+      socket.sellerId = null;
+      socket.role = 'guest';
       socket.data.pendingBookingJoins = [];
     });
-    socket.on('join_worker',       (id) => socket.join(`worker_${id}`));
-    socket.on('join_seller',       (id) => {
-      socket.join(`seller_${id}`);
-      logger.info({ sellerId: id }, 'Seller joined room');
+
+    socket.on('join_worker', () => {
+      socket.emit('socket_error', { message: 'Not authorized' });
     });
-    socket.on('join_workers_watch', ()  => socket.join('workers_watch_room'));
-    socket.on('join_products',      ()  => socket.join('products_room'));
+
+    socket.on('join_seller', (id) => {
+      if (!socket.data.authenticated || socket.data.role !== 'seller') {
+        return socket.emit('socket_error', { message: 'Not authorized' });
+      }
+      const requestedId = id ? String(id) : null;
+      if (requestedId && requestedId !== socket.data.sellerId) {
+        return socket.emit('socket_error', { message: 'Not authorized for this seller room' });
+      }
+      socket.join(`seller_${socket.data.sellerId}`);
+      logger.info({ sellerId: socket.data.sellerId }, 'Seller joined room');
+    });
+
+    // Public rooms open to all clients
+    socket.on('join_workers_watch', () => socket.join('workers_watch_room'));
+    socket.on('join_products',      () => socket.join('products_room'));
 
     socket.on('disconnect', () => logger.info({ socketId: socket.id }, 'Client disconnected'));
   });

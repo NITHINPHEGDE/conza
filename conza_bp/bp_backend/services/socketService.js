@@ -5,6 +5,9 @@ const mongoose                    = require('mongoose');
 const { getRedis, getSubscriber } = require('../config/redis');
 const logger                      = require('../utils/logger');
 const Sentry                      = require('@sentry/node');
+const jwt                         = require('jsonwebtoken');
+const Worker                      = require('../models/Worker');
+const Booking                     = require('../models/Booking');
 
 let io;
 
@@ -25,20 +28,133 @@ const initSocket = (server) => {
     logger.warn({ err }, 'Socket.io Redis adapter failed (running in-memory)');
   }
 
+  // ── Handshake Authentication ──────────────────────────────────────────────
+  io.use(async (socket, next) => {
+    try {
+      const rawToken =
+        socket.handshake.auth?.token ||
+        socket.handshake.headers?.authorization?.replace(/^Bearer\s+/i, '');
+
+      if (!rawToken || typeof rawToken !== 'string' || !rawToken.trim()) {
+        logger.warn('BP Socket connection rejected: token missing');
+        return next(new Error('Authentication required'));
+      }
+
+      const token = rawToken.trim();
+      let decoded;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET || 'conza_bp_jwt_secret_fallback_2026');
+      } catch (err) {
+        logger.warn({ err: err.message }, 'BP Socket auth failed: invalid or expired token');
+        return next(new Error('Authentication failed'));
+      }
+
+      if (!decoded || !decoded.id) {
+        return next(new Error('Authentication failed'));
+      }
+
+      // Check Redis blacklist for revoked tokens
+      try {
+        const redis = getRedis();
+        const revoked = await redis.get(`blacklist:${token}`);
+        if (revoked) {
+          logger.warn({ workerId: decoded.id }, 'BP Socket auth failed: token revoked');
+          return next(new Error('Authentication failed'));
+        }
+      } catch (_) {}
+
+      // Worker lookup (cache-aside)
+      let worker = null;
+      const cacheKey = `worker:session:${decoded.id}`;
+      try {
+        const redis = getRedis();
+        const cached = await redis.get(cacheKey);
+        if (cached) worker = JSON.parse(cached);
+      } catch (_) {}
+
+      if (!worker) {
+        worker = await Worker.findById(decoded.id).select('-password').lean();
+        if (worker) {
+          try {
+            const redis = getRedis();
+            await redis.set(cacheKey, JSON.stringify(worker), 'EX', 300);
+          } catch (_) {}
+        }
+      }
+
+      if (!worker || worker.status === 'suspended') {
+        logger.warn({ workerId: decoded.id }, 'BP Socket auth rejected: worker not found or suspended');
+        return next(new Error('Authentication failed'));
+      }
+
+      const workerId = worker._id.toString();
+      socket.data.authenticated = true;
+      socket.data.userId        = workerId;
+      socket.data.workerId      = workerId;
+      socket.data.role          = 'worker';
+      socket.userId             = workerId;
+      socket.workerId           = workerId;
+      socket.role               = 'worker';
+      socket.worker             = worker;
+      return next();
+    } catch (err) {
+      logger.error({ err }, 'BP Socket handshake authentication error');
+      return next(new Error('Authentication failed'));
+    }
+  });
+
   io.on('connection', (socket) => {
-    logger.info({ socketId: socket.id }, 'Client connected');
+    logger.info({ socketId: socket.id, workerId: socket.workerId }, 'BP Worker connected');
 
-    socket.on('join_booking',      (id) => socket.join(`booking_${id}`));
-    socket.on('join_customer',     (id) => socket.join(`customer_${id}`));
-    socket.on('join_worker',       (id) => socket.join(`worker_${id}`));
-    socket.on('join_seller',       (id) => {
-      socket.join(`seller_${id}`);
-      logger.info({ sellerId: id }, 'Seller joined room');
+    // Automatically join the authenticated worker's personal room
+    socket.join(`worker_${socket.workerId}`);
+    logger.info({ workerId: socket.workerId }, 'Worker auto-joined personal room');
+
+    // Worker room: backwards compatibility for join_worker event, strictly rejecting ID mismatch
+    socket.on('join_worker', (id) => {
+      const requestedId = id ? String(id) : null;
+      if (requestedId && requestedId !== socket.workerId) {
+        return socket.emit('socket_error', { message: 'Not authorized for this worker room' });
+      }
+      socket.join(`worker_${socket.workerId}`);
     });
-    socket.on('join_workers_watch', ()  => socket.join('workers_watch_room'));
-    socket.on('join_products',      ()  => socket.join('products_room'));
 
-    socket.on('disconnect', () => logger.info({ socketId: socket.id }, 'Client disconnected'));
+    // Booking room: verify worker is assigned to this booking
+    socket.on('join_booking', async (id) => {
+      if (!id || !mongoose.Types.ObjectId.isValid(id)) return;
+      const bookingId = String(id);
+      try {
+        const isAssigned = await Booking.exists({
+          _id: bookingId,
+          $or: [
+            { workers: socket.workerId },
+            { 'workerStatuses.worker': socket.workerId },
+          ],
+        });
+        if (isAssigned) {
+          socket.join(`booking_${bookingId}`);
+        } else {
+          socket.emit('socket_error', { message: 'Not authorized for this booking' });
+        }
+      } catch (err) {
+        logger.warn({ err: err.message, bookingId }, 'BP join_booking verification failed');
+      }
+    });
+
+    socket.on('leave_booking', (id) => {
+      if (!id) return;
+      socket.leave(`booking_${id}`);
+    });
+
+    // Reject joining unauthorized rooms
+    socket.on('join_customer', () => socket.emit('socket_error', { message: 'Not authorized' }));
+    socket.on('join_seller',   () => socket.emit('socket_error', { message: 'Not authorized' }));
+
+    // Public broadcast rooms
+    socket.on('join_workers_watch', () => socket.join('workers_watch_room'));
+    socket.on('join_products',      () => socket.join('products_room'));
+
+    socket.on('disconnect', () => logger.info({ socketId: socket.id, workerId: socket.workerId }, 'BP Worker disconnected'));
   });
 
   watchChanges();
