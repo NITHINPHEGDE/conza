@@ -55,9 +55,11 @@ const workerSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Compound geo index — covers all $near and $geoNear queries
-// (single-field 2dsphere is redundant when compound exists)
-workerSchema.index({ location: '2dsphere', 'categories.name': 1, isAvailable: 1, status: 1 });
+// Compound geo index — covers all geospatial queries with verification and availability filters
+workerSchema.index({ location: '2dsphere', 'categories.name': 1, isVerified: 1, isAvailable: 1, status: 1 });
+
+// locationless fallback index (covers safeQuery + sort by rating and totalJobs)
+workerSchema.index({ isVerified: 1, isAvailable: 1, status: 1, rating: -1, totalJobs: -1 });
 
 // category listing + online status (getCategories aggregation $match)
 workerSchema.index({ 'categories.name': 1, isOnline: 1, isAvailable: 1, status: 1 });

@@ -66,9 +66,9 @@ const getNearbyWorkers = async (req, res) => {
   try {
     const { category, lat, lng, debug } = req.query;
 
-    // ── DIAGNOSTIC MODE — bypasses Redis, tests exact geo-filter live ──────
-    // GET /api/workers/nearby?category=Plumber&lat=12.97&lng=77.49&debug=1
-    if (debug) {
+    // ── DIAGNOSTIC MODE — gated to development/test environments only ──────
+    const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+    if (debug && isDev) {
       const query = {};
       if (category) {
         query.$or = [
@@ -95,8 +95,6 @@ const getNearbyWorkers = async (req, res) => {
         const [wLng, wLat] = w.location?.coordinates || [0, 0];
         if (wLng === 0 && wLat === 0) reasons.push('location is [0,0]');
 
-        // Diagnose against the category being queried (or the worker's
-        // first category if none was specified).
         const entry = pickCategoryEntry(w, category);
         const wCategoryName = entry?.name || '';
         const key = wCategoryName.toLowerCase().trim();
@@ -140,27 +138,38 @@ const getNearbyWorkers = async (req, res) => {
       });
     }
 
-    // The category's admin-configured "Service Radius (km)" is the source of
-    // truth for how far a worker can be to count as "nearby" for that category.
-    // A client-supplied radius is only used as a fallback when no category is given.
-    let radius = req.query.radius ? parseInt(req.query.radius) : 5000;
-    if (category) {
-      const serviceCategory = await ServiceCategory.findOne({ name: category }).select('radius').lean();
-      if (serviceCategory && serviceCategory.radius) {
-        radius = serviceCategory.radius * 1000; // km → meters
+    // ── Input coordinate and radius validation ──────────────────────────────
+    const hasLat = lat !== undefined && lat !== null && String(lat).trim() !== '';
+    const hasLng = lng !== undefined && lng !== null && String(lng).trim() !== '';
+
+    if (hasLat || hasLng) {
+      if (!hasLat || !hasLng) {
+        return res.status(400).json({ success: false, message: 'Both latitude and longitude are required for location-based search.' });
+      }
+      const parsedLat = parseFloat(lat);
+      const parsedLng = parseFloat(lng);
+      if (isNaN(parsedLat) || isNaN(parsedLng) || parsedLat < -90 || parsedLat > 90 || parsedLng < -180 || parsedLng > 180) {
+        return res.status(400).json({ success: false, message: 'Invalid latitude or longitude coordinates.' });
       }
     }
 
-    if (!lat || !lng) {
-      // Match active workers OR legacy documents that predate the status/isVerified
-      // fields (no field at all in MongoDB). Only hard-exclude 'suspended'.
+    let clientRadiusMeters = null;
+    if (req.query.radius !== undefined && req.query.radius !== null && String(req.query.radius).trim() !== '') {
+      const parsedRadius = parseInt(req.query.radius, 10);
+      if (isNaN(parsedRadius) || parsedRadius <= 0) {
+        return res.status(400).json({ success: false, message: 'Radius must be a positive number.' });
+      }
+      // Server-controlled ceiling: max 100km (100,000 meters)
+      clientRadiusMeters = Math.min(parsedRadius, 100000);
+    }
+
+    // ── Fallback when coordinates are omitted ───────────────────────────────
+    // Preserves UI compatibility for clients without location permissions,
+    // while preventing unbounded memory consumption by capping at 50 results.
+    if (!hasLat || !hasLng) {
       const safeQuery = {
         isAvailable: { $ne: false },
         status:      { $not: { $eq: 'suspended' } },
-        // Strict verification gate — a worker only appears to customers once
-        // the admin panel has explicitly verified them. Do NOT grandfather in
-        // documents missing the field; that loophole let unverified workers
-        // through.
         isVerified:  true,
       };
       if (category) {
@@ -169,9 +178,15 @@ const getNearbyWorkers = async (req, res) => {
           { category: categoryMatcher(category) },
         ];
       }
-      const workers = await Worker.find(safeQuery).select(
-        'fullName username profileImage categories skills locationText experience bio isOnline rating totalJobs memberSince location'
-      ).lean();
+      const FALLBACK_LIMIT = 50;
+      const workers = await Worker.find(safeQuery)
+        .sort({ rating: -1, totalJobs: -1 })
+        .limit(FALLBACK_LIMIT)
+        .select(
+          'fullName username profileImage categories category minCharge baseCharge perDayCharge skills locationText experience bio isOnline rating totalJobs memberSince location'
+        )
+        .lean();
+
       const mapped = workers.map((w) => {
         const entry = pickCategoryEntry(w, category);
         return {
@@ -202,71 +217,137 @@ const getNearbyWorkers = async (req, res) => {
       return res.json({ success: true, count: mapped.length, workers: mapped });
     }
 
-    // ── Geospatial query using the 2dsphere index ───────────────────────────
-    // Fetch each active ServiceCategory and its admin-configured radius, then
-    // ask MongoDB to filter workers by location using $geoWithin/$centerSphere.
-    // MongoDB evaluates this against the compound { location:'2dsphere', … }
-    // index — no JavaScript haversine math, no full collection scan.
+    // ── Geospatial location search ───────────────────────────────────────────
     const userLat = parseFloat(lat);
     const userLng = parseFloat(lng);
+    const EARTH_RADIUS_KM = 6371;
+    const R = EARTH_RADIUS_KM;
 
-    // Determine which categories to query
-    const serviceCategories = await ServiceCategory.find(
-      category
-        ? { active: true, name: categoryMatcher(category) }
-        : { active: true }
-    ).select('name radius').lean();
-
-    if (!serviceCategories.length) {
-      return res.json({ success: true, count: 0, workers: [] });
-    }
-
-    // Base filter (availability + verification)
     const baseFilter = {
       isAvailable: { $ne: false },
       status:      { $not: { $eq: 'suspended' } },
       isVerified:  true,
     };
 
-    // Run one geo-filtered query per ServiceCategory in parallel. A worker
-    // who belongs to multiple queried categories can legitimately appear in
-    // more than one bucket here — that's fine, each result below is scoped
-    // to the ServiceCategory (sc.name) it was matched under, so pricing
-    // stays correct per-category even for the same worker.
-    const EARTH_RADIUS_KM = 6371;
-    const perCatResults = await Promise.all(
-      serviceCategories.map(async (sc) => {
-        const radiusKm = sc.radius;
-        if (!radiusKm) return []; // skip misconfigured categories
-        const radiusRadians = radiusKm / EARTH_RADIUS_KM;
-        const workers = await Worker.find({
-          ...baseFilter,
-          $or: [
-            { 'categories.name': categoryMatcher(sc.name) },
-            { category: categoryMatcher(sc.name) },
-          ],
-          location: {
-            $geoWithin: {
-              $centerSphere: [[userLng, userLat], radiusRadians],
-            },
+    // ── Case A: Category is specified ───────────────────────────────────────
+    // Consolidates to 1 ServiceCategory query + 1 Worker query
+    if (category) {
+      const serviceCategory = await ServiceCategory.findOne({
+        active: true,
+        name: categoryMatcher(category),
+      }).select('name radius').lean();
+
+      if (!serviceCategory) {
+        return res.json({ success: true, count: 0, workers: [] });
+      }
+
+      const scName = serviceCategory.name;
+      const radiusKm = serviceCategory.radius || (clientRadiusMeters ? clientRadiusMeters / 1000 : 5);
+      const radiusRadians = radiusKm / EARTH_RADIUS_KM;
+
+      const workers = await Worker.find({
+        ...baseFilter,
+        $or: [
+          { 'categories.name': categoryMatcher(scName) },
+          { category: categoryMatcher(scName) },
+        ],
+        location: {
+          $geoWithin: {
+            $centerSphere: [[userLng, userLat], radiusRadians],
           },
-        }).select(
-          'fullName username profileImage categories category minCharge baseCharge perDayCharge skills locationText experience bio isOnline rating totalJobs memberSince location'
-        ).lean();
-        // Tag which ServiceCategory this worker was matched under so the
-        // mapping step below resolves the RIGHT pricing entry, even if the
-        // worker has other categories too.
-        return workers.map((w) => ({ ...w, __matchedCategory: sc.name }));
-      })
+        },
+      }).select(
+        'fullName username profileImage categories category minCharge baseCharge perDayCharge skills locationText experience bio isOnline rating totalJobs memberSince location'
+      ).lean();
+
+      const workersWithDistance = workers.map((w) => {
+        const [wLng, wLat] = w.location?.coordinates || [0, 0];
+        const dLat   = ((wLat - userLat) * Math.PI) / 180;
+        const dLng   = ((wLng - userLng) * Math.PI) / 180;
+        const a      =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos((userLat * Math.PI) / 180) *
+            Math.cos((wLat * Math.PI) / 180) *
+            Math.sin(dLng / 2) ** 2;
+        const distKm = parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1));
+        const entry = pickCategoryEntry(w, scName);
+        return {
+          id:           w._id,
+          _id:          w._id,
+          name:         w.fullName,
+          initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+          category:     entry?.name || scName,
+          categories:   (w.categories || []).map((c) => c.name),
+          skills:       w.skills,
+          pricePerDay:  entry?.minCharge || 0,
+          minCharge:    entry?.minCharge || 0,
+          baseCharge:   entry?.baseCharge || 0,
+          perDayCharge: entry?.perDayCharge || 0,
+          rating:       w.rating,
+          totalJobs:    w.totalJobs,
+          distance:     `${kmToMinutes(distKm)} min away`,
+          distanceKm:   distKm,
+          available:    true,
+          isOnline:     true,
+          bio:          w.bio,
+          experience:   w.experience,
+          locationText: w.locationText,
+          memberSince:  w.memberSince,
+          profileImage: w.profileImage,
+        };
+      }).filter((w) => w.distanceKm <= radiusKm);
+
+      workersWithDistance.sort((a, b) => a.distanceKm - b.distanceKm);
+      return res.json({ success: true, count: workersWithDistance.length, workers: workersWithDistance });
+    }
+
+    // ── Case B: Category is omitted ─────────────────────────────────────────
+    // Replaces the N+1 query loop with a single max-radius Worker query,
+    // then enforces category-specific radii in-memory without duplicate worker entries.
+    const serviceCategories = await ServiceCategory.find({ active: true }).select('name radius').lean();
+    if (!serviceCategories.length) {
+      return res.json({ success: true, count: 0, workers: [] });
+    }
+
+    const maxRadiusKm = Math.max(
+      ...serviceCategories.map((sc) => sc.radius || 0),
+      clientRadiusMeters ? clientRadiusMeters / 1000 : 5
     );
+    if (!maxRadiusKm || maxRadiusKm <= 0) {
+      return res.json({ success: true, count: 0, workers: [] });
+    }
+    const maxRadiusRadians = maxRadiusKm / EARTH_RADIUS_KM;
 
-    const allWorkers = perCatResults.flat();
-    const R = EARTH_RADIUS_KM;
+    const categoryMap = new Map();
+    const activeCategoryNames = [];
+    for (const sc of serviceCategories) {
+      if (sc.name) {
+        const trimmed = sc.name.trim();
+        categoryMap.set(trimmed.toLowerCase(), { name: trimmed, radius: sc.radius || 5 });
+        activeCategoryNames.push(trimmed);
+      }
+    }
 
-    const workersWithDistance = allWorkers.map((w) => {
+    const activeRegexes = activeCategoryNames.map((name) => new RegExp(`^${escapeRegex(name)}$`, 'i'));
+
+    const workers = await Worker.find({
+      ...baseFilter,
+      $or: [
+        { 'categories.name': { $in: activeRegexes } },
+        { category: { $in: activeRegexes } },
+      ],
+      location: {
+        $geoWithin: {
+          $centerSphere: [[userLng, userLat], maxRadiusRadians],
+        },
+      },
+    }).select(
+      'fullName username profileImage categories category minCharge baseCharge perDayCharge skills locationText experience bio isOnline rating totalJobs memberSince location'
+    ).lean();
+
+    const workersWithDistance = [];
+    for (const w of workers) {
       const [wLng, wLat] = w.location?.coordinates || [0, 0];
-      // Compute display distance in JS (just for the label — MongoDB already
-      // confirmed the worker is within radius via the index).
       const dLat   = ((wLat - userLat) * Math.PI) / 180;
       const dLng   = ((wLng - userLng) * Math.PI) / 180;
       const a      =
@@ -275,13 +356,36 @@ const getNearbyWorkers = async (req, res) => {
           Math.cos((wLat * Math.PI) / 180) *
           Math.sin(dLng / 2) ** 2;
       const distKm = parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1));
-      const entry = pickCategoryEntry(w, w.__matchedCategory);
-      return {
+
+      // Resolve primary matching category whose service radius encompasses this worker
+      let matchedCategoryName = null;
+      const workerCatList = w.categories || [];
+      for (const c of workerCatList) {
+        const catName = (c.name || '').trim();
+        const scInfo = categoryMap.get(catName.toLowerCase());
+        if (scInfo && distKm <= scInfo.radius) {
+          matchedCategoryName = scInfo.name;
+          break;
+        }
+      }
+      if (!matchedCategoryName && w.category) {
+        const catName = w.category.trim();
+        const scInfo = categoryMap.get(catName.toLowerCase());
+        if (scInfo && distKm <= scInfo.radius) {
+          matchedCategoryName = scInfo.name;
+        }
+      }
+
+      // If the worker is outside the service radius of ALL their categories, exclude them
+      if (!matchedCategoryName) continue;
+
+      const entry = pickCategoryEntry(w, matchedCategoryName);
+      workersWithDistance.push({
         id:           w._id,
         _id:          w._id,
         name:         w.fullName,
         initials:     w.fullName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
-        category:     entry?.name || w.__matchedCategory,
+        category:     entry?.name || matchedCategoryName,
         categories:   (w.categories || []).map((c) => c.name),
         skills:       w.skills,
         pricePerDay:  entry?.minCharge || 0,
@@ -299,11 +403,11 @@ const getNearbyWorkers = async (req, res) => {
         locationText: w.locationText,
         memberSince:  w.memberSince,
         profileImage: w.profileImage,
-      };
-    });
+      });
+    }
 
     workersWithDistance.sort((a, b) => a.distanceKm - b.distanceKm);
-    res.json({ success: true, count: workersWithDistance.length, workers: workersWithDistance });
+    return res.json({ success: true, count: workersWithDistance.length, workers: workersWithDistance });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
