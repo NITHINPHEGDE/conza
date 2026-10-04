@@ -148,29 +148,56 @@ const BookingTrackingScreen = ({ navigation, route }) => {
   // Dynamic live timer state (seconds elapsed)
   const [elapsedSeconds, setElapsedSeconds]       = useState(0);
 
-  // Join booking socket room for real-time updates
-  useEffect(() => {
-    if (!activeBookingId) return;
-    socket.emit('join_booking', activeBookingId);
+  // ── Socket-aware polling ───────────────────────────────────────────────────
+  // Track live connection state so we can skip the fallback poll while the
+  // socket is healthy and restart it only when we go offline.
+  const [isSocketConnected, setIsSocketConnected] = useState(() => socket.connected);
 
-    const handleReconnect = () => {
+  // Join booking socket room and track connection state.
+  // On reconnect: rejoin the room and do one authoritative fetch so we
+  // never miss an update that arrived while we were offline.
+  useEffect(() => {
+    if (!activeBookingId) return undefined;
+
+    // Join immediately (in case socket is already connected)
+    if (socket.connected) {
       socket.emit('join_booking', activeBookingId);
+    }
+
+    const handleConnect = () => {
+      setIsSocketConnected(true);
+      socket.emit('join_booking', activeBookingId);
+      fetchActiveBooking(activeBookingId);
     };
-    socket.on('connect', handleReconnect);
+
+    const handleDisconnect = () => {
+      setIsSocketConnected(false);
+    };
+
+    const handleConnectError = () => {
+      setIsSocketConnected(false);
+    };
+
+    socket.on('connect',       handleConnect);
+    socket.on('disconnect',    handleDisconnect);
+    socket.on('connect_error', handleConnectError);
 
     return () => {
-      socket.off('connect', handleReconnect);
+      socket.off('connect',       handleConnect);
+      socket.off('disconnect',    handleDisconnect);
+      socket.off('connect_error', handleConnectError);
     };
   }, [activeBookingId]);
 
-  // Fallback polling every 30s. Keeps going after completion while the bill
-  // is still unpaid, so "Continue to Payment" disappears on its own if the
-  // labour marks the cash as collected and the socket update is missed.
+  // Fallback polling — only runs when the socket is disconnected.
+  // Keeps going after completion while the bill is still unpaid, so
+  // "Continue to Payment" disappears on its own if the labour marks the
+  // cash as collected and the socket update is missed.
   const paymentOpen = getBookingPaymentState(activeBooking).canPay;
   useEffect(() => {
     let intervalId;
     const stillActive = activeBooking?.status !== 'completed' && activeBooking?.status !== 'cancelled';
-    if (activeBookingId && (stillActive || paymentOpen)) {
+    if (!isSocketConnected && activeBookingId && (stillActive || paymentOpen)) {
       intervalId = setInterval(() => {
         fetchActiveBooking(activeBookingId);
       }, paymentOpen ? 10000 : 30000);
@@ -178,10 +205,10 @@ const BookingTrackingScreen = ({ navigation, route }) => {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [activeBookingId, activeBooking?.status, paymentOpen]);
+  }, [activeBookingId, activeBooking?.status, paymentOpen, isSocketConnected]);
 
   // Coming back to the app (e.g. after the admin changed Finance → Pricing)
-  // re-fetches the booking so the amount due is never stale.
+  // re-fetches the booking once so the amount due is never stale.
   useEffect(() => {
     if (!activeBookingId) return undefined;
     const sub = AppState.addEventListener('change', (state) => {
@@ -193,6 +220,7 @@ const BookingTrackingScreen = ({ navigation, route }) => {
   useEffect(() => {
     if (activeBookingId) fetchActiveBooking(activeBookingId);
   }, [activeBookingId]);
+
 
   // Live Timer Effect for 'in_progress' status
   useEffect(() => {

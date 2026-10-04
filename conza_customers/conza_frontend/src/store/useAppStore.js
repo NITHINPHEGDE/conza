@@ -49,7 +49,44 @@ const isOwnBookingPopupEvent = (get, data) => {
 };
 import api from '../api/axiosInstance';
 
+// In-flight request deduplication promise for canonical bookings fetch
+let inFlightMyBookingsPromise = null;
+
+// Atomically updates all booking collections and derived counts from a socket event
+const updateBookingInCollections = (s, bookingId, status, bookingSnapshot) => {
+  const idStr = bookingId?.toString();
+  const patch = (b) => {
+    if (b._id?.toString() !== idStr) return b;
+    return bookingSnapshot ? { ...b, ...bookingSnapshot, status } : { ...b, status };
+  };
+  const myBookings = (s.myBookings || []).map(patch);
+  const labourBookings = (s.labourBookings || []).map(patch);
+  const activeBookings = myBookings.filter(
+    (b) => !['completed', 'cancelled'].includes(b.status)
+  );
+  const completedOrders = myBookings.filter(
+    (b) => b.status === 'completed'
+  );
+  const activeBooking =
+    s.activeBooking?._id?.toString() === idStr
+      ? (bookingSnapshot
+          ? { ...s.activeBooking, ...bookingSnapshot, status }
+          : { ...s.activeBooking, status })
+      : s.activeBooking;
+
+  return {
+    myBookings,
+    labourBookings,
+    activeBookings,
+    completedOrders,
+    derivedCompletedCount: completedOrders.length,
+    derivedActiveSitesCount: activeBookings.length,
+    activeBooking,
+  };
+};
+
 // Normalizes a category title into the id format used by the filter chips
+
 // ("Earth Movers" → "earth_movers"), matching how rental items already
 // normalize Product.category in fetchRentalData.
 const toCategoryId = (name) => (name || '').toLowerCase().trim().replace(/\s+/g, '_');
@@ -695,15 +732,49 @@ const useAppStore = create((set, get) => ({
     set((s) => ({ myProjects: s.myProjects.filter((p) => p._id !== projectId) }));
   },
 
-  // ── Projects / Bookings ─────────────────────────────────────────────────────
+  // ── Canonical Bookings Store ────────────────────────────────────────────────
+  myBookings:             [],
+  myBookingsLoading:      false,
+
+  fetchMyBookings: async () => {
+    if (inFlightMyBookingsPromise) {
+      return inFlightMyBookingsPromise;
+    }
+    set({ myBookingsLoading: true });
+    inFlightMyBookingsPromise = (async () => {
+      try {
+        const data = await bookingAPI.getMyBookings();
+        const allBookings = data.bookings || [];
+        const completed = allBookings.filter((b) => b.status === 'completed');
+        const active = allBookings.filter(
+          (b) => !['completed', 'cancelled'].includes(b.status)
+        );
+        set({
+          myBookings: allBookings,
+          labourBookings: allBookings,
+          activeBookings: active,
+          completedOrders: completed,
+          derivedCompletedCount: completed.length,
+          derivedActiveSitesCount: active.length,
+        });
+        return allBookings;
+      } finally {
+        inFlightMyBookingsPromise = null;
+        set({ myBookingsLoading: false });
+      }
+    })();
+    return inFlightMyBookingsPromise;
+  },
+
+  // ── Projects ────────────────────────────────────────────────────────────────
   projects:        [],
   projectsLoading: false,
 
   fetchProjects: async () => {
     try {
       set({ projectsLoading: true });
-      const data = await bookingAPI.getMyBookings();
-      const projects = (data.bookings || []).map((b) => ({
+      const allBookings = await get().fetchMyBookings();
+      const projects = (allBookings || []).map((b) => ({
         id:        b._id,
         name:      b.category
           ? `${b.category} Booking`
@@ -741,17 +812,7 @@ const useAppStore = create((set, get) => ({
   fetchCompletedOrders: async () => {
     try {
       set({ completedOrdersLoading: true });
-      const data = await bookingAPI.getMyBookings();
-      const allBookings = data.bookings || [];
-      const completed = allBookings.filter((b) => b.status === 'completed');
-      const active = allBookings.filter(
-        (b) => !['completed', 'cancelled'].includes(b.status)
-      );
-      set({
-        completedOrders: completed,
-        derivedCompletedCount: completed.length,
-        derivedActiveSitesCount: active.length,
-      });
+      await get().fetchMyBookings();
     } catch (err) {
       console.error('fetchCompletedOrders error:', err.message);
       set({ completedOrders: [] });
@@ -771,11 +832,7 @@ const useAppStore = create((set, get) => ({
   fetchActiveBookings: async () => {
     try {
       set({ activeBookingsLoading: true });
-      const data = await bookingAPI.getMyBookings();
-      const active = (data.bookings || []).filter(
-        (b) => !['completed', 'cancelled'].includes(b.status)
-      );
-      set({ activeBookings: active });
+      await get().fetchMyBookings();
     } catch (err) {
       console.error('fetchActiveBookings error:', err.message);
     } finally {
@@ -790,14 +847,14 @@ const useAppStore = create((set, get) => ({
   fetchLabourBookings: async () => {
     try {
       set({ labourBookingsLoading: true });
-      const data = await bookingAPI.getMyBookings();
-      set({ labourBookings: data.bookings || [] });
+      await get().fetchMyBookings();
     } catch (err) {
       console.error('fetchLabourBookings error:', err.message);
     } finally {
       set({ labourBookingsLoading: false });
     }
   },
+
 
   setActiveBookingId: async (id) => {
     if (id) {
@@ -816,8 +873,24 @@ const useAppStore = create((set, get) => ({
     try {
       const res = await api.get(`/bookings/${bookingId}?_cb=${Date.now()}`);
       const data = res.data;
-      if (data.success) {
-        set({ activeBooking: data.booking });
+      if (data.success && data.booking) {
+        set((s) => {
+          const current = s.activeBooking;
+          // Guard against stale HTTP response overwriting newer Socket.IO state
+          if (
+            current &&
+            current._id?.toString() === data.booking._id?.toString() &&
+            current.updatedAt &&
+            data.booking.updatedAt
+          ) {
+            const currentUpdated = new Date(current.updatedAt).getTime();
+            const incomingUpdated = new Date(data.booking.updatedAt).getTime();
+            if (incomingUpdated < currentUpdated) {
+              return {};
+            }
+          }
+          return { activeBooking: data.booking };
+        });
         socket.emit('join_booking', bookingId);
       } else {
         // Server returned success:false — booking is gone; clear stale ID
@@ -866,8 +939,12 @@ const useAppStore = create((set, get) => ({
       userProfile: null,
       activeBookingId: null,
       activeBooking: null,
+      myBookings: [],
       activeBookings: [],
       labourBookings: [],
+      completedOrders: [],
+      derivedCompletedCount: null,
+      derivedActiveSitesCount: null,
       sellerOrders: [],
       walletBalance: 0,
       autobookToast: null,
@@ -1281,24 +1358,7 @@ const useAppStore = create((set, get) => ({
       const { bookingId, status, bookingSnapshot } = data;
 
       if (bookingId && status) {
-        set((s) => ({
-          activeBookings: s.activeBookings.map((b) =>
-            b._id?.toString() === bookingId?.toString()
-              ? { ...b, status }
-              : b
-          ),
-          labourBookings: s.labourBookings.map((b) =>
-            b._id?.toString() === bookingId?.toString()
-              ? { ...b, status }
-              : b
-          ),
-          activeBooking:
-            s.activeBooking?._id?.toString() === bookingId?.toString()
-              ? bookingSnapshot
-                ? { ...s.activeBooking, ...bookingSnapshot, status }
-                : { ...s.activeBooking, status }
-              : s.activeBooking,
-        }));
+        set((s) => updateBookingInCollections(s, bookingId, status, bookingSnapshot));
       }
 
       // Use the cache-busted fetchActiveBooking for the detail view — do NOT
@@ -1317,24 +1377,7 @@ const useAppStore = create((set, get) => ({
       const { bookingId, status, bookingSnapshot, isWorkCompletion } = data;
 
       if (bookingId && status) {
-        set((s) => ({
-          activeBookings: s.activeBookings.map((b) =>
-            b._id?.toString() === bookingId?.toString()
-              ? { ...b, status }
-              : b
-          ),
-          labourBookings: s.labourBookings.map((b) =>
-            b._id?.toString() === bookingId?.toString()
-              ? { ...b, status }
-              : b
-          ),
-          activeBooking:
-            s.activeBooking?._id?.toString() === bookingId?.toString()
-              ? bookingSnapshot
-                ? { ...s.activeBooking, ...bookingSnapshot, status }
-                : { ...s.activeBooking, status }
-              : s.activeBooking,
-        }));
+        set((s) => updateBookingInCollections(s, bookingId, status, bookingSnapshot));
       }
 
       if (isWorkCompletion && bookingId && isOwnBookingPopupEvent(get, data)) {
@@ -1354,20 +1397,7 @@ const useAppStore = create((set, get) => ({
       if (!bookingId) return;
 
       set((s) => ({
-        activeBookings: s.activeBookings.map((b) =>
-          b._id?.toString() === bookingId?.toString()
-            ? { ...b, status: 'awaiting_customer_confirmation' }
-            : b
-        ),
-        labourBookings: s.labourBookings.map((b) =>
-          b._id?.toString() === bookingId?.toString()
-            ? { ...b, status: 'awaiting_customer_confirmation' }
-            : b
-        ),
-        activeBooking:
-          s.activeBooking?._id?.toString() === bookingId?.toString()
-            ? { ...s.activeBooking, status: 'awaiting_customer_confirmation' }
-            : s.activeBooking,
+        ...updateBookingInCollections(s, bookingId, 'awaiting_customer_confirmation'),
         // Manual bookings never triggered the "Work Completed — Confirm to
         // release payment" popup because nothing set this field for them —
         // only the autobook path did. Reuse the same field/shape so the
@@ -1380,6 +1410,7 @@ const useAppStore = create((set, get) => ({
         get().fetchActiveBooking(bookingId);
       }
     });
+
 
     socket.on('autobook_worker_accepted', (data) => {
       if (!isOwnBookingPopupEvent(get, data)) return;

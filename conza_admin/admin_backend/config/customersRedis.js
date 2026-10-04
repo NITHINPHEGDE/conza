@@ -65,4 +65,28 @@ const bustPricingConfigCache = async (category) => {
   }
 }
 
-module.exports = { getCustomersRedis, bustCustomerSessionCache, bustPricingConfigCache }
+/**
+ * Delete the seller session cache for a vendor so that the vendor backend
+ * picks up status changes (e.g. suspended, verified) on the very next request
+ * instead of waiting up to 60 s for the cache TTL to expire.
+ *
+ * @param {string} sellerId — Mongo ObjectId string
+ */
+const bustSellerSessionCache = async (sellerId) => {
+  try {
+    const redis = getCustomersRedis()
+    if (!redis) return
+    await redis.del(`seller:session:${sellerId}`)
+  } catch (_) {
+    // best-effort — never throw
+  }
+}
+
+module.exports = {
+  getCustomersRedis,
+  bustCustomerSessionCache,
+  bustPricingConfigCache,
+  bustSellerSessionCache,
+}
+
+

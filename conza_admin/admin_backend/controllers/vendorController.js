@@ -3,6 +3,7 @@ const Order = require('../models/Order')
 const Review = require('../models/Review')
 const { sendSuccess, sendPaginated } = require('../utils/response')
 const { createError } = require('../utils/error')
+const { bustSellerSessionCache } = require('../config/customersRedis')
 
 exports.getVendors = async (req, res, next) => {
   try {
@@ -60,6 +61,10 @@ exports.updateVendorStatus = async (req, res, next) => {
     const { status } = req.body
     const vendor = await Vendor.findByIdAndUpdate(req.params.id, { status }, { new: true, runValidators: true })
     if (!vendor) return next(createError(404, 'Vendor not found.'))
+
+    // Bust vendor session cache immediately so status change takes effect on next request
+    await bustSellerSessionCache(req.params.id)
+
     req.auditTarget = `Vendor #${req.params.id} - ${vendor.name}`
     req.auditDetails = `Status changed to ${status}`
     sendSuccess(res, 200, 'Vendor status updated', { vendor })
@@ -80,6 +85,10 @@ exports.verifyVendor = async (req, res, next) => {
     }
 
     await vendor.save()
+
+    // Bust vendor session cache immediately
+    await bustSellerSessionCache(req.params.id)
+
     req.auditTarget = `Vendor #${req.params.id} - ${vendor.name}`
     req.auditDetails = `Verification set to ${vendor.isVerified}`
     sendSuccess(res, 200, 'Vendor verification updated', { vendor })
@@ -130,6 +139,9 @@ exports.deleteVendor = async (req, res, next) => {
     const vendor = await Vendor.findByIdAndDelete(req.params.id)
     if (!vendor) return next(createError(404, 'Vendor not found.'))
 
+    // Bust vendor session cache immediately
+    await bustSellerSessionCache(req.params.id)
+
     req.auditTarget = `Vendor #${req.params.id} - ${vendor.name}`
     req.auditDetails = `Vendor account deleted`
 
@@ -137,4 +149,4 @@ exports.deleteVendor = async (req, res, next) => {
   } catch (err) {
     next(err)
   }
-}
+}

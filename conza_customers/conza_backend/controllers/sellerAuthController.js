@@ -79,19 +79,21 @@ const login = async (req, res) => {
   }
 };
 
+const { invalidateSellerCache, revokeSellerToken } = require('../middleware/sellerAuthMiddleware');
+
 // GET /api/seller/auth/me
 const getMe = async (req, res) => {
   try {
+    const seller = req.seller;
     const Product     = require('../models/Product');
     const SellerOrder = require('../models/SellerOrder');
 
-    const [seller, totalProducts, totalOrders, pendingOrders, revenueAgg] = await Promise.all([
-      Seller.findById(req.seller._id).select('-password'),
-      Product.countDocuments({ seller: req.seller._id }),
-      SellerOrder.countDocuments({ seller: req.seller._id }),
-      SellerOrder.countDocuments({ seller: req.seller._id, status: 'new' }),
+    const [totalProducts, totalOrders, pendingOrders, revenueAgg] = await Promise.all([
+      Product.countDocuments({ seller: seller._id }),
+      SellerOrder.countDocuments({ seller: seller._id }),
+      SellerOrder.countDocuments({ seller: seller._id, status: 'new' }),
       SellerOrder.aggregate([
-        { $match: { seller: req.seller._id, status: { $in: ['delivered', 'returned'] } } },
+        { $match: { seller: seller._id, status: { $in: ['delivered', 'returned'] } } },
         { $group: { _id: null, total: { $sum: '$total' } } },
       ]),
     ]);
@@ -116,6 +118,7 @@ const updateProfile = async (req, res) => {
       { name, email, shopName, address, city, pincode, sellerType, gstNumber, licenseNo },
       { new: true, runValidators: true }
     ).select('-password');
+    await invalidateSellerCache(req.seller._id);
     res.json({ success: true, seller: sellerPublic(seller) });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -127,10 +130,27 @@ const savePushToken = async (req, res) => {
   try {
     const { pushToken } = req.body;
     await Seller.findByIdAndUpdate(req.seller._id, { pushToken });
+    await invalidateSellerCache(req.seller._id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-module.exports = { register, login, getMe, updateProfile, savePushToken };
+// POST /api/seller/auth/logout
+const logout = async (req, res) => {
+  try {
+    let token;
+    if (req.headers.authorization?.startsWith('Bearer')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+    if (token) {
+      await revokeSellerToken(token);
+    }
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { register, login, getMe, updateProfile, savePushToken, logout };
