@@ -118,38 +118,49 @@ exports.debitWallet = async (req, res, next) => {
     const existingWallet = await Wallet.findById(req.params.id)
 
     if (existingWallet) {
-      if (existingWallet.balance < amount) return next(createError(400, 'Insufficient wallet balance.'))
-      existingWallet.balance -= amount
-      existingWallet.totalDebit += amount
-      existingWallet.transactions.push({ type: 'debit', amount, description: description || 'Admin debit' })
-      await existingWallet.save()
-
-      if (existingWallet.ownerType === 'customer') {
-        await Customer.findByIdAndUpdate(existingWallet.ownerId, { $inc: { walletBalance: -amount } })
+      const updatedWallet = await Wallet.findOneAndUpdate(
+        { _id: req.params.id, balance: { $gte: amount } },
+        {
+          $inc: { balance: -amount, totalDebit: amount },
+          $push: { transactions: { type: 'debit', amount, description: description || 'Admin debit' } }
+        },
+        { new: true }
+      )
+      if (!updatedWallet) {
+        return next(createError(400, 'Insufficient wallet balance.'))
       }
 
-      req.auditTarget = `Wallet - ${existingWallet.ownerName}`
+      if (updatedWallet.ownerType === 'customer') {
+        await Customer.findByIdAndUpdate(updatedWallet.ownerId, { $inc: { walletBalance: -amount } })
+      }
+
+      req.auditTarget = `Wallet - ${updatedWallet.ownerName}`
       req.auditDetails = `Debited ₹${amount}: ${description}`
-      return sendSuccess(res, 200, 'Wallet debited', { wallet: existingWallet })
+      return sendSuccess(res, 200, 'Wallet debited', { wallet: updatedWallet })
     }
 
     // No Wallet doc → treat id as a Customer _id directly
-    const customer = await Customer.findById(req.params.id).select('fullName phone walletBalance')
-    if (!customer) return next(createError(404, 'Customer not found.'))
-    if ((customer.walletBalance ?? 0) < amount) return next(createError(400, 'Insufficient wallet balance.'))
+    const updatedCustomer = await Customer.findOneAndUpdate(
+      { _id: req.params.id, walletBalance: { $gte: amount } },
+      { $inc: { walletBalance: -amount } },
+      { new: true }
+    ).select('fullName phone walletBalance')
 
-    customer.walletBalance -= amount
-    await Customer.findByIdAndUpdate(req.params.id, { $inc: { walletBalance: -amount } })
+    if (!updatedCustomer) {
+      const customerExists = await Customer.exists({ _id: req.params.id })
+      if (!customerExists) return next(createError(404, 'Customer not found.'))
+      return next(createError(400, 'Insufficient wallet balance.'))
+    }
 
-    req.auditTarget = `Customer Wallet - ${customer.fullName}`
+    req.auditTarget = `Customer Wallet - ${updatedCustomer.fullName}`
     req.auditDetails = `Debited ₹${amount}: ${description}`
     sendSuccess(res, 200, 'Wallet debited', {
       wallet: {
-        _id: customer._id,
-        ownerId: customer._id,
-        ownerName: customer.fullName,
+        _id: updatedCustomer._id,
+        ownerId: updatedCustomer._id,
+        ownerName: updatedCustomer.fullName,
         ownerType: 'customer',
-        balance: customer.walletBalance - amount,
+        balance: updatedCustomer.walletBalance,
       },
     })
   } catch (err) {

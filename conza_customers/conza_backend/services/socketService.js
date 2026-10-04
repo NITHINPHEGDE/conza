@@ -1,4 +1,5 @@
 // conza_backend/services/socketService.js
+const crypto                      = require('crypto');
 const { Server }                  = require('socket.io');
 const { createAdapter }           = require('@socket.io/redis-adapter');
 const mongoose                    = require('mongoose');
@@ -401,12 +402,41 @@ const initSocket = (server) => {
   return io;
 };
 
+const INSTANCE_ID = crypto.randomUUID();
+const LEADER_KEY = 'conza:leader:changestream';
+const LEADER_TTL_MS = 30000;
+const ELECTION_INTERVAL_MS = 10000;
+
+let isLeader = false;
+let dbReady = false;
+let electionIntervalTimer = null;
+let activeStreams = [];
+
 const watchChanges = () => {
   const db = mongoose.connection;
 
+  const stopWatching = async () => {
+    if (activeStreams.length > 0) {
+      logger.info({ instanceId: INSTANCE_ID }, 'Stopping MongoDB change streams on this instance');
+      const streamsToClose = [...activeStreams];
+      activeStreams = [];
+      for (const stream of streamsToClose) {
+        try {
+          await stream.close();
+        } catch (err) {
+          logger.debug({ err: err.message }, 'Error closing change stream');
+        }
+      }
+    }
+  };
+
   const startWatching = () => {
-    logger.info('Watching MongoDB collections...');
+    if (!isLeader || !dbReady) return;
+    logger.info({ instanceId: INSTANCE_ID }, 'Watching MongoDB collections (leader instance)...');
     try {
+      // Close any existing active streams before initializing new ones
+      stopWatching();
+
       const workerStream = db.collection('workers').watch([], { fullDocument: 'updateLookup' });
       workerStream.on('change', (c) => {
         io.to('workers_watch_room').emit('worker_updated', {
@@ -415,7 +445,9 @@ const watchChanges = () => {
           fullDocument:  sanitizeWorkerForWatch(c.fullDocument),
         });
       });
-      workerStream.on('error', () => setTimeout(startWatching, 5000));
+      workerStream.on('error', () => {
+        if (isLeader) setTimeout(startWatching, 5000);
+      });
 
       const bookingStream = db.collection('bookings').watch([], { fullDocument: 'updateLookup' });
       bookingStream.on('change', (c) => {
@@ -563,7 +595,9 @@ const watchChanges = () => {
           isWorkCompletion: status === 'awaiting_customer_confirmation' && !doc?.isAutobook,
         });
       });
-      bookingStream.on('error', () => setTimeout(startWatching, 5000));
+      bookingStream.on('error', () => {
+        if (isLeader) setTimeout(startWatching, 5000);
+      });
 
       const sellerOrderStream = db.collection('sellerorders').watch([], { fullDocument: 'updateLookup' });
       sellerOrderStream.on('change', (c) => {
@@ -580,7 +614,9 @@ const watchChanges = () => {
           status:  doc.status,
         });
       });
-      sellerOrderStream.on('error', () => setTimeout(startWatching, 5000));
+      sellerOrderStream.on('error', () => {
+        if (isLeader) setTimeout(startWatching, 5000);
+      });
 
       const productStream = db.collection('products').watch([], { fullDocument: 'updateLookup' });
       productStream.on('change', (c) => {
@@ -589,7 +625,11 @@ const watchChanges = () => {
           productId:     c.documentKey._id.toString(),
         });
       });
-      productStream.on('error', () => setTimeout(startWatching, 5000));
+      productStream.on('error', () => {
+        if (isLeader) setTimeout(startWatching, 5000);
+      });
+
+      activeStreams = [workerStream, bookingStream, sellerOrderStream, productStream];
 
     } catch (err) {
       logger.error({ err }, 'Change streams failed — run MongoDB as replica set or use Atlas');
@@ -597,8 +637,86 @@ const watchChanges = () => {
     }
   };
 
-  if (db.readyState === 1) startWatching();
-  else db.once('open', startWatching);
+  const renewScript = `
+    if redis.call("get", KEYS[1]) == ARGV[1] then
+      return redis.call("pexpire", KEYS[1], ARGV[2])
+    else
+      return 0
+    end
+  `;
+
+  const runElectionCycle = async () => {
+    let redis;
+    try {
+      redis = getRedis();
+      if (!redis || redis.status === 'end') throw new Error('Redis not ready');
+    } catch (err) {
+      // Redis is not configured or offline — fall back to standalone mode (run streams locally)
+      if (!isLeader) {
+        logger.warn('Redis unavailable for leader election — starting change streams in standalone mode');
+        isLeader = true;
+        if (dbReady) startWatching();
+      }
+      return;
+    }
+
+    try {
+      if (isLeader) {
+        const renewed = await redis.eval(renewScript, 1, LEADER_KEY, INSTANCE_ID, LEADER_TTL_MS);
+        if (renewed !== 1) {
+          logger.warn({ instanceId: INSTANCE_ID }, 'Change-stream leadership lease expired or acquired by another instance. Stepping down.');
+          isLeader = false;
+          await stopWatching();
+        }
+      } else {
+        const acquired = await redis.set(LEADER_KEY, INSTANCE_ID, 'PX', LEADER_TTL_MS, 'NX');
+        if (acquired === 'OK') {
+          logger.info({ instanceId: INSTANCE_ID }, 'Acquired change-stream leadership. Starting watchers.');
+          isLeader = true;
+          if (dbReady) startWatching();
+        }
+      }
+    } catch (err) {
+      logger.warn({ err: err.message }, 'Change-stream leader election cycle error');
+    }
+  };
+
+  const onDbReady = () => {
+    dbReady = true;
+    if (isLeader) {
+      startWatching();
+    }
+  };
+
+  if (db.readyState === 1) onDbReady();
+  else db.once('open', onDbReady);
+
+  runElectionCycle();
+  if (!electionIntervalTimer) {
+    electionIntervalTimer = setInterval(runElectionCycle, ELECTION_INTERVAL_MS);
+    if (electionIntervalTimer.unref) electionIntervalTimer.unref();
+  }
+
+  const releaseLeadership = async () => {
+    if (electionIntervalTimer) clearInterval(electionIntervalTimer);
+    await stopWatching();
+    if (isLeader) {
+      try {
+        const redis = getRedis();
+        const releaseScript = `
+          if redis.call("get", KEYS[1]) == ARGV[1] then
+            return redis.call("del", KEYS[1])
+          else
+            return 0
+          end
+        `;
+        await redis.eval(releaseScript, 1, LEADER_KEY, INSTANCE_ID);
+      } catch (_) {}
+    }
+  };
+
+  process.once('SIGTERM', releaseLeadership);
+  process.once('SIGINT', releaseLeadership);
 };
 
 const getIO = () => {

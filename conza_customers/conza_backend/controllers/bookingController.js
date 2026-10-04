@@ -23,6 +23,7 @@ const Worker           = require('../models/Worker');
 const ServiceCategory  = require('../models/ServiceCategory');
 const Review           = require('../models/Review');
 const { getLabourPricingConfig, getLabourPricingConfigFresh, computeLabourBill, computeLabourScenarioEstimates, billNeedsRepricing } = require('../utils/pricingEngine');
+const { debitWallet, creditWallet, refundWallet } = require('../services/walletService');
 
 // Category names must match tolerantly (case/whitespace) — mirrors the
 // matcher already used by workerController's getNearbyWorkers.
@@ -563,53 +564,84 @@ const createBooking = async (req, res) => {
       );
     } catch (lockErr) {
       logger.warn({ err: lockErr }, 'Could not acquire lock, proceeding without (Redis may be down)');
+      // NOTE: Redis lock is an optional concurrency optimisation, NOT a
+      // financial safety mechanism. Correctness is guaranteed by the
+      // MongoDB transaction + atomic $gte wallet debit below.
     }
 
+    // ── Atomic wallet deduction + booking creation (single transaction) ───
+    // Labour bookings are paid AFTER the work is completed (see payBooking),
+    // so no wallet is touched when the booking request is sent.
+    //
+    // For wallet-funded non-labour bookings:
+    //  • Both the wallet debit and the booking document are written inside
+    //    a single MongoDB multi-document transaction.
+    //  • The debit uses walletService.debitWallet which does a SINGLE atomic
+    //    findOneAndUpdate({ walletBalance: { $gte: amount } }) — the check and
+    //    decrement are one indivisible operation, eliminating the TOCTOU race.
+    //  • A WalletTransaction ledger entry is created inside the same session,
+    //    so if anything fails the entire transaction rolls back and the customer
+    //    is never charged without a corresponding booking.
+    const txSession = await mongoose.startSession();
+    txSession.startTransaction();
     try {
-      // Labour bookings are paid AFTER the work is completed (see payBooking),
-      // so nothing is deducted from the wallet when the request is sent.
       if (bookingType !== 'labour' && (paymentMethod === 'wallet') && computedTotal > 0) {
-        const User = require('../models/User');
-        const freshUser = await User.findById(req.user._id).select('walletBalance');
-        if (!freshUser) throw new Error('User not found');
-        if ((freshUser.walletBalance || 0) < computedTotal) {
-          return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
-        }
-        await User.findByIdAndUpdate(req.user._id, { $inc: { walletBalance: -computedTotal } });
+        await debitWallet({
+          userId:        req.user._id,
+          amount:        computedTotal,
+          referenceType: 'Booking',   // referenceId set after booking is created
+          referenceId:   null,        // will be patched post-commit via a separate update
+          description:   `Payment for ${bookingType} booking`,
+          idempotencyKey: req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || null,
+          metadata:      { bookingType, city },
+          session:       txSession,
+        });
       }
 
-      booking = await Booking.create({
-        user:           req.user._id,
-        bookingType,
-        workers:        workerIds       || [],
-        workerSnapshot: workerSnapshot  || [],
-        category:       category        || '',
-        items:          items           || [],
-        houseNumber:    houseNumber     || '',
-        houseName:      houseName       || '',
-        street:         street          || '',
-        address:        address || street || '',
-        area:           area            || '',
-        city,
-        district:       district        || '',
-        state:          state           || '',
-        pincode,
-        latitude:       latitude        || null,
-        longitude:      longitude       || null,
-        subtotal:       computedSubtotal,
-        platformFee:    computedPlatformFee,
-        total:          computedTotal,
-        billing:        billing         || undefined,
-        paymentMethod:  bookingType === 'labour' ? 'pending' : (paymentMethod || 'cod'),
-        scheduledDate:    scheduledDate    || null,
-        scheduledEndDate: scheduledEndDate || null,
-        scheduledDates:   scheduledDates   || [],
-        totalDays:        totalDays        || 1,
-        isImmediate:      isImmediate !== undefined ? isImmediate : true,
-        notes:          notes           || '',
-        description:    description     || '',
-      });
+      booking = await Booking.create(
+        [
+          {
+            user:           req.user._id,
+            bookingType,
+            workers:        workerIds       || [],
+            workerSnapshot: workerSnapshot  || [],
+            category:       category        || '',
+            items:          items           || [],
+            houseNumber:    houseNumber     || '',
+            houseName:      houseName       || '',
+            street:         street          || '',
+            address:        address || street || '',
+            area:           area            || '',
+            city,
+            district:       district        || '',
+            state:          state           || '',
+            pincode,
+            latitude:       latitude        || null,
+            longitude:      longitude       || null,
+            subtotal:       computedSubtotal,
+            platformFee:    computedPlatformFee,
+            total:          computedTotal,
+            billing:        billing         || undefined,
+            paymentMethod:  bookingType === 'labour' ? 'pending' : (paymentMethod || 'cod'),
+            scheduledDate:    scheduledDate    || null,
+            scheduledEndDate: scheduledEndDate || null,
+            scheduledDates:   scheduledDates   || [],
+            totalDays:        totalDays        || 1,
+            isImmediate:      isImmediate !== undefined ? isImmediate : true,
+            notes:          notes           || '',
+            description:    description     || '',
+          },
+        ],
+        { session: txSession }
+      );
+      booking = booking[0]; // create with session returns array
+
+      await txSession.commitTransaction();
+    } catch (txErr) {
+      await txSession.abortTransaction();
+      throw txErr;
     } finally {
+      txSession.endSession();
       await Promise.allSettled(locks.map((lock) => lock.release()));
     }
 
@@ -1694,54 +1726,78 @@ const payBooking = async (req, res) => {
         : res.status(400).json({ success: false, message: 'Payment is available only after the work is completed.' });
     }
 
-    const amount = state.payableAmount;
-    let walletBalanceAfter = null;
-
-    // ── Wallet: atomic debit ────────────────────────────────────────────
-    if (paymentMethod === 'wallet') {
-      const User = require('../models/User');
-      const debited = await User.findOneAndUpdate(
-        { _id: req.user._id, walletBalance: { $gte: amount } },
-        { $inc: { walletBalance: -amount } },
-        { new: true }
-      ).select('walletBalance').lean();
-      if (!debited) {
-        await release();
-        claimed = false;
-        return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
+    // ── Wallet debit + booking mark-paid in one transaction (P1 fix) ─────
+    // Both the wallet deduction and the booking paymentStatus update are
+    // written inside a single MongoDB transaction. If the process dies
+    // between the two writes, the transaction rolls back automatically —
+    // the customer is never charged without a corresponding paid booking.
+    //
+    // The legacy compensating-refund catch block is retained as a last-resort
+    // safety net for edge cases where the transaction itself partially commits
+    // due to a driver-level issue, but normal failures roll back cleanly.
+    const txSession = await mongoose.startSession();
+    txSession.startTransaction();
+    let txCommitted = false;
+    try {
+      if (paymentMethod === 'wallet') {
+        const User = require('../models/User');
+        const { ledger, balanceAfter } = await debitWallet({
+          userId:        req.user._id,
+          amount,
+          referenceType: 'Booking',
+          referenceId:   bookingId,
+          description:   'Labour booking payment',
+          session:       txSession,
+        });
+        walletDebited        = amount;
+        walletBalanceAfter   = balanceAfter;
+        void ledger; // already persisted inside walletService
       }
-      walletDebited = amount;
-      walletBalanceAfter = debited.walletBalance;
-    }
 
-    // ── Mark paid ───────────────────────────────────────────────────────
-    const now = new Date();
-    if (perWorker) {
-      const openWorkerIds = (before.workerStatuses || [])
-        .filter((w) => w.status === 'completed' && Number(w.total) > 0 && !isSettledUnit(w))
-        .map((w) => w.worker);
-      await Booking.updateOne(
-        { _id: bookingId },
-        {
-          $set: {
-            paymentStatus: 'paid',
-            paymentMethod,
-            paidAt: now,
-            'workerStatuses.$[e].paymentStatus': 'paid',
-            'workerStatuses.$[e].paymentMethod': paymentMethod,
-            'workerStatuses.$[e].paidAt': now,
+      // ── Mark paid (inside the same transaction) ──────────────────────────
+      const now = new Date();
+      if (perWorker) {
+        const openWorkerIds = (before.workerStatuses || [])
+          .filter((w) => w.status === 'completed' && Number(w.total) > 0 && !isSettledUnit(w))
+          .map((w) => w.worker);
+        await Booking.updateOne(
+          { _id: bookingId },
+          {
+            $set: {
+              paymentStatus: 'paid',
+              paymentMethod,
+              paidAt: now,
+              'workerStatuses.$[e].paymentStatus': 'paid',
+              'workerStatuses.$[e].paymentMethod': paymentMethod,
+              'workerStatuses.$[e].paidAt': now,
+            },
+            $inc: { paidAmount: amount },
           },
-          $inc: { paidAmount: amount },
-        },
-        { arrayFilters: [{ 'e.worker': { $in: openWorkerIds }, 'e.status': 'completed' }] }
-      );
-    } else {
-      await Booking.updateOne(
-        { _id: bookingId },
-        { $set: { paymentStatus: 'paid', paymentMethod, paidAt: now, paidAmount: amount } }
-      );
+          {
+            arrayFilters: [{ 'e.worker': { $in: openWorkerIds }, 'e.status': 'completed' }],
+            session: txSession,
+          }
+        );
+      } else {
+        await Booking.updateOne(
+          { _id: bookingId },
+          { $set: { paymentStatus: 'paid', paymentMethod, paidAt: now, paidAmount: amount } },
+          { session: txSession }
+        );
+      }
+
+      await txSession.commitTransaction();
+      txCommitted = true;
+      finalized = true;
+    } catch (txErr) {
+      await txSession.abortTransaction().catch(() => {});
+      // Transaction rolled back — wallet and booking are consistent.
+      // If wallet debit happened inside the tx it was rolled back too.
+      walletDebited = 0;
+      throw txErr;
+    } finally {
+      txSession.endSession().catch(() => {});
     }
-    finalized = true;
 
     // ── Caches + realtime (best effort — payment is already recorded) ──
     const workerIds = (before.workers || []).map((w) => w.toString());
@@ -1767,7 +1823,7 @@ const payBooking = async (req, res) => {
     return res.json({
       success: true,
       message: 'Payment successful',
-      payment: { paid: true, amount, paymentMethod, paidAt: now },
+      payment: { paid: true, amount, paymentMethod, paidAt: new Date() },
       walletBalance: walletBalanceAfter,
     });
   } catch (err) {
