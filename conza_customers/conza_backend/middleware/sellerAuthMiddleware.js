@@ -1,5 +1,5 @@
 // conza_backend/middleware/sellerAuthMiddleware.js
-const jwt          = require('jsonwebtoken');
+const { verifyToken } = require('../utils/jwt');
 const Seller       = require('../models/Seller');
 const { getRedis } = require('../config/redis');
 
@@ -13,7 +13,7 @@ const protectSeller = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = verifyToken(token);
     if (decoded.role !== 'seller') {
       return res.status(403).json({ success: false, message: 'Access denied — sellers only' });
     }

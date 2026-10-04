@@ -5,7 +5,8 @@ const mongoose                    = require('mongoose');
 const { getRedis, getSubscriber } = require('../config/redis');
 const logger                      = require('../utils/logger');
 const Sentry                      = require('@sentry/node');
-const jwt                         = require('jsonwebtoken');
+const config                      = require('../config/env');
+const { verifyToken }             = require('../utils/jwt');
 const User                        = require('../models/User');
 const Seller                      = require('../models/Seller');
 const Worker                      = require('../models/Worker');
@@ -120,12 +121,17 @@ const initSocket = (server) => {
       const token = rawToken.trim();
       let decoded;
       try {
-        decoded = jwt.verify(token, process.env.JWT_SECRET || 'conza_jwt_secret_fallback_2026');
+        decoded = verifyToken(token);
       } catch (err) {
-        // Try fallback for BP worker secret if cross-connecting
-        try {
-          decoded = jwt.verify(token, process.env.BP_JWT_SECRET || 'conza_super_secret_jwt_key_2026');
-        } catch (_) {
+        // If BP secret configured, allow worker sockets to connect
+        if (config.jwt.bpSecret) {
+          try {
+            decoded = verifyToken(token, config.jwt.bpSecret);
+          } catch (_) {
+            logger.warn({ err: err.message }, 'Socket authentication failed: invalid or expired token');
+            return next(new Error('Authentication failed'));
+          }
+        } else {
           logger.warn({ err: err.message }, 'Socket authentication failed: invalid or expired token');
           return next(new Error('Authentication failed'));
         }

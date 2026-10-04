@@ -34,17 +34,17 @@ const {
 // ── Configuration from .env.test ─────────────────────────────────────────────
 const cfg = {
   customerUrl:    process.env.CUSTOMER_BACKEND_URL || 'http://localhost:5000',
-  customerSecret: process.env.CUSTOMER_JWT_SECRET  || 'conza_jwt_secret_fallback_2026',
+  customerSecret: process.env.CUSTOMER_JWT_SECRET,
   customerAId:    process.env.CUSTOMER_A_ID,
   customerBId:    process.env.CUSTOMER_B_ID,
 
   bpUrl:          process.env.BP_BACKEND_URL  || 'http://localhost:5001',
-  bpSecret:       process.env.BP_JWT_SECRET   || 'conza_bp_jwt_secret_fallback_2026',
+  bpSecret:       process.env.BP_JWT_SECRET,
   workerAId:      process.env.WORKER_A_ID,
   workerBId:      process.env.WORKER_B_ID,
 
   vendorUrl:      process.env.VENDOR_BACKEND_URL || 'http://localhost:5002',
-  vendorSecret:   process.env.VENDOR_JWT_SECRET  || 'conza_vendor_jwt_secret_fallback_2026',
+  vendorSecret:   process.env.VENDOR_JWT_SECRET,
   sellerAId:      process.env.SELLER_A_ID,
   sellerBId:      process.env.SELLER_B_ID,
 
@@ -102,6 +102,7 @@ const emitAndExpectError = async (socket, event, payload, ms = 3000) => {
   });
 };
 
+(async () => {
 // ────────────────────────────────────────────────────────────────────────────
 // TEST 1 — Customer A attempts join_customer with Customer B's ID
 // Expected: DENIED (socket_error emitted; room NOT joined)
@@ -418,4 +419,5 @@ await test('TEST 10: Reconnect after disconnect → re-authenticated & rooms rej
 });
 
 // ── Final summary ─────────────────────────────────────────────────────────────
-summary();
+await summary();
+})();

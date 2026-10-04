@@ -7,6 +7,7 @@ const morgan     = require('morgan');
 const http       = require('http');
 
 dotenv.config();
+const config = require('./config/env');
 
 const connectDB          = require('./config/db');
 const authRoutes         = require('./routes/authRoutes');
@@ -41,7 +42,7 @@ app.use(cors({
   credentials: true,
 }));
 
-if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
+if (config.nodeEnv !== 'production') app.use(morgan('dev'));
 app.use(express.json({ limit: '5mb' }));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -58,5 +59,5 @@ app.get('/api/health', (req, res) => res.json({ status: 'OK', timestamp: new Dat
 
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5001;
+const PORT = config.port;
 server.listen(PORT, () => console.log(`🚀 Seller backend running on port ${PORT}`));

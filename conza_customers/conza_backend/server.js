@@ -9,6 +9,7 @@ const morgan  = require('morgan');
 const Sentry  = require('@sentry/node');
 
 dotenv.config();
+const config = require('./config/env');
 
 const connectDB            = require('./config/db');
 const authRoutes           = require('./routes/authRoutes');
@@ -83,5 +84,5 @@ Sentry.setupExpressErrorHandler(app);
 
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = config.port;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

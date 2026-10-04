@@ -1,4 +1,4 @@
-const jwt          = require('jsonwebtoken');
+const { verifyToken, decodeToken } = require('../utils/jwt');
 const User         = require('../models/User');
 const { getRedis } = require('../config/redis');
 
@@ -14,7 +14,7 @@ const protect = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = verifyToken(token);
     const redis   = getRedis();
 
     // ── Blacklist check ────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ const protect = async (req, res, next) => {
 
 const revokeToken = async (token) => {
   try {
-    const decoded    = jwt.decode(token);
+    const decoded    = decodeToken(token);
     const ttlSeconds = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 86400;
     if (ttlSeconds > 0) {
       const redis = getRedis();

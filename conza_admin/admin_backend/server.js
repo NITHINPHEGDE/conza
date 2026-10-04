@@ -6,6 +6,7 @@ const morgan = require('morgan')
 const cookieParser = require('cookie-parser')
 const rateLimit = require('express-rate-limit')
 require('dotenv').config()
+const config = require('./config/env')
 
 require('./config/customersDb')
 require('./config/workersDb')

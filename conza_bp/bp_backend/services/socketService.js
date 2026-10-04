@@ -5,7 +5,8 @@ const mongoose                    = require('mongoose');
 const { getRedis, getSubscriber } = require('../config/redis');
 const logger                      = require('../utils/logger');
 const Sentry                      = require('@sentry/node');
-const jwt                         = require('jsonwebtoken');
+const config                      = require('../config/env');
+const { verifyToken }             = require('../utils/jwt');
 const Worker                      = require('../models/Worker');
 const Booking                     = require('../models/Booking');
 const User                        = require('../models/User');
@@ -110,12 +111,17 @@ const initSocket = (server) => {
       const token = rawToken.trim();
       let decoded;
       try {
-        decoded = jwt.verify(token, process.env.JWT_SECRET || 'conza_bp_jwt_secret_fallback_2026');
+        decoded = verifyToken(token);
       } catch (err) {
-        // Fallback for customer token secret if customer connects
-        try {
-          decoded = jwt.verify(token, process.env.CUSTOMER_JWT_SECRET || 'conza_super_secret_jwt_key_2024');
-        } catch (_) {
+        // Fallback for customer token secret if customer connects cross-service
+        if (config.jwt.customerSecret) {
+          try {
+            decoded = verifyToken(token, config.jwt.customerSecret);
+          } catch (_) {
+            logger.warn({ err: err.message }, 'BP Socket auth failed: invalid or expired token');
+            return next(new Error('Authentication failed'));
+          }
+        } else {
           logger.warn({ err: err.message }, 'BP Socket auth failed: invalid or expired token');
           return next(new Error('Authentication failed'));
         }

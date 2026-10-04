@@ -1,6 +1,7 @@
 require('./instrument.js');
 
 require('dotenv').config();
+const config = require('./config/env');
 
 const express   = require('express');
 const compression = require('compression');
@@ -72,9 +73,9 @@ const gracefulShutdown = async (signal) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 
-const PORT = process.env.PORT || 5000;
+const PORT = config.port;
 server.listen(PORT, () =>
-  console.log(`🚀 Conza BP backend running on port ${PORT} [${process.env.NODE_ENV}]`)
+  console.log(`🚀 Conza BP backend running on port ${PORT} [${config.nodeEnv}]`)
 );
 
 module.exports = app;

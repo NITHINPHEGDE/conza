@@ -1,4 +1,4 @@
-const jwt          = require('jsonwebtoken');
+const { verifyToken, decodeToken } = require('../utils/jwt');
 const Worker       = require('../models/Worker');
 const AppError     = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
@@ -15,7 +15,7 @@ const protect = asyncHandler(async (req, res, next) => {
   const token = auth.split(' ')[1];
   let decoded;
   try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET);
+    decoded = verifyToken(token);
   } catch {
     throw new AppError('Invalid or expired token. Please log in again.', 401);
   }
@@ -66,7 +66,7 @@ const requireActive = (req, res, next) => {
 
 const revokeToken = async (token) => {
   try {
-    const decoded    = jwt.decode(token);
+    const decoded    = decodeToken(token);
     const ttlSeconds = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 86400;
     if (ttlSeconds > 0) {
       const redis = getRedis();

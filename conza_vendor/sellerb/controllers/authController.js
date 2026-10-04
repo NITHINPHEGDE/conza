@@ -1,10 +1,8 @@
 // conzasb/controllers/authController.js
-const jwt    = require('jsonwebtoken');
+const { signToken } = require('../utils/jwt');
 const Seller = require('../models/Seller');
 
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'conza_vendor_jwt_secret_fallback_2026', { expiresIn: '30d' });
-};
+const generateToken = (id) => signToken({ id });
 
 const sellerPublic = (s) => ({
   _id:           s._id,

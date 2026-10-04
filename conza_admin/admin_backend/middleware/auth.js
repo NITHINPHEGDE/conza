@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken')
+const { verifyToken } = require('../utils/jwt')
 const Admin = require('../models/Admin')
 const Role = require('../models/Role')
 const { createError } = require('../utils/error')
@@ -17,7 +17,7 @@ const protect = async (req, res, next) => {
       return next(createError(401, 'Access denied. No token provided.'))
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    const decoded = verifyToken(token)
     const admin = await Admin.findById(decoded.id).select('+permissions')
 
     if (!admin) {

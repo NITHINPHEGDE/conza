@@ -1,7 +1,7 @@
 // conzasb/services/socketService.js
 const { Server } = require('socket.io');
 const mongoose   = require('mongoose');
-const jwt        = require('jsonwebtoken');
+const { verifyToken } = require('../utils/jwt');
 const Seller     = require('../models/Seller');
 
 // Minimal safe logger — replace with your structured logger if available.
@@ -37,7 +37,7 @@ const initSocket = (server) => {
       const token = rawToken.trim();
       let decoded;
       try {
-        decoded = jwt.verify(token, process.env.JWT_SECRET || 'conza_vendor_jwt_secret_fallback_2026');
+        decoded = verifyToken(token);
       } catch (err) {
         log.warn('Auth failed: invalid or expired token');
         return next(new Error('Authentication failed'));
