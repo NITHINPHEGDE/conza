@@ -1,10 +1,15 @@
 // conzacsb/controllers/sellerOrderController.js
+const mongoose    = require('mongoose');
 const SellerOrder = require('../models/SellerOrder');
 const Product     = require('../models/Product');
 const Seller      = require('../models/Seller');
 const { getIO }   = require('../services/socketService');
 const { withCache, invalidateCache } = require('../utils/cacheHelpers');
 const logger      = require('../utils/logger');
+const {
+  calculateMaterialOrderPricing,
+  calculateRentalOrderPricing,
+} = require('../services/orderPricingService');
 
 const sendSellerPush = async (pushToken, title, body, data = {}) => {
   if (!pushToken) return;
@@ -17,92 +22,230 @@ const sendSellerPush = async (pushToken, title, body, data = {}) => {
   } catch (_) {}
 };
 
+// ── CUSTOMER: POST /api/orders/seller/preview ─────────────────────────────
+// Exposes authoritative server pricing before final order submission
+const previewOrderPricing = async (req, res) => {
+  try {
+    const { sellerId, orderType, items, durationDays } = req.body;
+
+    if (!sellerId || !mongoose.Types.ObjectId.isValid(sellerId)) {
+      return res.status(400).json({ success: false, message: 'Invalid or missing sellerId' });
+    }
+    if (!['material', 'rental'].includes(orderType)) {
+      return res.status(400).json({ success: false, message: 'Invalid orderType: must be material or rental' });
+    }
+    if (!Array.isArray(items) || !items.length) {
+      return res.status(400).json({ success: false, message: 'Items array cannot be empty' });
+    }
+
+    const pricing = orderType === 'material'
+      ? await calculateMaterialOrderPricing(items, sellerId)
+      : await calculateRentalOrderPricing(items, sellerId, durationDays);
+
+    res.json({
+      success: true,
+      pricing: {
+        orderType,
+        items: pricing.snapshotItems,
+        subtotal: pricing.subtotal,
+        deliveryCharge: pricing.deliveryCharge,
+        depositAmount: pricing.depositAmount,
+        total: pricing.total,
+      },
+    });
+  } catch (err) {
+    logger.warn({ err: err.message }, 'previewOrderPricing failed');
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
 // ── CUSTOMER: POST /api/orders/seller ──────────────────────────────────────
 const placeOrder = async (req, res) => {
+  let session = null;
   try {
     const {
       sellerId, orderType, items,
       customerAddress, city, pincode, latitude, longitude,
       startDate, endDate, durationDays,
-      subtotal, deliveryCharge, total, depositAmount,
       paymentMethod, notes,
     } = req.body;
 
-    if (!sellerId || !orderType || !items?.length || !subtotal || !total) {
-      return res.status(400).json({ success: false, message: 'Missing required order fields' });
-    }
+    const idempotencyKey = (
+      req.headers['idempotency-key'] ||
+      req.headers['x-idempotency-key'] ||
+      req.body.idempotencyKey ||
+      null
+    );
 
     const user = req.user;
 
-    const mongoose = require('mongoose');
-    if (!mongoose.Types.ObjectId.isValid(sellerId)) {
-      return res.status(400).json({ success: false, message: `Invalid sellerId: ${sellerId}` });
-    }
+    // ── 1. Idempotency Check ────────────────────────────────────────────────
+    if (idempotencyKey) {
+      const existingOrder = await SellerOrder.findOne({
+        customer: user._id,
+        idempotencyKey,
+      }).populate('seller', 'pushToken shopName').lean();
 
-    for (const item of items) {
-      if (!item.productId || !mongoose.Types.ObjectId.isValid(item.productId)) {
-        return res.status(400).json({ success: false, message: `Invalid or missing productId: ${item.productId}` });
+      if (existingOrder) {
+        logger.info({ orderId: existingOrder._id, idempotencyKey }, 'Returning idempotent replayed order');
+        return res.status(200).json({
+          success: true,
+          order: existingOrder,
+          idempotentReplay: true,
+        });
       }
     }
 
-    const productIds = items.map((i) => i.productId);
-    const products   = await Product.find({ _id: { $in: productIds } }).lean();
-    const productMap = Object.fromEntries(products.map((p) => [p._id.toString(), p]));
-
-    const snapshotItems = [];
-    for (const item of items) {
-      const product = productMap[item.productId.toString()];
-      if (!product) throw new Error(`Product not found: ${item.productId}`);
-      if (orderType === 'material' && product.stock < item.qty) {
-        throw new Error(`Insufficient stock for ${product.title}`);
-      }
-      snapshotItems.push({
-        product:  product._id,
-        title:    product.title,
-        image:    product.images?.[0] || null,
-        price:    product.price,
-        unit:     product.unit,
-        qty:      item.qty,
-        days:     item.days || null,
-        subtotal: item.subtotal,
-      });
+    // ── 2. Basic Validation ─────────────────────────────────────────────────
+    if (!sellerId || !mongoose.Types.ObjectId.isValid(sellerId)) {
+      return res.status(400).json({ success: false, message: 'Invalid or missing sellerId' });
     }
+    if (!['material', 'rental'].includes(orderType)) {
+      return res.status(400).json({ success: false, message: 'Invalid orderType: must be material or rental' });
+    }
+    if (!Array.isArray(items) || !items.length) {
+      return res.status(400).json({ success: false, message: 'Items array cannot be empty' });
+    }
+
+    // ── 3. Start Multi-Document MongoDB Transaction ──────────────────────────
+    session = await mongoose.startSession();
+    session.startTransaction();
+
+    let pricing;
+    let parsedStart = null;
+    let parsedEnd = null;
+    let cleanDurationDays = null;
 
     if (orderType === 'material') {
-      await Promise.all(
-        items.map((item) =>
-          Product.findByIdAndUpdate(item.productId, { $inc: { stock: -item.qty, sold: item.qty } })
-        )
-      );
+      // 3A. Authoritative Server Pricing (ignores any client subtotal/total/fees)
+      pricing = await calculateMaterialOrderPricing(items, sellerId, session);
+
+      // 3B. Atomic Conditional Stock Deduction for Materials
+      for (const item of pricing.snapshotItems) {
+        const updatedProduct = await Product.findOneAndUpdate(
+          {
+            _id: item.product,
+            seller: sellerId,
+            stock: { $gte: item.qty },
+            isAvailable: true,
+            type: 'material',
+          },
+          {
+            $inc: { stock: -item.qty, sold: item.qty },
+          },
+          { session, new: true }
+        );
+
+        if (!updatedProduct) {
+          // Find product to give clear diagnostic message
+          const currentP = await Product.findById(item.product).session(session).lean();
+          const availStock = currentP ? currentP.stock : 0;
+          throw new Error(
+            `Insufficient stock for "${item.title}". Requested: ${item.qty}, Available: ${availStock}`
+          );
+        }
+      }
+    } else {
+      // 3C. Rental Order Flow
+      cleanDurationDays = Math.max(parseInt(durationDays, 10) || 1, 1);
+      parsedStart = startDate ? new Date(startDate) : new Date();
+      parsedEnd = endDate ? new Date(endDate) : new Date(parsedStart.getTime() + cleanDurationDays * 86400000);
+
+      if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime()) || parsedEnd < parsedStart) {
+        throw new Error('Invalid rental date range');
+      }
+
+      pricing = await calculateRentalOrderPricing(items, sellerId, cleanDurationDays, session);
+
+      // 3D. Rental Overlapping Date & Capacity Validation
+      for (const item of pricing.snapshotItems) {
+        const product = await Product.findOne({
+          _id: item.product,
+          seller: sellerId,
+          isAvailable: true,
+          type: 'rental',
+        }).session(session).lean();
+
+        if (!product) {
+          throw new Error(`Rental product "${item.title}" not found or unavailable`);
+        }
+
+        if (product.stock < item.qty) {
+          throw new Error(
+            `Insufficient total units for equipment "${item.title}". Requested: ${item.qty}, Total owned: ${product.stock}`
+          );
+        }
+
+        // Query overlapping active reservations
+        const overlappingOrders = await SellerOrder.find({
+          'items.product': item.product,
+          orderType: 'rental',
+          status: { $in: ['new', 'accepted', 'active', 'overdue'] },
+          startDate: { $lte: parsedEnd },
+          endDate:   { $gte: parsedStart },
+        }).session(session).lean();
+
+        const bookedUnits = overlappingOrders.reduce((sum, ord) => {
+          const matchingItem = (ord.items || []).find(
+            (it) => it.product?.toString() === item.product.toString()
+          );
+          return sum + (matchingItem?.qty || 0);
+        }, 0);
+
+        const availableUnits = product.stock - bookedUnits;
+        if (availableUnits < item.qty) {
+          throw new Error(
+            `Equipment "${item.title}" is fully booked for selected dates. Available: ${Math.max(0, availableUnits)}, Requested: ${item.qty}`
+          );
+        }
+      }
     }
 
-    const order = await SellerOrder.create({
-      seller:          sellerId,
-      customer:        user._id,
-      orderType,
-      items:           snapshotItems,
-      customerName:    user.fullName,
-      customerPhone:   user.phone,
-      customerAddress: customerAddress || '',
-      city:            city || '',
-      pincode:         pincode || '',
-      latitude:        latitude  || null,
-      longitude:       longitude || null,
-      startDate:       startDate  ? new Date(startDate)  : null,
-      endDate:         endDate    ? new Date(endDate)     : null,
-      durationDays:    durationDays || null,
-      subtotal,
-      deliveryCharge:  deliveryCharge || 0,
-      total,
-      depositAmount:   depositAmount  || 0,
-      paymentMethod:   paymentMethod  || 'cod',
-      notes:           notes || '',
-    });
+    // ── 4. Create Order with Immutable Financial Snapshot ────────────────────
+    const [order] = await SellerOrder.create(
+      [
+        {
+          seller:          sellerId,
+          customer:        user._id,
+          orderType,
+          items:           pricing.snapshotItems,
+          customerName:    user.fullName || '',
+          customerPhone:   user.phone || '',
+          customerAddress: customerAddress || '',
+          city:            city || '',
+          pincode:         pincode || '',
+          latitude:        latitude  || null,
+          longitude:       longitude || null,
+          startDate:       orderType === 'rental' ? parsedStart : null,
+          endDate:         orderType === 'rental' ? parsedEnd   : null,
+          durationDays:    orderType === 'rental' ? cleanDurationDays : null,
+          subtotal:        pricing.subtotal,
+          deliveryCharge:  pricing.deliveryCharge,
+          total:           pricing.total,
+          depositAmount:   pricing.depositAmount,
+          depositStatus:   pricing.depositAmount > 0 ? 'pending' : undefined,
+          paymentMethod:   paymentMethod || 'cod',
+          notes:           notes || '',
+          idempotencyKey,
+          stockRestored:   false,
+        },
+      ],
+      { session }
+    );
 
+    // ── 5. Commit Transaction ───────────────────────────────────────────────
+    await session.commitTransaction();
+    session.endSession();
+    session = null;
+
+    // ── 6. Post-Commit Actions: Cache Invalidation & Real-Time Events ─────────
     await order.populate('seller', 'pushToken shopName');
 
-    // Bust seller dashboard cache — new order changes KPIs
-    invalidateCache(`dashboard:seller:${sellerId}`).catch(() => {});
+    // Bust seller dashboard and product list caches
+    invalidateCache(
+      `dashboard:seller:${sellerId}`,
+      `products:seller:${sellerId}:*`
+    ).catch(() => {});
 
     try {
       const io = getIO();
@@ -110,25 +253,36 @@ const placeOrder = async (req, res) => {
         orderId: order._id,
         orderType,
         customerName: user.fullName,
-        total,
+        total: order.total,
       });
     } catch (_) {}
 
     sendSellerPush(
-      order.seller.pushToken,
+      order.seller?.pushToken,
       '🛒 New Order Received',
-      `${user.fullName} placed an order · ₹${total}`,
+      `${user.fullName} placed an order · ₹${order.total}`,
       { orderId: order._id.toString() }
     ).catch(() => {});
 
-    res.status(201).json({ success: true, order });
+    return res.status(201).json({ success: true, order });
   } catch (err) {
-    logger.error({ err }, 'placeOrder failed');
+    if (session && session.inTransaction()) {
+      await session.abortTransaction().catch(() => {});
+    }
+    if (session) {
+      session.endSession().catch(() => {});
+    }
+
+    logger.error({ err: err.message }, 'placeOrder failed');
     const isClientError =
       err.name === 'ValidationError' ||
       err.name === 'CastError' ||
       err.message?.includes('not found') ||
-      err.message?.includes('Insufficient stock');
+      err.message?.includes('Insufficient stock') ||
+      err.message?.includes('fully booked') ||
+      err.message?.includes('Invalid') ||
+      err.message?.includes('Minimum');
+
     res.status(isClientError ? 400 : 500).json({ success: false, message: err.message });
   }
 };
@@ -170,24 +324,37 @@ const updateOrderStatus = async (req, res) => {
     const { status } = req.body;
     if (!status) return res.status(400).json({ success: false, message: 'status required' });
 
-    // needs .save() — no .lean()
     const order = await SellerOrder.findOne({ _id: req.params.id, seller: req.seller._id });
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
+    const prevStatus = order.status;
     order.status = status;
 
-    if (status === 'returned') {
-      for (const item of order.items) {
-        if (item.product) {
-          await Product.findByIdAndUpdate(item.product, { $inc: { stock: item.qty } });
+    // ── Stock Restoration on Cancellation or Return ─────────────────────────
+    // Prevent double-restoration using the atomic stockRestored guard flag
+    if ((status === 'returned' || status === 'cancelled') && !order.stockRestored) {
+      if (order.orderType === 'material') {
+        for (const item of order.items) {
+          if (item.product) {
+            await Product.findByIdAndUpdate(item.product, {
+              $inc: { stock: item.qty, sold: -item.qty },
+            });
+          }
         }
+      }
+      order.stockRestored = true;
+      if (status === 'returned') {
+        order.depositStatus = 'refunded';
       }
     }
 
     await order.save();
 
-    // Bust dashboard cache — status change affects KPIs and revenue
-    invalidateCache(`dashboard:seller:${req.seller._id}`).catch(() => {});
+    // Invalidate caches
+    invalidateCache(
+      `dashboard:seller:${req.seller._id}`,
+      `products:seller:${req.seller._id}:*`
+    ).catch(() => {});
 
     const io = getIO();
     const itemsSummary =
@@ -197,7 +364,7 @@ const updateOrderStatus = async (req, res) => {
           : `${order.items[0].title} +${order.items.length - 1} more`
         : '';
 
-    io.to(`seller_${req.seller._id}`).emit('order_status_updated', { orderId: order._id, status });
+    io.to(`seller_${req.seller._id}`).emit('order_status_updated', { orderId: order._id, status, prevStatus });
     io.to(`customer_${order.customer}`).emit('seller_order_status_changed', {
       orderId: order._id,
       status,
@@ -353,6 +520,12 @@ const getCustomerOrderById = async (req, res) => {
 };
 
 module.exports = {
-  placeOrder, getSellerOrders, getOrderById,
-  updateOrderStatus, getDashboard, getMyOrders, getCustomerOrderById,
+  previewOrderPricing,
+  placeOrder,
+  getSellerOrders,
+  getOrderById,
+  updateOrderStatus,
+  getDashboard,
+  getMyOrders,
+  getCustomerOrderById,
 };

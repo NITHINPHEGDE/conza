@@ -58,6 +58,9 @@ const sellerOrderSchema = new mongoose.Schema(
     },
 
     notes: { type: String, default: '' },
+
+    idempotencyKey: { type: String, default: null, sparse: true, index: true },
+    stockRestored:  { type: Boolean, default: false },
   },
   { timestamps: true }
 );

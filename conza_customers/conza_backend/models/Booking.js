@@ -149,7 +149,9 @@ const bookingSchema = new mongoose.Schema(
     issueReport: {
       comment: { type: String, default: '' },
       reportedAt: { type: Date, default: null }
-    }
+    },
+
+    idempotencyKey: { type: String, default: null, sparse: true, index: true },
   },
   { timestamps: true }
 );

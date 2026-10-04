@@ -2,6 +2,7 @@
 const express = require('express');
 const router  = express.Router();
 const {
+  previewOrderPricing,
   placeOrder, getSellerOrders, getOrderById,
   updateOrderStatus, getDashboard, getMyOrders, getCustomerOrderById,
 } = require('../controllers/sellerOrderController');
@@ -9,6 +10,7 @@ const { protectSeller } = require('../middleware/sellerAuthMiddleware');
 const { protect, checkSuspended } = require('../middleware/authMiddleware');
 
 // Customer
+router.post('/preview', protect, previewOrderPricing);
 router.post('/',       protect, checkSuspended, placeOrder);
 router.get('/my',      protect, getMyOrders);
 router.get('/:id',     protect, getCustomerOrderById);
