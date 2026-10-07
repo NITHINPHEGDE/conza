@@ -79,11 +79,10 @@ const getPublicProducts = async (req, res) => {
   try {
     const { type, search, category, page = 1, limit = 20 } = req.query;
 
-    // Only show products from vendors who haven't been suspended
-    const activeSellers = await Seller.find({ status: { $ne: 'suspended' } }).select('_id');
-    const activeSellerIds = activeSellers.map((s) => s._id);
-
-    const query = { isAvailable: true, stock: { $gt: 0 }, seller: { $in: activeSellerIds } };
+    // Only show products from verified sellers. isSellerVerified is
+    // denormalized from Seller.isVerified — eliminates the separate
+    // Seller collection query on every catalog page request.
+    const query = { isAvailable: true, stock: { $gt: 0 }, isSellerVerified: true };
     if (type)     query.type     = type;
     if (category) query.category = category;
     if (search)   query.$text    = { $search: search };
@@ -93,18 +92,21 @@ const getPublicProducts = async (req, res) => {
     const [products, total] = await Promise.all([
       Product.find(query)
         .populate('seller', 'name shopName phone city profileImage status isVerified')
-        .sort({ createdAt: -1 })
+        .sort({ createdAt: -1, _id: -1 })
         .skip(skip)
         .limit(Number(limit)),
       Product.countDocuments(query),
     ]);
 
+    const hasMore = (Number(page) * Number(limit)) < total;
     res.json({
       success: true,
       products,
       total,
       page:  Number(page),
       pages: Math.ceil(total / Number(limit)),
+      hasMore,
+      nextPage: hasMore ? Number(page) + 1 : null,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -184,6 +186,8 @@ const createProduct = async (req, res) => {
       hsnCode:       hsnCode       || '',
       lowStockAt:    Number(lowStockAt) || 5,
       images:        catalogueProduct ? images : (Array.isArray(images) ? images.slice(0, 5) : []),
+      // Inherit seller verification at creation time — never from client input
+      isSellerVerified: !!req.seller.isVerified,
     });
 
     // Bust the customer-facing catalog cache (conza_backend) so the new

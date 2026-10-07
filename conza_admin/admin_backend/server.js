@@ -5,7 +5,7 @@ const helmet = require('helmet')
 const morgan = require('morgan')
 const cookieParser = require('cookie-parser')
 const rateLimit = require('express-rate-limit')
-require('dotenv').config()
+require('dotenv').config({ path: require('path').join(__dirname, '.env') })
 const config = require('./config/env')
 
 require('./config/customersDb')

@@ -108,11 +108,11 @@ const MaterialCard = React.memo(({
     if (!inStock) return;
     const finalQty = Math.max(1, parseInt(localQty, 10) || 1);
     if (onAddToCart) {
-      onAddToCart({ id, name, seller, price, unit, distance, image, rating, inStock, quantity: finalQty });
+      onAddToCart({ id, name, seller, sellerId, price, unit, distance, image, rating, inStock, quantity: finalQty });
     }
     setCartAdded(true);
     setTimeout(() => setCartAdded(false), 1800);
-  }, [onAddToCart, id, name, seller, price, unit, distance, image, rating, inStock, localQty]);
+  }, [onAddToCart, id, name, seller, sellerId, price, unit, distance, image, rating, inStock, localQty]);
 
   return (
     <View style={styles.card}>

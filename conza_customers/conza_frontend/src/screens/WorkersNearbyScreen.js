@@ -419,9 +419,10 @@ const ProfileModal = React.memo(({ worker, onClose, onToggle, isSelected }) => {
 // ─── Main Screen Component ────────────────────────────────────────────────────
 const WorkersNearbyScreen = ({ route, navigation }) => {
   const category = route?.params?.category || 'Painter';
+  const categoryKey = (category || '').trim().toLowerCase();
 
   const allWorkers = useAppStore((s) => (category ? s.workersByCategory[category] : null) || EMPTY_ARRAY);
-  const labourLoading = useAppStore((s) => s.labourLoading);
+  const isCategoryLoading = useAppStore((s) => !!s.workersLoadingByCategory?.[categoryKey]);
   const labourError   = useAppStore((s) => s.labourError);
   const fetchWorkersByCategory = useAppStore((s) => s.fetchWorkersByCategory);
 
@@ -572,7 +573,7 @@ const WorkersNearbyScreen = ({ route, navigation }) => {
   ), []);
 
   if (!category) return <ErrorState message="No category selected" onRetry={() => navigation.goBack()} />;
-  if (labourLoading && !refreshing) return <WorkerListSkeleton />;
+  if (isCategoryLoading && !refreshing) return <WorkerListSkeleton />;
   if (labourError)   return <ErrorState message={labourError} onRetry={() => fetchWorkersByCategory(category)} />;
 
   return (

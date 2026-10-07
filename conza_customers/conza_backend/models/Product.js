@@ -30,8 +30,12 @@ const productSchema = new mongoose.Schema(
 
     images:       { type: [String], default: [] },
 
-    isAvailable:  { type: Boolean, default: true },
-    lowStockAt:   { type: Number, default: 5 },   // alert threshold
+    isAvailable:     { type: Boolean, default: true },
+    lowStockAt:      { type: Number, default: 5 },   // alert threshold
+
+    // Denormalized from Seller.isVerified — updated by admin verification and
+    // product creation. Eliminates the Seller.$in query on every catalog page.
+    isSellerVerified: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
@@ -39,8 +43,11 @@ const productSchema = new mongoose.Schema(
 // getMyProducts: seller + type filter + availability, sorted by createdAt
 productSchema.index({ seller: 1, type: 1, isAvailable: 1, createdAt: -1 });
 
-// getPublicProducts: type + category + availability (main catalog query)
+// getPublicProducts: type + category + availability (main catalog query, no seller lookup)
 productSchema.index({ type: 1, category: 1, isAvailable: 1, createdAt: -1 });
+
+// getPublicProducts with isSellerVerified: covers the denormalized catalog query
+productSchema.index({ isSellerVerified: 1, isAvailable: 1, type: 1, category: 1, createdAt: -1, _id: -1 });
 
 // low stock dashboard query: seller + stock <= lowStockAt
 productSchema.index({ seller: 1, stock: 1, lowStockAt: 1 });
@@ -50,6 +57,6 @@ productSchema.index({ seller: 1, type: 1 });
 productSchema.index({ type: 1, isAvailable: 1 });
 
 // full-text search
-productSchema.index({ title: 'text', description: 'text', brand: 'text', category: 'text' });
+productSchema.index({ title: 'text', description: 'text', brand: 'text' });
 
 module.exports = mongoose.model('Product', productSchema);

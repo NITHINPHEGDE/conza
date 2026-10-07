@@ -36,12 +36,17 @@ const productSchema = new mongoose.Schema(
     images:      { type: [String], default: [] },  // Cloudinary URLs
     isAvailable: { type: Boolean, default: true },
     lowStockAt:  { type: Number, default: 5 },
+
+    // Denormalized from Seller.isVerified — set on product creation and updated
+    // when admin changes seller verification. Eliminates per-request Seller query.
+    isSellerVerified: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
 productSchema.index({ seller: 1, type: 1 });
 productSchema.index({ type: 1, isAvailable: 1 });
+productSchema.index({ isSellerVerified: 1, isAvailable: 1, type: 1, category: 1, createdAt: -1, _id: -1 });
 productSchema.index({ title: 'text', description: 'text', brand: 'text' });
 
 module.exports = mongoose.model('Product', productSchema);

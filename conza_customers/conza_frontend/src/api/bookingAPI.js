@@ -69,6 +69,11 @@ export const bookingAPI = {
     return res.data;
   },
 
+  checkoutSellerOrders: async (data) => {
+    const res = await api.post('/orders/seller/checkout', data);
+    return res.data;
+  },
+
   getMySellerOrders: async () => {
     const res = await api.get('/orders/seller/my');
     return res.data;

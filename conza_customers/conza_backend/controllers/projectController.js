@@ -223,16 +223,89 @@ const getMyProjects = async (req, res, next) => {
   try {
     const projects = await Project.find({ user: req.user._id }).sort({ createdAt: -1 });
 
-    const result = [];
+    if (!projects.length) {
+      return res.json({ success: true, projects: [] });
+    }
+
+    // ── Batch-load all attachments across ALL projects in exactly 2 queries ──
+    const allBookingIds = [];
+    const allOrderIds   = [];
+    for (const p of projects) {
+      for (const a of p.attachments) {
+        if (a.refModel === 'Booking')     allBookingIds.push(a.refId);
+        else if (a.refModel === 'SellerOrder') allOrderIds.push(a.refId);
+      }
+    }
+
+    const [bookings, orders] = await Promise.all([
+      allBookingIds.length
+        ? Booking.find({ _id: { $in: allBookingIds } })
+            .select('category status total city createdAt')
+            .lean()
+        : [],
+      allOrderIds.length
+        ? SellerOrder.find({ _id: { $in: allOrderIds } })
+            .select('orderType items status total city createdAt')
+            .lean()
+        : [],
+    ]);
+
+    const bookingMap = new Map(bookings.map((b) => [b._id.toString(), b]));
+    const orderMap   = new Map(orders.map((o)   => [o._id.toString(), o]));
+
+    // ── Build per-project item lists using the shared maps ──────────────────
+    const bulkSaves = [];
+    const result    = [];
+
     for (const project of projects) {
-      const items = await loadAttachments(project.attachments);
+      const items = [];
+      for (const a of project.attachments) {
+        const idStr = a.refId.toString();
+        if (a.refModel === 'Booking') {
+          const doc = bookingMap.get(idStr);
+          if (!doc) continue;
+          items.push({
+            attachmentId: a._id,
+            refModel: 'Booking',
+            refId: doc._id,
+            type: 'labour',
+            title: doc.category ? `${doc.category} Booking` : 'Labour Booking',
+            status: doc.status,
+            bucket: labourBucket(doc.status),
+            total: doc.total,
+            city: doc.city,
+            createdAt: doc.createdAt,
+          });
+        } else {
+          const doc = orderMap.get(idStr);
+          if (!doc) continue;
+          const bucket = doc.orderType === 'rental' ? rentalBucket(doc.status) : materialBucket(doc.status);
+          items.push({
+            attachmentId: a._id,
+            refModel: 'SellerOrder',
+            refId: doc._id,
+            type: doc.orderType,
+            title: (doc.items || []).map((i) => i.title).filter(Boolean).join(', ') ||
+              (doc.orderType === 'rental' ? 'Equipment Rental' : 'Material Order'),
+            status: doc.status,
+            bucket,
+            total: doc.total,
+            city: doc.city,
+            createdAt: doc.createdAt,
+          });
+        }
+      }
+
       const newStatus = combineStatus(items.map((i) => i.bucket));
       if (newStatus !== project.status) {
         project.status = newStatus;
-        await project.save();
+        bulkSaves.push(project.save());
       }
       result.push({ ...project.toObject(), attachments: items });
     }
+
+    // Fire all status saves concurrently (non-blocking to the response)
+    if (bulkSaves.length) await Promise.all(bulkSaves);
 
     res.json({ success: true, projects: result });
   } catch (err) {

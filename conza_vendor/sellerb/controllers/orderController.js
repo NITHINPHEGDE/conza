@@ -171,6 +171,23 @@ const placeOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid orderType' });
     }
 
+    const ALLOWED_PAYMENT_METHODS = ['cod', 'online', 'upi'];
+    const chosenPaymentMethod = paymentMethod || 'cod';
+    if (!ALLOWED_PAYMENT_METHODS.includes(chosenPaymentMethod)) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: 'Invalid payment method' });
+    }
+    if (['online', 'upi'].includes(chosenPaymentMethod)) {
+      const paymentProof = req.body.paymentProof || req.body.paymentReference || req.body.razorpayPaymentId;
+      if (!paymentProof) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: 'Online and UPI payments require verified payment transaction. Please use COD or provide payment verification.',
+        });
+      }
+    }
+
     // ── Idempotency guard ──────────────────────────────────────────────────
     const idempotencyKey = clientKey || new mongoose.Types.ObjectId().toString();
     if (clientKey) {

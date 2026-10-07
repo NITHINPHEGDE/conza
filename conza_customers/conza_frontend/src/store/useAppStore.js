@@ -52,6 +52,68 @@ import api from '../api/axiosInstance';
 // In-flight request deduplication promise for canonical bookings fetch
 let inFlightMyBookingsPromise = null;
 
+// Search request sequence counters for stale response protection
+let materialSearchSeq = 0;
+let rentalSearchSeq   = 0;
+
+const normalizeMaterialProduct = (p) => {
+  const mrp = (p.mrp !== undefined && p.mrp !== null && Number(p.mrp) > Number(p.price)) ? Number(p.mrp) : null;
+  const discountPercent = mrp ? Math.round(((mrp - p.price) / mrp) * 100) : 0;
+  return {
+    id:          p._id?.toString() || p.id,
+    name:        p.title,
+    price:       p.price,
+    mrp,
+    discountPercent,
+    seller:      p.seller?.shopName || p.seller?.name || 'Vendor',
+    unit:        `per ${p.unit || 'piece'}`,
+    distance:    '—',
+    image:       p.images?.[0] || null,
+    images:      Array.isArray(p.images) && p.images.length ? p.images : (p.images?.[0] ? [p.images[0]] : []),
+    inStock:     (p.stock > 0) && p.isAvailable,
+    rating:      4.5,
+    returnable:  false,
+    replaceable: false,
+    returnPolicy: 'Contact seller for return policy.',
+    replacementPolicy: 'Contact seller for replacement policy.',
+    sellerId:    p.seller?._id?.toString(),
+    sellerPhone: p.seller?.phone,
+    sellerCity:  p.seller?.city,
+    category:    p.category,
+    brand:       p.brand || '',
+    description: p.description || '',
+  };
+};
+
+const normalizeRentalProduct = (p) => {
+  const pricePerDay = p.rentalPrice || p.price;
+  const mrp = (p.mrp !== undefined && p.mrp !== null && Number(p.mrp) > Number(pricePerDay)) ? Number(p.mrp) : null;
+  const discountPercent = mrp ? Math.round(((mrp - pricePerDay) / mrp) * 100) : 0;
+  return {
+    id:          p._id?.toString() || p.id,
+    name:        p.title,
+    category:    (p.category || 'Other').toLowerCase().replace(/\s+/g, '_'),
+    emoji:       '🏗️',
+    pricePerDay,
+    mrp,
+    discountPercent,
+    distance:    '—',
+    image:       p.images?.[0] || null,
+    images:      Array.isArray(p.images) && p.images.length ? p.images : (p.images?.[0] ? [p.images[0]] : []),
+    available:   p.isAvailable && (p.stock > 0),
+    rating:      4.5,
+    seller:      p.seller?.shopName || p.seller?.name || 'Vendor',
+    sellerId:    p.seller?._id?.toString(),
+    sellerPhone: p.seller?.phone,
+    sellerCity:  p.seller?.city,
+    description: p.description || '',
+    deposit:     p.deposit || 0,
+    minDays:     p.minRentalDays || 1,
+    features:    [],
+    specs:       [],
+  };
+};
+
 // Atomically updates all booking collections and derived counts from a socket event
 const updateBookingInCollections = (s, bookingId, status, bookingSnapshot) => {
   const idStr = bookingId?.toString();
@@ -386,11 +448,12 @@ const useAppStore = create((set, get) => ({
   },
 
   // ── Labour / Workers ────────────────────────────────────────────────────────
-  labourCategories:  [],
-  workersByCategory: {},
-  allWorkers:        [],
-  labourLoading:     true,
-  labourError:       null,
+  labourCategories:         [],
+  workersByCategory:        {},
+  workersLoadingByCategory: {},
+  allWorkers:               [],
+  labourLoading:            true,
+  labourError:              null,
 
   fetchLabourData: async () => {
     const { userLat, userLng } = get();
@@ -423,9 +486,14 @@ const useAppStore = create((set, get) => ({
   },
 
   fetchWorkersByCategory: async (category) => {
+    if (!category) return;
+    const catKey = (category || '').trim().toLowerCase();
     const { userLat, userLng } = get();
     try {
-      set({ labourLoading: true, labourError: null });
+      set((state) => ({
+        workersLoadingByCategory: { ...state.workersLoadingByCategory, [catKey]: true },
+        labourError: null,
+      }));
       // No radius passed — the backend resolves it from this category's own
       // admin-configured "Service Radius (km)" (ServiceCategory.radius).
       const data = await workerAPI.getNearbyWorkers({
@@ -439,7 +507,14 @@ const useAppStore = create((set, get) => ({
     } catch (err) {
       set({ labourError: err.message });
     } finally {
-      set({ labourLoading: false });
+      set((state) => {
+        const nextMap = { ...state.workersLoadingByCategory, [catKey]: false };
+        const anyLoading = Object.values(nextMap).some(Boolean);
+        return {
+          workersLoadingByCategory: nextMap,
+          labourLoading: anyLoading,
+        };
+      });
     }
   },
 
@@ -457,69 +532,46 @@ const useAppStore = create((set, get) => ({
   },
 
   // ── Materials ─────────────────────────────────────────────────────────────
-  materials:          [],
-  materialCategories: [],
+  materials:                [],
+  materialCategories:       [],
+  materialsPage:            1,
+  materialsHasMore:         true,
   // Starts `true` (not `false`) so the very first render — which can happen
   // before initApp()'s fetchMaterials() call has had a chance to flip this
   // flag — shows the loading skeleton instead of an empty FlatList hitting
-  // its "No materials found" ListEmptyComponent. Without this, cold app
-  // start briefly flashed "No materials found" before the skeleton/data.
-  materialsLoading:   true,
-  materialsError:     null,
-  // Tracks whether fetchMaterials() has completed at least once. Used by the
-  // Material tab to tell "genuinely nothing matched" apart from "data hasn't
-  // arrived yet", so it never shows the empty state before a real result.
-  materialsFetched:   false,
+  // its "No materials found" ListEmptyComponent.
+  materialsLoading:         true,
+  materialsLoadingMore:     false,
+  materialsError:           null,
+  materialsFetched:         false,
+  serverSearchedMaterials:  null,
+  materialsSearching:       false,
 
-  fetchMaterials: async () => {
-    // Fetch products and admin-managed categories in parallel; the categories
-    // call is failure-isolated so it can never break product loading.
+  fetchMaterials: async (options = {}) => {
+    const { page = 1 } = options;
     const catsPromise = productAPI.getMaterialCategories()
       .then((d) => (Array.isArray(d?.categories) ? d.categories : null))
       .catch(() => null);
 
     try {
       set({ materialsLoading: true, materialsError: null });
-      const res  = await api.get('/products/public?type=material&limit=100');
+      const res  = await api.get(`/products/public?type=material&page=${page}&limit=20`);
       const data = res.data;
       const apiCategories = await catsPromise;
 
       if (data.success && data.products?.length) {
-        const normalized = data.products.map((p) => {
-          const mrp = (p.mrp !== undefined && p.mrp !== null && Number(p.mrp) > Number(p.price)) ? Number(p.mrp) : null;
-          const discountPercent = mrp ? Math.round(((mrp - p.price) / mrp) * 100) : 0;
-          return {
-            id:          p._id?.toString() || p.id,
-            name:        p.title,
-            price:       p.price,
-            mrp,
-            discountPercent,
-            seller:      p.seller?.shopName || p.seller?.name || 'Vendor',
-            unit:        `per ${p.unit || 'piece'}`,
-            distance:    '—',
-            image:       p.images?.[0] || null,
-            images:      Array.isArray(p.images) && p.images.length ? p.images : (p.images?.[0] ? [p.images[0]] : []),
-            inStock:     (p.stock > 0) && p.isAvailable,
-            rating:      4.5,
-            returnable:  false,
-            replaceable: false,
-            returnPolicy: 'Contact seller for return policy.',
-            replacementPolicy: 'Contact seller for replacement policy.',
-            sellerId:    p.seller?._id?.toString(),
-            sellerPhone: p.seller?.phone,
-            sellerCity:  p.seller?.city,
-            category:    p.category,
-            brand:       p.brand || '',
-            description: p.description || '',
-          };
-        });
+        const normalized = data.products.map(normalizeMaterialProduct);
         set({
           materials: normalized,
+          materialsPage: page,
+          materialsHasMore: Boolean(data.hasMore ?? (data.products.length >= 20)),
           materialCategories: buildCategoryList(apiCategories, normalized, { allEmoji: '🧱' }),
         });
       } else {
         set({
           materials: [],
+          materialsPage: 1,
+          materialsHasMore: false,
           materialCategories: buildCategoryList(apiCategories, [], { allEmoji: '🧱' }),
         });
       }
@@ -528,12 +580,77 @@ const useAppStore = create((set, get) => ({
       const apiCategories = await catsPromise;
       set({
         materials: [],
+        materialsPage: 1,
+        materialsHasMore: false,
         materialCategories: buildCategoryList(apiCategories, [], { allEmoji: '🧱' }),
         materialsError: err.message,
       });
     } finally {
       set({ materialsLoading: false, materialsFetched: true });
     }
+  },
+
+  fetchMoreMaterials: async () => {
+    const { materialsLoading, materialsLoadingMore, materialsHasMore, materialsPage } = get();
+    if (materialsLoading || materialsLoadingMore || !materialsHasMore) return;
+    set({ materialsLoadingMore: true });
+    try {
+      const nextPage = materialsPage + 1;
+      const res = await api.get(`/products/public?type=material&page=${nextPage}&limit=20`);
+      const data = res.data;
+      if (data.success && data.products?.length) {
+        const normalized = data.products.map(normalizeMaterialProduct);
+        set((state) => {
+          const existingIds = new Set(state.materials.map((m) => m.id));
+          const newItems = normalized.filter((m) => !existingIds.has(m.id));
+          return {
+            materials: [...state.materials, ...newItems],
+            materialsPage: nextPage,
+            materialsHasMore: Boolean(data.hasMore ?? (data.products.length >= 20)),
+          };
+        });
+      } else {
+        set({ materialsHasMore: false });
+      }
+    } catch (err) {
+      console.warn('[Materials] fetchMore error:', err.message);
+    } finally {
+      set({ materialsLoadingMore: false });
+    }
+  },
+
+  searchMaterialsServer: async (query, category = 'all') => {
+    const currentSeq = ++materialSearchSeq;
+    if (!query || query.trim().length < 2) {
+      set({ serverSearchedMaterials: null, materialsSearching: false });
+      return;
+    }
+    set({ materialsSearching: true });
+    try {
+      let url = `/products/public?type=material&search=${encodeURIComponent(query.trim())}&page=1&limit=20`;
+      if (category && category !== 'all') {
+        url += `&category=${encodeURIComponent(category)}`;
+      }
+      const res = await api.get(url);
+      if (currentSeq !== materialSearchSeq) return; // Stale-response guard
+      if (res.data.success && Array.isArray(res.data.products)) {
+        const normalized = res.data.products.map(normalizeMaterialProduct);
+        set({ serverSearchedMaterials: normalized });
+      }
+    } catch (err) {
+      if (currentSeq === materialSearchSeq) {
+        console.warn('[Materials] search error:', err.message);
+      }
+    } finally {
+      if (currentSeq === materialSearchSeq) {
+        set({ materialsSearching: false });
+      }
+    }
+  },
+
+  clearMaterialServerSearch: () => {
+    materialSearchSeq++;
+    set({ serverSearchedMaterials: null, materialsSearching: false });
   },
 
   searchMaterials: (query) => {
@@ -560,70 +677,113 @@ const useAppStore = create((set, get) => ({
   },
 
   // ── Rental ──────────────────────────────────────────────────────────────
-  rentalItems:      [],
-  rentalCategories: [],
-  // Same fix as materialsLoading above — default to `true` so the rental
-  // tab shows its skeleton on first render instead of a flash of the
-  // "No rentals found" empty state before fetchRentalData() completes.
-  rentalLoading:    true,
-  rentalError:      null,
+  rentalItems:              [],
+  rentalCategories:         [],
+  rentalPage:               1,
+  rentalHasMore:            true,
+  rentalLoading:            true,
+  rentalLoadingMore:        false,
+  rentalError:              null,
+  serverSearchedRentals:    null,
+  rentalSearching:          false,
 
-  fetchRentalData: async () => {
-    // Fetch products and admin-managed categories in parallel; the categories
-    // call is failure-isolated so it can never break product loading.
+  fetchRentalData: async (options = {}) => {
+    const { page = 1 } = options;
     const catsPromise = productAPI.getRentalCategories()
       .then((d) => (Array.isArray(d?.categories) ? d.categories : null))
       .catch(() => null);
 
     try {
       set({ rentalLoading: true, rentalError: null });
-      const res  = await api.get('/products/public?type=rental&limit=100');
+      const res  = await api.get(`/products/public?type=rental&page=${page}&limit=20`);
       const data = res.data;
       const apiCategories = await catsPromise;
 
       if (data.success && data.products?.length) {
-        const normalized = data.products.map((p) => {
-          const pricePerDay = p.rentalPrice || p.price;
-          const mrp = (p.mrp !== undefined && p.mrp !== null && Number(p.mrp) > Number(pricePerDay)) ? Number(p.mrp) : null;
-          const discountPercent = mrp ? Math.round(((mrp - pricePerDay) / mrp) * 100) : 0;
-          return {
-            id:          p._id?.toString() || p.id,
-            name:        p.title,
-            category:    (p.category || 'Other').toLowerCase().replace(/\s+/g, '_'),
-            emoji:       '🏗️',
-            pricePerDay,
-            mrp,
-            discountPercent,
-            distance:    '—',
-            image:       p.images?.[0] || null,
-            images:      Array.isArray(p.images) && p.images.length ? p.images : (p.images?.[0] ? [p.images[0]] : []),
-            available:   p.isAvailable && (p.stock > 0),
-            rating:      4.5,
-            seller:      p.seller?.shopName || p.seller?.name || 'Vendor',
-            sellerId:    p.seller?._id?.toString(),
-            sellerPhone: p.seller?.phone,
-            sellerCity:  p.seller?.city,
-            description: p.description || '',
-            deposit:     p.deposit || 0,
-            minDays:     p.minRentalDays || 1,
-            features:    [],
-            specs:       [],
-          };
-        });
-
+        const normalized = data.products.map(normalizeRentalProduct);
         set({
           rentalItems: normalized,
+          rentalPage: page,
+          rentalHasMore: Boolean(data.hasMore ?? (data.products.length >= 20)),
           rentalCategories: buildCategoryList(apiCategories, normalized, { allEmoji: '🏗️', fallbackEmoji: '📦' }),
         });
       } else {
-        set({ rentalItems: [], rentalCategories: buildCategoryList(apiCategories, [], { allEmoji: '🏗️', fallbackEmoji: '📦' }) });
+        set({
+          rentalItems: [],
+          rentalPage: 1,
+          rentalHasMore: false,
+          rentalCategories: buildCategoryList(apiCategories, [], { allEmoji: '🏗️', fallbackEmoji: '📦' }),
+        });
       }
     } catch (err) {
       console.warn('[Rentals] API error:', err.message);
-      set({ rentalItems: [], rentalCategories: [], rentalError: err.message });
+      set({ rentalItems: [], rentalPage: 1, rentalHasMore: false, rentalCategories: [], rentalError: err.message });
     } finally {
       set({ rentalLoading: false });
     }
+  },
+
+  fetchMoreRentals: async () => {
+    const { rentalLoading, rentalLoadingMore, rentalHasMore, rentalPage } = get();
+    if (rentalLoading || rentalLoadingMore || !rentalHasMore) return;
+    set({ rentalLoadingMore: true });
+    try {
+      const nextPage = rentalPage + 1;
+      const res = await api.get(`/products/public?type=rental&page=${nextPage}&limit=20`);
+      const data = res.data;
+      if (data.success && data.products?.length) {
+        const normalized = data.products.map(normalizeRentalProduct);
+        set((state) => {
+          const existingIds = new Set(state.rentalItems.map((r) => r.id));
+          const newItems = normalized.filter((r) => !existingIds.has(r.id));
+          return {
+            rentalItems: [...state.rentalItems, ...newItems],
+            rentalPage: nextPage,
+            rentalHasMore: Boolean(data.hasMore ?? (data.products.length >= 20)),
+          };
+        });
+      } else {
+        set({ rentalHasMore: false });
+      }
+    } catch (err) {
+      console.warn('[Rentals] fetchMore error:', err.message);
+    } finally {
+      set({ rentalLoadingMore: false });
+    }
+  },
+
+  searchRentalsServer: async (query, category = 'all') => {
+    const currentSeq = ++rentalSearchSeq;
+    if (!query || query.trim().length < 2) {
+      set({ serverSearchedRentals: null, rentalSearching: false });
+      return;
+    }
+    set({ rentalSearching: true });
+    try {
+      let url = `/products/public?type=rental&search=${encodeURIComponent(query.trim())}&page=1&limit=20`;
+      if (category && category !== 'all') {
+        url += `&category=${encodeURIComponent(category)}`;
+      }
+      const res = await api.get(url);
+      if (currentSeq !== rentalSearchSeq) return; // Stale-response guard
+      if (res.data.success && Array.isArray(res.data.products)) {
+        const normalized = res.data.products.map(normalizeRentalProduct);
+        set({ serverSearchedRentals: normalized });
+      }
+    } catch (err) {
+      if (currentSeq === rentalSearchSeq) {
+        console.warn('[Rentals] search error:', err.message);
+      }
+    } finally {
+      if (currentSeq === rentalSearchSeq) {
+        set({ rentalSearching: false });
+      }
+    }
+  },
+
+  clearRentalServerSearch: () => {
+    rentalSearchSeq++;
+    set({ serverSearchedRentals: null, rentalSearching: false });
   },
 
   filterRentalItems: (category = 'all', query = '') => {

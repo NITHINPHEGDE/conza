@@ -27,7 +27,6 @@ const getDashboard = async (req, res) => {
       recentMaterialOrders,
       recentRentalOrders,
       chartAgg,
-      completedOrdersAgg,
       pendingOrdersAgg,
     ] = await Promise.all([
 
@@ -68,7 +67,7 @@ const getDashboard = async (req, res) => {
         { $group: { _id: null, total: { $sum: '$total' } } },
       ]),
 
-      // All-time revenue
+      // All-time revenue (also serves as completed orders total/count)
       SellerOrder.aggregate([
         {
           $match: {
@@ -101,15 +100,7 @@ const getDashboard = async (req, res) => {
         { $sort: { _id: 1 } },
       ]),
 
-      // Completed orders count + total
-      SellerOrder.aggregate([
-        {
-          $match: { seller: sellerId, status: { $in: ['delivered', 'returned'] } },
-        },
-        { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } },
-      ]),
-
-      // Pending payout orders (active / accepted / out_for_delivery)
+      // Pending payout orders (new / accepted / out_for_delivery / active)
       SellerOrder.aggregate([
         {
           $match: {
@@ -126,8 +117,9 @@ const getDashboard = async (req, res) => {
     const totalRevenue      = totalRevenueAgg[0]?.total     || 0;
     const totalOrderCount   = totalRevenueAgg[0]?.count     || 0;
     const avgOrderValue     = totalRevenueAgg[0]?.avgOrder  || 0;
-    const completedTotal    = completedOrdersAgg[0]?.total  || 0;
-    const completedCount    = completedOrdersAgg[0]?.count  || 0;
+    // completedTotal/completedCount reuse totalRevenueAgg (same filter, no date range)
+    const completedTotal    = totalRevenue;
+    const completedCount    = totalOrderCount;
     const pendingPayoutAmt  = pendingOrdersAgg[0]?.total    || 0;
     const pendingPayoutCnt  = pendingOrdersAgg[0]?.count    || 0;
 

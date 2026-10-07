@@ -48,53 +48,66 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
   const [selectedAddress, setSelectedAddress] = useState(initialAddress);
   const [showAddressSheet, setShowAddressSheet] = useState(false);
 
-  // Payment Method
-  const [paymentMethod, setPaymentMethod] = useState('upi'); // 'upi' | 'card' | 'netbanking' | 'wallet'
+  // Payment Method — default to COD for zero-friction order placement
+  const [paymentMethod, setPaymentMethod] = useState('cod'); // 'cod' | 'upi' | 'card' | 'netbanking' | 'wallet'
   const [submitting, setSubmitting] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+
+  // Single persistent idempotency key per checkout attempt (reused on network retry)
+  const checkoutKeyRef = React.useRef(
+    'chk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9)
+  );
 
   const displayAddress = selectedAddress?.address || initialLocationText || userLocationText || 'Sri Maregowda Circle, Bengaluru - 560002';
   const recipientName = userProfile?.name || userProfile?.fullName || 'Rifat Kazi';
   const recipientPhone = userProfile?.phone || '98765 43210';
 
-  // Group materials by vendor
+  // Group materials by vendor (keyed by canonical sellerId)
   const materialsByVendor = useMemo(() => {
     const map = {};
     selectedMaterials.forEach((item) => {
-      const vendor = item.seller || 'RN Enterprises';
-      if (!map[vendor]) {
-        map[vendor] = {
-          vendorName: vendor,
-          sellerId: item.sellerId || item.seller,
-          // Vendor-specific delivery charge (different vendors → different
-          // locations → different charges) instead of a flat ₹250 for
-          // every vendor.
-          deliveryCharge: getVendorDeliveryCharge(item.sellerId || vendor, 'material'),
+      const sellerId = item.sellerId || (item.seller && typeof item.seller === 'object' ? item.seller._id : null);
+      if (!sellerId) {
+        console.warn('[MaterialCheckoutScreen] Material item missing canonical sellerId:', item);
+        return;
+      }
+      const sellerKey = String(sellerId);
+      const vendorDisplayName = item.sellerName || (typeof item.seller === 'string' ? item.seller : item.seller?.shopName || item.seller?.name) || 'Vendor';
+      if (!map[sellerKey]) {
+        map[sellerKey] = {
+          vendorName: vendorDisplayName,
+          sellerId: sellerKey,
+          deliveryCharge: getVendorDeliveryCharge(sellerKey, 'material'),
           deliveryTime: '1 - 2 days',
           items: [],
         };
       }
-      map[vendor].items.push(item);
+      map[sellerKey].items.push(item);
     });
     return Object.values(map);
   }, [selectedMaterials]);
 
-  // Group rentals by vendor
+  // Group rentals by vendor (keyed by canonical sellerId)
   const rentalsByVendor = useMemo(() => {
     const map = {};
     selectedRentals.forEach((item) => {
-      const vendor = item.seller || 'PowerUp Rentals';
-      if (!map[vendor]) {
-        map[vendor] = {
-          vendorName: vendor,
-          sellerId: item.sellerId || item.seller,
-          // Same vendor-specific delivery charge logic as materials above.
-          deliveryCharge: getVendorDeliveryCharge(item.sellerId || vendor, 'rental'),
+      const sellerId = item.sellerId || (item.seller && typeof item.seller === 'object' ? item.seller._id : null);
+      if (!sellerId) {
+        console.warn('[MaterialCheckoutScreen] Rental item missing canonical sellerId:', item);
+        return;
+      }
+      const sellerKey = String(sellerId);
+      const vendorDisplayName = item.sellerName || (typeof item.seller === 'string' ? item.seller : item.seller?.shopName || item.seller?.name) || 'Rental Vendor';
+      if (!map[sellerKey]) {
+        map[sellerKey] = {
+          vendorName: vendorDisplayName,
+          sellerId: sellerKey,
+          deliveryCharge: getVendorDeliveryCharge(sellerKey, 'rental'),
           deliveryTime: '12 Sep, 9:00 AM',
           items: [],
         };
       }
-      map[vendor].items.push(item);
+      map[sellerKey].items.push(item);
     });
     return Object.values(map);
   }, [selectedRentals]);
@@ -148,20 +161,29 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
   }, [materialsByVendor, rentalsByVendor, cart, selectedMaterials, selectedRentals]);
 
   const handlePlaceOrder = async () => {
+    // Validate all vendors have a valid sellerId
+    const missingSeller = [...materialsByVendor, ...rentalsByVendor].find((v) => !v.sellerId);
+    if (missingSeller) {
+      Alert.alert('Order Error', 'One or more items are missing seller information. Please remove and re-add them.');
+      return;
+    }
+
+    if (paymentMethod !== 'cod') {
+      Alert.alert(
+        'Online Payment Notice',
+        'Online payment gateway verification is pending. Please choose Cash on Delivery (COD) to place your order.',
+        [
+          { text: 'Switch to COD', onPress: () => setPaymentMethod('cod') },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const createdOrders = [];
-
-      // 1. Submit Material Orders (one per vendor)
-      for (const v of materialsByVendor) {
-        const sub = v.items.reduce((s, i) => {
-          const itemId = String(i.id || i._id);
-          const qty = Number(cart[itemId]) || Number(cart[i.id]) || 1;
-          return s + (Number(i.price) || 0) * qty;
-        }, 0);
-        const tot = sub + v.deliveryCharge;
-
-        const payload = {
+      const orderSpecs = [
+        ...materialsByVendor.map((v) => ({
           sellerId: v.sellerId,
           orderType: 'material',
           items: v.items.map((i) => {
@@ -170,93 +192,78 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
             return {
               productId: itemId,
               qty,
-              subtotal: (Number(i.price) || 0) * qty,
             };
           }),
-          customerAddress: displayAddress,
-          city: 'Bengaluru',
-          pincode: '560002',
-          latitude: userLat || 12.9716,
-          longitude: userLng || 77.5946,
-          subtotal: sub,
           deliveryCharge: v.deliveryCharge,
-          total: tot,
-          paymentMethod,
           notes: selectedProject ? `Project: ${selectedProject.name}` : '',
-        };
-
-        const res = await bookingAPI.placeSellerOrder(payload);
-        if (res.success && res.order) {
-          addSellerOrder(res.order);
-          createdOrders.push(res.order);
-
-          // Attach to project if chosen
-          if (selectedProject?._id) {
-            await addAttachmentToProject(selectedProject._id, {
-              refModel: 'SellerOrder',
-              refId: res.order._id,
-            });
-          }
-        }
-      }
-
-      // 2. Submit Rental Orders (one per vendor)
-      for (const v of rentalsByVendor) {
-        const sub = v.items.reduce((s, i) => s + (Number(i.pricePerDay) || 600) * (Number(i.rentalDays) || 3), 0);
-        const tot = sub + v.deliveryCharge;
-
-        const payload = {
+        })),
+        ...rentalsByVendor.map((v) => ({
           sellerId: v.sellerId,
           orderType: 'rental',
           items: v.items.map((i) => ({
             productId: String(i.id || i._id),
             qty: 1,
-            subtotal: (Number(i.pricePerDay) || 600) * (Number(i.rentalDays) || 3),
+            days: Number(i.rentalDays) || 3,
             rentalDays: Number(i.rentalDays) || 3,
-            startDate: i.startDate || '12 Sep 2024',
-            endDate: i.endDate || '15 Sep 2024',
-            withOperator: true,
+            startDate: i.startDate || null,
+            endDate: i.endDate || null,
           })),
-          customerAddress: displayAddress,
-          city: 'Bengaluru',
-          pincode: '560002',
-          latitude: userLat || 12.9716,
-          longitude: userLng || 77.5946,
-          subtotal: sub,
+          durationDays: 3,
           deliveryCharge: v.deliveryCharge,
-          total: tot,
-          paymentMethod,
           notes: selectedProject ? `Project: ${selectedProject.name}` : '',
-        };
+        })),
+      ];
 
-        const res = await bookingAPI.placeSellerOrder(payload);
-        if (res.success && res.order) {
-          addSellerOrder(res.order);
-          createdOrders.push(res.order);
+      const checkoutPayload = {
+        orders: orderSpecs,
+        customerAddress: displayAddress,
+        city: 'Bengaluru',
+        pincode: '560002',
+        latitude: userLat || 12.9716,
+        longitude: userLng || 77.5946,
+        paymentMethod,
+        notes: selectedProject ? `Project: ${selectedProject.name}` : '',
+        idempotencyKey: checkoutKeyRef.current,
+      };
 
+      const res = await bookingAPI.checkoutSellerOrders(checkoutPayload);
+      if (res.success && res.orders && res.orders.length) {
+        // Add all created orders to store
+        for (const order of res.orders) {
+          addSellerOrder(order);
           // Attach to project if chosen
           if (selectedProject?._id) {
-            await addAttachmentToProject(selectedProject._id, {
-              refModel: 'SellerOrder',
-              refId: res.order._id,
-            });
+            try {
+              await addAttachmentToProject(selectedProject._id, {
+                refModel: 'SellerOrder',
+                refId: order._id,
+              });
+            } catch (attErr) {
+              console.warn('[MaterialCheckout] Auto-attach order failed:', attErr?.message || attErr);
+            }
           }
         }
+
+        // Only clear carts ONCE when entire atomic checkout succeeds!
+        clearCart();
+        clearRentalCart();
+
+        // Regenerate key for next order session
+        checkoutKeyRef.current = 'chk_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+
+        const firstOrder = res.orders[0];
+        navigation.navigate('BookingConfirmation', {
+          attachment: firstOrder,
+          title: 'Order Placed! 📦',
+          message: selectedProject
+            ? `Your order has been placed and added to "${selectedProject.name}". Track it from Status.`
+            : 'Your order has been placed successfully. Track it from Status.',
+        });
+      } else {
+        throw new Error(res.message || 'Could not place order.');
       }
-
-      // Clear carts
-      clearCart();
-      clearRentalCart();
-
-      const firstOrder = createdOrders[0];
-      navigation.navigate('BookingConfirmation', {
-        attachment: firstOrder,
-        title: 'Order Placed! 📦',
-        message: selectedProject
-          ? `Your order has been placed and added to "${selectedProject.name}". Track it from Status.`
-          : 'Your order has been placed successfully. Track it from Status.',
-      });
     } catch (err) {
+      // DO NOT clear cart on failure!
       Alert.alert('Order Failed', err?.response?.data?.message || err.message || 'Could not place order.');
     } finally {
       setSubmitting(false);
@@ -346,7 +353,7 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
 
           {/* Group: Materials */}
           {materialsByVendor.map((vendor) => (
-            <View key={vendor.vendorName} style={styles.vendorOrderBlock}>
+            <View key={vendor.sellerId || vendor.vendorName} style={styles.vendorOrderBlock}>
               <View style={styles.vendorBlockHeader}>
                 <View style={[styles.vendorGroupIcon, { backgroundColor: '#FFEDD5' }]}>
                   <MaterialCommunityIcons name="package-variant-closed" size={16} color="#EA580C" />
@@ -400,7 +407,7 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
 
           {/* Group: Rentals */}
           {rentalsByVendor.map((vendor) => (
-            <View key={vendor.vendorName} style={styles.vendorOrderBlock}>
+            <View key={vendor.sellerId || vendor.vendorName} style={styles.vendorOrderBlock}>
               <View style={styles.vendorBlockHeader}>
                 <View style={[styles.vendorGroupIcon, { backgroundColor: '#FFEDD5' }]}>
                   <MaterialCommunityIcons name="tractor" size={16} color="#EA580C" />
@@ -461,7 +468,23 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
             <MaterialCommunityIcons name="wallet-outline" size={18} color="#0F172A" />
             <Text style={styles.sectionHeading}>Payment Method</Text>
           </View>
-          <Text style={styles.paymentSubheading}>UPI, Cards and more</Text>
+          <Text style={styles.paymentSubheading}>Choose your payment method</Text>
+
+          {/* Option 0: Cash on Delivery */}
+          <TouchableOpacity
+            style={[styles.paymentMethodCard, paymentMethod === 'cod' && styles.paymentMethodCardSelected]}
+            onPress={() => setPaymentMethod('cod')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.radioOuter, paymentMethod === 'cod' && styles.radioOuterSelected]}>
+              {paymentMethod === 'cod' && <View style={styles.radioInner} />}
+            </View>
+            <MaterialCommunityIcons name="cash-multiple" size={18} color="#16A34A" style={{ marginRight: 8 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.paymentMethodTitle}>Cash on Delivery (COD)</Text>
+              <Text style={{ fontSize: 11, color: '#64748B' }}>Pay cash when your order arrives</Text>
+            </View>
+          </TouchableOpacity>
 
           {/* Option 1: UPI */}
           <TouchableOpacity
@@ -534,14 +557,14 @@ const MaterialCheckoutScreen = ({ route, navigation }) => {
           </View>
 
           {materialsByVendor.map((v) => (
-            <View key={v.vendorName} style={styles.summaryRow}>
+            <View key={v.sellerId || v.vendorName} style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Materials delivery charge ({v.vendorName})</Text>
               <Text style={styles.summaryValue}>₹{v.deliveryCharge}</Text>
             </View>
           ))}
 
           {rentalsByVendor.map((v) => (
-            <View key={v.vendorName} style={styles.summaryRow}>
+            <View key={v.sellerId || v.vendorName} style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Rentals delivery charge ({v.vendorName})</Text>
               <Text style={styles.summaryValue}>₹{v.deliveryCharge}</Text>
             </View>

@@ -103,45 +103,56 @@ const CartScreen = () => {
     setSelectedItems((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Group materials by seller/vendor
+  // Group materials by seller/vendor using canonical sellerId
   const materialVendors = useMemo(() => {
     const map = {};
     materialItems.forEach((item) => {
-      const vendorName = item.seller || 'RN Enterprises';
-      if (!map[vendorName]) {
-        map[vendorName] = {
+      const sellerId = item.sellerId || (item.seller && typeof item.seller === 'object' ? item.seller._id : null);
+      const sellerKey = sellerId ? String(sellerId) : null;
+      if (!sellerKey) {
+        console.warn('[CartScreen] Material item missing canonical sellerId:', item);
+        return;
+      }
+      const vendorName = item.sellerName || (typeof item.seller === 'string' ? item.seller : item.seller?.shopName || item.seller?.name) || 'Vendor';
+      if (!map[sellerKey]) {
+        map[sellerKey] = {
+          sellerId: sellerKey,
           name: vendorName,
           subtitle: 'Building better together',
-          // Delivery charge is vendor-specific (based on seller ID, falling
-          // back to vendor name) instead of a flat rate for every vendor —
-          // different vendors are in different locations, so two vendors
-          // in the same cart show two different delivery charges.
-          deliveryCharge: getVendorDeliveryCharge(item.sellerId || vendorName, 'material'),
+          // Delivery charge is vendor-specific based on seller ID
+          deliveryCharge: getVendorDeliveryCharge(sellerKey, 'material'),
           deliveryTime: '1 - 2 days',
           items: [],
         };
       }
-      map[vendorName].items.push(item);
+      map[sellerKey].items.push(item);
     });
     return Object.values(map);
   }, [materialItems]);
 
-  // Group rentals by seller/vendor
+  // Group rentals by seller/vendor using canonical sellerId
   const rentalVendors = useMemo(() => {
     const map = {};
     rentalCart.forEach((item) => {
-      const vendorName = item.seller || 'PowerUp Rentals';
-      if (!map[vendorName]) {
-        map[vendorName] = {
+      const sellerId = item.sellerId || (item.seller && typeof item.seller === 'object' ? item.seller._id : null);
+      const sellerKey = sellerId ? String(sellerId) : null;
+      if (!sellerKey) {
+        console.warn('[CartScreen] Rental item missing canonical sellerId:', item);
+        return;
+      }
+      const vendorName = item.sellerName || (typeof item.seller === 'string' ? item.seller : item.seller?.shopName || item.seller?.name) || 'Rental Vendor';
+      if (!map[sellerKey]) {
+        map[sellerKey] = {
+          sellerId: sellerKey,
           name: vendorName,
           subtitle: 'Equip your ambition',
-          // Same vendor-specific delivery charge logic as materials above.
-          deliveryCharge: getVendorDeliveryCharge(item.sellerId || vendorName, 'rental'),
+          // Delivery charge is vendor-specific based on seller ID
+          deliveryCharge: getVendorDeliveryCharge(sellerKey, 'rental'),
           deliveryTime: 'Same day',
           items: [],
         };
       }
-      map[vendorName].items.push(item);
+      map[sellerKey].items.push(item);
     });
     return Object.values(map);
   }, [rentalCart]);
@@ -428,7 +439,7 @@ const CartScreen = () => {
                     );
 
                     return (
-                      <View key={vendor.name} style={styles.vendorBlock}>
+                      <View key={vendor.sellerId || vendor.name} style={styles.vendorBlock}>
                         {/* Vendor Header */}
                         <View style={styles.vendorHeaderRow}>
                           <View style={styles.vendorAvatar}>
@@ -583,7 +594,7 @@ const CartScreen = () => {
                     }, 0);
 
                     return (
-                      <View key={vendor.name} style={styles.vendorBlock}>
+                      <View key={vendor.sellerId || vendor.name} style={styles.vendorBlock}>
                         {/* Vendor Header */}
                         <View style={styles.vendorHeaderRow}>
                           <View style={styles.vendorAvatar}>

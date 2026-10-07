@@ -42,22 +42,30 @@ const getPublicProducts = async (req, res) => {
       if (search)   query.$text    = { $search: search };
       if (type === 'material') query.stock = { $gt: 0 };
 
-      // Materials and rentals from unverified vendors must never be visible
-      // to customers, regardless of type/category/search filters above.
-      const verifiedSellerIds = await Seller.find({ isVerified: true }).distinct('_id');
-      query.seller = { $in: verifiedSellerIds };
+      // Only show products from verified sellers. isSellerVerified is a
+      // denormalized field kept in sync by admin verification changes and
+      // product creation — eliminates the Seller collection round-trip.
+      query.isSellerVerified = true;
 
       const skip = (Number(page) - 1) * Number(limit);
       const [products, total] = await Promise.all([
         Product.find(query)
           .populate('seller', 'name shopName phone city profileImage')
-          .sort({ createdAt: -1 })
+          .sort({ createdAt: -1, _id: -1 })
           .skip(skip)
           .limit(Number(limit))
           .lean(),
         Product.countDocuments(query),
       ]);
-      return { products, total, page: Number(page), pages: Math.ceil(total / limit) };
+      const hasMore = (Number(page) * Number(limit)) < total;
+      return {
+        products,
+        total,
+        page: Number(page),
+        pages: Math.ceil(total / Number(limit)),
+        hasMore,
+        nextPage: hasMore ? Number(page) + 1 : null,
+      };
     };
 
     const data = TTL > 0
@@ -104,22 +112,24 @@ const createProduct = async (req, res) => {
     }
 
     const product = await Product.create({
-      seller:       req.seller._id,
+      seller:           req.seller._id,
       title, description, brand, category,
-      unit:         unit         || 'piece',
+      unit:             unit         || 'piece',
       type,
-      price:        Number(price),
-      mrp:          (mrp !== undefined && mrp !== null && mrp !== '') ? Number(mrp) : null,
-      rentalPrice:  rentalPrice  ? Number(rentalPrice)  : null,
-      deposit:      deposit      ? Number(deposit)      : 0,
-      minRentalDays: minRentalDays ? Number(minRentalDays) : 1,
-      stock:        Number(stock)    || 0,
-      sku:          sku          || '',
-      minOrder:     Number(minOrder) || 1,
-      weight:       weight       || '',
-      hsnCode:      hsnCode      || '',
-      lowStockAt:   Number(lowStockAt) || 5,
-      images:       Array.isArray(images) ? images.slice(0, 5) : [],
+      price:            Number(price),
+      mrp:              (mrp !== undefined && mrp !== null && mrp !== '') ? Number(mrp) : null,
+      rentalPrice:      rentalPrice  ? Number(rentalPrice)  : null,
+      deposit:          deposit      ? Number(deposit)      : 0,
+      minRentalDays:    minRentalDays ? Number(minRentalDays) : 1,
+      stock:            Number(stock)    || 0,
+      sku:              sku          || '',
+      minOrder:         Number(minOrder) || 1,
+      weight:           weight       || '',
+      hsnCode:          hsnCode      || '',
+      lowStockAt:       Number(lowStockAt) || 5,
+      images:           Array.isArray(images) ? images.slice(0, 5) : [],
+      // Inherit seller verification at creation time — never from client input
+      isSellerVerified: !!req.seller.isVerified,
     });
 
     // Bust the public catalog cache so customers immediately see the new

@@ -497,6 +497,21 @@ const createBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing required booking fields' });
     }
 
+    // Material and rental orders must use /api/orders/seller to prevent client-controlled financial bypass
+    if (bookingType === 'material' || bookingType === 'rental') {
+      return res.status(400).json({
+        success: false,
+        message: 'Material and rental orders must be placed through /api/orders/seller',
+      });
+    }
+
+    if (bookingType !== 'labour') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid bookingType: only labour bookings are supported on this endpoint',
+      });
+    }
+
     // ── Server-side billing (Finance → Pricing → Labour) ──────────────────
     // For labour bookings, the customer-facing figures the client sent
     // (subtotal/platformFee/total) are only a display estimate. The

@@ -82,11 +82,34 @@ const bustSellerSessionCache = async (sellerId) => {
   }
 }
 
+/**
+ * Bust the public product catalog cache so that verification or suspension
+ * changes (which update isSellerVerified on products) are immediately visible
+ * to customers instead of serving stale cached catalog pages for up to 60 s.
+ *
+ * Uses SCAN to avoid blocking KEYS on large keyspaces.
+ */
+const bustProductCatalogCache = async () => {
+  try {
+    const redis = getCustomersRedis()
+    if (!redis) return
+    let cursor = '0'
+    do {
+      const [next, found] = await redis.scan(cursor, 'MATCH', 'products:catalog:*', 'COUNT', 100)
+      cursor = next
+      if (found.length) await redis.del(...found)
+    } while (cursor !== '0')
+  } catch (_) {
+    // best-effort — never throw
+  }
+}
+
 module.exports = {
   getCustomersRedis,
   bustCustomerSessionCache,
   bustPricingConfigCache,
   bustSellerSessionCache,
+  bustProductCatalogCache,
 }
 
 

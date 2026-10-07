@@ -178,58 +178,58 @@ export const useBooking = (type) => {
         return createdBookings.length ? createdBookings : null;
       }
 
-      // ── Material order → seller order API ───────────────────────────────
+      // ── Material order → atomic seller checkout API ─────────────────────
       if (type === 'material') {
-        const { items, subtotal, platformFee, total } = bookingData;
+        const { items } = bookingData;
 
-        // Group items by sellerId — each seller gets a separate order
+        // Group items by sellerId — each seller gets an entry in the checkout
         const bySellerMap = {};
         (items || []).forEach((item) => {
-          const sid = item.sellerId || item.seller;
+          const sid = item.sellerId || (item.seller && typeof item.seller === 'object' ? item.seller._id : null);
           if (!sid) return;
-          if (!bySellerMap[sid]) bySellerMap[sid] = [];
-          bySellerMap[sid].push(item);
+          const key = String(sid);
+          if (!bySellerMap[key]) bySellerMap[key] = [];
+          bySellerMap[key].push(item);
         });
 
         const sellerIds = Object.keys(bySellerMap);
         if (!sellerIds.length) throw new Error('No seller information on cart items');
 
-        const createdOrders = [];
-        for (const sellerId of sellerIds) {
+        const orderSpecs = sellerIds.map((sellerId) => {
           const sellerItems = bySellerMap[sellerId];
-          const sellerSubtotal = sellerItems.reduce(
-            (sum, i) => sum + (Number(i.price) * (Number(i.quantity) || 1)), 0
-          );
-          const sellerTotal = Math.round(sellerSubtotal * 1.05) + 99; // platform fee + delivery
-
-          const payload = {
+          return {
             sellerId,
-            orderType:       'material',
-            items:           sellerItems.map((i) => ({
-              productId: i.id,
+            orderType: 'material',
+            items: sellerItems.map((i) => ({
+              productId: i.id || i._id,
               qty:       Number(i.quantity) || 1,
-              subtotal:  Number(i.price) * (Number(i.quantity) || 1),
             })),
-            customerAddress: `${houseNumber || ''} ${houseName || ''} ${street || ''}`.trim(),
-            city,
-            pincode,
-            latitude:        latitude  || userLat,
-            longitude:       longitude || userLng,
-            subtotal:        sellerSubtotal,
-            deliveryCharge:  99,
-            total:           sellerTotal,
-            paymentMethod:   paymentMethod || 'cod',
-            notes:           description   || '',
+            deliveryCharge: 99,
+            notes: description || '',
           };
+        });
 
-          const result = await bookingAPI.placeSellerOrder(payload);
-          if (result.success) {
-            addSellerOrder(result.order);
+        const checkoutPayload = {
+          orders:          orderSpecs,
+          customerAddress: `${houseNumber || ''} ${houseName || ''} ${street || ''}`.trim(),
+          city,
+          pincode,
+          latitude:        latitude  || userLat,
+          longitude:       longitude || userLng,
+          paymentMethod:   paymentMethod || 'cod',
+          notes:           description   || '',
+        };
+
+        const result = await bookingAPI.checkoutSellerOrders(checkoutPayload);
+        if (result.success && result.orders?.length) {
+          const createdOrders = [];
+          for (const order of result.orders) {
+            addSellerOrder(order);
             if (targetProjectId) {
               try {
                 await addAttachmentToProject(targetProjectId, {
                   refModel: 'SellerOrder',
-                  refId: result.order._id,
+                  refId: order._id,
                 });
               } catch (attErr) {
                 console.warn('[useBooking] Auto-attach material order failed:', attErr?.message || attErr);
@@ -237,22 +237,21 @@ export const useBooking = (type) => {
             }
             createdOrders.push({
               refModel: 'SellerOrder',
-              refId: result.order._id,
-              title: (result.order.items || []).map((i) => i.title).filter(Boolean).join(', ') || 'Material Order',
+              refId: order._id,
+              title: (order.items || []).map((i) => i.title).filter(Boolean).join(', ') || 'Material Order',
             });
           }
-        }
 
-        clearCart();
-        setSuccess(true);
-        return createdOrders.length ? createdOrders : null;
+          clearCart();
+          setSuccess(true);
+          return createdOrders.length ? createdOrders : null;
+        } else {
+          throw new Error(result.message || 'Material checkout failed');
+        }
       }
 
-      // ── Rental order → seller order API ─────────────────────────────────
+      // ── Rental order → atomic seller checkout API ───────────────────────
       if (type === 'rental') {
-        // Support two call patterns:
-        //   Cart flow:          { items: [...], quantity: 1, ... }
-        //   Detail-screen flow: { item: {...},  quantity: N, ... }
         const { items: rentalItemsParam, item, quantity } = bookingData;
 
         // Normalise to an array so the rest of the logic is uniform.
@@ -262,60 +261,55 @@ export const useBooking = (type) => {
 
         if (!rentalItems.length) throw new Error('No rental items to order');
 
-        // Group by sellerId — one SellerOrder per seller (matches material flow)
+        // Group by sellerId
         const bySellerMap = {};
         rentalItems.forEach((it) => {
-          const sid = it.sellerId;
+          const sid = it.sellerId || (it.seller && typeof it.seller === 'object' ? it.seller._id : null);
           if (!sid) return;
-          if (!bySellerMap[sid]) bySellerMap[sid] = [];
-          bySellerMap[sid].push(it);
+          const key = String(sid);
+          if (!bySellerMap[key]) bySellerMap[key] = [];
+          bySellerMap[key].push(it);
         });
 
         const sellerIds = Object.keys(bySellerMap);
         if (!sellerIds.length) throw new Error('No seller information on rental items');
 
-        const createdOrders = [];
-        for (const sellerId of sellerIds) {
+        const orderSpecs = sellerIds.map((sellerId) => {
           const sellerItems = bySellerMap[sellerId];
-
-          // For the single-item path `_qty` carries the quantity field;
-          // for the multi-item cart path each item qty = 1.
-          const sellerSubtotal = sellerItems.reduce((sum, it) => {
-            const qty = it._qty !== undefined ? it._qty : 1;
-            return sum + (Number(it.pricePerDay) || 0) * qty;
-          }, 0);
-          const sellerTotal = Math.round(sellerSubtotal * 1.05) + 149;
-
-          const payload = {
+          return {
             sellerId,
             orderType: 'rental',
             items: sellerItems.map((it) => ({
-              productId: it.id,
+              productId: it.id || it._id,
               qty:       it._qty !== undefined ? it._qty : 1,
               days:      null,
-              subtotal:  (Number(it.pricePerDay) || 0) * (it._qty !== undefined ? it._qty : 1),
             })),
-            customerAddress: `${houseNumber || ''} ${houseName || ''} ${street || ''}`.trim(),
-            city,
-            pincode,
-            latitude:       latitude  || userLat,
-            longitude:      longitude || userLng,
-            subtotal:       sellerSubtotal,
             deliveryCharge: 149,
-            total:          sellerTotal,
-            depositAmount:  sellerItems.reduce((s, it) => s + (it.deposit || 0), 0),
-            paymentMethod:  paymentMethod || 'cod',
-            notes:          description   || '',
+            notes: description || '',
           };
+        });
 
-          const result = await bookingAPI.placeSellerOrder(payload);
-          if (result.success) {
-            addSellerOrder(result.order);
+        const checkoutPayload = {
+          orders:          orderSpecs,
+          customerAddress: `${houseNumber || ''} ${houseName || ''} ${street || ''}`.trim(),
+          city,
+          pincode,
+          latitude:        latitude  || userLat,
+          longitude:       longitude || userLng,
+          paymentMethod:   paymentMethod || 'cod',
+          notes:           description   || '',
+        };
+
+        const result = await bookingAPI.checkoutSellerOrders(checkoutPayload);
+        if (result.success && result.orders?.length) {
+          const createdOrders = [];
+          for (const order of result.orders) {
+            addSellerOrder(order);
             if (targetProjectId) {
               try {
                 await addAttachmentToProject(targetProjectId, {
                   refModel: 'SellerOrder',
-                  refId: result.order._id,
+                  refId: order._id,
                 });
               } catch (attErr) {
                 console.warn('[useBooking] Auto-attach rental order failed:', attErr?.message || attErr);
@@ -323,23 +317,20 @@ export const useBooking = (type) => {
             }
             createdOrders.push({
               refModel: 'SellerOrder',
-              refId: result.order._id,
-              title: (result.order.items || []).map((i) => i.title).filter(Boolean).join(', ') || 'Equipment Rental',
+              refId: order._id,
+              title: (order.items || []).map((i) => i.title).filter(Boolean).join(', ') || 'Equipment Rental',
             });
           }
-        }
 
-        setSuccess(true);
-        // Clear the rental cart only when the order came from the cart
-        // (rentalItemsParam was provided). The single-item detail-screen
-        // flow should not wipe unrelated cart items.
-        if (rentalItemsParam && rentalItemsParam.length) {
-          clearRentalCart();
+          setSuccess(true);
+          if (rentalItemsParam && rentalItemsParam.length) {
+            clearRentalCart();
+          }
+          if (!createdOrders.length) return null;
+          return createdOrders.length === 1 ? createdOrders[0] : createdOrders;
+        } else {
+          throw new Error(result.message || 'Rental checkout failed');
         }
-        // Return array for multi-seller, or single object for single-seller
-        // (BookingConfirmation screen handles both via its `attachment` prop).
-        if (!createdOrders.length) return null;
-        return createdOrders.length === 1 ? createdOrders[0] : createdOrders;
       }
 
 

@@ -1,9 +1,10 @@
 const Vendor = require('../models/Vendor')
+const Product = require('../models/Product')
 const Order = require('../models/Order')
 const Review = require('../models/Review')
 const { sendSuccess, sendPaginated } = require('../utils/response')
 const { createError } = require('../utils/error')
-const { bustSellerSessionCache } = require('../config/customersRedis')
+const { bustSellerSessionCache, bustProductCatalogCache } = require('../config/customersRedis')
 
 exports.getVendors = async (req, res, next) => {
   try {
@@ -65,6 +66,15 @@ exports.updateVendorStatus = async (req, res, next) => {
     // Bust vendor session cache immediately so status change takes effect on next request
     await bustSellerSessionCache(req.params.id)
 
+    // Propagate visibility to the denormalized product field.
+    // A suspended or inactive vendor must not have products visible to customers.
+    const isProductVisible = vendor.isVerified && vendor.status === 'active'
+    await Product.updateMany(
+      { seller: vendor._id },
+      { $set: { isSellerVerified: isProductVisible } }
+    )
+    await bustProductCatalogCache()
+
     req.auditTarget = `Vendor #${req.params.id} - ${vendor.name}`
     req.auditDetails = `Status changed to ${status}`
     sendSuccess(res, 200, 'Vendor status updated', { vendor })
@@ -88,6 +98,15 @@ exports.verifyVendor = async (req, res, next) => {
 
     // Bust vendor session cache immediately
     await bustSellerSessionCache(req.params.id)
+
+    // Propagate isSellerVerified to all products so the public catalog
+    // can use a single indexed field instead of a Seller $in lookup.
+    const isProductVisible = vendor.isVerified && vendor.status === 'active'
+    await Product.updateMany(
+      { seller: vendor._id },
+      { $set: { isSellerVerified: isProductVisible } }
+    )
+    await bustProductCatalogCache()
 
     req.auditTarget = `Vendor #${req.params.id} - ${vendor.name}`
     req.auditDetails = `Verification set to ${vendor.isVerified}`

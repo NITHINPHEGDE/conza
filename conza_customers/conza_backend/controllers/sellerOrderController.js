@@ -107,9 +107,31 @@ const placeOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Items array cannot be empty' });
     }
 
+    const ALLOWED_PAYMENT_METHODS = ['cod', 'online', 'upi'];
+    const chosenPaymentMethod = paymentMethod || 'cod';
+    if (!ALLOWED_PAYMENT_METHODS.includes(chosenPaymentMethod)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment method' });
+    }
+    if (['online', 'upi'].includes(chosenPaymentMethod)) {
+      const paymentProof = req.body.paymentProof || req.body.paymentReference || req.body.razorpayPaymentId;
+      if (!paymentProof) {
+        return res.status(400).json({
+          success: false,
+          message: 'Online and UPI payments require verified payment gateway transaction. Please use Cash on Delivery (COD) or provide valid payment verification.',
+        });
+      }
+    }
+
+    const orderGroupId = req.body.orderGroupId || `grp_${new mongoose.Types.ObjectId().toString()}`;
+
     // ── 3. Start Multi-Document MongoDB Transaction ──────────────────────────
     session = await mongoose.startSession();
     session.startTransaction();
+
+    const sellerDoc = await Seller.findById(sellerId).session(session).lean();
+    if (!sellerDoc) {
+      throw new Error(`Seller ${sellerId} not found`);
+    }
 
     let pricing;
     let parsedStart = null;
@@ -207,6 +229,7 @@ const placeOrder = async (req, res) => {
         {
           seller:          sellerId,
           customer:        user._id,
+          orderGroupId,
           orderType,
           items:           pricing.snapshotItems,
           customerName:    user.fullName || '',
@@ -224,7 +247,7 @@ const placeOrder = async (req, res) => {
           total:           pricing.total,
           depositAmount:   pricing.depositAmount,
           depositStatus:   pricing.depositAmount > 0 ? 'pending' : undefined,
-          paymentMethod:   paymentMethod || 'cod',
+          paymentMethod:   chosenPaymentMethod,
           notes:           notes || '',
           idempotencyKey,
           stockRestored:   false,
@@ -284,6 +307,301 @@ const placeOrder = async (req, res) => {
       err.message?.includes('Minimum');
 
     res.status(isClientError ? 400 : 500).json({ success: false, message: err.message });
+  }
+};
+
+// ── CUSTOMER: POST /api/orders/seller/checkout ───────────────────────────
+// Atomic multi-seller checkout executing all order creations in a single MongoDB transaction.
+const checkoutOrders = async (req, res) => {
+  let session = null;
+  try {
+    const {
+      orders,
+      customerAddress, city, pincode, latitude, longitude,
+      paymentMethod, notes,
+    } = req.body;
+
+    const idempotencyKey = (
+      req.headers['idempotency-key'] ||
+      req.headers['x-idempotency-key'] ||
+      req.body.idempotencyKey ||
+      null
+    );
+
+    const user = req.user;
+
+    // ── 1. Idempotency Check ────────────────────────────────────────────────
+    if (idempotencyKey) {
+      const existingOrders = await SellerOrder.find({
+        customer: user._id,
+        idempotencyKey,
+      }).populate('seller', 'pushToken shopName').lean();
+
+      if (existingOrders.length > 0) {
+        logger.info({ count: existingOrders.length, idempotencyKey }, 'Returning idempotent replayed checkout');
+        return res.status(200).json({
+          success: true,
+          orders: existingOrders,
+          orderGroupId: existingOrders[0].orderGroupId,
+          idempotentReplay: true,
+        });
+      }
+    }
+
+    // ── 2. Basic Validation ─────────────────────────────────────────────────
+    if (!Array.isArray(orders) || !orders.length) {
+      return res.status(400).json({ success: false, message: 'Orders array cannot be empty' });
+    }
+
+    if (!customerAddress || !city || !pincode) {
+      return res.status(400).json({ success: false, message: 'Missing required delivery address fields' });
+    }
+
+    const ALLOWED_PAYMENT_METHODS = ['cod', 'online', 'upi'];
+    const chosenPaymentMethod = paymentMethod || 'cod';
+    if (!ALLOWED_PAYMENT_METHODS.includes(chosenPaymentMethod)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment method' });
+    }
+
+    if (['online', 'upi'].includes(chosenPaymentMethod)) {
+      const paymentProof = req.body.paymentProof || req.body.paymentReference || req.body.razorpayPaymentId;
+      if (!paymentProof) {
+        return res.status(400).json({
+          success: false,
+          message: 'Online and UPI payments require verified payment gateway transaction. Please use Cash on Delivery (COD) or provide valid payment verification.',
+        });
+      }
+    }
+
+    const orderGroupId = `grp_${new mongoose.Types.ObjectId().toString()}`;
+
+    // ── 3. Start Multi-Document MongoDB Transaction ──────────────────────────
+    session = await mongoose.startSession();
+    session.startTransaction();
+
+    const createdOrders = [];
+    const pushNotificationsToSend = [];
+    const socketEventsToSend = [];
+    const cacheInvalidations = new Set();
+
+    for (const spec of orders) {
+      const { sellerId, orderType, items, startDate, endDate, durationDays, notes: orderNotes } = spec;
+
+      if (!sellerId || !mongoose.Types.ObjectId.isValid(sellerId)) {
+        throw new Error(`Invalid or missing sellerId: ${sellerId}`);
+      }
+      if (!['material', 'rental'].includes(orderType)) {
+        throw new Error(`Invalid orderType "${orderType}": must be material or rental`);
+      }
+      if (!Array.isArray(items) || !items.length) {
+        throw new Error(`Items array cannot be empty for seller ${sellerId}`);
+      }
+
+      const sellerDoc = await Seller.findById(sellerId).session(session).lean();
+      if (!sellerDoc) {
+        throw new Error(`Seller ${sellerId} not found`);
+      }
+
+      let pricing;
+      let parsedStart = null;
+      let parsedEnd = null;
+      let cleanDurationDays = null;
+
+      if (orderType === 'material') {
+        // Authoritative server pricing
+        pricing = await calculateMaterialOrderPricing(items, sellerId, session);
+
+        // Atomic conditional stock deduction
+        for (const item of pricing.snapshotItems) {
+          const updatedProduct = await Product.findOneAndUpdate(
+            {
+              _id: item.product,
+              seller: sellerId,
+              stock: { $gte: item.qty },
+              isAvailable: true,
+              type: 'material',
+            },
+            {
+              $inc: { stock: -item.qty, sold: item.qty },
+            },
+            { session, new: true }
+          );
+
+          if (!updatedProduct) {
+            const currentP = await Product.findById(item.product).session(session).lean();
+            const availStock = currentP ? currentP.stock : 0;
+            throw new Error(
+              `Insufficient stock for "${item.title}". Requested: ${item.qty}, Available: ${availStock}`
+            );
+          }
+        }
+      } else {
+        // Rental order
+        cleanDurationDays = Math.max(parseInt(durationDays, 10) || 1, 1);
+        parsedStart = startDate ? new Date(startDate) : new Date();
+        parsedEnd = endDate ? new Date(endDate) : new Date(parsedStart.getTime() + cleanDurationDays * 86400000);
+
+        if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime()) || parsedEnd < parsedStart) {
+          throw new Error('Invalid rental date range');
+        }
+
+        pricing = await calculateRentalOrderPricing(items, sellerId, cleanDurationDays, session);
+
+        // Capacity and overlap check
+        for (const item of pricing.snapshotItems) {
+          const product = await Product.findOne({
+            _id: item.product,
+            seller: sellerId,
+            isAvailable: true,
+            type: 'rental',
+          }).session(session).lean();
+
+          if (!product) {
+            throw new Error(`Rental product "${item.title}" not found or unavailable`);
+          }
+
+          if (product.stock < item.qty) {
+            throw new Error(
+              `Insufficient total units for equipment "${item.title}". Requested: ${item.qty}, Total owned: ${product.stock}`
+            );
+          }
+
+          const overlappingOrders = await SellerOrder.find({
+            'items.product': item.product,
+            orderType: 'rental',
+            status: { $in: ['new', 'accepted', 'active', 'overdue'] },
+            startDate: { $lte: parsedEnd },
+            endDate:   { $gte: parsedStart },
+          }).session(session).lean();
+
+          const bookedUnits = overlappingOrders.reduce((sum, ord) => {
+            const matchingItem = (ord.items || []).find(
+              (it) => it.product?.toString() === item.product.toString()
+            );
+            return sum + (matchingItem?.qty || 0);
+          }, 0);
+
+          const availableUnits = product.stock - bookedUnits;
+          if (availableUnits < item.qty) {
+            throw new Error(
+              `Equipment "${item.title}" is fully booked for selected dates. Available: ${Math.max(0, availableUnits)}, Requested: ${item.qty}`
+            );
+          }
+        }
+      }
+
+      const [order] = await SellerOrder.create(
+        [
+          {
+            seller:          sellerId,
+            customer:        user._id,
+            orderGroupId,
+            orderType,
+            items:           pricing.snapshotItems,
+            customerName:    user.fullName || '',
+            customerPhone:   user.phone || '',
+            customerAddress: customerAddress || '',
+            city:            city || '',
+            pincode:         pincode || '',
+            latitude:        latitude  || null,
+            longitude:       longitude || null,
+            startDate:       orderType === 'rental' ? parsedStart : null,
+            endDate:         orderType === 'rental' ? parsedEnd   : null,
+            durationDays:    orderType === 'rental' ? cleanDurationDays : null,
+            subtotal:        pricing.subtotal,
+            deliveryCharge:  pricing.deliveryCharge,
+            total:           pricing.total,
+            depositAmount:   pricing.depositAmount,
+            depositStatus:   pricing.depositAmount > 0 ? 'pending' : undefined,
+            paymentMethod:   chosenPaymentMethod,
+            notes:           orderNotes || notes || '',
+            idempotencyKey,
+            stockRestored:   false,
+          },
+        ],
+        { session }
+      );
+
+      createdOrders.push(order);
+      cacheInvalidations.add(sellerId.toString());
+
+      socketEventsToSend.push({
+        room: `seller_${sellerId}`,
+        event: 'new_seller_order',
+        payload: {
+          orderId: order._id,
+          orderGroupId,
+          orderType,
+          customerName: user.fullName,
+          total: order.total,
+        },
+      });
+
+      if (sellerDoc.pushToken) {
+        pushNotificationsToSend.push({
+          pushToken: sellerDoc.pushToken,
+          title: '🛒 New Order Received',
+          body: `${user.fullName} placed an order · ₹${order.total}`,
+          data: { orderId: order._id.toString(), orderGroupId },
+        });
+      }
+    }
+
+    // ── 4. Commit Transaction ───────────────────────────────────────────────
+    await session.commitTransaction();
+    session.endSession();
+    session = null;
+
+    // ── 5. Post-Commit Actions (Only after successful commit) ───────────────
+    for (const sid of cacheInvalidations) {
+      invalidateCache(
+        `dashboard:seller:${sid}`,
+        `products:seller:${sid}:*`
+      ).catch(() => {});
+    }
+
+    try {
+      const io = getIO();
+      for (const ev of socketEventsToSend) {
+        io.to(ev.room).emit(ev.event, ev.payload);
+      }
+    } catch (_) {}
+
+    for (const pn of pushNotificationsToSend) {
+      sendSellerPush(pn.pushToken, pn.title, pn.body, pn.data).catch(() => {});
+    }
+
+    // Populate seller info on created orders
+    await Promise.all(createdOrders.map((o) => o.populate('seller', 'pushToken shopName')));
+
+    return res.status(201).json({
+      success: true,
+      orderGroupId,
+      orders: createdOrders,
+    });
+  } catch (err) {
+    if (session && session.inTransaction()) {
+      await session.abortTransaction().catch(() => {});
+    }
+    if (session) {
+      session.endSession().catch(() => {});
+    }
+
+    logger.error({ err: err.message }, 'checkoutOrders failed');
+    const isClientError =
+      err.name === 'ValidationError' ||
+      err.name === 'CastError' ||
+      err.message?.includes('not found') ||
+      err.message?.includes('Insufficient stock') ||
+      err.message?.includes('fully booked') ||
+      err.message?.includes('Invalid') ||
+      err.message?.includes('Minimum') ||
+      err.message?.includes('unavailable');
+
+    return res.status(isClientError ? 400 : 500).json({
+      success: false,
+      message: err.message || 'Checkout failed',
+    });
   }
 };
 
@@ -522,6 +840,7 @@ const getCustomerOrderById = async (req, res) => {
 module.exports = {
   previewOrderPricing,
   placeOrder,
+  checkoutOrders,
   getSellerOrders,
   getOrderById,
   updateOrderStatus,

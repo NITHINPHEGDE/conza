@@ -68,6 +68,8 @@ const sellerOrderSchema = new mongoose.Schema(
 
     notes: { type: String, default: '' },
 
+    // Multi-seller checkout grouping ID
+    orderGroupId:   { type: String, default: null, index: true },
     idempotencyKey: { type: String, default: null, sparse: true, index: true },
     stockRestored:  { type: Boolean, default: false },
   },
@@ -77,5 +79,6 @@ const sellerOrderSchema = new mongoose.Schema(
 sellerOrderSchema.index({ seller: 1, status: 1 });
 sellerOrderSchema.index({ seller: 1, createdAt: -1 });
 sellerOrderSchema.index({ customerId: 1 });
+sellerOrderSchema.index({ orderGroupId: 1 });
 
 module.exports = mongoose.model('SellerOrder', sellerOrderSchema);
